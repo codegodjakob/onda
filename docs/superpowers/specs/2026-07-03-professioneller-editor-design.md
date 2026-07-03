@@ -57,6 +57,7 @@ Beim Bau werden die Design-Skills (interface-design, interaction-design) konsult
 - **Feine Details:** Speicher-Indikator (Punkt statt Text-Blinken), Hover-Zustände, Fokus-Ringe, Auswahlfarbe, Cursor-Ruhe (keine Layout-Sprünge), Leerzustände (freundlicher Hinweis statt weißer Fläche).
 - Keine Effekt-Show: Qualität dezent, nichts drängt sich auf.
 - **Leitprinzip Ruhe (vom Nutzer festgelegt):** Das Interface bleibt sehr ruhig und klar — wenige sichtbare Optionen, Gruppierung in Dropdowns/Popover statt Knopfreihen; im Zweifel wandert eine Funktion ins Menü statt in die Leiste.
+- **Calm Technology (vom Nutzer als Gesamtprinzip festgelegt):** kleinstmögliche Aufmerksamkeits-Beanspruchung; Information über die Peripherie (Speicher-*Punkt* statt blinkender Text, sanfte Zustandswechsel); Werkzeuge kontextuell auf Abruf; robust bei Fehlern (Speichern schlägt fehl → ruhiger, klarer Hinweis, kein Alarm). Voller Funktionsumfang, leise Präsentation.
 
 ## 7. Technik, Migration, Fehlerfälle
 

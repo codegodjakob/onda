@@ -10,6 +10,8 @@ Ein persönliches Desktop-Schreibwerkzeug für **alle Textformen** — von der w
 
 ## Leitprinzipien
 
+**0. Calm Technology (oberstes Gestaltungsprinzip, vom Nutzer festgelegt).** Das gesamte Tool folgt dem Calm-Technology-Ansatz: Es beansprucht so wenig Aufmerksamkeit wie möglich, informiert über die Peripherie (dezente Zeichen statt Text-Alarme, Punkt statt Pop-up), Funktionen erscheinen im Kontext statt in permanenten Leisten, und alles Wichtige funktioniert auch, wenn etwas fehlschlägt. **Wichtig: Calm ≠ featurearm** — der Funktionsumfang ist voll da, nur seine *Präsentation* ist leise und tritt hinter den Text zurück.
+
 1. **Denkraum vs. roter Faden trennen.** Der Argument-*Graph* ist der reiche, verzweigte Denkraum; der *Spine* ist eine einzige lineare, geordnete Auswahl daraus — und genau diese Sequenz ist die Textreihenfolge. „Ein klarer roter Faden" ist damit in jedem Moment wahr.
 2. **Entdeckungen drängen sich nie in den Text.** Neues landet im stillen Seitenkanal → wird in der Sandbox erkundet → nur **bewusst promotete** Knoten werden Teil des Graphen/Spine.
 3. **Die KI schreibt nie ungefragt.** Co-Autor-Vorschläge nur auf explizites Abrufen; kein Always-on-Ghost-Text. Provenienz (KI vs. ich) bleibt sichtbar.

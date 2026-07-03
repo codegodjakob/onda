@@ -1,0 +1,26 @@
+{
+  "name": "schreibwerkzeug-ui",
+  "private": true,
+  "scripts": {
+    "build": "esbuild src/editor.js --bundle --minify --format=iife --global-name=AIWT --outfile=dist/editor.bundle.js"
+  },
+  "dependencies": {
+    "@tiptap/core": "2.x",
+    "@tiptap/starter-kit": "2.x",
+    "@tiptap/extension-underline": "2.x",
+    "@tiptap/extension-link": "2.x",
+    "@tiptap/extension-task-list": "2.x",
+    "@tiptap/extension-task-item": "2.x",
+    "@tiptap/extension-image": "2.x",
+    "@tiptap/extension-text-style": "2.x",
+    "@tiptap/extension-color": "2.x",
+    "@tiptap/extension-highlight": "2.x",
+    "@tiptap/extension-text-align": "2.x",
+    "@tiptap/extension-placeholder": "2.x",
+    "@tiptap/extension-character-count": "2.x",
+    "@tiptap/extension-typography": "2.x"
+  },
+  "devDependencies": {
+    "esbuild": "0.24.2"
+  }
+}
