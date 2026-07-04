@@ -109,6 +109,48 @@ func runSelfTest() -> Never {
     exit(fails == 0 ? 0 : 1)
 }
 
+// MARK: - Bilder: Ablage + Auslieferung über eigenes URL-Schema
+
+extension Store {
+    static var imagesDir: URL { dir.appendingPathComponent("images", isDirectory: true) }
+
+    /// Löscht Bilddateien, auf die kein Text mehr verweist.
+    static func cleanOrphanImages() {
+        let fm = FileManager.default
+        guard let files = try? fm.contentsOfDirectory(atPath: imagesDir.path), !files.isEmpty else { return }
+        let data = load()
+        guard data != "null" else { return }
+        for f in files where !data.contains("aiwt-img://img/\(f)") {
+            try? fm.removeItem(at: imagesDir.appendingPathComponent(f))
+        }
+    }
+}
+
+final class ImgSchemeHandler: NSObject, WKURLSchemeHandler {
+    func webView(_ webView: WKWebView, start task: WKURLSchemeTask) {
+        guard let url = task.request.url else { return }
+        let name = url.lastPathComponent
+        let fileURL = Store.imagesDir.appendingPathComponent(name)
+        guard name.range(of: "^[\\w.-]+$", options: .regularExpression) != nil,
+              let data = try? Data(contentsOf: fileURL) else {
+            task.didReceive(HTTPURLResponse(url: url, statusCode: 404, httpVersion: nil, headerFields: nil)!)
+            task.didFinish()
+            return
+        }
+        let mime: String
+        switch (name as NSString).pathExtension.lowercased() {
+        case "jpg", "jpeg": mime = "image/jpeg"
+        case "gif": mime = "image/gif"
+        case "webp": mime = "image/webp"
+        default: mime = "image/png"
+        }
+        task.didReceive(URLResponse(url: url, mimeType: mime, expectedContentLength: data.count, textEncodingName: nil))
+        task.didReceive(data)
+        task.didFinish()
+    }
+    func webView(_ webView: WKWebView, stop task: WKURLSchemeTask) {}
+}
+
 // MARK: - App
 
 final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler {
@@ -119,10 +161,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
     init(probePath: String?) { self.probePath = probePath }
 
     func applicationDidFinishLaunching(_ n: Notification) {
+        Store.cleanOrphanImages()
+
         let ucc = WKUserContentController()
         ucc.add(self, name: "store")
         ucc.add(self, name: "exportmd")
         ucc.add(self, name: "probe")
+        ucc.add(self, name: "saveimg")
+        ucc.add(self, name: "printreq")
 
         let data = Store.load()
         let js = "window.__NATIVE_DATA__ = \(data); window.__PROBE__ = \(probePath != nil ? "true" : "false");"
@@ -130,6 +176,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
 
         let cfg = WKWebViewConfiguration()
         cfg.userContentController = ucc
+        cfg.setURLSchemeHandler(ImgSchemeHandler(), forURLScheme: "aiwt-img")
         webView = WKWebView(frame: .zero, configuration: cfg)
         webView.allowsMagnification = true
 
@@ -180,6 +227,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
                     try? content.data(using: .utf8)?.write(to: url, options: .atomic)
                 }
             }
+        case "saveimg":
+            guard let s = message.body as? String, let d = s.data(using: .utf8),
+                  let obj = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any],
+                  let reqId = obj["id"] as? String,
+                  let b64 = obj["dataBase64"] as? String else { return }
+            var ext = (obj["ext"] as? String ?? "png").lowercased()
+            if !["png", "jpg", "gif", "webp"].contains(ext) { ext = "png" }
+            let safeReq = reqId.replacingOccurrences(of: "'", with: "")
+            guard let imgData = Data(base64Encoded: b64), !imgData.isEmpty else {
+                webView.evaluateJavaScript("window.__imgSaved__ && window.__imgSaved__('\(safeReq)', null)", completionHandler: nil)
+                return
+            }
+            try? FileManager.default.createDirectory(at: Store.imagesDir, withIntermediateDirectories: true)
+            let fname = UUID().uuidString.lowercased() + "." + ext
+            let fileURL = Store.imagesDir.appendingPathComponent(fname)
+            do {
+                try imgData.write(to: fileURL, options: .atomic)
+                webView.evaluateJavaScript("window.__imgSaved__ && window.__imgSaved__('\(safeReq)', 'aiwt-img://img/\(fname)')", completionHandler: nil)
+            } catch {
+                webView.evaluateJavaScript("window.__imgSaved__ && window.__imgSaved__('\(safeReq)', null)", completionHandler: nil)
+            }
+        case "printreq":
+            printWebView()
         case "probe":
             if let p = probePath, let s = message.body as? String {
                 try? s.write(toFile: p, atomically: true, encoding: .utf8)
@@ -187,6 +257,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
             }
         default: break
         }
+    }
+
+    @objc func printWebView() {
+        let info = NSPrintInfo.shared
+        info.horizontalPagination = .fit
+        info.verticalPagination = .automatic
+        info.topMargin = 40; info.bottomMargin = 40; info.leftMargin = 40; info.rightMargin = 40
+        let op = webView.printOperation(with: info)
+        op.showsPrintPanel = true
+        op.showsProgressPanel = true
+        op.view?.frame = webView.bounds
+        op.runModal(for: window, delegate: nil, didRun: nil, contextInfo: nil)
     }
 
     @objc func menuNewDoc() { webView.evaluateJavaScript("window.__newDocFromMenu__ && window.__newDocFromMenu__()", completionHandler: nil) }
@@ -226,6 +308,9 @@ func buildMenus(_ delegate: AppDelegate) {
     let exp = NSMenuItem(title: "Exportieren als Markdown …", action: #selector(AppDelegate.menuExport), keyEquivalent: "e")
     exp.target = delegate
     fileMenu.addItem(exp)
+    let prt = NSMenuItem(title: "Drucken …", action: #selector(AppDelegate.printWebView), keyEquivalent: "p")
+    prt.target = delegate
+    fileMenu.addItem(prt)
     fileMenu.addItem(.separator())
     fileMenu.addItem(withTitle: "Fenster schließen", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
     fileItem.submenu = fileMenu

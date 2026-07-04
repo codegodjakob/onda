@@ -7,11 +7,18 @@ APP="../Schreibwerkzeug.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 
+echo "— baue Web-Bundle …"
+(cd ../app && npm install --silent >/dev/null 2>&1; npm run build >/dev/null 2>&1)
+test -f ../app/dist/editor.bundle.js || { echo "FEHLER: Bundle fehlt"; exit 1; }
+
 echo "— kompiliere App …"
 swiftc -O -swift-version 5 -o "$APP/Contents/MacOS/Schreibwerkzeug" main.swift
 
 echo "— kopiere Oberfläche …"
+mkdir -p "$APP/Contents/Resources/src" "$APP/Contents/Resources/dist"
 cp ../app/index.html "$APP/Contents/Resources/index.html"
+cp ../app/src/style.css "$APP/Contents/Resources/src/style.css"
+cp ../app/dist/editor.bundle.js "$APP/Contents/Resources/dist/editor.bundle.js"
 
 echo "— erzeuge Icon …"
 rm -rf AppIcon.iconset
