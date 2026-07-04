@@ -6,24 +6,30 @@
 <title>Schreibwerkzeug</title>
 <link rel="stylesheet" href="src/style.css" />
 </head>
-<body>
+<body class="view-home">
   <div id="app">
-    <aside id="side">
-      <div class="side-top">
-        <span class="side-label">Texte</span>
-        <button id="newBtn" title="Neuer Text (⌘N)">+</button>
+
+    <!-- Bibliothek: Startseite mit allen Texten (später: Projekte, Quellen) -->
+    <section id="home">
+      <div id="homeInner">
+        <div class="home-head">
+          <span class="home-title">Texte</span>
+          <button id="newBtn" title="Neuer Text (⌘N)"></button>
+        </div>
+        <div class="home-tools">
+          <input id="search" type="text" placeholder="Suchen …" spellcheck="false" />
+          <button id="sortBtn" title="Sortierung wechseln"></button>
+        </div>
+        <div id="doclist"></div>
+        <div id="trash">
+          <button id="trashToggle" class="trash-toggle">Papierkorb <span id="trashCount"></span></button>
+          <div id="trashlist" hidden></div>
+        </div>
       </div>
-      <div class="side-search">
-        <input id="search" type="text" placeholder="Suchen …" spellcheck="false" />
-        <button id="sortBtn" title="Sortierung wechseln">⇅</button>
-      </div>
-      <div id="doclist"></div>
-      <div id="trash">
-        <button id="trashToggle" class="trash-toggle">Papierkorb <span id="trashCount"></span></button>
-        <div id="trashlist" hidden></div>
-      </div>
-    </aside>
-    <main id="main">
+    </section>
+
+    <!-- Schreibansicht: nur Schreiben. Linke Spalte bleibt für die Meta-Struktur reserviert. -->
+    <section id="editorView">
       <div id="bar"></div>
       <div id="scroll">
         <div id="page">
@@ -31,7 +37,8 @@
           <div id="editor"></div>
         </div>
       </div>
-    </main>
+    </section>
+
   </div>
   <script src="dist/editor.bundle.js"></script>
   <script>AIWT.boot()</script>

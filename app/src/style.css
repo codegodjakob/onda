@@ -66,58 +66,56 @@ body {
 button { font-family: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
 input { font-family: inherit; }
 
-#app { display: flex; height: 100vh; }
+#app { height: 100vh; }
+body.view-home #editorView { display: none; }
+body.view-editor #home { display: none; }
 
-/* ---------- Seitenleiste ---------- */
-#side {
-  width: 236px; flex: none;
-  display: flex; flex-direction: column;
-  background: var(--bg2);
-  border-right: 0.5px solid var(--line);
-  transition: margin var(--dur) var(--ease), opacity var(--dur) var(--ease);
+/* ---------- Bibliothek (Startseite) ---------- */
+#home {
+  height: 100vh; overflow-y: auto;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, black 44px, black calc(100% - 44px), transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, black 44px, black calc(100% - 44px), transparent 100%);
 }
-.side-top { display: flex; align-items: center; justify-content: space-between; padding: 15px 16px 6px; }
-.side-label { font-size: 11.5px; color: var(--txt3); letter-spacing: .04em; }
-#newBtn { color: var(--txt2); line-height: 1; padding: 4px 6px; border-radius: 6px; }
+#homeInner { max-width: 620px; margin: 0 auto; padding: 72px 36px 120px; }
+.home-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+.home-title { font-size: 21px; font-weight: 500; color: var(--txt); }
+#newBtn { color: var(--txt2); line-height: 1; padding: 6px; border-radius: 7px; }
 #newBtn:hover { background: var(--bg3); color: var(--txt); }
-#newBtn svg, #sortBtn svg { width: 16px; height: 16px; display: block; }
+#newBtn svg, #sortBtn svg { width: 17px; height: 17px; display: block; }
 #sortBtn.on { color: var(--accent); }
-.side-search { display: flex; gap: 4px; padding: 4px 12px 8px; }
+.home-tools { display: flex; gap: 6px; align-items: center; margin-bottom: 14px; }
 #search {
   flex: 1; min-width: 0;
-  background: var(--bg); border: 0.5px solid var(--line2); border-radius: var(--r);
-  padding: 6px 10px; font-size: 12.5px; color: var(--txt); outline: none;
+  background: var(--bg2); border: 0.5px solid var(--line2); border-radius: var(--r);
+  padding: 8px 12px; font-size: 13px; color: var(--txt); outline: none;
   transition: border-color var(--dur) var(--ease);
 }
 #search:focus { border-color: var(--accent); }
 #search::placeholder { color: var(--txt3); }
-#sortBtn { color: var(--txt3); padding: 0 7px; border-radius: 6px; font-size: 14px; }
+#sortBtn { color: var(--txt3); padding: 6px; border-radius: 7px; }
 #sortBtn:hover { background: var(--bg3); color: var(--txt2); }
 
-#doclist { flex: 1; overflow: auto; padding: 2px 10px 10px; }
 .doc {
-  position: relative; padding: 9px 12px; border-radius: var(--r);
+  display: flex; align-items: center; gap: 10px;
+  padding: 11px 14px; border-radius: var(--r);
   cursor: pointer; margin-bottom: 2px;
   transition: background var(--dur) var(--ease);
 }
 .doc:hover { background: var(--bg3); }
-.doc.on { background: var(--bg3); }
+.doc-main { flex: 1; min-width: 0; }
 .doc .dt {
-  font-size: 13px; color: var(--txt);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 18px;
+  font-size: 14.5px; color: var(--txt);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .doc .dt mark { background: var(--accentbg); color: var(--accent); border-radius: 3px; padding: 0 1px; }
-.doc .dd { font-size: 11px; color: var(--txt3); margin-top: 2px; }
-.doc-more {
-  position: absolute; right: 6px; top: 7px;
-  color: var(--txt3); font-size: 14px; padding: 2px 6px; border-radius: 6px;
-  opacity: 0; transition: opacity var(--dur) var(--ease);
+.doc .dd {
+  font-size: 12px; color: var(--txt3); margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.doc:hover .doc-more { opacity: 1; }
-.doc-more:hover { background: var(--bg); color: var(--txt2); }
-.empty { padding: 22px 14px; font-size: 12.5px; color: var(--txt3); line-height: 1.6; }
+.doc .trash-acts { flex: none; }
+.empty { padding: 26px 14px; font-size: 13px; color: var(--txt3); line-height: 1.6; }
 
-#trash { border-top: 0.5px solid var(--line); padding: 6px 10px 10px; }
+#trash { border-top: 0.5px solid var(--line); margin-top: 26px; padding-top: 8px; }
 .trash-toggle {
   width: 100%; text-align: left; font-size: 12px; color: var(--txt3);
   padding: 7px 12px; border-radius: var(--r);
@@ -126,7 +124,7 @@ input { font-family: inherit; }
 #trashCount { float: right; color: var(--txt3); font-variant-numeric: tabular-nums; }
 .trash-doc {
   display: flex; align-items: center; gap: 6px;
-  padding: 5px 8px 5px 12px; border-radius: var(--r);
+  padding: 6px 8px 6px 14px; border-radius: var(--r);
 }
 .trash-doc:hover { background: var(--bg3); }
 .trash-doc .dt {
@@ -143,8 +141,8 @@ input { font-family: inherit; }
 .tico svg { width: 14px; height: 14px; display: block; }
 .tico-danger:hover { color: var(--danger); }
 
-/* ---------- Hauptbereich ---------- */
-#main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+/* ---------- Schreibansicht ---------- */
+#editorView { height: 100vh; display: flex; flex-direction: column; }
 
 #bar {
   display: flex; align-items: center; justify-content: space-between;
@@ -346,7 +344,6 @@ button:focus-visible, input:focus-visible {
 }
 
 /* ---------- Fokus-Modus ---------- */
-body.zen #side { margin-left: -236px; opacity: 0; }
 body.zen #bar { opacity: 0; transform: translateY(-8px); pointer-events: none; }
 body.zen.zen-peek #bar { opacity: 1; transform: none; pointer-events: auto; }
 body.zen #editor .ProseMirror > * { opacity: .28; transition: opacity .35s var(--ease); }
@@ -362,9 +359,10 @@ body.zen #title:focus { opacity: 1; }
 /* ---------- Druck ---------- */
 @media print {
   body { overflow: visible; background: #fff; color: #000; }
-  #side, #bar, .menu, .bubble, .img-handle { display: none !important; }
+  #home, #bar, .menu, .bubble, .img-handle { display: none !important; }
   #app { display: block; height: auto; }
-  #main { display: block; }
+  body.view-home #editorView { display: block; }
+  #editorView { display: block; height: auto; }
   #scroll { overflow: visible; -webkit-mask-image: none; mask-image: none; }
   #page { max-width: 100%; padding: 0; }
   #editor .ProseMirror { color: #000; }

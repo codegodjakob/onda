@@ -33,6 +33,24 @@ const IC = {
   sort: '<path d="M7 4v13M7 4 4 7M7 4l3 3"/><path d="M17 20V7M17 20l-3-3M17 20l3-3"/>',
   restore: '<path d="M9 14 4 9l5-5"/><path d="M4 9h9.5a6.5 6.5 0 0 1 0 13H10"/>',
   x: '<path d="M18 6 6 18M6 6l12 12"/>',
+  copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/>',
+  trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/>',
+  back: '<path d="M5 12h14M5 12l6-6M5 12l6 6"/>',
+}
+
+// ---------- Seiten: Bibliothek (Home) ↔ Schreibansicht ----------
+export function showHomeView() {
+  document.body.classList.remove('zen', 'zen-peek')
+  document.body.classList.add('view-home')
+  document.body.classList.remove('view-editor')
+  closeAllPanels(); hideBubble()
+  refreshSidebar()
+}
+export function showEditorView() {
+  document.body.classList.add('view-editor')
+  document.body.classList.remove('view-home')
+  // Titelhöhe erst messen, wenn die Ansicht wirklich sichtbar ist.
+  if (ctx) requestAnimationFrame(ctx.autoGrowTitle)
 }
 
 // ---------- kleine Helfer ----------
@@ -179,6 +197,14 @@ function buildToolbar() {
   const left = el('div', 'bar-group')
   const right = el('div', 'bar-group bar-right')
 
+  const backBtn = el('button', 'tbtn')
+  backBtn.innerHTML = icon(IC.back)
+  backBtn.title = 'Zur Bibliothek (Esc)'
+  backBtn.setAttribute('aria-label', 'Zur Bibliothek')
+  backBtn.addEventListener('click', () => { ctx.flushSave(); showHomeView() })
+  left.appendChild(backBtn)
+  left.appendChild(el('span', 'bar-sep'))
+
   blockBtn = el('button', 'tbtn tbtn-label tbtn-block')
   blockBtn.title = 'Absatzformat'
   blockBtn.innerHTML = '<span id="blockLabel">Text</span>'
@@ -204,6 +230,19 @@ function buildToolbar() {
   aaBtn.title = 'Format (Größe, Stil, Farbe, Ausrichtung)'
   makeDropdown(aaBtn, panel => {
     const e = ctx.editor
+    menuLabel(panel, 'Schrift')
+    const srow = el('div', 'mi-row')
+    ;[['Serif', 'serif', SERIF], ['Sans', 'sans', SANS]].forEach(([lab, v, fam]) => {
+      const b = el('button', 'mi-seg' + (ctx.state.settings.font === v ? ' on' : ''), lab)
+      b.style.fontFamily = fam
+      b.addEventListener('mousedown', ev => ev.preventDefault())
+      b.addEventListener('click', () => {
+        setSetting('font', v)
+        Array.from(srow.children).forEach(x => x.classList.toggle('on', x === b))
+      })
+      srow.appendChild(b)
+    })
+    panel.appendChild(srow)
     menuLabel(panel, 'Schriftgröße')
     const row = el('div', 'mi-row')
     const minus = el('button', 'mi-step', '−')
@@ -328,18 +367,6 @@ function buildGearPanel(panel) {
 
   menuLabel(panel, 'Erscheinung')
   segRow([['Auto', 'auto'], ['Hell', 'light'], ['Dunkel', 'dark']], s.theme, v => setSetting('theme', v))
-  menuLabel(panel, 'Schrift')
-  segRow([['Serif', 'serif', SERIF], ['Sans', 'sans', SANS]], s.font, v => setSetting('font', v))
-  menuLabel(panel, 'Grundgröße')
-  const grow = el('div', 'mi-row')
-  const gm = el('button', 'mi-step', '−')
-  const gv = el('span', 'mi-val', s.fontSize + '')
-  const gp = el('button', 'mi-step', '+')
-  gm.addEventListener('click', () => { setSetting('fontSize', Math.max(15, ctx.state.settings.fontSize - 1)); gv.textContent = ctx.state.settings.fontSize + '' })
-  gp.addEventListener('click', () => { setSetting('fontSize', Math.min(22, ctx.state.settings.fontSize + 1)); gv.textContent = ctx.state.settings.fontSize + '' })
-  ;[gm, gp].forEach(b => b.addEventListener('mousedown', e => e.preventDefault()))
-  grow.appendChild(gm); grow.appendChild(gv); grow.appendChild(gp)
-  panel.appendChild(grow)
   menuLabel(panel, 'Zeilenbreite')
   segRow([['Schmal', 600], ['Mittel', 720], ['Breit', 900]], s.lineWidth, v => setSetting('lineWidth', v))
 
@@ -665,13 +692,8 @@ function highlightMatch(text, q) {
   frag.appendChild(document.createTextNode(text.slice(idx + q.length)))
   return frag
 }
-let rowPanels = []
 export function refreshSidebar() {
   if (!ctx) return
-  // Offenes Zeilen-Menü erst sauber schließen, dann alte Zeilen-Menüs aufräumen.
-  if (openPanel && rowPanels.includes(openPanel)) closeAllPanels()
-  rowPanels.forEach(p => { const i = panels.indexOf(p); if (i >= 0) panels.splice(i, 1); p.remove() })
-  rowPanels = []
   if (counterEl && ctx.editor) updateToolbarState()
   const listEl = document.getElementById('doclist')
   const trashListEl = document.getElementById('trashlist')
@@ -696,24 +718,31 @@ export function refreshSidebar() {
     listEl.appendChild(el('div', 'empty', q ? 'Nichts gefunden.' : 'Noch kein Text — ⌘N beginnt einen neuen.'))
   }
   docs.forEach(d => {
-    const item = el('div', 'doc' + (d.id === ctx.state.active ? ' on' : ''))
+    const item = el('div', 'doc')
+    const main = el('div', 'doc-main')
     const tt = el('div', 'dt')
     tt.appendChild(highlightMatch(ctx.docTitle(d), q))
-    item.appendChild(tt)
-    item.appendChild(el('div', 'dd', fmtDate(d.updated)))
-    const more = el('button', 'doc-more', '…')
-    more.title = 'Aktionen'
-    more.setAttribute('aria-label', 'Aktionen für „' + ctx.docTitle(d) + '“')
-    item.appendChild(more)
-    rowPanels.push(makeDropdown(more, panel => {
-      menuItem(panel, 'Duplizieren', () => ctx.ops.duplicateDoc(d.id))
-      menuDivider(panel)
-      menuItem(panel, 'In den Papierkorb', () => ctx.ops.trashDoc(d.id))
-    }))
-    item.addEventListener('click', e => {
-      if (e.target === more || more.contains(e.target)) return
-      if (d.id !== ctx.state.active) ctx.ops.openDoc(d.id)
-    })
+    main.appendChild(tt)
+    const preview = stripHtml(d.body).trim().slice(0, 90)
+    main.appendChild(el('div', 'dd', fmtDate(d.updated) + (preview ? '  ·  ' + preview : '')))
+    item.appendChild(main)
+
+    // Einheitliche Zeilen-Aktionen: direkt sichtbar beim Hover, ein Klick (wie im Papierkorb).
+    const acts = el('div', 'trash-acts')
+    const dup = el('button', 'tico')
+    dup.innerHTML = icon(IC.copy)
+    dup.title = 'Duplizieren'
+    dup.setAttribute('aria-label', 'Duplizieren')
+    dup.addEventListener('click', ev => { ev.stopPropagation(); ctx.ops.duplicateDoc(d.id) })
+    const tr = el('button', 'tico tico-danger')
+    tr.innerHTML = icon(IC.trash)
+    tr.title = 'In den Papierkorb'
+    tr.setAttribute('aria-label', 'In den Papierkorb')
+    tr.addEventListener('click', ev => { ev.stopPropagation(); ctx.ops.trashDoc(d.id) })
+    acts.appendChild(dup); acts.appendChild(tr)
+    item.appendChild(acts)
+
+    item.addEventListener('click', () => ctx.ops.openDoc(d.id))
     listEl.appendChild(item)
   })
 
@@ -806,6 +835,7 @@ function bindKeys() {
     else if (e.key === 'Escape') {
       if (openPanel) closeAllPanels()
       else if (document.body.classList.contains('zen')) toggleZen()
+      else if (document.body.classList.contains('view-editor')) { ctx.flushSave(); showHomeView() }
     }
   })
   document.addEventListener('click', () => closeAllPanels())

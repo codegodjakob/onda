@@ -13,7 +13,7 @@ import TextAlign from '@tiptap/extension-text-align'
 import Placeholder from '@tiptap/extension-placeholder'
 import CharacterCount from '@tiptap/extension-character-count'
 import Typography from '@tiptap/extension-typography'
-import { initUI, setSaveState, refreshSidebar, applySettings, focusTitle } from './ui.js'
+import { initUI, setSaveState, refreshSidebar, applySettings, focusTitle, showEditorView } from './ui.js'
 
 // ---------- Schriftgröße pro Auswahl (Word-granular) ----------
 const FontSize = Extension.create({
@@ -163,9 +163,11 @@ function showDoc(id) {
   refreshSidebar()
 }
 export function openDoc(id) {
-  if (id === state.active) return
-  flushSave()
-  showDoc(id)
+  if (id !== state.active) {
+    flushSave()
+    showDoc(id)
+  }
+  showEditorView()
   state.editor.commands.focus('start')
 }
 export function newDoc() {
@@ -173,6 +175,7 @@ export function newDoc() {
   const d = { id: uid(), title: '', body: '', updated: now() }
   state.docs.push(d)
   showDoc(d.id)
+  showEditorView()
   focusTitle()
 }
 export function duplicateDoc(id) {
@@ -181,6 +184,7 @@ export function duplicateDoc(id) {
   const copy = { id: uid(), title: (src.title ? src.title + ' Kopie' : 'Kopie'), body: src.body, updated: now() }
   state.docs.push(copy)
   showDoc(copy.id)
+  showEditorView()
 }
 export function trashDoc(id) {
   const d = state.docs.find(x => x.id === id); if (!d) return
