@@ -153,7 +153,7 @@ final class ImgSchemeHandler: NSObject, WKURLSchemeHandler {
 
 // MARK: - App
 
-final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler {
+final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler, WKUIDelegate {
     var window: NSWindow!
     var webView: WKWebView!
     let probePath: String?
@@ -179,6 +179,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         cfg.setURLSchemeHandler(ImgSchemeHandler(), forURLScheme: "aiwt-img")
         webView = WKWebView(frame: .zero, configuration: cfg)
         webView.allowsMagnification = true
+        webView.uiDelegate = self
 
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1150, height: 760),
                           styleMask: [.titled, .closable, .miniaturizable, .resizable],
@@ -257,6 +258,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
             }
         default: break
         }
+    }
+
+    // JS-confirm()/alert() brauchen in WKWebView einen UIDelegate — sonst sind sie stumm (confirm liefert immer false).
+    func webView(_ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String,
+                 initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (Bool) -> Void) {
+        let a = NSAlert()
+        a.messageText = "Schreibwerkzeug"
+        a.informativeText = message
+        a.alertStyle = .warning
+        a.addButton(withTitle: "OK")
+        a.addButton(withTitle: "Abbrechen")
+        a.beginSheetModal(for: window) { resp in
+            completionHandler(resp == .alertFirstButtonReturn)
+        }
+    }
+
+    func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String,
+                 initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping () -> Void) {
+        let a = NSAlert()
+        a.messageText = "Schreibwerkzeug"
+        a.informativeText = message
+        a.beginSheetModal(for: window) { _ in completionHandler() }
     }
 
     @objc func printWebView() {

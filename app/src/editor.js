@@ -1,4 +1,5 @@
 import { Editor, Extension } from '@tiptap/core'
+import { EditorState } from '@tiptap/pm/state'
 import StarterKit from '@tiptap/starter-kit'
 import Underline from '@tiptap/extension-underline'
 import Link from '@tiptap/extension-link'
@@ -128,8 +129,11 @@ function saveCurrent() {
   const d = activeDoc()
   if (!d || !state.editor) return
   const t = document.getElementById('title')
-  d.title = t ? t.value : d.title
-  d.body = state.editor.getHTML()
+  const title = t ? t.value : d.title
+  const body = state.editor.getHTML()
+  if (title === d.title && body === d.body) return
+  d.title = title
+  d.body = body
   d.updated = now()
 }
 
@@ -150,6 +154,11 @@ function showDoc(id) {
   if (t) { t.value = d.title || '' }
   autoGrowTitle()
   state.editor.commands.setContent(d.body || '', false)
+  // Undo-History leeren: ⌘Z darf nie Inhalte eines anderen Dokuments zurückholen.
+  state.editor.view.updateState(EditorState.create({
+    doc: state.editor.state.doc,
+    plugins: state.editor.state.plugins,
+  }))
   persist()
   refreshSidebar()
 }
@@ -214,25 +223,36 @@ window.__imgSaved__ = function (reqId, url) {
 }
 export function insertImageFile(file) {
   if (!file || !/^image\//.test(file.type)) return false
+  const targetDoc = state.active
   const reader = new FileReader()
   reader.onload = () => {
     const dataUrl = reader.result
     if (NATIVE && window.webkit.messageHandlers.saveimg) {
       const reqId = uid()
       const ext = (file.type.split('/')[1] || 'png').replace('jpeg', 'jpg')
-      imgPending[reqId] = (url) => { insertImgNode(url || dataUrl) }
+      imgPending[reqId] = (url) => { insertImgNode(url || dataUrl, targetDoc) }
       window.webkit.messageHandlers.saveimg.postMessage(JSON.stringify({
         id: reqId, ext, dataBase64: String(dataUrl).split(',')[1] || '',
       }))
-      setTimeout(() => { if (imgPending[reqId]) { delete imgPending[reqId]; insertImgNode(dataUrl) } }, 2000)
+      setTimeout(() => { if (imgPending[reqId]) { delete imgPending[reqId]; insertImgNode(dataUrl, targetDoc) } }, 2000)
     } else {
-      insertImgNode(dataUrl)
+      insertImgNode(dataUrl, targetDoc)
     }
   }
   reader.readAsDataURL(file)
   return true
 }
-function insertImgNode(src) {
+function insertImgNode(src, targetDoc) {
+  // Kam die Antwort erst nach einem Dokumentwechsel, gehört das Bild trotzdem ins Ursprungs-Dokument.
+  if (targetDoc && targetDoc !== state.active) {
+    const d = state.docs.find(x => x.id === targetDoc)
+    if (d) {
+      d.body = (d.body || '') + '<img src="' + src + '" style="width:100%">'
+      d.updated = now()
+      persist(); refreshSidebar()
+    }
+    return
+  }
   state.editor.chain().focus().insertContent({ type: 'image', attrs: { src, width: '100%' } }).run()
   scheduleSave()
 }
@@ -267,10 +287,12 @@ function blockMd(node) {
     else if (tag === 'blockquote') out += '> ' + blockMd(n).trim().replace(/\n/g, '\n> ') + '\n\n'
     else if (tag === 'pre') out += '```\n' + n.textContent.replace(/\n$/, '') + '\n```\n\n'
     else if (tag === 'hr') out += '---\n\n'
+    else if (tag === 'img') out += '![](' + (n.getAttribute('src') || '') + ')\n\n'
     else if (tag === 'ul' && n.getAttribute('data-type') === 'taskList') {
       n.querySelectorAll(':scope > li').forEach(li => {
         const checked = li.getAttribute('data-checked') === 'true'
-        out += (checked ? '- [x] ' : '- [ ] ') + inlineMd(li).trim() + '\n'
+        const content = li.querySelector(':scope > div') || li
+        out += (checked ? '- [x] ' : '- [ ] ') + inlineMd(content).trim() + '\n'
       })
       out += '\n'
     }
@@ -314,7 +336,7 @@ export function boot() {
       TextStyle, FontSize, Color,
       Highlight.configure({ multicolor: true }),
       TextAlign.configure({ types: ['heading', 'paragraph'] }),
-      Placeholder.configure({ placeholder: 'Schreib hier los — „/" für Befehle …' }),
+      Placeholder.configure({ placeholder: 'Schreib hier los — „/“ für Befehle …' }),
       CharacterCount,
       Typography,
     ],
@@ -362,6 +384,11 @@ export function boot() {
   window.__flushForQuit__ = flushSave
   window.__newDocFromMenu__ = newDoc
   window.__exportFromMenu__ = exportMd
+
+  if (!NATIVE) {
+    window.addEventListener('beforeunload', flushSave)
+    document.addEventListener('visibilitychange', () => { if (document.hidden) flushSave() })
+  }
 
   // Selbsttest-Modus der Mac-App
   if (NATIVE && window.__PROBE__ && window.webkit.messageHandlers.probe) {

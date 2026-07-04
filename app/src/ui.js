@@ -31,6 +31,8 @@ const IC = {
   plus: '<path d="M12 5v14M5 12h14"/>',
   gear: '<circle cx="15" cy="6" r="2"/><path d="M4 6h9M19 6h1"/><circle cx="9" cy="12" r="2"/><path d="M4 12h3M13 12h7"/><circle cx="16" cy="18" r="2"/><path d="M4 18h10"/>',
   sort: '<path d="M7 4v13M7 4 4 7M7 4l3 3"/><path d="M17 20V7M17 20l-3-3M17 20l3-3"/>',
+  restore: '<path d="M9 14 4 9l5-5"/><path d="M4 9h9.5a6.5 6.5 0 0 1 0 13H10"/>',
+  x: '<path d="M18 6 6 18M6 6l12 12"/>',
 }
 
 // ---------- kleine Helfer ----------
@@ -43,6 +45,7 @@ function el(tag, cls, text) {
 function closeAllPanels() {
   panels.forEach(p => p.classList.remove('open'))
   openPanel = null
+  if (slashActive) closeSlash()
 }
 function positionPanel(panel, anchorRect, alignRight) {
   panel.style.visibility = 'hidden'
@@ -80,7 +83,7 @@ function menuItem(panel, label, onRun, opts = {}) {
   it.appendChild(lab)
   if (opts.kbd) it.appendChild(el('span', 'mi-kbd', opts.kbd))
   it.addEventListener('mousedown', e => e.preventDefault())
-  it.addEventListener('click', () => { closeAllPanels(); onRun() })
+  it.addEventListener('click', () => { if (!opts.stay) closeAllPanels(); onRun() })
   panel.appendChild(it)
   return it
 }
@@ -93,13 +96,15 @@ export function setSaveState(s) {
   if (!dotEl) return
   dotEl.classList.remove('saving', 'saved', 'error')
   errEl.textContent = ''
-  if (s === 'saving') dotEl.classList.add('saving')
+  if (s === 'saving') { dotEl.classList.add('saving'); dotEl.title = 'Speichert …' }
   else if (s === 'saved') {
     dotEl.classList.add('saved')
+    dotEl.title = 'Gespeichert'
     if (dotTimer) clearTimeout(dotTimer)
     dotTimer = setTimeout(() => dotEl.classList.remove('saved'), 1600)
   } else if (s === 'error') {
     dotEl.classList.add('error')
+    dotEl.title = 'Speichern fehlgeschlagen'
     errEl.textContent = 'Speichern fehlgeschlagen — bitte exportieren'
   }
 }
@@ -143,7 +148,7 @@ function currentBlockLabel() {
   if (e.isActive('heading', { level: 3 })) return 'Überschrift 3'
   if (e.isActive('taskList')) return 'Checkliste'
   if (e.isActive('bulletList')) return 'Aufzählung'
-  if (e.isActive('orderedList')) return 'Nummeriert'
+  if (e.isActive('orderedList')) return 'Nummerierte Liste'
   if (e.isActive('blockquote')) return 'Zitat'
   if (e.isActive('codeBlock')) return 'Code'
   return 'Text'
@@ -175,19 +180,19 @@ function buildToolbar() {
   const right = el('div', 'bar-group bar-right')
 
   blockBtn = el('button', 'tbtn tbtn-label tbtn-block')
-  blockBtn.title = 'Blocktyp'
+  blockBtn.title = 'Absatzformat'
   blockBtn.innerHTML = '<span id="blockLabel">Text</span>'
   makeDropdown(blockBtn, blockItems)
   left.appendChild(blockBtn)
   left.appendChild(el('span', 'bar-sep'))
 
-  const bBtn = el('button', 'tbtn', 'B'); bBtn.style.fontWeight = '700'
+  const bBtn = el('button', 'tbtn tb-bold', 'B'); bBtn.style.fontWeight = '700'
   bBtn.title = 'Fett (⌘B)'
   bBtn.addEventListener('mousedown', e => e.preventDefault())
   bBtn.addEventListener('click', () => ctx.editor.chain().focus().toggleBold().run())
   left.appendChild(bBtn)
 
-  const iBtn = el('button', 'tbtn', 'I'); iBtn.style.fontStyle = 'italic'
+  const iBtn = el('button', 'tbtn tb-italic', 'I'); iBtn.style.fontStyle = 'italic'
   iBtn.title = 'Kursiv (⌘I)'
   iBtn.addEventListener('mousedown', e => e.preventDefault())
   iBtn.addEventListener('click', () => ctx.editor.chain().focus().toggleItalic().run())
@@ -196,7 +201,7 @@ function buildToolbar() {
 
   const aaBtn = el('button', 'tbtn tbtn-label')
   aaBtn.innerHTML = '<span>Aa</span>'
-  aaBtn.title = 'Format (Größe, Farbe, Ausrichtung)'
+  aaBtn.title = 'Format (Größe, Stil, Farbe, Ausrichtung)'
   makeDropdown(aaBtn, panel => {
     const e = ctx.editor
     menuLabel(panel, 'Schriftgröße')
@@ -219,7 +224,7 @@ function buildToolbar() {
     panel.appendChild(row)
     menuDivider(panel)
     menuItem(panel, 'Unterstrichen', () => e.chain().focus().toggleUnderline().run(), { active: e.isActive('underline'), kbd: '⌘U' })
-    menuItem(panel, 'Durchgestrichen', () => e.chain().focus().toggleStrike().run(), { active: e.isActive('strike') })
+    menuItem(panel, 'Durchgestrichen', () => e.chain().focus().toggleStrike().run(), { active: e.isActive('strike'), kbd: '⇧⌘S' })
     menuDivider(panel)
     menuLabel(panel, 'Textfarbe')
     const crow = el('div', 'mi-swatches')
@@ -255,7 +260,10 @@ function buildToolbar() {
     ;[['Links', 'left'], ['Mitte', 'center'], ['Rechts', 'right']].forEach(([lab, alg]) => {
       const b = el('button', 'mi-seg' + (e.isActive({ textAlign: alg }) ? ' on' : ''), lab)
       b.addEventListener('mousedown', ev => ev.preventDefault())
-      b.addEventListener('click', () => { e.chain().focus().setTextAlign(alg).run(); closeAllPanels() })
+      b.addEventListener('click', () => {
+        e.chain().focus().setTextAlign(alg).run()
+        Array.from(arow.children).forEach(x => x.classList.toggle('on', x === b))
+      })
       arow.appendChild(b)
     })
     panel.appendChild(arow)
@@ -269,9 +277,6 @@ function buildToolbar() {
     const e = ctx.editor
     menuItem(panel, 'Link …', () => openLinkDialog(), { kbd: '⌘K' })
     menuItem(panel, 'Bild …', () => imgInput.click())
-    menuDivider(panel)
-    menuItem(panel, 'Checkliste', () => e.chain().focus().toggleTaskList().run())
-    menuItem(panel, 'Zitat', () => e.chain().focus().toggleBlockquote().run())
     menuItem(panel, 'Trennlinie', () => e.chain().focus().setHorizontalRule().run(), { kbd: '---' })
   })
   left.appendChild(plusBtn)
@@ -287,50 +292,7 @@ function buildToolbar() {
   const gearBtn = el('button', 'tbtn')
   gearBtn.innerHTML = icon(IC.gear)
   gearBtn.title = 'Einstellungen'
-  makeDropdown(gearBtn, panel => {
-    const s = ctx.state.settings
-    menuLabel(panel, 'Erscheinung')
-    const trow = el('div', 'mi-row')
-    ;[['Auto', 'auto'], ['Hell', 'light'], ['Dunkel', 'dark']].forEach(([lab, v]) => {
-      const b = el('button', 'mi-seg' + (s.theme === v ? ' on' : ''), lab)
-      b.addEventListener('click', () => { setSetting('theme', v); closeAllPanels() })
-      trow.appendChild(b)
-    })
-    panel.appendChild(trow)
-    menuLabel(panel, 'Schrift')
-    const frow = el('div', 'mi-row')
-    ;[['Serif', 'serif'], ['Sans', 'sans']].forEach(([lab, v]) => {
-      const b = el('button', 'mi-seg' + (s.font === v ? ' on' : ''), lab)
-      b.style.fontFamily = v === 'serif' ? SERIF : SANS
-      b.addEventListener('click', () => { setSetting('font', v); closeAllPanels() })
-      frow.appendChild(b)
-    })
-    panel.appendChild(frow)
-    menuLabel(panel, 'Textgröße')
-    const grow = el('div', 'mi-row')
-    const gm = el('button', 'mi-step', '−')
-    const gv = el('span', 'mi-val', s.fontSize + '')
-    const gp = el('button', 'mi-step', '+')
-    gm.addEventListener('click', () => { setSetting('fontSize', Math.max(15, s.fontSize - 1)); gv.textContent = ctx.state.settings.fontSize + '' })
-    gp.addEventListener('click', () => { setSetting('fontSize', Math.min(22, s.fontSize + 1)); gv.textContent = ctx.state.settings.fontSize + '' })
-    grow.appendChild(gm); grow.appendChild(gv); grow.appendChild(gp)
-    panel.appendChild(grow)
-    menuLabel(panel, 'Zeilenbreite')
-    const wrow = el('div', 'mi-row')
-    ;[['Schmal', 600], ['Mittel', 720], ['Breit', 900]].forEach(([lab, v]) => {
-      const b = el('button', 'mi-seg' + (s.lineWidth === v ? ' on' : ''), lab)
-      b.addEventListener('click', () => { setSetting('lineWidth', v); closeAllPanels() })
-      wrow.appendChild(b)
-    })
-    panel.appendChild(wrow)
-    menuDivider(panel)
-    menuItem(panel, s.spellcheck ? 'Rechtschreibung: An' : 'Rechtschreibung: Aus',
-      () => setSetting('spellcheck', !s.spellcheck))
-    menuItem(panel, 'Fokus-Modus', () => toggleZen(), { kbd: '⌘.', active: document.body.classList.contains('zen') })
-    menuDivider(panel)
-    menuItem(panel, 'Exportieren als Markdown …', () => ctx.exportMd(), { kbd: '⌘E' })
-    menuItem(panel, 'Drucken / PDF …', () => requestPrint(), { kbd: '⌘P' })
-  }, true)
+  makeDropdown(gearBtn, buildGearPanel, true)
   right.appendChild(gearBtn)
 
   bar.appendChild(left)
@@ -347,6 +309,49 @@ function buildToolbar() {
   })
   document.body.appendChild(imgInput)
 }
+// Einstellungen: bleibt beim Ausprobieren offen, Segmente aktualisieren sich an Ort und Stelle.
+function buildGearPanel(panel) {
+  panel.classList.add('settings')
+  const s = ctx.state.settings
+  const refresh = () => { panel.innerHTML = ''; buildGearPanel(panel) }
+  const segRow = (items, current, apply) => {
+    const row = el('div', 'mi-row')
+    items.forEach(([lab, v, font]) => {
+      const b = el('button', 'mi-seg' + (current === v ? ' on' : ''), lab)
+      if (font) b.style.fontFamily = font
+      b.addEventListener('mousedown', e => e.preventDefault())
+      b.addEventListener('click', () => { apply(v); refresh() })
+      row.appendChild(b)
+    })
+    panel.appendChild(row)
+  }
+
+  menuLabel(panel, 'Erscheinung')
+  segRow([['Auto', 'auto'], ['Hell', 'light'], ['Dunkel', 'dark']], s.theme, v => setSetting('theme', v))
+  menuLabel(panel, 'Schrift')
+  segRow([['Serif', 'serif', SERIF], ['Sans', 'sans', SANS]], s.font, v => setSetting('font', v))
+  menuLabel(panel, 'Grundgröße')
+  const grow = el('div', 'mi-row')
+  const gm = el('button', 'mi-step', '−')
+  const gv = el('span', 'mi-val', s.fontSize + '')
+  const gp = el('button', 'mi-step', '+')
+  gm.addEventListener('click', () => { setSetting('fontSize', Math.max(15, ctx.state.settings.fontSize - 1)); gv.textContent = ctx.state.settings.fontSize + '' })
+  gp.addEventListener('click', () => { setSetting('fontSize', Math.min(22, ctx.state.settings.fontSize + 1)); gv.textContent = ctx.state.settings.fontSize + '' })
+  ;[gm, gp].forEach(b => b.addEventListener('mousedown', e => e.preventDefault()))
+  grow.appendChild(gm); grow.appendChild(gv); grow.appendChild(gp)
+  panel.appendChild(grow)
+  menuLabel(panel, 'Zeilenbreite')
+  segRow([['Schmal', 600], ['Mittel', 720], ['Breit', 900]], s.lineWidth, v => setSetting('lineWidth', v))
+
+  menuDivider(panel)
+  menuItem(panel, 'Rechtschreibung', () => { setSetting('spellcheck', !ctx.state.settings.spellcheck); refresh() },
+    { stay: true, kbd: s.spellcheck ? 'An' : 'Aus' })
+  menuItem(panel, 'Fokus-Modus', () => toggleZen(), { kbd: '⌘.', active: document.body.classList.contains('zen') })
+  menuDivider(panel)
+  menuItem(panel, 'Exportieren als Markdown …', () => ctx.exportMd(), { kbd: '⌘E' })
+  menuItem(panel, 'Drucken / PDF …', () => requestPrint(), { kbd: '⌘P' })
+}
+
 function requestPrint() {
   if (ctx.state.native && window.webkit.messageHandlers.printreq) {
     window.webkit.messageHandlers.printreq.postMessage('')
@@ -361,6 +366,10 @@ function updateToolbarState() {
     const w = ctx.editor.storage.characterCount.words()
     counterEl.textContent = w + (w === 1 ? ' Wort' : ' Wörter')
   }
+  const tb = document.querySelector('#bar .tb-bold')
+  const ti = document.querySelector('#bar .tb-italic')
+  if (tb) tb.classList.toggle('on', ctx.editor.isActive('bold'))
+  if (ti) ti.classList.toggle('on', ctx.editor.isActive('italic'))
 }
 
 // ---------- Auswahl-Bubble ----------
@@ -375,10 +384,10 @@ function buildBubble() {
     bubbleEl.appendChild(b)
     return b
   }
-  mk('B', 'Fett', () => ctx.editor.chain().focus().toggleBold().run(), 'bb-b')
-  mk('I', 'Kursiv', () => ctx.editor.chain().focus().toggleItalic().run(), 'bb-i')
-  mk('U', 'Unterstrichen', () => ctx.editor.chain().focus().toggleUnderline().run(), 'bb-u')
-  mk('S', 'Durchgestrichen', () => ctx.editor.chain().focus().toggleStrike().run(), 'bb-s')
+  mk('B', 'Fett (⌘B)', () => ctx.editor.chain().focus().toggleBold().run(), 'bb-b')
+  mk('I', 'Kursiv (⌘I)', () => ctx.editor.chain().focus().toggleItalic().run(), 'bb-i')
+  mk('U', 'Unterstrichen (⌘U)', () => ctx.editor.chain().focus().toggleUnderline().run(), 'bb-u')
+  mk('S', 'Durchgestrichen (⇧⌘S)', () => ctx.editor.chain().focus().toggleStrike().run(), 'bb-s')
   bubbleEl.appendChild(el('span', 'bb-div'))
   mk('−', 'Kleiner', () => bumpFontSize(-1))
   mk('+', 'Größer', () => bumpFontSize(1))
@@ -391,6 +400,10 @@ function showBubble() {
   const sel = e.state.selection
   if (sel.empty || sel.node) { hideBubble(); return }
   if (openPanel) return
+  bubbleEl.querySelector('.bb-b').classList.toggle('on', e.isActive('bold'))
+  bubbleEl.querySelector('.bb-i').classList.toggle('on', e.isActive('italic'))
+  bubbleEl.querySelector('.bb-u').classList.toggle('on', e.isActive('underline'))
+  bubbleEl.querySelector('.bb-s').classList.toggle('on', e.isActive('strike'))
   const from = e.view.coordsAtPos(sel.from)
   const to = e.view.coordsAtPos(sel.to)
   bubbleEl.classList.add('open')
@@ -427,8 +440,17 @@ function openLinkDialog() {
   ok.addEventListener('click', () => {
     let url = input.value.trim()
     if (url && !/^https?:\/\//i.test(url)) url = 'https://' + url
-    if (url) ctx.editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run()
-    else ctx.editor.chain().focus().extendMarkRange('link').unsetLink().run()
+    const sel = ctx.editor.state.selection
+    if (url && sel.empty && !ctx.editor.isActive('link')) {
+      // Nichts markiert: Link als Text einfügen, sonst sähe man keine Wirkung.
+      ctx.editor.chain().focus().insertContent({
+        type: 'text', text: url, marks: [{ type: 'link', attrs: { href: url } }],
+      }).insertContent(' ').run()
+    } else if (url) {
+      ctx.editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run()
+    } else {
+      ctx.editor.chain().focus().extendMarkRange('link').unsetLink().run()
+    }
     closeAllPanels()
   })
   const rm = el('button', 'mi-seg', 'Entfernen')
@@ -445,7 +467,7 @@ function openLinkDialog() {
   input.focus()
   input.addEventListener('keydown', e => {
     if (e.key === 'Enter') { e.preventDefault(); ok.click() }
-    if (e.key === 'Escape') closeAllPanels()
+    if (e.key === 'Escape') { e.stopPropagation(); closeAllPanels(); ctx.editor.commands.focus() }
   })
 }
 
@@ -530,6 +552,8 @@ function bindSlash() {
       if (e.key === 'ArrowDown') { slashSel++; renderSlash(); return true }
       if (e.key === 'ArrowUp') { slashSel = Math.max(0, slashSel - 1); renderSlash(); return true }
       if (e.key === 'Enter') {
+        const q = slashQuery()
+        if (q === null) { closeSlash(); return false }
         const items = slashEl._items || []
         if (items[slashSel]) execSlash(items[slashSel])
         return true
@@ -551,7 +575,7 @@ function bindSlash() {
 let handleEl = null, dragging = false
 function bindImageResize() {
   handleEl = el('div', 'img-handle')
-  handleEl.title = 'Breite ziehen'
+  handleEl.title = 'Bildbreite anpassen (ziehen)'
   document.body.appendChild(handleEl)
   const update = () => {
     const selNode = document.querySelector('#editor .ProseMirror-selectednode')
@@ -598,6 +622,7 @@ function bindImageResize() {
 let lastZenBlock = null
 function toggleZen() {
   document.body.classList.toggle('zen')
+  document.body.classList.remove('zen-peek')
   markZenBlock()
 }
 function markZenBlock() {
@@ -643,9 +668,11 @@ function highlightMatch(text, q) {
 let rowPanels = []
 export function refreshSidebar() {
   if (!ctx) return
-  // alte Zeilen-Menüs aufräumen (sonst sammeln sie sich an)
+  // Offenes Zeilen-Menü erst sauber schließen, dann alte Zeilen-Menüs aufräumen.
+  if (openPanel && rowPanels.includes(openPanel)) closeAllPanels()
   rowPanels.forEach(p => { const i = panels.indexOf(p); if (i >= 0) panels.splice(i, 1); p.remove() })
   rowPanels = []
+  if (counterEl && ctx.editor) updateToolbarState()
   const listEl = document.getElementById('doclist')
   const trashListEl = document.getElementById('trashlist')
   const trashCountEl = document.getElementById('trashCount')
@@ -655,6 +682,11 @@ export function refreshSidebar() {
   let docs = ctx.state.docs.filter(d => !d.trashed)
   if (q) docs = docs.filter(d =>
     ctx.docTitle(d).toLowerCase().includes(q) || stripHtml(d.body).toLowerCase().includes(q))
+  // Das aktive Dokument bleibt immer sichtbar — auch wenn die Suche es nicht trifft.
+  if (!docs.some(d => d.id === ctx.state.active)) {
+    const a = ctx.state.docs.find(d => d.id === ctx.state.active && !d.trashed)
+    if (a) docs.unshift(a)
+  }
   docs = docs.slice().sort((a, b) => sortMode === 'title'
     ? ctx.docTitle(a).localeCompare(ctx.docTitle(b), 'de')
     : (b.updated || 0) - (a.updated || 0))
@@ -670,7 +702,8 @@ export function refreshSidebar() {
     item.appendChild(tt)
     item.appendChild(el('div', 'dd', fmtDate(d.updated)))
     const more = el('button', 'doc-more', '…')
-    more.title = 'Mehr'
+    more.title = 'Aktionen'
+    more.setAttribute('aria-label', 'Aktionen für „' + ctx.docTitle(d) + '“')
     item.appendChild(more)
     rowPanels.push(makeDropdown(more, panel => {
       menuItem(panel, 'Duplizieren', () => ctx.ops.duplicateDoc(d.id))
@@ -689,33 +722,50 @@ export function refreshSidebar() {
   document.getElementById('trash').style.display = trash.length ? '' : 'none'
   trashListEl.innerHTML = ''
   trash.sort((a, b) => (b.trashedAt || 0) - (a.trashedAt || 0)).forEach(d => {
-    const item = el('div', 'doc trash-doc')
+    const item = el('div', 'trash-doc')
     item.appendChild(el('div', 'dt', ctx.docTitle(d)))
     const acts = el('div', 'trash-acts')
-    const re = el('button', 'ghost', 'Wiederherstellen')
+    const re = el('button', 'tico')
+    re.innerHTML = icon(IC.restore)
+    re.title = 'Wiederherstellen'
+    re.setAttribute('aria-label', 'Wiederherstellen')
     re.addEventListener('click', () => ctx.ops.restoreDoc(d.id))
-    const del = el('button', 'ghost ghost-danger', 'Endgültig löschen')
+    const del = el('button', 'tico tico-danger')
+    del.innerHTML = icon(IC.x)
+    del.title = 'Endgültig löschen'
+    del.setAttribute('aria-label', 'Endgültig löschen')
     del.addEventListener('click', () => {
-      if (confirm('„' + ctx.docTitle(d) + '" endgültig löschen? Das kann nicht rückgängig gemacht werden.'))
+      if (confirm('„' + ctx.docTitle(d) + '“ endgültig löschen? Das kann nicht rückgängig gemacht werden.'))
         ctx.ops.deleteForever(d.id)
     })
     acts.appendChild(re); acts.appendChild(del)
     item.appendChild(acts)
     trashListEl.appendChild(item)
   })
+  if (trash.length) {
+    trashListEl.appendChild(el('div', 'trash-note', 'Wird nach 30 Tagen automatisch endgültig gelöscht.'))
+  }
 }
 function bindSidebar() {
   const nb = document.getElementById('newBtn')
   nb.innerHTML = icon(IC.plus)
+  nb.setAttribute('aria-label', 'Neuer Text')
   nb.addEventListener('click', () => ctx.ops.newDoc())
-  document.getElementById('sortBtn').innerHTML = icon(IC.sort)
+  const sb = document.getElementById('sortBtn')
+  sb.innerHTML = icon(IC.sort)
+  sb.setAttribute('aria-label', 'Sortierung wechseln')
+  document.getElementById('trashToggle').title = 'Einträge werden nach 30 Tagen endgültig gelöscht'
   const search = document.getElementById('search')
   search.addEventListener('input', () => { searchQuery = search.value; refreshSidebar() })
   search.addEventListener('keydown', e => {
     if (e.key === 'Escape') { search.value = ''; searchQuery = ''; refreshSidebar(); search.blur() }
   })
   const sortBtn = document.getElementById('sortBtn')
-  const syncSortTitle = () => { sortBtn.title = sortMode === 'recent' ? 'Sortiert: zuletzt bearbeitet' : 'Sortiert: Titel A–Z' }
+  const syncSortTitle = () => {
+    sortBtn.title = sortMode === 'recent' ? 'Sortiert: zuletzt bearbeitet' : 'Sortiert: Titel A–Z'
+    sortBtn.classList.toggle('on', sortMode === 'title')
+    sortBtn.setAttribute('aria-pressed', sortMode === 'title' ? 'true' : 'false')
+  }
   syncSortTitle()
   sortBtn.addEventListener('click', () => {
     sortMode = sortMode === 'recent' ? 'title' : 'recent'
@@ -725,7 +775,6 @@ function bindSidebar() {
   tgl.addEventListener('click', () => {
     const l = document.getElementById('trashlist')
     l.hidden = !l.hidden
-    tgl.classList.toggle('openT', !l.hidden)
   })
 }
 
@@ -776,5 +825,14 @@ export function initUI(context) {
   ctx.editor.on('selectionUpdate', () => { updateToolbarState(); showBubble(); markZenBlock() })
   ctx.editor.on('update', () => { updateToolbarState(); markZenBlock() })
   ctx.editor.on('blur', () => setTimeout(() => { if (!openPanel) hideBubble() }, 150))
-  document.getElementById('scroll').addEventListener('scroll', () => { hideBubble() })
+  document.getElementById('scroll').addEventListener('scroll', () => {
+    hideBubble()
+    if (openPanel) closeAllPanels()
+  })
+  // Fokus-Modus: Maus an den oberen Rand holt die Leiste kurz zurück.
+  document.addEventListener('mousemove', ev => {
+    if (!document.body.classList.contains('zen')) return
+    if (ev.clientY <= 8) document.body.classList.add('zen-peek')
+    else if (ev.clientY > 70) document.body.classList.remove('zen-peek')
+  })
 }
