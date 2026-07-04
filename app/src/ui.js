@@ -8,21 +8,30 @@ let searchQuery = ''
 let openPanel = null
 const panels = []
 
+// Prinzip „begrenzte Auswahl": wenige, gut gewählte Optionen statt vieler Nuancen.
 const COLORS = [
   { label: 'Standard', value: null },
   { label: 'Rot', value: '#a3402a' },
   { label: 'Bernstein', value: '#b9831f' },
   { label: 'Blau', value: '#3a6ea5' },
   { label: 'Grün', value: '#256d4f' },
-  { label: 'Violett', value: '#6b4a94' },
 ]
 const HIGHLIGHTS = [
   { label: 'Keine', value: null },
   { label: 'Gelb', value: '#f6e7a9' },
   { label: 'Grün', value: '#d9ecd4' },
   { label: 'Blau', value: '#d7e6f7' },
-  { label: 'Rosa', value: '#f6dde7' },
 ]
+
+// Schlichte Linien-Icons (einheitlicher Strich, keine Deko)
+function icon(paths) {
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + paths + '</svg>'
+}
+const IC = {
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  gear: '<circle cx="15" cy="6" r="2"/><path d="M4 6h9M19 6h1"/><circle cx="9" cy="12" r="2"/><path d="M4 12h3M13 12h7"/><circle cx="16" cy="18" r="2"/><path d="M4 18h10"/>',
+  sort: '<path d="M7 4v13M7 4 4 7M7 4l3 3"/><path d="M17 20V7M17 20l-3-3M17 20l3-3"/>',
+}
 
 // ---------- kleine Helfer ----------
 function el(tag, cls, text) {
@@ -96,8 +105,8 @@ export function setSaveState(s) {
 }
 
 // ---------- Einstellungen anwenden ----------
-const SERIF = 'Georgia, "Iowan Old Style", "Times New Roman", serif'
-const SANS = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif'
+const SERIF = '"Literata", "Iowan Old Style", Georgia, serif'
+const SANS = '"Diatype", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif'
 let mediaBound = false
 export function applySettings() {
   const s = ctx.state.settings
@@ -165,10 +174,12 @@ function buildToolbar() {
   const left = el('div', 'bar-group')
   const right = el('div', 'bar-group bar-right')
 
-  blockBtn = el('button', 'tbtn tbtn-label')
-  blockBtn.innerHTML = '<span id="blockLabel">Text</span><span class="chev">▾</span>'
+  blockBtn = el('button', 'tbtn tbtn-label tbtn-block')
+  blockBtn.title = 'Blocktyp'
+  blockBtn.innerHTML = '<span id="blockLabel">Text</span>'
   makeDropdown(blockBtn, blockItems)
   left.appendChild(blockBtn)
+  left.appendChild(el('span', 'bar-sep'))
 
   const bBtn = el('button', 'tbtn', 'B'); bBtn.style.fontWeight = '700'
   bBtn.title = 'Fett (⌘B)'
@@ -181,10 +192,11 @@ function buildToolbar() {
   iBtn.addEventListener('mousedown', e => e.preventDefault())
   iBtn.addEventListener('click', () => ctx.editor.chain().focus().toggleItalic().run())
   left.appendChild(iBtn)
+  left.appendChild(el('span', 'bar-sep'))
 
   const aaBtn = el('button', 'tbtn tbtn-label')
-  aaBtn.innerHTML = '<span>Aa</span><span class="chev">▾</span>'
-  aaBtn.title = 'Format'
+  aaBtn.innerHTML = '<span>Aa</span>'
+  aaBtn.title = 'Format (Größe, Farbe, Ausrichtung)'
   makeDropdown(aaBtn, panel => {
     const e = ctx.editor
     menuLabel(panel, 'Schriftgröße')
@@ -197,7 +209,7 @@ function buildToolbar() {
     ;[minus, plus].forEach(b => b.addEventListener('mousedown', ev => ev.preventDefault()))
     row.appendChild(minus); row.appendChild(val); row.appendChild(plus)
     const presets = el('span', 'mi-presets')
-    ;[14, 17, 20, 24].forEach(px => {
+    ;[14, 17, 21].forEach(px => {
       const p = el('button', 'mi-preset', px + '')
       p.addEventListener('mousedown', ev => ev.preventDefault())
       p.addEventListener('click', () => { e.chain().focus().setFontSize(px + 'px').run(); val.textContent = px + '' })
@@ -250,9 +262,9 @@ function buildToolbar() {
   })
   left.appendChild(aaBtn)
 
-  const plusBtn = el('button', 'tbtn tbtn-label')
-  plusBtn.innerHTML = '<span>+</span><span class="chev">▾</span>'
-  plusBtn.title = 'Einfügen'
+  const plusBtn = el('button', 'tbtn')
+  plusBtn.innerHTML = icon(IC.plus)
+  plusBtn.title = 'Einfügen (Link, Bild, Trennlinie …)'
   makeDropdown(plusBtn, panel => {
     const e = ctx.editor
     menuItem(panel, 'Link …', () => openLinkDialog(), { kbd: '⌘K' })
@@ -272,8 +284,8 @@ function buildToolbar() {
   errEl = el('span', 'saveerr', '')
   right.appendChild(errEl)
 
-  const gearBtn = el('button', 'tbtn tbtn-label')
-  gearBtn.innerHTML = '<span>⚙</span>'
+  const gearBtn = el('button', 'tbtn')
+  gearBtn.innerHTML = icon(IC.gear)
   gearBtn.title = 'Einstellungen'
   makeDropdown(gearBtn, panel => {
     const s = ctx.state.settings
@@ -289,6 +301,7 @@ function buildToolbar() {
     const frow = el('div', 'mi-row')
     ;[['Serif', 'serif'], ['Sans', 'sans']].forEach(([lab, v]) => {
       const b = el('button', 'mi-seg' + (s.font === v ? ' on' : ''), lab)
+      b.style.fontFamily = v === 'serif' ? SERIF : SANS
       b.addEventListener('click', () => { setSetting('font', v); closeAllPanels() })
       frow.appendChild(b)
     })
@@ -692,7 +705,10 @@ export function refreshSidebar() {
   })
 }
 function bindSidebar() {
-  document.getElementById('newBtn').addEventListener('click', () => ctx.ops.newDoc())
+  const nb = document.getElementById('newBtn')
+  nb.innerHTML = icon(IC.plus)
+  nb.addEventListener('click', () => ctx.ops.newDoc())
+  document.getElementById('sortBtn').innerHTML = icon(IC.sort)
   const search = document.getElementById('search')
   search.addEventListener('input', () => { searchQuery = search.value; refreshSidebar() })
   search.addEventListener('keydown', e => {

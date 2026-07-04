@@ -10,7 +10,9 @@ Ein persönliches Desktop-Schreibwerkzeug für **alle Textformen** — von der w
 
 ## Leitprinzipien
 
-**0. Calm Technology (oberstes Gestaltungsprinzip, vom Nutzer festgelegt).** Das gesamte Tool folgt dem Calm-Technology-Ansatz: Es beansprucht so wenig Aufmerksamkeit wie möglich, informiert über die Peripherie (dezente Zeichen statt Text-Alarme, Punkt statt Pop-up), Funktionen erscheinen im Kontext statt in permanenten Leisten, und alles Wichtige funktioniert auch, wenn etwas fehlschlägt. **Wichtig: Calm ≠ featurearm** — der Funktionsumfang ist voll da, nur seine *Präsentation* ist leise und tritt hinter den Text zurück.
+**0a. Begrenzte Auswahl (Gestaltungsprinzip, vom Nutzer festgelegt).** Überall gilt: **wenige, gut gewählte Optionen statt vieler Nuancen** — eine Balance zwischen „ein paar Optionen" und „nicht zu kompliziert". Beispiel Schriften: genau zwei (eine Serif, eine Sans), jede mit eigener Wirkung — statt einer Font-Liste. Gleiches Muster für Farben, Größen-Presets, Zeilenbreiten. Richtung Notion. Alles muss in die Gesamt-Gestaltungssprache der App passen. Hausschriften: **ABC Diatype** (UI + Sans) · **Literata** (Serif).
+
+**0b. Calm Technology (oberstes Gestaltungsprinzip, vom Nutzer festgelegt).** Das gesamte Tool folgt dem Calm-Technology-Ansatz: Es beansprucht so wenig Aufmerksamkeit wie möglich, informiert über die Peripherie (dezente Zeichen statt Text-Alarme, Punkt statt Pop-up), Funktionen erscheinen im Kontext statt in permanenten Leisten, und alles Wichtige funktioniert auch, wenn etwas fehlschlägt. **Wichtig: Calm ≠ featurearm** — der Funktionsumfang ist voll da, nur seine *Präsentation* ist leise und tritt hinter den Text zurück.
 
 1. **Denkraum vs. roter Faden trennen.** Der Argument-*Graph* ist der reiche, verzweigte Denkraum; der *Spine* ist eine einzige lineare, geordnete Auswahl daraus — und genau diese Sequenz ist die Textreihenfolge. „Ein klarer roter Faden" ist damit in jedem Moment wahr.
 2. **Entdeckungen drängen sich nie in den Text.** Neues landet im stillen Seitenkanal → wird in der Sandbox erkundet → nur **bewusst promotete** Knoten werden Teil des Graphen/Spine.
