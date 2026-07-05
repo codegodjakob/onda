@@ -36,6 +36,16 @@ const IC = {
   copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/>',
   trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/>',
   back: '<path d="M5 12h14M5 12l6-6M5 12l6 6"/>',
+  // Absatzformat-Icons (wechseln mit dem Format)
+  bText: '<path d="M4 6h16M4 12h16M4 18h10"/>',
+  bH1: '<path d="M4 7v10M11 7v10M4 12h7M17 7.5l2-1.5v11"/>',
+  bH2: '<path d="M4 7v10M10 7v10M4 12h6M15 8.6a2.1 2.1 0 0 1 4 .9c0 1-.7 1.7-1.6 2.7L15 15.5V17h4.5"/>',
+  bH3: '<path d="M4 7v10M10 7v10M4 12h6M15 8.5a2 2 0 1 1 2.6 3.4A2.1 2.1 0 1 1 15 15.6"/>',
+  bUl: '<path d="M10 6h10M10 12h10M10 18h10M4.5 6h.5M4.5 12h.5M4.5 18h.5"/>',
+  bOl: '<path d="M11 6h9M11 12h9M11 18h9M6 8V4L4.5 5.2M4 12.5a1.5 1.5 0 1 1 3 .4c0 .5-.4.9-1 1.5L4 16h3"/>',
+  bCl: '<path d="M11 6h9M11 12h9M11 18h9M3.5 5.5 5 7l2.5-3M3.5 11.5 5 13l2.5-3"/>',
+  bQuote: '<path d="M9 7H6a1 1 0 0 0-1 1v3a1 1 0 0 0 1 1h3v1c0 2-1 3-3 3.5M19 7h-3a1 1 0 0 0-1 1v3a1 1 0 0 0 1 1h3v1c0 2-1 3-3 3.5"/>',
+  bCode: '<path d="M8 8l-4 4 4 4M16 8l4 4-4 4"/>',
 }
 
 // ---------- Seiten: Bibliothek (Home) ↔ Schreibansicht ----------
@@ -161,15 +171,15 @@ function setSetting(key, value) {
 let blockBtn = null, counterEl = null
 function currentBlock() {
   const e = ctx.editor
-  if (e.isActive('heading', { level: 1 })) return { mark: 'H1', name: 'Überschrift 1' }
-  if (e.isActive('heading', { level: 2 })) return { mark: 'H2', name: 'Überschrift 2' }
-  if (e.isActive('heading', { level: 3 })) return { mark: 'H3', name: 'Überschrift 3' }
-  if (e.isActive('taskList')) return { mark: '✓', name: 'Checkliste' }
-  if (e.isActive('bulletList')) return { mark: '•', name: 'Aufzählung' }
-  if (e.isActive('orderedList')) return { mark: '1.', name: 'Nummerierte Liste' }
-  if (e.isActive('blockquote')) return { mark: '„', name: 'Zitat' }
-  if (e.isActive('codeBlock')) return { mark: '</>', name: 'Code' }
-  return { mark: '¶', name: 'Text' }
+  if (e.isActive('heading', { level: 1 })) return { ic: IC.bH1, name: 'Überschrift 1' }
+  if (e.isActive('heading', { level: 2 })) return { ic: IC.bH2, name: 'Überschrift 2' }
+  if (e.isActive('heading', { level: 3 })) return { ic: IC.bH3, name: 'Überschrift 3' }
+  if (e.isActive('taskList')) return { ic: IC.bCl, name: 'Checkliste' }
+  if (e.isActive('bulletList')) return { ic: IC.bUl, name: 'Aufzählung' }
+  if (e.isActive('orderedList')) return { ic: IC.bOl, name: 'Nummerierte Liste' }
+  if (e.isActive('blockquote')) return { ic: IC.bQuote, name: 'Zitat' }
+  if (e.isActive('codeBlock')) return { ic: IC.bCode, name: 'Code' }
+  return { ic: IC.bText, name: 'Text' }
 }
 function currentBlockLabel() { return currentBlock().name }
 function curFontSize() {
@@ -208,7 +218,7 @@ function buildToolbar() {
 
   blockBtn = el('button', 'tbtn tbtn-block')
   blockBtn.title = 'Absatzformat: Text'
-  blockBtn.innerHTML = '<span id="blockLabel">¶</span>'
+  blockBtn.innerHTML = '<span id="blockLabel">' + icon(IC.bText) + '</span>'
   makeDropdown(blockBtn, blockItems)
   left.appendChild(blockBtn)
   left.appendChild(el('span', 'bar-sep'))
@@ -390,7 +400,10 @@ function updateToolbarState() {
   const lab = document.getElementById('blockLabel')
   if (lab) {
     const b = currentBlock()
-    lab.textContent = b.mark
+    if (lab.dataset.ic !== b.name) {
+      lab.dataset.ic = b.name
+      lab.innerHTML = icon(b.ic)
+    }
     if (blockBtn) blockBtn.title = 'Absatzformat: ' + b.name
   }
   if (counterEl && ctx.editor.storage.characterCount) {
