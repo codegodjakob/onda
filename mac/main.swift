@@ -169,6 +169,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         ucc.add(self, name: "probe")
         ucc.add(self, name: "saveimg")
         ucc.add(self, name: "printreq")
+        ucc.add(self, name: "openurl")
 
         let data = Store.load()
         let js = "window.__NATIVE_DATA__ = \(data); window.__PROBE__ = \(probePath != nil ? "true" : "false");"
@@ -251,6 +252,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
             }
         case "printreq":
             printWebView()
+        case "openurl":
+            if let s = message.body as? String, let url = URL(string: s),
+               ["http", "https"].contains(url.scheme ?? "") {
+                NSWorkspace.shared.open(url)
+            }
         case "probe":
             if let p = probePath, let s = message.body as? String {
                 try? s.write(toFile: p, atomically: true, encoding: .utf8)

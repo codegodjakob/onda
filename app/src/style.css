@@ -262,6 +262,35 @@ body.view-editor #home { display: none; }
 .ai-box .mi-row { padding: 10px 0 0; }
 .ai-box > .mi-seg { margin: 6px 0 0; }
 
+.rail-div { width: 18px; height: 0.5px; background: var(--line2); margin: 4px 0 6px; }
+
+/* Bibliothek: Breadcrumb + Projekt-Umbenennen */
+.crumb { font-size: 12px; color: var(--txt3); padding: 0 0 10px; display: block; }
+.crumb:hover { color: var(--accent); }
+.rename-input {
+  width: 100%; font-size: 14.5px; color: var(--txt);
+  background: var(--bg); border: 0.5px solid var(--accent); border-radius: 6px;
+  padding: 2px 8px; outline: none; font-family: inherit;
+}
+
+/* Overlay: Bild + Quellen-Links */
+.ai-img { width: 100%; border-radius: var(--r); border: 0.5px solid var(--line); display: block; margin: 6px 0 4px; }
+.ai-cap { font-size: 11px; color: var(--txt3); margin-bottom: 4px; }
+.ai-src { display: block; width: 100%; text-align: left; font-size: 12.5px; color: var(--accent); padding: 4px 2px; border-radius: 5px; }
+.ai-src:hover { background: var(--bg3); }
+
+/* Bauklötze: Verschiebe-Ziel */
+.blk.drop-above { box-shadow: 0 -2px 0 0 var(--accent); }
+
+/* Narrative: editierbar + hinzufügen */
+.narr-label[contenteditable]:focus, .narr-txt[contenteditable]:focus {
+  outline: none; background: var(--bg); border-radius: 4px; box-shadow: 0 0 0 1.5px var(--accent);
+}
+.narr-add { font-size: 11px; color: var(--txt3); padding: 3px 0; display: block; }
+.narr-add:hover { color: var(--accent); }
+.narr-add-thread { margin-top: 4px; }
+.narr-sync { color: var(--warn) !important; transition: color var(--dur) var(--ease); }
+
 /* Fokus-Modus blendet auch Rails & Panels aus */
 body.zen .rail, body.zen .panel { display: none; }
 

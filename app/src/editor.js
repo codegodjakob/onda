@@ -58,7 +58,7 @@ const NATIVE = !!(window.webkit && window.webkit.messageHandlers && window.webki
 const DEFAULTS = { theme: 'auto', fontSize: 17, lineWidth: 720, font: 'serif', spellcheck: false, showWords: true }
 const TRASH_DAYS = 30
 
-export const state = { docs: [], active: null, settings: { ...DEFAULTS }, editor: null, native: NATIVE }
+export const state = { docs: [], active: null, projects: [], activeProject: null, settings: { ...DEFAULTS }, editor: null, native: NATIVE }
 
 function uid() { return 'd' + Math.random().toString(36).slice(2, 9) + Date.now().toString(36) }
 function now() { return Date.now() }
@@ -66,10 +66,30 @@ export function docTitle(d) { return (d && d.title && d.title.trim()) ? d.title.
 export function activeDoc() { return state.docs.find(d => d.id === state.active) }
 
 function newDocRaw() {
-  const d = { id: uid(), title: '', body: '', updated: now() }
+  const d = { id: uid(), title: '', body: '', updated: now(), projectId: state.activeProject || (state.projects[0] && state.projects[0].id) }
   state.docs.push(d); state.active = d.id
   return d
 }
+
+// ---------- Projekt-Operationen ----------
+export function newProject(name) {
+  const p = { id: 'p' + Math.random().toString(36).slice(2, 8), name: name || 'Neues Projekt', created: now() }
+  state.projects.push(p)
+  state.activeProject = p.id
+  persist()
+  return p
+}
+export function renameProject(id, name) {
+  const p = state.projects.find(x => x.id === id); if (!p) return
+  p.name = (name || '').trim() || p.name
+  persist()
+}
+export function openProject(id) {
+  if (!state.projects.some(p => p.id === id)) return
+  state.activeProject = id
+  persist()
+}
+export function activeProjectObj() { return state.projects.find(p => p.id === state.activeProject) }
 
 export function purgeTrash() {
   const cutoff = now() - TRASH_DAYS * 24 * 3600 * 1000
@@ -92,6 +112,16 @@ function load() {
   state.docs = (d && Array.isArray(d.docs)) ? d.docs : []
   state.active = d ? d.active : null
   state.settings = Object.assign({}, DEFAULTS, (d && d.settings) || {})
+  // Projekte: bestehende Texte wandern in ein Standard-Projekt (Migration).
+  state.projects = (d && Array.isArray(d.projects) && d.projects.length) ? d.projects : []
+  if (!state.projects.length) {
+    state.projects = [{ id: 'p-default', name: 'Meine Texte', created: now() }]
+  }
+  state.docs.forEach(x => {
+    if (!x.projectId || !state.projects.some(p => p.id === x.projectId)) x.projectId = state.projects[0].id
+  })
+  state.activeProject = (d && d.activeProject && state.projects.some(p => p.id === d.activeProject))
+    ? d.activeProject : state.projects[0].id
   purgeTrash()
   if (!state.docs.some(x => !x.trashed)) newDocRaw()
   if (!state.docs.some(x => x.id === state.active && !x.trashed)) {
@@ -101,7 +131,11 @@ function load() {
 
 let ackPending = false
 export function persist() {
-  const payload = JSON.stringify({ docs: state.docs, active: state.active, settings: state.settings })
+  const payload = JSON.stringify({
+    docs: state.docs, active: state.active,
+    projects: state.projects, activeProject: state.activeProject,
+    settings: state.settings,
+  })
   if (NATIVE) {
     ackPending = true
     try { window.webkit.messageHandlers.store.postMessage(payload) }
@@ -165,6 +199,8 @@ function showDoc(id) {
   refreshSidebar()
 }
 export function openDoc(id) {
+  const target = state.docs.find(x => x.id === id)
+  if (target && target.projectId) state.activeProject = target.projectId
   if (id !== state.active) {
     flushSave()
     showDoc(id)
@@ -174,7 +210,7 @@ export function openDoc(id) {
 }
 export function newDoc() {
   flushSave()
-  const d = { id: uid(), title: '', body: '', updated: now() }
+  const d = { id: uid(), title: '', body: '', updated: now(), projectId: state.activeProject }
   state.docs.push(d)
   showDoc(d.id)
   showEditorView()
@@ -183,7 +219,7 @@ export function newDoc() {
 export function duplicateDoc(id) {
   flushSave()
   const src = state.docs.find(x => x.id === id); if (!src) return
-  const copy = { id: uid(), title: (src.title ? src.title + ' Kopie' : 'Kopie'), body: src.body, updated: now() }
+  const copy = { id: uid(), title: (src.title ? src.title + ' Kopie' : 'Kopie'), body: src.body, updated: now(), projectId: src.projectId }
   state.docs.push(copy)
   showDoc(copy.id)
   showEditorView()
@@ -385,8 +421,8 @@ export function boot() {
 
   const ctx = {
     editor: state.editor, state,
-    ops: { newDoc, openDoc, duplicateDoc, trashDoc, restoreDoc, deleteForever },
-    persist, scheduleSave, flushSave, exportMd, insertImageFile, docTitle, activeDoc, autoGrowTitle,
+    ops: { newDoc, openDoc, duplicateDoc, trashDoc, restoreDoc, deleteForever, newProject, renameProject, openProject },
+    persist, scheduleSave, flushSave, exportMd, insertImageFile, docTitle, activeDoc, autoGrowTitle, activeProjectObj,
   }
   initUI(ctx)
   initPanels(ctx)

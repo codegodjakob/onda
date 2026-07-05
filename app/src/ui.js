@@ -24,6 +24,7 @@ const IC = {
   copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/>',
   trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/>',
   back: '<path d="M5 12h14M5 12l6-6M5 12l6 6"/>',
+  pencil: '<path d="M4 20l1-4L16 5l3 3L8 19l-4 1zM13.5 7.5l3 3"/>',
   // Absatzformat-Icons (wechseln mit dem Format)
   bText: '<path d="M4 6h16M4 12h16M4 18h10"/>',
   bH1: '<path d="M4 7v10M11 7v10M4 12h7M17 7.5l2-1.5v11"/>',
@@ -202,14 +203,6 @@ function buildToolbar() {
   bar.innerHTML = ''
   const left = el('div', 'bar-group')
   const right = el('div', 'bar-group bar-right')
-
-  const backBtn = el('button', 'tbtn')
-  backBtn.innerHTML = icon(IC.back)
-  backBtn.title = 'Zur Bibliothek (Esc)'
-  backBtn.setAttribute('aria-label', 'Zur Bibliothek')
-  backBtn.addEventListener('click', () => { ctx.flushSave(); showHomeView() })
-  left.appendChild(backBtn)
-  left.appendChild(el('span', 'bar-sep'))
 
   blockBtn = el('button', 'tbtn tbtn-block')
   blockBtn.title = 'Absatzformat: Text'
@@ -653,6 +646,53 @@ function highlightMatch(text, q) {
   frag.appendChild(document.createTextNode(text.slice(idx + q.length)))
   return frag
 }
+let homeMode = 'projects'
+export function setHomeMode(m) { homeMode = m }
+
+function projectRows(listEl) {
+  const projects = ctx.state.projects.slice().sort((a, b) => (b.created || 0) - (a.created || 0))
+  projects.forEach(p => {
+    const count = ctx.state.docs.filter(d => d.projectId === p.id && !d.trashed).length
+    const item = el('div', 'doc')
+    const main = el('div', 'doc-main')
+    main.appendChild(el('div', 'dt', p.name))
+    main.appendChild(el('div', 'dd', count + (count === 1 ? ' Text' : ' Texte')))
+    item.appendChild(main)
+    const acts = el('div', 'trash-acts')
+    const ren = el('button', 'tico')
+    ren.innerHTML = icon(IC.pencil)
+    ren.title = 'Umbenennen'
+    ren.setAttribute('aria-label', 'Projekt umbenennen')
+    ren.addEventListener('click', ev => { ev.stopPropagation(); startRename(item, p) })
+    acts.appendChild(ren)
+    item.appendChild(acts)
+    item.addEventListener('click', () => { ctx.ops.openProject(p.id); homeMode = 'docs'; refreshSidebar() })
+    listEl.appendChild(item)
+  })
+}
+function startRename(item, p) {
+  const dt = item.querySelector('.dt')
+  const input = document.createElement('input')
+  input.className = 'rename-input'
+  input.value = p.name
+  dt.replaceWith(input)
+  input.focus(); input.select()
+  let committed = false
+  const done = () => {
+    if (committed) return
+    committed = true
+    ctx.ops.renameProject(p.id, input.value)
+    refreshSidebar()
+  }
+  input.addEventListener('blur', done)
+  input.addEventListener('keydown', ev => {
+    ev.stopPropagation()
+    if (ev.key === 'Enter') { ev.preventDefault(); done() }
+    if (ev.key === 'Escape') { input.value = p.name; done() }
+  })
+  input.addEventListener('click', ev => ev.stopPropagation())
+}
+
 export function refreshSidebar() {
   if (!ctx) return
   if (counterEl && ctx.editor) updateToolbarState()
@@ -660,23 +700,40 @@ export function refreshSidebar() {
   const trashListEl = document.getElementById('trashlist')
   const trashCountEl = document.getElementById('trashCount')
   if (!listEl) return
-  const q = searchQuery.trim().toLowerCase()
 
-  let docs = ctx.state.docs.filter(d => !d.trashed)
+  const crumb = document.getElementById('crumb')
+  const titleEl2 = document.getElementById('homeTitle')
+  const tools = document.querySelector('.home-tools')
+  const trashSec = document.getElementById('trash')
+  const isProjects = homeMode === 'projects'
+  crumb.hidden = isProjects
+  tools.style.display = isProjects ? 'none' : ''
+  const proj = ctx.activeProjectObj()
+  titleEl2.textContent = isProjects ? 'Projekte' : (proj ? proj.name : 'Texte')
+  document.getElementById('newBtn').title = isProjects ? 'Neues Projekt' : 'Neuer Text (\u2318N)'
+
+  listEl.innerHTML = ''
+  if (isProjects) {
+    trashSec.style.display = 'none'
+    projectRows(listEl)
+    if (!ctx.state.projects.length) listEl.appendChild(el('div', 'empty', 'Noch kein Projekt.'))
+    return
+  }
+
+  const q = searchQuery.trim().toLowerCase()
+  let docs = ctx.state.docs.filter(d => !d.trashed && d.projectId === ctx.state.activeProject)
   if (q) docs = docs.filter(d =>
     ctx.docTitle(d).toLowerCase().includes(q) || stripHtml(d.body).toLowerCase().includes(q))
-  // Das aktive Dokument bleibt immer sichtbar — auch wenn die Suche es nicht trifft.
   if (!docs.some(d => d.id === ctx.state.active)) {
-    const a = ctx.state.docs.find(d => d.id === ctx.state.active && !d.trashed)
+    const a = ctx.state.docs.find(d => d.id === ctx.state.active && !d.trashed && d.projectId === ctx.state.activeProject)
     if (a) docs.unshift(a)
   }
   docs = docs.slice().sort((a, b) => sortMode === 'title'
     ? ctx.docTitle(a).localeCompare(ctx.docTitle(b), 'de')
     : (b.updated || 0) - (a.updated || 0))
 
-  listEl.innerHTML = ''
   if (!docs.length) {
-    listEl.appendChild(el('div', 'empty', q ? 'Nichts gefunden.' : 'Noch kein Text — ⌘N beginnt einen neuen.'))
+    listEl.appendChild(el('div', 'empty', q ? 'Nichts gefunden.' : 'Noch kein Text \u2014 \u2318N beginnt einen neuen.'))
   }
   docs.forEach(d => {
     const item = el('div', 'doc')
@@ -685,10 +742,8 @@ export function refreshSidebar() {
     tt.appendChild(highlightMatch(ctx.docTitle(d), q))
     main.appendChild(tt)
     const preview = stripHtml(d.body).trim().slice(0, 90)
-    main.appendChild(el('div', 'dd', fmtDate(d.updated) + (preview ? '  ·  ' + preview : '')))
+    main.appendChild(el('div', 'dd', fmtDate(d.updated) + (preview ? '  \u00b7  ' + preview : '')))
     item.appendChild(main)
-
-    // Einheitliche Zeilen-Aktionen: direkt sichtbar beim Hover, ein Klick (wie im Papierkorb).
     const acts = el('div', 'trash-acts')
     const dup = el('button', 'tico')
     dup.innerHTML = icon(IC.copy)
@@ -702,14 +757,13 @@ export function refreshSidebar() {
     tr.addEventListener('click', ev => { ev.stopPropagation(); ctx.ops.trashDoc(d.id) })
     acts.appendChild(dup); acts.appendChild(tr)
     item.appendChild(acts)
-
     item.addEventListener('click', () => ctx.ops.openDoc(d.id))
     listEl.appendChild(item)
   })
 
-  const trash = ctx.state.docs.filter(d => d.trashed)
+  const trash = ctx.state.docs.filter(d => d.trashed && d.projectId === ctx.state.activeProject)
   trashCountEl.textContent = trash.length ? String(trash.length) : ''
-  document.getElementById('trash').style.display = trash.length ? '' : 'none'
+  trashSec.style.display = trash.length ? '' : 'none'
   trashListEl.innerHTML = ''
   trash.sort((a, b) => (b.trashedAt || 0) - (a.trashedAt || 0)).forEach(d => {
     const item = el('div', 'trash-doc')
@@ -722,10 +776,10 @@ export function refreshSidebar() {
     re.addEventListener('click', () => ctx.ops.restoreDoc(d.id))
     const del = el('button', 'tico tico-danger')
     del.innerHTML = icon(IC.x)
-    del.title = 'Endgültig löschen'
-    del.setAttribute('aria-label', 'Endgültig löschen')
+    del.title = 'Endg\u00fcltig l\u00f6schen'
+    del.setAttribute('aria-label', 'Endg\u00fcltig l\u00f6schen')
     del.addEventListener('click', () => {
-      if (confirm('„' + ctx.docTitle(d) + '“ endgültig löschen? Das kann nicht rückgängig gemacht werden.'))
+      if (confirm('\u201e' + ctx.docTitle(d) + '\u201c endg\u00fcltig l\u00f6schen? Das kann nicht r\u00fcckg\u00e4ngig gemacht werden.'))
         ctx.ops.deleteForever(d.id)
     })
     acts.appendChild(re); acts.appendChild(del)
@@ -733,14 +787,24 @@ export function refreshSidebar() {
     trashListEl.appendChild(item)
   })
   if (trash.length) {
-    trashListEl.appendChild(el('div', 'trash-note', 'Wird nach 30 Tagen automatisch endgültig gelöscht.'))
+    trashListEl.appendChild(el('div', 'trash-note', 'Wird nach 30 Tagen automatisch endg\u00fcltig gel\u00f6scht.'))
   }
 }
 function bindSidebar() {
   const nb = document.getElementById('newBtn')
   nb.innerHTML = icon(IC.plus)
-  nb.setAttribute('aria-label', 'Neuer Text')
-  nb.addEventListener('click', () => ctx.ops.newDoc())
+  nb.setAttribute('aria-label', 'Neu')
+  nb.addEventListener('click', () => {
+    if (homeMode === 'projects') {
+      const p = ctx.ops.newProject('Neues Projekt')
+      refreshSidebar()
+      const rows = document.querySelectorAll('#doclist .doc')
+      if (rows[0]) startRename(rows[0], p)
+    } else {
+      ctx.ops.newDoc()
+    }
+  })
+  document.getElementById('crumb').addEventListener('click', () => { homeMode = 'projects'; refreshSidebar() })
   const sb = document.getElementById('sortBtn')
   sb.innerHTML = icon(IC.sort)
   sb.setAttribute('aria-label', 'Sortierung wechseln')
@@ -804,7 +868,7 @@ function bindKeys() {
     else if (e.key === 'Escape') {
       if (openPanel) closeAllPanels()
       else if (document.body.classList.contains('zen')) toggleZen()
-      else if (document.body.classList.contains('view-editor')) { ctx.flushSave(); showHomeView() }
+      else if (document.body.classList.contains('view-editor')) { ctx.flushSave(); homeMode = 'docs'; showHomeView() }
     }
   })
   document.addEventListener('click', () => closeAllPanels())

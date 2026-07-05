@@ -2,6 +2,8 @@
 // links: Navigation (TOC) · Struktur-Bauklötze · Narrative — rechts: Coach.
 // Alles ein-/ausklappbar über schmale Rand-Leisten. Calm: standardmäßig ist alles zu.
 
+import { showHomeView, setHomeMode } from './ui.js'
+
 let ctx = null
 
 function el(tag, cls, text) {
@@ -14,6 +16,7 @@ function icon(paths) {
   return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + paths + '</svg>'
 }
 const PIC = {
+  back: '<path d="M5 12h14M5 12l6-6M5 12l6 6"/>',
   toc: '<path d="M4 6h10M4 12h16M4 18h13"/>',
   struct: '<rect x="4" y="4" width="16" height="5" rx="1.5"/><rect x="7" y="12" width="13" height="4" rx="1.5"/><rect x="7" y="18.5" width="13" height="1.5" rx="0.75"/>',
   narr: '<circle cx="6" cy="5" r="1.6"/><circle cx="6" cy="12" r="1.6"/><circle cx="6" cy="19" r="1.6"/><path d="M6 6.6v3.8M6 13.6v3.8M9.5 5h9M9.5 12h9M9.5 19h9"/>',
@@ -48,10 +51,16 @@ const MOCK_COACH = [
   },
   {
     type: 'Inhalt', tone: 'idea',
-    text: 'Zur Leitfrage passt Mark Weisers Aufsatz „The Coming Age of Calm Technology" (1996).',
-    why: 'Der Text ist die Primärquelle des Begriffs. Ein kurzer Verweis in der Einleitung verankert deine Definition.',
-    action: 'Weiser und Brown prägten den Begriff 1996 in „The Coming Age of Calm Technology" — Technik solle sich, so ihre Formel, an den Rändern unserer Aufmerksamkeit bewegen.',
-    source: 'Weiser & Brown, 1996 · calmtech.com',
+    text: 'Zur Leitfrage passt Mark Weisers Aufsatz „The Coming Age of Calm Technology“ (1996).',
+    why: 'Der Text ist die Primärquelle des Begriffs — hier wurde „Calm Technology“ zum ersten Mal formuliert. Ein kurzer Verweis in der Einleitung verankert deine Definition historisch: Technik soll zwischen Zentrum und Peripherie der Aufmerksamkeit wechseln können, statt permanent im Zentrum zu stehen.',
+    action: 'Weiser und Brown prägten den Begriff 1996 in „The Coming Age of Calm Technology“ — Technik solle sich, so ihre Formel, an den Rändern unserer Aufmerksamkeit bewegen.',
+    sources: [
+      { label: 'Weiser & Brown (1996): The Coming Age of Calm Technology', url: 'https://calmtech.com/papers' },
+      { label: 'calmtech.com — Prinzipien im Überblick', url: 'https://calmtech.com' },
+      { label: 'Wikipedia: Calm technology', url: 'https://en.wikipedia.org/wiki/Calm_technology' },
+    ],
+    image: "data:image/svg+xml;utf8," + encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 150'><rect width='400' height='150' fill='#fbfaf7'/><circle cx='200' cy='75' r='34' fill='none' stroke='#3a6ea5' stroke-width='2'/><text x='200' y='79' text-anchor='middle' font-family='sans-serif' font-size='12' fill='#3a6ea5'>Zentrum</text><circle cx='200' cy='75' r='64' fill='none' stroke='#a6a59c' stroke-width='1.5' stroke-dasharray='5 5'/><text x='200' y='22' text-anchor='middle' font-family='sans-serif' font-size='11' fill='#6c6b64'>Peripherie</text><path d='M264 75h60' stroke='#b9831f' stroke-width='2'/><text x='328' y='62' text-anchor='middle' font-family='sans-serif' font-size='10' fill='#854f0b'>Wechsel</text></svg>"),
+    imageCaption: 'Weisers Modell: Aufmerksamkeit wandert zwischen Zentrum und Peripherie.',
   },
   {
     type: 'Formulierung', tone: 'style',
@@ -64,9 +73,24 @@ const MOCK_COACH = [
 
 // ---------- Panel-Gerüst ----------
 let coachCards = []
+let blockSeq = 0
+function tagBlocks(list) { list.forEach(b => { if (!b._id) b._id = 'mb' + (++blockSeq); tagBlocks(b.children) }) }
+function findBlock(list, id) {
+  for (const b of list) {
+    if (b._id === id) return { arr: list, idx: list.indexOf(b), b }
+    const r = findBlock(b.children, id); if (r) return r
+  }
+  return null
+}
+function openExternal(url) {
+  if (!/^https?:\/\//.test(url)) return
+  if (ctx.state.native && window.webkit.messageHandlers.openurl) window.webkit.messageHandlers.openurl.postMessage(url)
+  else window.open(url, '_blank', 'noopener')
+}
 
 export function initPanels(context) {
   ctx = context
+  tagBlocks(MOCK_BLOCKS)
   buildRails()
   buildStruct()
   buildNarr()
@@ -97,6 +121,13 @@ function buildRails() {
   const railL = document.getElementById('railL')
   const railR = document.getElementById('railR')
   railL.innerHTML = ''; railR.innerHTML = ''
+  const back = el('button', 'rail-btn')
+  back.innerHTML = icon(PIC.back)
+  back.title = 'Zurück zum Projekt (Esc)'
+  back.setAttribute('aria-label', 'Zurück zum Projekt')
+  back.addEventListener('click', () => { ctx.flushSave(); setHomeMode('docs'); showHomeView() })
+  railL.appendChild(back)
+  railL.appendChild(el('div', 'rail-div'))
   railBtn(railL, PIC.toc, 'Navigation (Kapitel)', 'pToc')
   railBtn(railL, PIC.struct, 'Struktur (Bauklötze)', 'pStruct')
   railBtn(railL, PIC.narr, 'Narrative (Meta-Struktur)', 'pNarr')
@@ -158,10 +189,30 @@ function buildStruct() {
       }
       row.addEventListener('dragstart', ev => {
         ev.dataTransfer.setData('application/x-baustein', b.content || b.title)
-        ev.dataTransfer.effectAllowed = 'copy'
+        ev.dataTransfer.setData('application/x-blkid', b._id)
+        ev.dataTransfer.effectAllowed = 'copyMove'
         row.classList.add('dragging')
       })
       row.addEventListener('dragend', () => row.classList.remove('dragging'))
+      row.addEventListener('dragover', ev => {
+        if (Array.from(ev.dataTransfer.types).includes('application/x-blkid')) {
+          ev.preventDefault(); ev.stopPropagation(); row.classList.add('drop-above')
+        }
+      })
+      row.addEventListener('dragleave', () => row.classList.remove('drop-above'))
+      row.addEventListener('drop', ev => {
+        row.classList.remove('drop-above')
+        const id = ev.dataTransfer.getData('application/x-blkid')
+        if (!id || id === b._id) return
+        ev.preventDefault(); ev.stopPropagation()
+        const srcB = findBlock(MOCK_BLOCKS, id)
+        if (!srcB || findBlock(srcB.b.children, b._id)) return
+        srcB.arr.splice(srcB.idx, 1)
+        const dst = findBlock(MOCK_BLOCKS, b._id)
+        dst.arr.splice(dst.idx, 0, srcB.b)
+        buildStruct()
+        structChanged(srcB.b.title, b.title)
+      })
       row.title = b.content ? b.content.slice(0, 140) : b.title
       wrap.appendChild(row)
       if (b.children.length) {
@@ -176,25 +227,58 @@ function buildStruct() {
   p.appendChild(el('div', 'panel-note', 'Platzhalter — wird später in der Struktur-Ansicht geplant.'))
 }
 
+function structChanged(moved, before) {
+  // Kopplung sichtbar machen: Narrative reagiert, Coach merkt an (Mock).
+  const sub = document.querySelector('#pNarr .panel-sub')
+  if (sub) {
+    sub.textContent = '⟳ An die neue Bauklotz-Reihenfolge angepasst.'
+    sub.classList.add('narr-sync')
+    setTimeout(() => { sub.classList.remove('narr-sync'); sub.textContent = 'Welche Fäden sich durch den Text ziehen.' }, 4000)
+  }
+  coachCards.unshift({
+    type: 'Struktur', tone: 'warn',
+    text: 'Du hast „' + moved + '“ vor „' + before + '“ geschoben — passt der Übergang im Text noch?',
+    why: 'Die Reihenfolge der Bauklötze hat sich geändert. Die Narrative wurde angepasst; im Text sollte die Überleitung zwischen den betroffenen Abschnitten geprüft werden.',
+    action: null, done: false,
+  })
+  renderCoach()
+}
+
 // ---------- Narrative: Meta-Struktur als Fluss (Mock) ----------
 function buildNarr() {
   const p = document.getElementById('pNarr')
   p.innerHTML = ''
   p.appendChild(el('div', 'panel-head', 'Narrative'))
   p.appendChild(el('div', 'panel-sub', 'Welche Fäden sich durch den Text ziehen.'))
+  const editable = (elx, save) => {
+    elx.contentEditable = 'true'
+    elx.spellcheck = false
+    elx.addEventListener('keydown', ev => { ev.stopPropagation(); if (ev.key === 'Enter') { ev.preventDefault(); elx.blur() } })
+    elx.addEventListener('blur', () => save(elx.textContent.trim()))
+  }
   MOCK_NARRATIVE.forEach(t => {
     const box = el('div', 'narr-thread')
-    box.appendChild(el('div', 'narr-label', t.label))
+    const lab = el('div', 'narr-label', t.label)
+    editable(lab, v => { t.label = v || t.label })
+    box.appendChild(lab)
     const line = el('div', 'narr-line')
     t.points.forEach((pt, i) => {
       const item = el('div', 'narr-pt' + (pt.includes('offen') ? ' open' : ''))
       item.appendChild(el('span', 'narr-dot'))
-      item.appendChild(el('span', 'narr-txt', pt))
+      const txt = el('span', 'narr-txt', pt)
+      editable(txt, v => { t.points[i] = v || t.points[i] })
+      item.appendChild(txt)
       line.appendChild(item)
     })
+    const addPt = el('button', 'narr-add', '+ Punkt')
+    addPt.addEventListener('click', () => { t.points.push('neuer Punkt'); buildNarr() })
+    line.appendChild(addPt)
     box.appendChild(line)
     p.appendChild(box)
   })
+  const addTh = el('button', 'narr-add narr-add-thread', '+ Faden')
+  addTh.addEventListener('click', () => { MOCK_NARRATIVE.push({ label: 'Neuer Faden', points: ['beginnt hier'] }); buildNarr() })
+  p.appendChild(addTh)
   p.appendChild(el('div', 'panel-note', 'Platzhalter — wächst später aus dem echten Text.'))
 }
 
@@ -241,9 +325,22 @@ function openOverlay(card) {
   box.appendChild(el('div', 'ai-title', card.text))
   box.appendChild(el('div', 'panel-head', 'Warum'))
   box.appendChild(el('div', 'ai-why', card.why))
-  if (card.source) {
-    box.appendChild(el('div', 'panel-head', 'Quelle'))
-    box.appendChild(el('div', 'ai-why', card.source))
+  if (card.image) {
+    const img = document.createElement('img')
+    img.className = 'ai-img'
+    img.src = card.image
+    img.alt = card.imageCaption || ''
+    box.appendChild(img)
+    if (card.imageCaption) box.appendChild(el('div', 'ai-cap', card.imageCaption))
+  }
+  if (card.sources && card.sources.length) {
+    box.appendChild(el('div', 'panel-head', 'Quellen'))
+    card.sources.forEach(s => {
+      const a = el('button', 'ai-src', s.label + '  ↗')
+      a.title = s.url
+      a.addEventListener('click', () => openExternal(s.url))
+      box.appendChild(a)
+    })
   }
   let ta = null
   if (card.action) {
