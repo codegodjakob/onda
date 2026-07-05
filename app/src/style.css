@@ -142,7 +142,128 @@ body.view-editor #home { display: none; }
 .tico-danger:hover { color: var(--danger); }
 
 /* ---------- Schreibansicht ---------- */
-#editorView { height: 100vh; display: flex; flex-direction: column; }
+#editorView { height: 100vh; display: flex; flex-direction: row; }
+#main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+
+/* Rand-Leisten: schmal, nur Icons — jedes Panel ein-/ausklappbar */
+.rail {
+  width: 42px; flex: none;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding-top: 10px;
+  background: var(--bg2); border-right: 0.5px solid var(--line);
+}
+#railR { border-right: 0; border-left: 0.5px solid var(--line); }
+.rail-btn {
+  position: relative;
+  width: 30px; height: 30px; border-radius: 7px; color: var(--txt3);
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.rail-btn:hover { background: var(--bg3); color: var(--txt2); }
+.rail-btn.on { color: var(--accent); background: var(--accentbg); }
+.rail-btn svg { width: 17px; height: 17px; display: block; }
+.rail-badge {
+  position: absolute; top: 1px; right: 1px;
+  min-width: 13px; height: 13px; border-radius: 7px;
+  background: var(--warn); color: #fff;
+  font-size: 9px; line-height: 13px; text-align: center; padding: 0 3px;
+}
+
+/* Panels */
+.panel {
+  width: 232px; flex: none; overflow-y: auto;
+  background: var(--bg2); border-right: 0.5px solid var(--line);
+  padding: 12px 12px 20px;
+}
+.panel-right { border-right: 0; border-left: 0.5px solid var(--line); width: 264px; }
+.panel[hidden] { display: none; }
+.panel-head { font-size: 11px; color: var(--txt3); letter-spacing: .05em; margin: 8px 0 8px; }
+.panel-sub { font-size: 11.5px; color: var(--txt3); line-height: 1.5; margin: -2px 0 10px; }
+.panel-empty { font-size: 12px; color: var(--txt3); line-height: 1.6; padding: 8px 2px; }
+.panel-note { font-size: 10.5px; color: var(--txt3); margin-top: 16px; opacity: .8; }
+
+/* Navigation (TOC) */
+.toc-item {
+  display: block; width: 100%; text-align: left;
+  font-size: 12px; color: var(--txt2); padding: 4px 6px; border-radius: 6px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.toc-item:hover { background: var(--bg3); color: var(--txt); }
+.toc-l1 { font-weight: 500; color: var(--txt); }
+.toc-l2 { padding-left: 16px; }
+.toc-l3 { padding-left: 28px; color: var(--txt3); }
+
+/* Struktur: Bauklötze */
+.blk {
+  display: flex; align-items: center; gap: 7px;
+  border: 0.5px solid var(--line2); border-radius: var(--r);
+  background: var(--bg); padding: 7px 9px; margin-bottom: 5px;
+  font-size: 12px; color: var(--txt); cursor: grab;
+}
+.blk:active { cursor: grabbing; }
+.blk.dragging { opacity: .5; }
+.blk-grip { color: var(--txt3); font-size: 12px; }
+.blk-title { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.blk-chev { color: var(--txt3); font-size: 10px; padding: 2px 4px; border-radius: 4px; }
+.blk-chev:hover { background: var(--bg3); }
+.blk-kids { margin-left: 14px; }
+.blk-wrap.col .blk-kids { display: none; }
+.blk-wrap.col .blk-chev { transform: rotate(-90deg); }
+
+/* Narrative */
+.narr-thread { margin-bottom: 16px; }
+.narr-label { font-size: 12px; font-weight: 500; color: var(--txt); margin-bottom: 7px; }
+.narr-line { border-left: 1.5px solid var(--line2); margin-left: 4px; padding-left: 12px; }
+.narr-pt { position: relative; font-size: 11.5px; color: var(--txt2); padding: 3px 0; }
+.narr-dot {
+  position: absolute; left: -17px; top: 8px;
+  width: 7px; height: 7px; border-radius: 50%; background: var(--ok);
+}
+.narr-pt.open .narr-dot { background: var(--warn); }
+.narr-pt.open .narr-txt { color: var(--warn); }
+
+/* Coach */
+.coach-card {
+  display: block; width: 100%; text-align: left;
+  border: 0.5px solid var(--line2); border-radius: var(--r);
+  background: var(--bg); padding: 10px 11px; margin-bottom: 8px;
+  transition: background var(--dur) var(--ease);
+}
+.coach-card:hover { background: var(--bg3); }
+.coach-type {
+  display: inline-block; font-size: 10px; letter-spacing: .05em;
+  color: var(--txt3); border: 0.5px solid var(--line2); border-radius: 5px;
+  padding: 1px 6px; margin-bottom: 6px;
+}
+.tone-warn .coach-type { color: var(--warn); border-color: var(--warn); }
+.tone-idea .coach-type { color: var(--accent); border-color: var(--accent); }
+.coach-text { display: block; font-size: 12.5px; color: var(--txt); line-height: 1.5; }
+
+/* Vorschlag-Overlay */
+.ai-overlay {
+  position: fixed; inset: 0; z-index: 80;
+  background: rgba(20, 20, 18, .25);
+  display: flex; align-items: center; justify-content: center;
+}
+.ai-box {
+  width: 460px; max-width: calc(100vw - 48px); max-height: 80vh; overflow-y: auto;
+  background: var(--bg); border: 0.5px solid var(--line2); border-radius: var(--r2);
+  box-shadow: var(--shadow); padding: 18px 20px;
+}
+.ai-title { font-size: 15px; font-weight: 500; color: var(--txt); margin: 4px 0 6px; line-height: 1.45; }
+.ai-why { font-size: 12.5px; color: var(--txt2); line-height: 1.55; }
+.ai-edit {
+  width: 100%; min-height: 84px; resize: vertical;
+  background: var(--bg2); border: 0.5px solid var(--line2); border-radius: var(--r);
+  padding: 9px 11px; font-size: 13px; font-family: var(--doc-font); color: var(--txt);
+  outline: none; margin: 2px 0 6px;
+}
+.ai-edit:focus { border-color: var(--accent); }
+.ai-box .mi-row { padding: 10px 0 0; }
+.ai-box > .mi-seg { margin: 6px 0 0; }
+
+/* Fokus-Modus blendet auch Rails & Panels aus */
+body.zen .rail, body.zen .panel { display: none; }
 
 #bar {
   display: flex; align-items: center; justify-content: space-between;
@@ -166,6 +287,7 @@ body.view-editor #home { display: none; }
 .tbtn-block { min-width: 34px; justify-content: center; }
 .tbtn-block #blockLabel { display: inline-flex; }
 .mi-sublabel { font-size: 12px; color: var(--txt2); width: 64px; flex: none; }
+.mi-note { font-size: 11px; color: var(--txt3); padding: 2px 10px 8px; }
 .counter { font-size: 12px; color: var(--txt3); font-variant-numeric: tabular-nums; }
 .saveerr { font-size: 12px; color: var(--danger); }
 .saveerr:empty { display: none; }

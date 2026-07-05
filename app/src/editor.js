@@ -14,6 +14,7 @@ import Placeholder from '@tiptap/extension-placeholder'
 import CharacterCount from '@tiptap/extension-character-count'
 import Typography from '@tiptap/extension-typography'
 import { initUI, setSaveState, refreshSidebar, applySettings, focusTitle, showEditorView } from './ui.js'
+import { initPanels, refreshToc } from './panels.js'
 
 // ---------- Schriftgröße pro Auswahl (Word-granular) ----------
 const FontSize = Extension.create({
@@ -159,6 +160,7 @@ function showDoc(id) {
     doc: state.editor.state.doc,
     plugins: state.editor.state.plugins,
   }))
+  refreshToc()
   persist()
   refreshSidebar()
 }
@@ -358,6 +360,17 @@ export function boot() {
         return false
       },
       handleDrop(view, event) {
+        // Baustein aus dem Struktur-Panel: Inhalt als Absatz an der Zielstelle einfügen.
+        const block = event.dataTransfer && event.dataTransfer.getData('application/x-baustein')
+        if (block) {
+          event.preventDefault()
+          const posInfo = view.posAtCoords({ left: event.clientX, top: event.clientY })
+          const safe = block.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+          if (posInfo) state.editor.chain().focus().insertContentAt(posInfo.pos, '<p>' + safe + '</p>').run()
+          else state.editor.chain().focus('end').insertContent('<p>' + safe + '</p>').run()
+          scheduleSave()
+          return true
+        }
         const files = event.dataTransfer && event.dataTransfer.files
         if (files && files.length && /^image\//.test(files[0].type)) {
           event.preventDefault()
@@ -376,6 +389,7 @@ export function boot() {
     persist, scheduleSave, flushSave, exportMd, insertImageFile, docTitle, activeDoc, autoGrowTitle,
   }
   initUI(ctx)
+  initPanels(ctx)
   applySettings()
   refreshSidebar()
 

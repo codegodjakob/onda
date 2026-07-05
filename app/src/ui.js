@@ -184,11 +184,18 @@ function blockItems(panel) {
   menuItem(panel, 'Überschrift 1', () => e.chain().focus().toggleHeading({ level: 1 }).run(), { active: e.isActive('heading', { level: 1 }), kbd: '#' })
   menuItem(panel, 'Überschrift 2', () => e.chain().focus().toggleHeading({ level: 2 }).run(), { active: e.isActive('heading', { level: 2 }), kbd: '##' })
   menuItem(panel, 'Überschrift 3', () => e.chain().focus().toggleHeading({ level: 3 }).run(), { active: e.isActive('heading', { level: 3 }), kbd: '###' })
-  menuDivider(panel)
+}
+function listItems(panel) {
+  const e = ctx.editor
   menuItem(panel, 'Aufzählung', () => e.chain().focus().toggleBulletList().run(), { active: e.isActive('bulletList'), kbd: '-' })
   menuItem(panel, 'Nummerierte Liste', () => e.chain().focus().toggleOrderedList().run(), { active: e.isActive('orderedList'), kbd: '1.' })
-  menuItem(panel, 'Checkliste', () => e.chain().focus().toggleTaskList().run(), { active: e.isActive('taskList') })
+  menuItem(panel, 'Checkliste', () => e.chain().focus().toggleTaskList().run(), { active: e.isActive('taskList'), kbd: '[]' })
+}
+function elementItems(panel) {
+  const e = ctx.editor
   menuItem(panel, 'Zitat', () => e.chain().focus().toggleBlockquote().run(), { active: e.isActive('blockquote'), kbd: '>' })
+  menuItem(panel, 'Trennlinie', () => e.chain().focus().setHorizontalRule().run(), { kbd: '---' })
+  menuItem(panel, 'Code-Block', () => e.chain().focus().toggleCodeBlock().run(), { active: e.isActive('codeBlock'), kbd: '```' })
 }
 function buildToolbar() {
   const bar = document.getElementById('bar')
@@ -211,14 +218,49 @@ function buildToolbar() {
   left.appendChild(blockBtn)
   left.appendChild(el('span', 'bar-sep'))
 
+  const listBtn = el('button', 'tbtn')
+  listBtn.innerHTML = icon(IC.bUl)
+  listBtn.title = 'Listen (Aufzählung, nummeriert, Checkliste)'
+  makeDropdown(listBtn, listItems)
+  left.appendChild(listBtn)
+
+  const elemBtn = el('button', 'tbtn')
+  elemBtn.innerHTML = icon(IC.bQuote)
+  elemBtn.title = 'Elemente (Zitat, Trennlinie, Code)'
+  makeDropdown(elemBtn, elementItems)
+  left.appendChild(elemBtn)
+  left.appendChild(el('span', 'bar-sep'))
+
+  const aaBtn = el('button', 'tbtn tbtn-label')
+  aaBtn.innerHTML = '<span>Aa</span>'
+  aaBtn.title = 'Schriftgröße (Auswahl / Gesamt)'
+  makeDropdown(aaBtn, panel => {
+    menuLabel(panel, 'Schriftgröße')
+    const stepRow = (labelText, getVal, bump) => {
+      const row = el('div', 'mi-row')
+      row.appendChild(el('span', 'mi-sublabel', labelText))
+      const minus = el('button', 'mi-step', '−')
+      const val = el('span', 'mi-val', getVal() + '')
+      const plus = el('button', 'mi-step', '+')
+      minus.addEventListener('click', () => { bump(-1); val.textContent = getVal() + '' })
+      plus.addEventListener('click', () => { bump(1); val.textContent = getVal() + '' })
+      ;[minus, plus].forEach(b => b.addEventListener('mousedown', ev => ev.preventDefault()))
+      row.appendChild(minus); row.appendChild(val); row.appendChild(plus)
+      panel.appendChild(row)
+    }
+    stepRow('Auswahl', curFontSize, d => bumpFontSize(d))
+    stepRow('Gesamt', () => ctx.state.settings.fontSize, d => {
+      setSetting('fontSize', Math.max(14, Math.min(24, ctx.state.settings.fontSize + d)))
+    })
+    panel.appendChild(el('div', 'mi-note', 'Gesamt auch mit ⌘+ / ⌘−'))
+  })
+  left.appendChild(aaBtn)
+
   const plusBtn = el('button', 'tbtn')
   plusBtn.innerHTML = icon(IC.plus)
-  plusBtn.title = 'Einfügen (Link, Bild, Trennlinie …)'
+  plusBtn.title = 'Einfügen (Bild)'
   makeDropdown(plusBtn, panel => {
-    const e = ctx.editor
-    menuItem(panel, 'Link …', () => openLinkDialog(), { kbd: '⌘K' })
     menuItem(panel, 'Bild …', () => imgInput.click())
-    menuItem(panel, 'Trennlinie', () => e.chain().focus().setHorizontalRule().run(), { kbd: '---' })
   })
   left.appendChild(plusBtn)
 
@@ -269,19 +311,6 @@ function buildGearPanel(panel) {
 
   menuLabel(panel, 'Erscheinung')
   segRow([['Auto', 'auto'], ['Hell', 'light'], ['Dunkel', 'dark']], s.theme, v => setSetting('theme', v))
-  menuLabel(panel, 'Textgröße')
-  const grow = el('div', 'mi-row')
-  const gm = el('button', 'mi-step', '−')
-  const gv = el('span', 'mi-val', s.fontSize + '')
-  const gp = el('button', 'mi-step', '+')
-  gm.addEventListener('click', () => { setSetting('fontSize', Math.max(14, ctx.state.settings.fontSize - 1)); gv.textContent = ctx.state.settings.fontSize + '' })
-  gp.addEventListener('click', () => { setSetting('fontSize', Math.min(24, ctx.state.settings.fontSize + 1)); gv.textContent = ctx.state.settings.fontSize + '' })
-  ;[gm, gp].forEach(b => b.addEventListener('mousedown', e => e.preventDefault()))
-  grow.appendChild(gm); grow.appendChild(gv); grow.appendChild(gp)
-  grow.appendChild(el('span', 'mi-kbd', '⌘+ / ⌘−'))
-  panel.appendChild(grow)
-  menuLabel(panel, 'Zeilenbreite')
-  segRow([['Schmal', 600], ['Mittel', 720], ['Breit', 900]], s.lineWidth, v => setSetting('lineWidth', v))
 
   menuDivider(panel)
   menuItem(panel, 'Rechtschreibung', () => { setSetting('spellcheck', !ctx.state.settings.spellcheck); refresh() },

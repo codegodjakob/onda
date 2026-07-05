@@ -28,15 +28,23 @@
       </div>
     </section>
 
-    <!-- Schreibansicht: nur Schreiben. Linke Spalte bleibt für die Meta-Struktur reserviert. -->
+    <!-- Schreibansicht: Text in der Mitte, alles andere ein-/ausklappbar über die Rand-Leisten. -->
     <section id="editorView">
-      <div id="bar"></div>
-      <div id="scroll">
-        <div id="page">
-          <textarea id="title" rows="1" placeholder="Titel" spellcheck="false"></textarea>
-          <div id="editor"></div>
+      <div id="railL" class="rail"></div>
+      <aside id="pStruct" class="panel" hidden></aside>
+      <aside id="pNarr" class="panel" hidden></aside>
+      <aside id="pToc" class="panel" hidden></aside>
+      <div id="main">
+        <div id="bar"></div>
+        <div id="scroll">
+          <div id="page">
+            <textarea id="title" rows="1" placeholder="Titel" spellcheck="false"></textarea>
+            <div id="editor"></div>
+          </div>
         </div>
       </div>
+      <aside id="pCoach" class="panel panel-right" hidden></aside>
+      <div id="railR" class="rail"></div>
     </section>
 
   </div>
