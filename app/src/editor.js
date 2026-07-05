@@ -54,7 +54,7 @@ const ImageX = Image.extend({
 
 // ---------- Zustand & Speicher ----------
 const NATIVE = !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.store)
-const DEFAULTS = { theme: 'auto', fontSize: 17, lineWidth: 720, font: 'serif', spellcheck: false }
+const DEFAULTS = { theme: 'auto', fontSize: 17, lineWidth: 720, font: 'serif', spellcheck: false, showWords: true }
 const TRASH_DAYS = 30
 
 export const state = { docs: [], active: null, settings: { ...DEFAULTS }, editor: null, native: NATIVE }

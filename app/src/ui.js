@@ -8,20 +8,8 @@ let searchQuery = ''
 let openPanel = null
 const panels = []
 
-// Prinzip „begrenzte Auswahl": wenige, gut gewählte Optionen statt vieler Nuancen.
-const COLORS = [
-  { label: 'Standard', value: null },
-  { label: 'Rot', value: '#a3402a' },
-  { label: 'Bernstein', value: '#b9831f' },
-  { label: 'Blau', value: '#3a6ea5' },
-  { label: 'Grün', value: '#256d4f' },
-]
-const HIGHLIGHTS = [
-  { label: 'Keine', value: null },
-  { label: 'Gelb', value: '#f6e7a9' },
-  { label: 'Grün', value: '#d9ecd4' },
-  { label: 'Blau', value: '#d7e6f7' },
-]
+// Prinzip „begrenzte Auswahl": Hervorheben = genau eine Markierfarbe.
+const HL_COLOR = '#f6e7a9'
 
 // Schlichte Linien-Icons (einheitlicher Strich, keine Deko)
 function icon(paths) {
@@ -223,102 +211,6 @@ function buildToolbar() {
   left.appendChild(blockBtn)
   left.appendChild(el('span', 'bar-sep'))
 
-  const bBtn = el('button', 'tbtn tb-bold', 'B'); bBtn.style.fontWeight = '700'
-  bBtn.title = 'Fett (⌘B)'
-  bBtn.addEventListener('mousedown', e => e.preventDefault())
-  bBtn.addEventListener('click', () => ctx.editor.chain().focus().toggleBold().run())
-  left.appendChild(bBtn)
-
-  const iBtn = el('button', 'tbtn tb-italic', 'I'); iBtn.style.fontStyle = 'italic'
-  iBtn.title = 'Kursiv (⌘I)'
-  iBtn.addEventListener('mousedown', e => e.preventDefault())
-  iBtn.addEventListener('click', () => ctx.editor.chain().focus().toggleItalic().run())
-  left.appendChild(iBtn)
-  left.appendChild(el('span', 'bar-sep'))
-
-  const aaBtn = el('button', 'tbtn tbtn-label')
-  aaBtn.innerHTML = '<span>Aa</span>'
-  aaBtn.title = 'Format (Größe, Stil, Farbe, Ausrichtung)'
-  makeDropdown(aaBtn, panel => {
-    const e = ctx.editor
-    menuLabel(panel, 'Schrift')
-    const srow = el('div', 'mi-row')
-    ;[['Serif', 'serif', SERIF], ['Sans', 'sans', SANS]].forEach(([lab, v, fam]) => {
-      const b = el('button', 'mi-seg' + (ctx.state.settings.font === v ? ' on' : ''), lab)
-      b.style.fontFamily = fam
-      b.addEventListener('mousedown', ev => ev.preventDefault())
-      b.addEventListener('click', () => {
-        setSetting('font', v)
-        Array.from(srow.children).forEach(x => x.classList.toggle('on', x === b))
-      })
-      srow.appendChild(b)
-    })
-    panel.appendChild(srow)
-    menuLabel(panel, 'Schriftgröße')
-    const stepRow = (labelText, getVal, bump) => {
-      const row = el('div', 'mi-row')
-      row.appendChild(el('span', 'mi-sublabel', labelText))
-      const minus = el('button', 'mi-step', '−')
-      const val = el('span', 'mi-val', getVal() + '')
-      const plus = el('button', 'mi-step', '+')
-      minus.addEventListener('click', () => { bump(-1); val.textContent = getVal() + '' })
-      plus.addEventListener('click', () => { bump(1); val.textContent = getVal() + '' })
-      ;[minus, plus].forEach(b => b.addEventListener('mousedown', ev => ev.preventDefault()))
-      row.appendChild(minus); row.appendChild(val); row.appendChild(plus)
-      panel.appendChild(row)
-    }
-    stepRow('Auswahl', curFontSize, d => bumpFontSize(d))
-    stepRow('Gesamt', () => ctx.state.settings.fontSize, d => {
-      setSetting('fontSize', Math.max(14, Math.min(24, ctx.state.settings.fontSize + d)))
-    })
-    menuDivider(panel)
-    menuItem(panel, 'Unterstrichen', () => e.chain().focus().toggleUnderline().run(), { active: e.isActive('underline'), kbd: '⌘U' })
-    menuItem(panel, 'Durchgestrichen', () => e.chain().focus().toggleStrike().run(), { active: e.isActive('strike'), kbd: '⇧⌘S' })
-    menuDivider(panel)
-    menuLabel(panel, 'Textfarbe')
-    const crow = el('div', 'mi-swatches')
-    COLORS.forEach(c => {
-      const sw = el('button', 'swatch' + (c.value ? '' : ' swatch-none'))
-      if (c.value) sw.style.background = c.value
-      sw.title = c.label
-      sw.addEventListener('mousedown', ev => ev.preventDefault())
-      sw.addEventListener('click', () => {
-        if (c.value) e.chain().focus().setColor(c.value).run()
-        else e.chain().focus().unsetColor().run()
-      })
-      crow.appendChild(sw)
-    })
-    panel.appendChild(crow)
-    menuLabel(panel, 'Markierung')
-    const hrow = el('div', 'mi-swatches')
-    HIGHLIGHTS.forEach(c => {
-      const sw = el('button', 'swatch' + (c.value ? '' : ' swatch-none'))
-      if (c.value) sw.style.background = c.value
-      sw.title = c.label
-      sw.addEventListener('mousedown', ev => ev.preventDefault())
-      sw.addEventListener('click', () => {
-        if (c.value) e.chain().focus().setHighlight({ color: c.value }).run()
-        else e.chain().focus().unsetHighlight().run()
-      })
-      hrow.appendChild(sw)
-    })
-    panel.appendChild(hrow)
-    menuDivider(panel)
-    menuLabel(panel, 'Ausrichtung')
-    const arow = el('div', 'mi-row')
-    ;[['Links', 'left'], ['Mitte', 'center'], ['Rechts', 'right']].forEach(([lab, alg]) => {
-      const b = el('button', 'mi-seg' + (e.isActive({ textAlign: alg }) ? ' on' : ''), lab)
-      b.addEventListener('mousedown', ev => ev.preventDefault())
-      b.addEventListener('click', () => {
-        e.chain().focus().setTextAlign(alg).run()
-        Array.from(arow.children).forEach(x => x.classList.toggle('on', x === b))
-      })
-      arow.appendChild(b)
-    })
-    panel.appendChild(arow)
-  })
-  left.appendChild(aaBtn)
-
   const plusBtn = el('button', 'tbtn')
   plusBtn.innerHTML = icon(IC.plus)
   plusBtn.title = 'Einfügen (Link, Bild, Trennlinie …)'
@@ -377,12 +269,25 @@ function buildGearPanel(panel) {
 
   menuLabel(panel, 'Erscheinung')
   segRow([['Auto', 'auto'], ['Hell', 'light'], ['Dunkel', 'dark']], s.theme, v => setSetting('theme', v))
+  menuLabel(panel, 'Textgröße')
+  const grow = el('div', 'mi-row')
+  const gm = el('button', 'mi-step', '−')
+  const gv = el('span', 'mi-val', s.fontSize + '')
+  const gp = el('button', 'mi-step', '+')
+  gm.addEventListener('click', () => { setSetting('fontSize', Math.max(14, ctx.state.settings.fontSize - 1)); gv.textContent = ctx.state.settings.fontSize + '' })
+  gp.addEventListener('click', () => { setSetting('fontSize', Math.min(24, ctx.state.settings.fontSize + 1)); gv.textContent = ctx.state.settings.fontSize + '' })
+  ;[gm, gp].forEach(b => b.addEventListener('mousedown', e => e.preventDefault()))
+  grow.appendChild(gm); grow.appendChild(gv); grow.appendChild(gp)
+  grow.appendChild(el('span', 'mi-kbd', '⌘+ / ⌘−'))
+  panel.appendChild(grow)
   menuLabel(panel, 'Zeilenbreite')
   segRow([['Schmal', 600], ['Mittel', 720], ['Breit', 900]], s.lineWidth, v => setSetting('lineWidth', v))
 
   menuDivider(panel)
   menuItem(panel, 'Rechtschreibung', () => { setSetting('spellcheck', !ctx.state.settings.spellcheck); refresh() },
     { stay: true, kbd: s.spellcheck ? 'An' : 'Aus' })
+  menuItem(panel, 'Wortzahl anzeigen', () => { setSetting('showWords', !ctx.state.settings.showWords); updateToolbarState(); refresh() },
+    { stay: true, kbd: s.showWords ? 'An' : 'Aus' })
   menuItem(panel, 'Fokus-Modus', () => toggleZen(), { kbd: '⌘.', active: document.body.classList.contains('zen') })
   menuDivider(panel)
   menuItem(panel, 'Exportieren als Markdown …', () => ctx.exportMd(), { kbd: '⌘E' })
@@ -410,10 +315,7 @@ function updateToolbarState() {
     const w = ctx.editor.storage.characterCount.words()
     counterEl.textContent = w + (w === 1 ? ' Wort' : ' Wörter')
   }
-  const tb = document.querySelector('#bar .tb-bold')
-  const ti = document.querySelector('#bar .tb-italic')
-  if (tb) tb.classList.toggle('on', ctx.editor.isActive('bold'))
-  if (ti) ti.classList.toggle('on', ctx.editor.isActive('italic'))
+  if (counterEl) counterEl.style.display = ctx.state.settings.showWords ? '' : 'none'
 }
 
 // ---------- Auswahl-Bubble ----------
@@ -432,6 +334,13 @@ function buildBubble() {
   mk('I', 'Kursiv (⌘I)', () => ctx.editor.chain().focus().toggleItalic().run(), 'bb-i')
   mk('U', 'Unterstrichen (⌘U)', () => ctx.editor.chain().focus().toggleUnderline().run(), 'bb-u')
   mk('S', 'Durchgestrichen (⇧⌘S)', () => ctx.editor.chain().focus().toggleStrike().run(), 'bb-s')
+  const hl = el('button', 'bb bb-hl')
+  hl.title = 'Markieren'
+  hl.setAttribute('aria-label', 'Markieren')
+  hl.appendChild(el('span', 'bb-hl-dot'))
+  hl.addEventListener('mousedown', e => e.preventDefault())
+  hl.addEventListener('click', () => ctx.editor.chain().focus().toggleHighlight({ color: HL_COLOR }).run())
+  bubbleEl.appendChild(hl)
   bubbleEl.appendChild(el('span', 'bb-div'))
   mk('−', 'Kleiner', () => bumpFontSize(-1))
   mk('+', 'Größer', () => bumpFontSize(1))
@@ -444,10 +353,7 @@ function showBubble() {
   const sel = e.state.selection
   if (sel.empty || sel.node) { hideBubble(); return }
   if (openPanel) return
-  bubbleEl.querySelector('.bb-b').classList.toggle('on', e.isActive('bold'))
-  bubbleEl.querySelector('.bb-i').classList.toggle('on', e.isActive('italic'))
-  bubbleEl.querySelector('.bb-u').classList.toggle('on', e.isActive('underline'))
-  bubbleEl.querySelector('.bb-s').classList.toggle('on', e.isActive('strike'))
+  updateBubbleStates()
   const from = e.view.coordsAtPos(sel.from)
   const to = e.view.coordsAtPos(sel.to)
   bubbleEl.classList.add('open')
@@ -460,6 +366,15 @@ function showBubble() {
   bubbleEl.style.top = top + 'px'
 }
 function hideBubble() { if (bubbleEl) bubbleEl.classList.remove('open') }
+function updateBubbleStates() {
+  if (!bubbleEl) return
+  const e = ctx.editor
+  bubbleEl.querySelector('.bb-b').classList.toggle('on', e.isActive('bold'))
+  bubbleEl.querySelector('.bb-i').classList.toggle('on', e.isActive('italic'))
+  bubbleEl.querySelector('.bb-u').classList.toggle('on', e.isActive('underline'))
+  bubbleEl.querySelector('.bb-s').classList.toggle('on', e.isActive('strike'))
+  bubbleEl.querySelector('.bb-hl').classList.toggle('on', e.isActive('highlight'))
+}
 
 // ---------- Link-Dialog ----------
 let linkEl = null
@@ -879,6 +794,7 @@ export function initUI(context) {
   updateToolbarState()
   ctx.editor.on('selectionUpdate', () => { updateToolbarState(); showBubble(); markZenBlock() })
   ctx.editor.on('update', () => { updateToolbarState(); markZenBlock() })
+  ctx.editor.on('transaction', () => { if (bubbleEl && bubbleEl.classList.contains('open')) updateBubbleStates() })
   ctx.editor.on('blur', () => setTimeout(() => { if (!openPanel) hideBubble() }, 150))
   document.getElementById('scroll').addEventListener('scroll', () => {
     hideBubble()

@@ -329,6 +329,7 @@ body.view-editor #home { display: none; }
 .bb-u { text-decoration: underline; }
 .bb-s { text-decoration: line-through; }
 .bb.on { color: var(--accent); background: var(--accentbg); }
+.bb-hl-dot { width: 13px; height: 13px; border-radius: 50%; background: #f6e7a9; border: 0.5px solid var(--line2); display: block; }
 .bb-div { width: 0.5px; height: 16px; background: var(--line2); margin: 0 3px; }
 
 .img-handle {
