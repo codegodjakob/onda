@@ -163,7 +163,8 @@ body.view-editor #home { display: none; }
 .tbtn.on { color: var(--accent); background: var(--accentbg); }
 .tbtn svg { width: 16px; height: 16px; display: block; }
 .tbtn-label { padding: 0 10px; }
-.tbtn-block { min-width: 128px; justify-content: flex-start; font-weight: 500; white-space: nowrap; }
+.tbtn-block { min-width: 40px; justify-content: center; font-weight: 500; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.mi-sublabel { font-size: 12px; color: var(--txt2); width: 64px; flex: none; }
 .counter { font-size: 12px; color: var(--txt3); font-variant-numeric: tabular-nums; }
 .saveerr { font-size: 12px; color: var(--danger); }
 .saveerr:empty { display: none; }

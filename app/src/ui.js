@@ -159,18 +159,19 @@ function setSetting(key, value) {
 
 // ---------- Toolbar ----------
 let blockBtn = null, counterEl = null
-function currentBlockLabel() {
+function currentBlock() {
   const e = ctx.editor
-  if (e.isActive('heading', { level: 1 })) return 'Überschrift 1'
-  if (e.isActive('heading', { level: 2 })) return 'Überschrift 2'
-  if (e.isActive('heading', { level: 3 })) return 'Überschrift 3'
-  if (e.isActive('taskList')) return 'Checkliste'
-  if (e.isActive('bulletList')) return 'Aufzählung'
-  if (e.isActive('orderedList')) return 'Nummerierte Liste'
-  if (e.isActive('blockquote')) return 'Zitat'
-  if (e.isActive('codeBlock')) return 'Code'
-  return 'Text'
+  if (e.isActive('heading', { level: 1 })) return { mark: 'H1', name: 'Überschrift 1' }
+  if (e.isActive('heading', { level: 2 })) return { mark: 'H2', name: 'Überschrift 2' }
+  if (e.isActive('heading', { level: 3 })) return { mark: 'H3', name: 'Überschrift 3' }
+  if (e.isActive('taskList')) return { mark: '✓', name: 'Checkliste' }
+  if (e.isActive('bulletList')) return { mark: '•', name: 'Aufzählung' }
+  if (e.isActive('orderedList')) return { mark: '1.', name: 'Nummerierte Liste' }
+  if (e.isActive('blockquote')) return { mark: '„', name: 'Zitat' }
+  if (e.isActive('codeBlock')) return { mark: '</>', name: 'Code' }
+  return { mark: '¶', name: 'Text' }
 }
+function currentBlockLabel() { return currentBlock().name }
 function curFontSize() {
   const v = ctx.editor.getAttributes('textStyle').fontSize
   return v ? parseInt(v, 10) : ctx.state.settings.fontSize
@@ -205,9 +206,9 @@ function buildToolbar() {
   left.appendChild(backBtn)
   left.appendChild(el('span', 'bar-sep'))
 
-  blockBtn = el('button', 'tbtn tbtn-label tbtn-block')
-  blockBtn.title = 'Absatzformat'
-  blockBtn.innerHTML = '<span id="blockLabel">Text</span>'
+  blockBtn = el('button', 'tbtn tbtn-block')
+  blockBtn.title = 'Absatzformat: Text'
+  blockBtn.innerHTML = '<span id="blockLabel">¶</span>'
   makeDropdown(blockBtn, blockItems)
   left.appendChild(blockBtn)
   left.appendChild(el('span', 'bar-sep'))
@@ -244,23 +245,22 @@ function buildToolbar() {
     })
     panel.appendChild(srow)
     menuLabel(panel, 'Schriftgröße')
-    const row = el('div', 'mi-row')
-    const minus = el('button', 'mi-step', '−')
-    const val = el('span', 'mi-val', curFontSize() + '')
-    const plus = el('button', 'mi-step', '+')
-    minus.addEventListener('click', () => { bumpFontSize(-1); val.textContent = curFontSize() + '' })
-    plus.addEventListener('click', () => { bumpFontSize(1); val.textContent = curFontSize() + '' })
-    ;[minus, plus].forEach(b => b.addEventListener('mousedown', ev => ev.preventDefault()))
-    row.appendChild(minus); row.appendChild(val); row.appendChild(plus)
-    const presets = el('span', 'mi-presets')
-    ;[14, 17, 21].forEach(px => {
-      const p = el('button', 'mi-preset', px + '')
-      p.addEventListener('mousedown', ev => ev.preventDefault())
-      p.addEventListener('click', () => { e.chain().focus().setFontSize(px + 'px').run(); val.textContent = px + '' })
-      presets.appendChild(p)
+    const stepRow = (labelText, getVal, bump) => {
+      const row = el('div', 'mi-row')
+      row.appendChild(el('span', 'mi-sublabel', labelText))
+      const minus = el('button', 'mi-step', '−')
+      const val = el('span', 'mi-val', getVal() + '')
+      const plus = el('button', 'mi-step', '+')
+      minus.addEventListener('click', () => { bump(-1); val.textContent = getVal() + '' })
+      plus.addEventListener('click', () => { bump(1); val.textContent = getVal() + '' })
+      ;[minus, plus].forEach(b => b.addEventListener('mousedown', ev => ev.preventDefault()))
+      row.appendChild(minus); row.appendChild(val); row.appendChild(plus)
+      panel.appendChild(row)
+    }
+    stepRow('Auswahl', curFontSize, d => bumpFontSize(d))
+    stepRow('Gesamt', () => ctx.state.settings.fontSize, d => {
+      setSetting('fontSize', Math.max(14, Math.min(24, ctx.state.settings.fontSize + d)))
     })
-    row.appendChild(presets)
-    panel.appendChild(row)
     menuDivider(panel)
     menuItem(panel, 'Unterstrichen', () => e.chain().focus().toggleUnderline().run(), { active: e.isActive('underline'), kbd: '⌘U' })
     menuItem(panel, 'Durchgestrichen', () => e.chain().focus().toggleStrike().run(), { active: e.isActive('strike'), kbd: '⇧⌘S' })
@@ -388,7 +388,11 @@ function requestPrint() {
 }
 function updateToolbarState() {
   const lab = document.getElementById('blockLabel')
-  if (lab) lab.textContent = currentBlockLabel()
+  if (lab) {
+    const b = currentBlock()
+    lab.textContent = b.mark
+    if (blockBtn) blockBtn.title = 'Absatzformat: ' + b.name
+  }
   if (counterEl && ctx.editor.storage.characterCount) {
     const w = ctx.editor.storage.characterCount.words()
     counterEl.textContent = w + (w === 1 ? ' Wort' : ' Wörter')
@@ -832,6 +836,14 @@ function bindKeys() {
     else if (mod && e.key === 'e') { e.preventDefault(); ctx.exportMd() }
     else if (mod && e.key === 'p') { e.preventDefault(); requestPrint() }
     else if (mod && e.key === 'n' && !ctx.state.native) { e.preventDefault(); ctx.ops.newDoc() }
+    else if (mod && (e.key === '+' || e.key === '=')) {
+      e.preventDefault()
+      setSetting('fontSize', Math.min(24, ctx.state.settings.fontSize + 1))
+    }
+    else if (mod && e.key === '-') {
+      e.preventDefault()
+      setSetting('fontSize', Math.max(14, ctx.state.settings.fontSize - 1))
+    }
     else if (e.key === 'Escape') {
       if (openPanel) closeAllPanels()
       else if (document.body.classList.contains('zen')) toggleZen()
