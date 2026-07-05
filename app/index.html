@@ -29,23 +29,36 @@
       </div>
     </section>
 
-    <!-- Schreibansicht: Text in der Mitte, alles andere ein-/ausklappbar über die Rand-Leisten. -->
+    <!-- Schreibansicht: Text in der Mitte, Mini-Gliederung links im Textbereich,
+         Formulierungs-Spalte rechts am Text, Panels ein-/ausklappbar über die Rand-Leisten. -->
     <section id="editorView">
       <div id="railL" class="rail"></div>
       <aside id="pStruct" class="panel" hidden></aside>
-      <aside id="pNarr" class="panel" hidden></aside>
-      <aside id="pToc" class="panel" hidden></aside>
       <div id="main">
         <div id="bar"></div>
-        <div id="scroll">
-          <div id="page">
-            <textarea id="title" rows="1" placeholder="Titel" spellcheck="false"></textarea>
-            <div id="editor"></div>
+        <div id="mainBody">
+          <nav id="minimap" aria-label="Gliederung"></nav>
+          <div id="scroll">
+            <div id="page">
+              <textarea id="title" rows="1" placeholder="Titel" spellcheck="false"></textarea>
+              <div id="editor"></div>
+            </div>
           </div>
+          <aside id="lane" hidden></aside>
         </div>
       </div>
       <aside id="pCoach" class="panel panel-right" hidden></aside>
       <div id="railR" class="rail"></div>
+    </section>
+
+    <!-- Struktur-Seite: Material sammeln → Bausteine ordnen → Narrative → Coach. -->
+    <section id="structView">
+      <div id="railSL" class="rail"></div>
+      <div id="stCanvas" class="st-col st-canvas"></div>
+      <div id="stStruct" class="st-col"></div>
+      <div id="stNarr" class="st-col st-narr"></div>
+      <aside id="stCoach" class="panel panel-right st-coach"></aside>
+      <div id="railSR" class="rail"></div>
     </section>
 
   </div>

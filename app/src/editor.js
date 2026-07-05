@@ -15,6 +15,7 @@ import CharacterCount from '@tiptap/extension-character-count'
 import Typography from '@tiptap/extension-typography'
 import { initUI, setSaveState, refreshSidebar, applySettings, focusTitle, showEditorView } from './ui.js'
 import { initPanels, refreshToc } from './panels.js'
+import { initStructure } from './structure.js'
 
 // ---------- Schriftgröße pro Auswahl (Word-granular) ----------
 const FontSize = Extension.create({
@@ -426,6 +427,7 @@ export function boot() {
   }
   initUI(ctx)
   initPanels(ctx)
+  initStructure(ctx)
   applySettings()
   refreshSidebar()
 

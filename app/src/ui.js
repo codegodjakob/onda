@@ -37,19 +37,25 @@ const IC = {
   bCode: '<path d="M8 8l-4 4 4 4M16 8l4 4-4 4"/>',
 }
 
-// ---------- Seiten: Bibliothek (Home) ↔ Schreibansicht ----------
+// ---------- Seiten: Bibliothek (Home) ↔ Struktur ↔ Schreibansicht ----------
 export function showHomeView() {
   document.body.classList.remove('zen', 'zen-peek')
   document.body.classList.add('view-home')
-  document.body.classList.remove('view-editor')
+  document.body.classList.remove('view-editor', 'view-struct')
   closeAllPanels(); hideBubble()
   refreshSidebar()
 }
 export function showEditorView() {
   document.body.classList.add('view-editor')
-  document.body.classList.remove('view-home')
+  document.body.classList.remove('view-home', 'view-struct')
   // Titelhöhe erst messen, wenn die Ansicht wirklich sichtbar ist.
   if (ctx) requestAnimationFrame(ctx.autoGrowTitle)
+}
+export function showStructView() {
+  document.body.classList.remove('zen', 'zen-peek')
+  document.body.classList.add('view-struct')
+  document.body.classList.remove('view-home', 'view-editor')
+  closeAllPanels(); hideBubble()
 }
 
 // ---------- kleine Helfer ----------
@@ -256,6 +262,25 @@ function buildToolbar() {
     menuItem(panel, 'Bild …', () => imgInput.click())
   })
   left.appendChild(plusBtn)
+
+  // Formulierungs-Spalte: KI-Anmerkungen rechts am Text ein-/ausblenden.
+  const laneBtn = el('button', 'tbtn tbtn-lane')
+  laneBtn.innerHTML = icon('<path d="M7 8h13M7 12h13M7 16h8"/><path d="M4 7.2v9.6"/>')
+  laneBtn.title = 'Formulierung — Anmerkungen am Text'
+  laneBtn.appendChild(el('span', 'rail-badge'))
+  laneBtn.querySelector('.rail-badge').id = 'laneBadge'
+  laneBtn.addEventListener('mousedown', e => e.preventDefault())
+  laneBtn.addEventListener('click', e => {
+    e.stopPropagation()
+    const lane = document.getElementById('lane')
+    if (!lane) return
+    const show = lane.hasAttribute('hidden')
+    if (show) lane.removeAttribute('hidden')
+    else lane.setAttribute('hidden', '')
+    laneBtn.classList.toggle('on', show)
+  })
+  right.appendChild(laneBtn)
+  right.appendChild(el('span', 'bar-sep'))
 
   counterEl = el('span', 'counter', '')
   right.appendChild(counterEl)
@@ -713,6 +738,7 @@ export function refreshSidebar() {
   document.getElementById('newBtn').title = isProjects ? 'Neues Projekt' : 'Neuer Text (\u2318N)'
 
   listEl.innerHTML = ''
+  listEl.classList.toggle('grid', isProjects)
   if (isProjects) {
     trashSec.style.display = 'none'
     projectRows(listEl)
@@ -866,9 +892,12 @@ function bindKeys() {
       setSetting('fontSize', Math.max(14, ctx.state.settings.fontSize - 1))
     }
     else if (e.key === 'Escape') {
-      if (openPanel) closeAllPanels()
+      const overlay = document.querySelector('.ai-overlay')
+      if (overlay) overlay.querySelector('.ai-close')?.click()
+      else if (openPanel) closeAllPanels()
       else if (document.body.classList.contains('zen')) toggleZen()
-      else if (document.body.classList.contains('view-editor')) { ctx.flushSave(); homeMode = 'docs'; showHomeView() }
+      else if (document.body.classList.contains('view-editor')) { ctx.flushSave(); showStructView() }
+      else if (document.body.classList.contains('view-struct')) { homeMode = 'projects'; showHomeView() }
     }
   })
   document.addEventListener('click', () => closeAllPanels())

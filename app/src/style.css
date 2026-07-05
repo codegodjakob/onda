@@ -67,8 +67,11 @@ button { font-family: inherit; color: inherit; background: none; border: 0; curs
 input { font-family: inherit; }
 
 #app { height: 100vh; }
-body.view-home #editorView { display: none; }
-body.view-editor #home { display: none; }
+/* Drei Seiten: Bibliothek · Struktur · Schreiben — es ist immer genau eine sichtbar. */
+#home, #editorView, #structView { display: none; }
+body.view-home #home { display: block; }
+body.view-editor #editorView { display: flex; }
+body.view-struct #structView { display: flex; }
 
 /* ---------- Bibliothek (Startseite) ---------- */
 #home {
@@ -142,8 +145,9 @@ body.view-editor #home { display: none; }
 .tico-danger:hover { color: var(--danger); }
 
 /* ---------- Schreibansicht ---------- */
-#editorView { height: 100vh; display: flex; flex-direction: row; }
+#editorView { height: 100vh; flex-direction: row; }
 #main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+#mainBody { flex: 1; min-height: 0; display: flex; }
 
 /* Rand-Leisten: schmal, nur Icons — jedes Panel ein-/ausklappbar */
 .rail {
@@ -266,6 +270,7 @@ body.view-editor #home { display: none; }
 
 /* Bibliothek: Breadcrumb + Projekt-Umbenennen */
 .crumb { font-size: 12px; color: var(--txt3); padding: 0 0 10px; display: block; }
+.crumb[hidden] { display: none; }
 .crumb:hover { color: var(--accent); }
 .rename-input {
   width: 100%; font-size: 14.5px; color: var(--txt);
@@ -513,12 +518,210 @@ body.zen #title:focus { opacity: 1; }
 /* ---------- Druck ---------- */
 @media print {
   body { overflow: visible; background: #fff; color: #000; }
-  #home, #bar, .menu, .bubble, .img-handle { display: none !important; }
+  #home, #bar, .menu, .bubble, .img-handle, #structView, #minimap, #lane, .rail, .panel, .ai-overlay { display: none !important; }
   #app { display: block; height: auto; }
-  body.view-home #editorView { display: block; }
-  #editorView { display: block; height: auto; }
+  #editorView { display: block !important; height: auto; }
+  #mainBody { display: block; }
   #scroll { overflow: visible; -webkit-mask-image: none; mask-image: none; }
   #page { max-width: 100%; padding: 0; }
   #editor .ProseMirror { color: #000; }
   @page { margin: 2cm; }
 }
+
+/* ================================================================
+   KI-Interface v2: Mini-Gliederung, Struktur+Narrative, Formulierung,
+   Overlays mit Rückfrage-Chat, Struktur-Seite, Projekt-Kacheln.
+   ================================================================ */
+
+/* ---------- Mini-Gliederung im Textbereich ---------- */
+#minimap {
+  width: 148px; flex: none; overflow-y: auto;
+  padding: 46px 8px 30px 14px;
+  opacity: .45;
+  transition: opacity var(--dur) var(--ease);
+}
+#minimap:hover { opacity: 1; }
+.mm-h {
+  display: block; width: 100%; text-align: left;
+  font-size: 10.5px; color: var(--txt3); line-height: 1.35;
+  padding: 3px 6px; margin: 5px 0 1px; border-radius: 5px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.mm-h:hover { background: var(--bg3); color: var(--txt); }
+.mm-l1 { color: var(--txt2); font-weight: 500; }
+.mm-l2 { padding-left: 14px; }
+.mm-l3 { padding-left: 22px; }
+.mm-p {
+  display: block; width: 26px; height: 2px; border-radius: 1px;
+  background: var(--line2); margin: 5px 0 5px 8px; padding: 0;
+}
+.mm-p:hover { background: var(--txt3); }
+body.zen #minimap, body.zen #lane { display: none; }
+
+/* ---------- Formulierungs-Spalte rechts am Text ---------- */
+#lane { width: 212px; flex: none; overflow-y: auto; padding: 46px 16px 30px 4px; }
+#lane[hidden] { display: none; }
+.lane-card {
+  display: block; width: 100%; text-align: left;
+  border-left: 2px solid var(--line2);
+  padding: 6px 9px; margin-bottom: 12px;
+  border-radius: 0 var(--r) var(--r) 0;
+  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+.lane-card:hover { background: var(--bg3); border-left-color: var(--txt3); }
+.lane-text { display: block; font-size: 11.5px; color: var(--txt2); line-height: 1.5; }
+.tbtn-lane { position: relative; }
+
+/* ---------- Struktur+Narrative: eine breite Leiste, zwei Spalten ---------- */
+#pStruct { width: 560px; }
+.sp-cols { display: flex; gap: 16px; }
+.sp-col { flex: 1; min-width: 0; }
+.sp-col-n { border-left: 0.5px solid var(--line); padding-left: 16px; }
+
+.blk-main { flex: 1; min-width: 0; }
+.blk-sub {
+  font-size: 10.5px; color: var(--txt3); margin-top: 1px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* KI-Anmerkung in der Struktur: dünner roter Strich */
+.struct-note {
+  display: flex; align-items: flex-start; gap: 8px;
+  width: 100%; text-align: left; padding: 1px 2px 8px 2px;
+}
+.struct-note-line { width: 16px; height: 2px; border-radius: 1px; background: var(--danger); flex: none; margin-top: 6px; }
+.struct-note-txt { font-size: 11px; color: var(--danger); line-height: 1.45; opacity: .85; }
+.struct-note:hover .struct-note-txt { opacity: 1; text-decoration: underline; text-decoration-thickness: 1px; }
+
+/* Narrative: erzählte Fäden mit richtigen Absätzen */
+.narr-pt { display: flex; gap: 0; }
+.narr-body { min-width: 0; }
+.narr-h { font-size: 12px; font-weight: 500; color: var(--txt); line-height: 1.4; }
+.narr-p { font-size: 11.5px; color: var(--txt2); line-height: 1.55; margin: 2px 0 8px; }
+.narr-pt.open .narr-h { color: var(--warn); }
+.narr-h[contenteditable]:focus, .narr-p[contenteditable]:focus {
+  outline: none; background: var(--bg); border-radius: 4px; box-shadow: 0 0 0 1.5px var(--accent);
+}
+
+/* ---------- Overlay v2: Kopfzeile mit ✓ ✗ ✕, Inhalte, Chat ---------- */
+.ai-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px; }
+.ai-actions { display: flex; gap: 2px; }
+.ai-ico {
+  width: 30px; height: 30px; border-radius: 7px; color: var(--txt3);
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.ai-ico svg { width: 16px; height: 16px; display: block; }
+.ai-ico:hover { background: var(--bg3); color: var(--txt); }
+.ai-ok { color: var(--ok); }
+.ai-ok:hover { background: var(--accentbg); color: var(--ok); }
+.ai-no { color: var(--danger); }
+.ai-no:hover { color: var(--danger); }
+.ai-close { color: var(--txt3); }
+.ai-box .panel-head { margin-top: 14px; }
+.ai-narr { border-left: 2px solid var(--line2); padding-left: 10px; }
+
+/* Vorschlag & Original: normale Felder, nichts zum Aufziehen */
+.ai-prop {
+  background: var(--bg2); border: 0.5px solid var(--line2); border-radius: var(--r);
+  padding: 9px 11px; font-size: 13px; font-family: var(--doc-font); line-height: 1.6; color: var(--txt);
+}
+.ai-prop:focus { outline: none; border-color: var(--accent); background: var(--bg); }
+.ai-orig { font-size: 13px; font-family: var(--doc-font); color: var(--txt2); line-height: 1.6; }
+
+/* Quellen mit Lese-Vorschau */
+.ai-source { margin-bottom: 6px; }
+.ai-src-prev {
+  font-size: 11.5px; color: var(--txt2); line-height: 1.55;
+  background: var(--bg2); border: 0.5px solid var(--line); border-radius: var(--r);
+  padding: 8px 10px; margin: 2px 0 4px;
+}
+
+/* Rückfrage-Chat */
+.ai-chat { display: flex; flex-direction: column; gap: 6px; max-height: 190px; overflow-y: auto; }
+.ai-chat:empty { display: none; }
+.ai-msg { font-size: 12.5px; line-height: 1.5; padding: 7px 11px; border-radius: 11px; max-width: 86%; }
+.ai-msg-user { background: var(--accentbg); color: var(--txt); align-self: flex-end; }
+.ai-msg-ai { background: var(--bg3); color: var(--txt2); align-self: flex-start; }
+.ai-chat-row { display: flex; gap: 6px; align-items: flex-end; margin-top: 8px; }
+.ai-chat-input {
+  flex: 1; min-width: 0; min-height: 32px; max-height: 110px; overflow-y: auto;
+  background: var(--bg2); border: 0.5px solid var(--line2); border-radius: var(--r);
+  padding: 7px 11px; font-size: 13px; color: var(--txt); outline: none;
+}
+.ai-chat-input:focus { border-color: var(--accent); background: var(--bg); }
+.ai-chat-input:empty::before { content: attr(data-ph); color: var(--txt3); pointer-events: none; }
+
+/* Baustein-Overlay: groß, drei Spalten */
+.ai-box-wide { width: 880px; }
+.blk-ov-cols { display: flex; gap: 24px; margin-top: 6px; }
+.blk-ov-col { flex: 1; min-width: 0; }
+.blk-ov-col > .panel-head:first-child { margin-top: 6px; }
+.blk-ov-main { flex: 1.45; border-left: 0.5px solid var(--line); border-right: 0.5px solid var(--line); padding: 0 22px; }
+.blk-ov-title { font-size: 18px; font-weight: 600; font-family: var(--doc-font); color: var(--txt); margin: 0 0 8px; line-height: 1.3; }
+.blk-ov-body { font-size: 13.5px; font-family: var(--doc-font); line-height: 1.7; color: var(--txt); min-height: 140px; }
+.blk-ov-title[contenteditable]:focus, .blk-ov-body[contenteditable]:focus,
+.ai-why[contenteditable]:focus {
+  outline: none; background: var(--bg2); border-radius: 6px; box-shadow: 0 0 0 1.5px var(--accent);
+}
+
+/* ---------- Struktur-Seite: Material → Bausteine → Narrative → Coach ---------- */
+#structView { height: 100vh; flex-direction: row; }
+.st-col {
+  flex: 1; min-width: 0; overflow-y: auto;
+  padding: 14px 18px 40px; border-right: 0.5px solid var(--line);
+}
+.st-canvas { flex: 1.35; background: var(--bg2); display: flex; flex-direction: column; }
+.st-narr { border-right: 0; }
+.st-coach { width: 264px; }
+.st-head { display: flex; align-items: baseline; justify-content: space-between; }
+
+.cv { position: relative; flex: 1; min-height: 460px; }
+.cv-card {
+  position: absolute; width: 205px;
+  background: var(--bg); border: 0.5px solid var(--line2); border-radius: var(--r2);
+  padding: 10px 12px 11px; cursor: grab;
+  box-shadow: 0 1px 3px rgba(30, 30, 28, .06);
+  transition: box-shadow var(--dur) var(--ease);
+}
+.cv-card.cv-drag { cursor: grabbing; box-shadow: var(--shadow); z-index: 5; }
+.cv-kind {
+  display: inline-block; font-size: 9.5px; letter-spacing: .05em;
+  color: var(--txt3); border: 0.5px solid var(--line2); border-radius: 5px;
+  padding: 1px 6px; margin-bottom: 6px;
+}
+.cv-pdf .cv-kind { color: var(--danger); border-color: var(--danger); }
+.cv-youtube .cv-kind { color: var(--warn); border-color: var(--warn); }
+.cv-zitat .cv-kind { color: var(--accent); border-color: var(--accent); }
+.cv-text { font-size: 11.5px; color: var(--txt2); line-height: 1.5; cursor: text; }
+.cv-text:focus { outline: none; color: var(--txt); }
+.cv-make {
+  position: absolute; top: 7px; right: 7px;
+  font-size: 10.5px; color: var(--accent); background: var(--accentbg);
+  border-radius: 6px; padding: 2px 7px;
+  opacity: 0; transition: opacity var(--dur) var(--ease);
+}
+.cv-card:hover .cv-make, .cv-card:focus-within .cv-make { opacity: 1; }
+
+/* ---------- Startseite: Projekte als Kacheln ---------- */
+#doclist.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+#doclist.grid .doc {
+  position: relative; flex-direction: column; align-items: stretch; justify-content: flex-end;
+  min-height: 116px; padding: 16px;
+  background: var(--bg2); border: 0.5px solid var(--line2); border-radius: var(--r2);
+}
+#doclist.grid .doc:hover { background: var(--bg3); }
+#doclist.grid .doc .dt { font-size: 15.5px; font-weight: 500; }
+#doclist.grid .doc .trash-acts {
+  position: absolute; top: 8px; right: 8px;
+  opacity: 0; transition: opacity var(--dur) var(--ease);
+}
+#doclist.grid .doc:hover .trash-acts { opacity: 1; }
+#doclist.grid .empty { grid-column: 1 / -1; }
+
+/* Platz-Regel: Der Text hat Vorrang. Wird die Schreibfläche zu schmal
+   (weil Leisten offen sind), weichen zuerst die Mini-Gliederung, dann
+   die Formulierungs-Spalte — von allein, ohne Alarm. */
+#mainBody { container-type: inline-size; }
+@container (max-width: 1150px) { #minimap { display: none; } }
+@container (max-width: 900px) { #lane { display: none; } }
