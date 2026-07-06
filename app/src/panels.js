@@ -489,10 +489,18 @@ export function buildLane() {
   const lane = document.getElementById('lane')
   if (!lane) return
   lane.innerHTML = ''
-  if (lane.hasAttribute('hidden')) { if (ctx) ctx.editor.commands.setAnnos([]); updateLaneBadge(); return }
+  if (lane.hasAttribute('hidden')) {
+    laneInner = null
+    if (ctx) ctx.editor.commands.setAnnos([])
+    const layer = document.querySelector('#mainBody > .anno-layer'); if (layer) layer.innerHTML = ''
+    updateLaneBadge(); return
+  }
   laneInner = el('div', 'lane-inner')
   lane.appendChild(laneInner)
   layoutAnnotations()
+  // Nach dem nächsten Frame noch einmal ausrichten — der Editor ist beim ersten
+  // Aufbau (Ansichtswechsel) oft noch nicht vermessen (coordsAtPos wäre falsch).
+  requestAnimationFrame(() => { if (laneInner && !document.getElementById('lane').hasAttribute('hidden')) layoutAnnotations() })
   updateLaneBadge()
 }
 export function updateLaneBadge() {
@@ -521,30 +529,42 @@ export function findInDoc(text) {
   if (i < 0) return null
   return { from: map[i], to: map[i + text.length - 1] + 1 }
 }
+// Ebene über dem ganzen Textbereich für die Verbindungslinien (bis zur echten Stelle).
+function getAnnoLayer() {
+  const mb = document.getElementById('mainBody'); if (!mb) return null
+  let l = mb.querySelector(':scope > .anno-layer')
+  if (!l) { l = el('div', 'anno-layer'); mb.appendChild(l) }
+  return l
+}
 // Bubbles an die Höhe ihrer Passage setzen, Passagen markieren (Dekoration, nicht
-// gespeichert), Verbindungslinien zeichnen; sich überlappende Bubbles rücken nach unten.
+// gespeichert), Linien von der Textstelle bis zur Bubble ziehen; Überlappungen weichen.
 function layoutAnnotations() {
   if (!laneInner || !ctx) return
   laneInner.innerHTML = ''
+  const layer = getAnnoLayer(); if (layer) layer.innerHTML = ''
   const scroll = document.getElementById('scroll')
   const page = document.getElementById('page')
+  const mb = document.getElementById('mainBody')
+  const lane = document.getElementById('lane')
   const items = laneList().filter(c => c.status === 'open')
-  if (!scroll || !page || !page.offsetHeight) { ctx.editor.commands.setAnnos([]); return }
+  if (!scroll || !page || !mb || !page.offsetHeight) { ctx.editor.commands.setAnnos([]); return }
   const srect = scroll.getBoundingClientRect()
+  const mbr = mb.getBoundingClientRect()
+  const laneLeft = lane.getBoundingClientRect().left - mbr.left
   const anchors = [], decos = []
   items.forEach(c => {
     const r = findInDoc(c.target); if (!r) return
-    let co; try { co = ctx.editor.view.coordsAtPos(r.from) } catch (e) { return }
-    anchors.push({ c, y: co.top - srect.top + scroll.scrollTop })
+    let co, ce
+    try { co = ctx.editor.view.coordsAtPos(r.from); ce = ctx.editor.view.coordsAtPos(r.to) } catch (e) { return }
+    anchors.push({ c, y: co.top - srect.top + scroll.scrollTop, sx: ce.right - mbr.left, sy: (ce.top + ce.bottom) / 2 - mbr.top + scroll.scrollTop })
     decos.push({ from: r.from, to: r.to, kind: c.kind || 'form' })
   })
   ctx.editor.commands.setAnnos(decos)
   const h = page.offsetHeight
   laneInner.style.height = h + 'px'
   const NS = 'http://www.w3.org/2000/svg'
-  const svg = document.createElementNS(NS, 'svg')
-  svg.setAttribute('class', 'lane-svg'); svg.setAttribute('width', '100%'); svg.setAttribute('height', h)
-  laneInner.appendChild(svg)
+  let svg = null
+  if (layer) { svg = document.createElementNS(NS, 'svg'); svg.setAttribute('class', 'anno-svg'); svg.setAttribute('width', Math.round(mbr.width)); svg.setAttribute('height', h); layer.appendChild(svg) }
   anchors.sort((a, b) => a.y - b.y)
   let prevBottom = -999
   anchors.forEach(a => {
@@ -553,19 +573,24 @@ function layoutAnnotations() {
     const top = Math.max(Math.round(a.y) - 4, prevBottom + 12)
     bub.style.top = top + 'px'
     prevBottom = top + bub.offsetHeight
-    const y2 = top + 15
-    const path = document.createElementNS(NS, 'path')
-    path.setAttribute('d', 'M0 ' + a.y + ' C13 ' + a.y + ' 8 ' + y2 + ' 22 ' + y2)
-    path.setAttribute('fill', 'none'); path.setAttribute('class', 'lane-conn anno-' + (a.c.kind || 'form'))
-    path.dataset.aid = a.c.id
-    svg.appendChild(path)
+    if (svg) {
+      const tx = laneLeft + 13, ty = top + 15
+      const c1x = a.sx + (tx - a.sx) * 0.45, c2x = a.sx + (tx - a.sx) * 0.6
+      const path = document.createElementNS(NS, 'path')
+      path.setAttribute('d', 'M' + a.sx + ' ' + a.sy + ' C' + c1x + ' ' + a.sy + ' ' + c2x + ' ' + ty + ' ' + tx + ' ' + ty)
+      path.setAttribute('fill', 'none'); path.setAttribute('class', 'lane-conn anno-' + (a.c.kind || 'form'))
+      path.dataset.aid = a.c.id
+      svg.appendChild(path)
+    }
   })
   applyLaneTransform()
 }
 function applyLaneTransform() {
-  if (!laneInner) return
   const scroll = document.getElementById('scroll')
-  laneInner.style.transform = 'translateY(' + (-(scroll ? scroll.scrollTop : 0)) + 'px)'
+  const t = 'translateY(' + (-(scroll ? scroll.scrollTop : 0)) + 'px)'
+  if (laneInner) laneInner.style.transform = t
+  const layer = document.querySelector('#mainBody > .anno-layer')
+  if (layer) layer.style.transform = t
 }
 function annoBubble(c) {
   const b = el('div', 'anno-bubble anno-' + (c.kind || 'form'))

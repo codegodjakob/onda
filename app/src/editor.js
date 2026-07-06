@@ -144,9 +144,24 @@ function ensureDocShape(d) {
   if (!d.panels || typeof d.panels !== 'object') d.panels = { struct: false, coach: false, lane: false }
   // Jeder Erzählfaden hat eine feste Farbe (Index in der Faden-Palette).
   d.narrative.forEach((t, i) => { if (t.color == null) t.color = i })
+  // Alt-Notizen ohne Anker: den Baustein aus dem Titel „… (Baustein)" erkennen
+  // und daran heften (dann steht die Notiz in ihrer Zeile statt bei „ohne Baustein").
+  d.narrative.forEach(t => (t.steps || []).forEach(s => {
+    if (!s.blockId && s.h) {
+      const m = /\(([^)]+)\)\s*$/.exec(s.h)
+      if (m) { const b = findBlockByTitle(d.structure, m[1].trim()); if (b) { s.blockId = b.id; s.h = s.h.replace(/\s*\([^)]+\)\s*$/, '').trim() } }
+    }
+  }))
   // Anmerkungen: Standard-Art ist Formulierung.
   d.lane.forEach(c => { if (!c.kind) c.kind = 'form' })
   return d
+}
+function findBlockByTitle(list, title) {
+  for (const b of list) {
+    if ((b.title || '').trim() === title) return b
+    const r = findBlockByTitle(b.children || [], title); if (r) return r
+  }
+  return null
 }
 // Ein Projekt trägt sein Material (Canvas) — geteilt über alle Texte des Projekts.
 function ensureProjectShape(p) {
