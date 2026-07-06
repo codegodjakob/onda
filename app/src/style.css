@@ -23,6 +23,7 @@
   --danger: #a3402a;
   --ok: #5a8f4e;
   --warn: #b9831f;
+  --cue: #efe4c6;
   --r: 8px;
   --r2: 12px;
   --dur: 180ms;
@@ -47,6 +48,7 @@
   --danger: #cf7458;
   --ok: #83ab77;
   --warn: #cfa050;
+  --cue: #3c4453;
   --shadow: 0 8px 28px rgba(0, 0, 0, .45), 0 1px 3px rgba(0, 0, 0, .3);
 }
 
@@ -725,3 +727,81 @@ body.zen #minimap, body.zen #lane { display: none; }
 #mainBody { container-type: inline-size; }
 @container (max-width: 1150px) { #minimap { display: none; } }
 @container (max-width: 900px) { #lane { display: none; } }
+
+/* ================================================================
+   Station 1 — echtes Datenmodell: sanfte Markierung, Leerzustände,
+   KI-Vorschlag, Löschen, Feld-Platzhalter, sticky Overlay-Kopf.
+   ================================================================ */
+
+/* Flüchtige Markierung (Dekoration, nicht im Dokument) */
+.cue-mark { background: var(--cue); border-radius: 2px; box-shadow: 0 0 0 1px var(--cue); }
+
+/* Einladender Leerzustand in Struktur/Narrative */
+.ki-empty { padding: 10px 2px 14px; }
+.ki-empty-title { font-size: 13px; font-weight: 500; color: var(--txt2); margin-bottom: 4px; }
+.ki-empty-hint { font-size: 12px; color: var(--txt3); line-height: 1.55; }
+
+.blk-actions { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.ki-suggest {
+  display: inline-flex; align-items: center; gap: 7px; align-self: flex-start;
+  font-size: 12px; color: var(--accent);
+  border: 0.5px solid var(--line2); border-radius: var(--r); padding: 6px 10px;
+  transition: background var(--dur) var(--ease);
+}
+.ki-suggest:hover { background: var(--accentbg); }
+.ki-suggest svg { width: 15px; height: 15px; }
+.ki-suggest.resting { color: var(--txt3); }
+.ki-resting-note { font-size: 11.5px; color: var(--txt3); line-height: 1.5; margin-top: 4px; }
+
+/* Ablege-Zone unten in der Struktur */
+.blk-endzone { height: 14px; border-radius: 5px; margin: 2px 0; transition: background var(--dur) var(--ease); }
+.blk-endzone.drop-in { height: 22px; background: var(--accentbg); box-shadow: inset 0 0 0 1px var(--accent); }
+
+/* Löschen: Fäden, Punkte, Material, Bausteine */
+.narr-label-row { display: flex; align-items: center; gap: 6px; }
+.narr-label-row .narr-label { flex: 1; min-width: 0; }
+.narr-pt { position: relative; }
+.narr-del {
+  flex: none; width: 20px; height: 20px; border-radius: 5px; color: var(--txt3);
+  display: inline-flex; align-items: center; justify-content: center;
+  opacity: 0; transition: opacity var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.narr-del svg { width: 12px; height: 12px; }
+.narr-del-pt { position: absolute; top: 0; right: 0; }
+.narr-thread:hover .narr-del, .narr-pt:hover .narr-del-pt { opacity: 1; }
+.narr-del:hover { color: var(--danger); background: var(--bg3); }
+
+.cv-del {
+  position: absolute; top: 7px; right: 62px; width: 20px; height: 20px; border-radius: 5px;
+  color: var(--txt3); display: inline-flex; align-items: center; justify-content: center;
+  opacity: 0; transition: opacity var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.cv-del svg { width: 12px; height: 12px; }
+.cv-card:hover .cv-del { opacity: 1; }
+.cv-del:hover { color: var(--danger); background: var(--bg3); }
+
+.blk-ov-foot { margin-top: 18px; padding-top: 12px; border-top: 0.5px solid var(--line); }
+.blk-del { font-size: 12px; color: var(--txt3); padding: 5px 8px; border-radius: 6px; }
+.blk-del:hover { color: var(--danger); background: var(--bg3); }
+
+/* Feld-Platzhalter in Overlays (Klick-zum-Schreiben, noch leer) */
+.ai-prop:empty::before, .blk-ov-title:empty::before {
+  content: attr(data-ph); color: var(--txt3); pointer-events: none;
+}
+.ai-note-link { display: block; width: 100%; text-align: left; cursor: pointer; }
+.ai-note-link:hover { color: var(--warn); }
+.ai-warn {
+  font-size: 12px; color: var(--danger); line-height: 1.5;
+  background: var(--bg2); border: 0.5px solid var(--danger); border-radius: var(--r);
+  padding: 8px 10px; margin: 4px 0 2px;
+}
+
+/* Overlay-Kopf bleibt beim Scrollen oben (✓ ✗ ✕ immer erreichbar) */
+.ai-head {
+  position: sticky; top: 0; z-index: 3;
+  background: var(--bg); padding: 2px 0 8px; margin-top: -2px;
+}
+.ai-no:hover { background: var(--bg3); }
+
+/* Reject-Icon (⊗) etwas kräftiger vom Schließen (✕) abgesetzt */
+.ai-ok svg, .ai-no svg { width: 17px; height: 17px; }

@@ -8,6 +8,8 @@ let searchQuery = ''
 let openPanel = null
 const panels = []
 
+import { persistPanelState } from './panels.js'
+
 // Prinzip „begrenzte Auswahl": Hervorheben = genau eine Markierfarbe.
 const HL_COLOR = '#f6e7a9'
 
@@ -278,6 +280,7 @@ function buildToolbar() {
     if (show) lane.removeAttribute('hidden')
     else lane.setAttribute('hidden', '')
     laneBtn.classList.toggle('on', show)
+    persistPanelState()
   })
   right.appendChild(laneBtn)
   right.appendChild(el('span', 'bar-sep'))
@@ -564,7 +567,7 @@ function bindSlash() {
         if (items[slashSel]) execSlash(items[slashSel])
         return true
       }
-      if (e.key === 'Escape') { closeSlash(); return true }
+      if (e.key === 'Escape') { e.stopPropagation(); closeSlash(); return true }
       if (e.key === 'Backspace') {
         const q = slashQuery()
         if (!q) closeSlash()
@@ -878,10 +881,12 @@ function bindTitle() {
 function bindKeys() {
   document.addEventListener('keydown', e => {
     const mod = e.metaKey || e.ctrlKey
-    if (mod && e.key === 'k') { e.preventDefault(); openLinkDialog() }
-    else if (mod && e.key === '.') { e.preventDefault(); toggleZen() }
-    else if (mod && e.key === 'e') { e.preventDefault(); ctx.exportMd() }
-    else if (mod && e.key === 'p') { e.preventDefault(); requestPrint() }
+    const inEditor = document.body.classList.contains('view-editor')
+    // Text-bezogene Kürzel wirken nur in der Schreibansicht — nie auf ein verborgenes Dokument.
+    if (mod && e.key === 'k') { if (inEditor) { e.preventDefault(); openLinkDialog() } }
+    else if (mod && e.key === '.') { if (inEditor) { e.preventDefault(); toggleZen() } }
+    else if (mod && e.key === 'e') { if (inEditor) { e.preventDefault(); ctx.exportMd() } }
+    else if (mod && e.key === 'p') { if (inEditor) { e.preventDefault(); requestPrint() } }
     else if (mod && e.key === 'n' && !ctx.state.native) { e.preventDefault(); ctx.ops.newDoc() }
     else if (mod && (e.key === '+' || e.key === '=')) {
       e.preventDefault()
@@ -895,6 +900,7 @@ function bindKeys() {
       const overlay = document.querySelector('.ai-overlay')
       if (overlay) overlay.querySelector('.ai-close')?.click()
       else if (openPanel) closeAllPanels()
+      else if (bubbleEl && bubbleEl.classList.contains('open')) hideBubble()
       else if (document.body.classList.contains('zen')) toggleZen()
       else if (document.body.classList.contains('view-editor')) { ctx.flushSave(); showStructView() }
       else if (document.body.classList.contains('view-struct')) { homeMode = 'projects'; showHomeView() }

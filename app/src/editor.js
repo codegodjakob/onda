@@ -1,5 +1,6 @@
 import { Editor, Extension } from '@tiptap/core'
-import { EditorState } from '@tiptap/pm/state'
+import { EditorState, Plugin, PluginKey } from '@tiptap/pm/state'
+import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import StarterKit from '@tiptap/starter-kit'
 import Underline from '@tiptap/extension-underline'
 import Link from '@tiptap/extension-link'
@@ -14,8 +15,9 @@ import Placeholder from '@tiptap/extension-placeholder'
 import CharacterCount from '@tiptap/extension-character-count'
 import Typography from '@tiptap/extension-typography'
 import { initUI, setSaveState, refreshSidebar, applySettings, focusTitle, showEditorView } from './ui.js'
-import { initPanels, refreshToc } from './panels.js'
+import { initPanels, refreshAllPanels } from './panels.js'
 import { initStructure } from './structure.js'
+import { buildExampleStructure, buildExampleNarrative, buildExampleCoach, buildExampleLane, buildExampleBody, buildExampleMaterial } from './example.js'
 
 // ---------- Schriftgröße pro Auswahl (Word-granular) ----------
 const FontSize = Extension.create({
@@ -54,10 +56,43 @@ const ImageX = Image.extend({
   },
 })
 
+// ---------- Sanfte Markierung (Peripherie): eine flüchtige Dekoration ----------
+// Zeigt eine Passage kurz an, OHNE das Dokument zu ändern — sie wird nicht
+// gespeichert, landet nicht im Rückgängig-Verlauf und kollidiert nicht mit der
+// gelben Nutzer-Markierung. (Der frühere Fehler: echtes Highlight ins Dokument.)
+const cueKey = new PluginKey('aiwtCue')
+const Cue = Extension.create({
+  name: 'aiwtCue',
+  addProseMirrorPlugins() {
+    return [new Plugin({
+      key: cueKey,
+      state: {
+        init() { return DecorationSet.empty },
+        apply(tr, old) {
+          const meta = tr.getMeta(cueKey)
+          if (meta !== undefined) {
+            if (!meta) return DecorationSet.empty
+            return DecorationSet.create(tr.doc, [Decoration.inline(meta.from, meta.to, { class: 'cue-mark' })])
+          }
+          return old.map(tr.mapping, tr.doc)
+        },
+      },
+      props: { decorations(state) { return cueKey.getState(state) } },
+    })]
+  },
+  addCommands() {
+    return {
+      setCue: range => ({ tr, dispatch }) => { if (dispatch) dispatch(tr.setMeta(cueKey, range)); return true },
+      clearCue: () => ({ tr, dispatch }) => { if (dispatch) dispatch(tr.setMeta(cueKey, null)); return true },
+    }
+  },
+})
+
 // ---------- Zustand & Speicher ----------
 const NATIVE = !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.store)
 const DEFAULTS = { theme: 'auto', fontSize: 17, lineWidth: 720, font: 'serif', spellcheck: false, showWords: true }
 const TRASH_DAYS = 30
+const SCHEMA = 3
 
 export const state = { docs: [], active: null, projects: [], activeProject: null, settings: { ...DEFAULTS }, editor: null, native: NATIVE }
 
@@ -66,8 +101,24 @@ function now() { return Date.now() }
 export function docTitle(d) { return (d && d.title && d.title.trim()) ? d.title.trim() : 'Ohne Titel' }
 export function activeDoc() { return state.docs.find(d => d.id === state.active) }
 
+// Ein Text trägt seine Struktur, seine Erzählfäden, Coach- und Formulierungs-Karten
+// und den Zustand seiner Leisten bei sich — alles wird mitgespeichert.
+function ensureDocShape(d) {
+  if (!Array.isArray(d.structure)) d.structure = []
+  if (!Array.isArray(d.narrative)) d.narrative = []
+  if (!Array.isArray(d.coach)) d.coach = []
+  if (!Array.isArray(d.lane)) d.lane = []
+  if (!d.panels || typeof d.panels !== 'object') d.panels = { struct: false, coach: false, lane: false }
+  return d
+}
+// Ein Projekt trägt sein Material (Canvas) — geteilt über alle Texte des Projekts.
+function ensureProjectShape(p) {
+  if (!Array.isArray(p.material)) p.material = []
+  return p
+}
+
 function newDocRaw() {
-  const d = { id: uid(), title: '', body: '', updated: now(), projectId: state.activeProject || (state.projects[0] && state.projects[0].id) }
+  const d = ensureDocShape({ id: uid(), title: '', body: '', updated: now(), projectId: state.activeProject || (state.projects[0] && state.projects[0].id) })
   state.docs.push(d); state.active = d.id
   return d
 }
@@ -121,6 +172,15 @@ function load() {
   state.docs.forEach(x => {
     if (!x.projectId || !state.projects.some(p => p.id === x.projectId)) x.projectId = state.projects[0].id
   })
+  // Struktur/Narrative/Material sind neu (Schema 3) — bestehende Texte bekommen leere Felder,
+  // das „Calm Technology"-Beispiel wandert einmalig in ein eigenes, echtes Projekt.
+  state.projects.forEach(ensureProjectShape)
+  state.docs.forEach(ensureDocShape)
+  const version = (d && d.schemaVersion) || 0
+  if (!state.settings.exampleSeeded) {
+    seedExampleProject()
+    state.settings.exampleSeeded = true
+  }
   state.activeProject = (d && d.activeProject && state.projects.some(p => p.id === d.activeProject))
     ? d.activeProject : state.projects[0].id
   purgeTrash()
@@ -130,9 +190,23 @@ function load() {
   }
 }
 
+// Legt „Beispiel: Calm Technology" als vollständiges, editierbares Projekt an —
+// einmalig, klar als Beispiel benannt, jederzeit löschbar. Kein Mock über echten Texten.
+function seedExampleProject() {
+  const proj = ensureProjectShape({ id: 'p-example', name: 'Beispiel: Calm Technology', created: now(), example: true })
+  proj.material = buildExampleMaterial()
+  state.projects.push(proj)
+  state.docs.push(ensureDocShape({
+    id: uid(), title: 'Calm Technology', body: buildExampleBody(), updated: now(), projectId: proj.id,
+    structure: buildExampleStructure(), narrative: buildExampleNarrative(),
+    coach: buildExampleCoach(), lane: buildExampleLane(),
+  }))
+}
+
 let ackPending = false
 export function persist() {
   const payload = JSON.stringify({
+    schemaVersion: SCHEMA,
     docs: state.docs, active: state.active,
     projects: state.projects, activeProject: state.activeProject,
     settings: state.settings,
@@ -195,7 +269,7 @@ function showDoc(id) {
     doc: state.editor.state.doc,
     plugins: state.editor.state.plugins,
   }))
-  refreshToc()
+  refreshAllPanels()
   persist()
   refreshSidebar()
 }
@@ -211,7 +285,7 @@ export function openDoc(id) {
 }
 export function newDoc() {
   flushSave()
-  const d = { id: uid(), title: '', body: '', updated: now(), projectId: state.activeProject }
+  const d = ensureDocShape({ id: uid(), title: '', body: '', updated: now(), projectId: state.activeProject })
   state.docs.push(d)
   showDoc(d.id)
   showEditorView()
@@ -220,7 +294,13 @@ export function newDoc() {
 export function duplicateDoc(id) {
   flushSave()
   const src = state.docs.find(x => x.id === id); if (!src) return
-  const copy = { id: uid(), title: (src.title ? src.title + ' Kopie' : 'Kopie'), body: src.body, updated: now(), projectId: src.projectId }
+  // Eine Kopie erbt auch die Struktur, die Erzählfäden und die Hinweise des Textes.
+  const clone = obj => JSON.parse(JSON.stringify(obj || []))
+  const copy = ensureDocShape({
+    id: uid(), title: (src.title ? src.title + ' Kopie' : 'Kopie'), body: src.body, updated: now(), projectId: src.projectId,
+    structure: clone(src.structure), narrative: clone(src.narrative), coach: clone(src.coach), lane: clone(src.lane),
+    panels: Object.assign({ struct: false, coach: false, lane: false }, src.panels),
+  })
   state.docs.push(copy)
   showDoc(copy.id)
   showEditorView()
@@ -230,7 +310,7 @@ export function trashDoc(id) {
   if (id === state.active) flushSave()
   d.trashed = true; d.trashedAt = now()
   if (!state.docs.some(x => !x.trashed)) {
-    state.docs.push({ id: uid(), title: '', body: '', updated: now() })
+    state.docs.push(ensureDocShape({ id: uid(), title: '', body: '', updated: now(), projectId: state.activeProject }))
   }
   if (state.active === id) {
     showDoc(state.docs.find(x => !x.trashed).id)
@@ -249,7 +329,7 @@ export function deleteForever(id) {
   if (!wasActive) flushSave()
   state.docs = state.docs.filter(x => x.id !== id)
   if (!state.docs.some(x => !x.trashed)) {
-    state.docs.push({ id: uid(), title: '', body: '', updated: now() })
+    state.docs.push(ensureDocShape({ id: uid(), title: '', body: '', updated: now(), projectId: state.activeProject }))
   }
   if (wasActive) {
     showDoc(state.docs.find(x => !x.trashed).id)
@@ -382,6 +462,7 @@ export function boot() {
       Placeholder.configure({ placeholder: 'Schreib hier los — „/“ für Befehle …' }),
       CharacterCount,
       Typography,
+      Cue,
     ],
     content: (activeDoc() && activeDoc().body) || '',
     editorProps: {

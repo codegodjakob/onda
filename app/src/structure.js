@@ -1,18 +1,14 @@
 // Struktur-Seite: Material sammeln (Canvas) → Bausteine ordnen → Narrative → Coach.
-// Nutzt dieselben Bausteine und Fäden wie die Schreibansicht — eine Struktur, zwei Orte.
+// Material gehört zum Projekt, Struktur/Narrative zum Text — dieselben Daten wie im Editor.
 
-import { el, icon, PIC, MOCK_BLOCKS, tagBlocks, renderBlocksInto, renderNarrativeInto, renderCoachInto, openBlockOverlay, rebuildStructEverywhere, notifyStructChanged } from './panels.js'
+import { el, icon, PIC, renderBlocksInto, renderNarrativeInto, renderCoachInto, openBlockOverlay, notifyStructChanged, addRootBlock } from './panels.js'
 import { showHomeView, setHomeMode, showEditorView } from './ui.js'
 
-// Mock-Material auf dem Canvas — später: echte Notizen, PDFs, Videos, Bilder.
-const MOCK_CANVAS = [
-  { kind: 'Notiz', text: 'Ruhige Technik = volle Kraft, leise Präsentation. Vielleicht als Schlussformel?', x: 24, y: 46 },
-  { kind: 'PDF', text: 'Weiser & Brown (1996): The Coming Age of Calm Technology — Originalaufsatz, 8 Seiten.', x: 150, y: 170 },
-  { kind: 'YouTube', text: 'Amber Case: „Calm Technology“ — Vortrag, gute Beispiele ab Minute 12.', x: 40, y: 305 },
-  { kind: 'Zitat', text: '„Technology should require the smallest possible amount of attention.“ — Case, Prinzip 1', x: 170, y: 430 },
-]
-
 let ctxS = null
+let cardSeq = 0
+
+function material() { const p = ctxS.activeProjectObj(); return p ? (p.material = p.material || []) : [] }
+function saveS() { ctxS.scheduleSave() }
 
 export function initStructure(context) {
   ctxS = context
@@ -20,7 +16,7 @@ export function initStructure(context) {
   buildCanvas()
   rebuildStructColumns()
   renderCoachInto(document.getElementById('stCoach'))
-  window.__rebuildStructView = rebuildStructColumns
+  window.__rebuildStructView = () => { buildCanvas(); rebuildStructColumns() }
   window.__renderStructCoach = () => renderCoachInto(document.getElementById('stCoach'))
 }
 
@@ -30,45 +26,55 @@ function buildStructRails() {
   rl.innerHTML = ''; rr.innerHTML = ''
   const mk = (rail, ic, title, onClick) => {
     const b = el('button', 'rail-btn')
-    b.innerHTML = icon(ic)
-    b.title = title
-    b.setAttribute('aria-label', title)
+    b.innerHTML = icon(ic); b.title = title; b.setAttribute('aria-label', title)
     b.addEventListener('click', onClick)
-    rail.appendChild(b)
-    return b
+    rail.appendChild(b); return b
   }
-  mk(rl, PIC.home, 'Projekte (Startseite)', () => { setHomeMode('projects'); showHomeView() })
-  mk(rl, PIC.toText, 'Zum Text', () => showEditorView())
+  mk(rl, PIC.home, 'Projekte (Startseite)', () => { ctxS.flushSave(); setHomeMode('projects'); showHomeView() })
+  mk(rl, PIC.toText, 'Zum Text', () => { ctxS.flushSave(); showEditorView() })
+  const cb = mk(rr, PIC.coach, 'Coach ein-/ausblenden', () => {
+    const c = document.getElementById('stCoach')
+    const open = c.hasAttribute('hidden')
+    if (open) c.removeAttribute('hidden'); else c.setAttribute('hidden', '')
+    cb.classList.toggle('on', open)
+  })
+  cb.classList.add('on')
 }
 
-// ---------- Canvas: Material frei anordnen ----------
+// ---------- Canvas: Material frei anordnen (pro Projekt) ----------
 function buildCanvas() {
   const col = document.getElementById('stCanvas')
+  if (!col) return
   col.innerHTML = ''
   const head = el('div', 'st-head')
   head.appendChild(el('div', 'panel-head', 'Material'))
   const add = el('button', 'narr-add', '+ Notiz')
   add.addEventListener('click', () => {
-    MOCK_CANVAS.push({ kind: 'Notiz', text: 'Neuer Gedanke …', x: 30, y: 30 })
-    buildCanvas()
+    const n = material().length
+    material().push({ id: 'm' + Date.now().toString(36) + (cardSeq++), kind: 'Notiz', text: 'Neuer Gedanke …', x: 24 + (n % 4) * 20, y: 24 + (n % 6) * 26 })
+    saveS(); buildCanvas()
   })
   head.appendChild(add)
   col.appendChild(head)
-  col.appendChild(el('div', 'panel-sub', 'Sammeln und frei anordnen — Notizen, PDFs, Videos, Zitate. Aus jedem Stück kann ein Baustein werden.'))
+  col.appendChild(el('div', 'panel-sub', 'Sammeln und frei anordnen — Notizen, Quellen, Zitate. Aus jedem Stück kann ein Baustein werden.'))
   const cv = el('div', 'cv')
-  MOCK_CANVAS.forEach(c => cv.appendChild(canvasCard(c, cv)))
+  const list = material()
+  if (!list.length) col.appendChild(el('div', 'panel-empty', 'Noch kein Material. „+ Notiz" legt das erste Stück an.'))
+  list.forEach(c => cv.appendChild(canvasCard(c, cv)))
   col.appendChild(cv)
 }
 
 function canvasCard(c, cv) {
   const card = el('div', 'cv-card cv-' + c.kind.toLowerCase())
-  card.style.left = c.x + 'px'
-  card.style.top = c.y + 'px'
+  card.style.left = c.x + 'px'; card.style.top = c.y + 'px'
   card.appendChild(el('span', 'cv-kind', c.kind))
+  const del = el('button', 'cv-del'); del.innerHTML = icon(PIC.x); del.title = 'Entfernen'
+  del.addEventListener('mousedown', ev => ev.stopPropagation())
+  del.addEventListener('click', ev => { ev.stopPropagation(); const l = material(); const i = l.indexOf(c); if (i >= 0) l.splice(i, 1); saveS(); buildCanvas() })
+  card.appendChild(del)
   const txt = el('div', 'cv-text', c.text)
-  txt.contentEditable = 'true'
-  txt.spellcheck = false
-  txt.addEventListener('blur', () => { c.text = txt.textContent.trim() || c.text })
+  txt.contentEditable = 'true'; txt.spellcheck = false
+  txt.addEventListener('blur', () => { c.text = txt.textContent.trim() || c.text; saveS() })
   txt.addEventListener('mousedown', ev => ev.stopPropagation())
   txt.addEventListener('keydown', ev => ev.stopPropagation())
   card.appendChild(txt)
@@ -79,19 +85,16 @@ function canvasCard(c, cv) {
     ev.stopPropagation()
     const nb = {
       title: c.text.split(/[.!?—]/)[0].slice(0, 34) || c.kind,
-      role: c.kind === 'Zitat' ? 'Beleg' : 'Baustein',
+      role: c.kind === 'Zitat' ? 'Beleg' : '',
       content: c.text,
-      why: 'Aus dem Material übernommen — die Begründung kann hier ergänzt werden.',
-      sources: c.kind === 'PDF' || c.kind === 'YouTube' || c.kind === 'Zitat' ? [c.text.slice(0, 60)] : [],
+      why: '', note: null,
+      sources: (c.kind === 'PDF' || c.kind === 'YouTube' || c.kind === 'Zitat') ? [c.text.slice(0, 60)] : [],
       children: [],
     }
-    MOCK_BLOCKS.push(nb)
-    tagBlocks(MOCK_BLOCKS)
-    rebuildStructEverywhere()
+    addRootBlock(nb)
     openBlockOverlay(nb)
   })
   card.appendChild(mk)
-  // Frei verschieben mit der Maus
   card.addEventListener('mousedown', ev => {
     if (ev.button !== 0) return
     ev.preventDefault()
@@ -100,31 +103,28 @@ function canvasCard(c, cv) {
     const move = e2 => {
       c.x = Math.max(0, Math.min(e2.clientX - startX, cv.clientWidth - card.offsetWidth))
       c.y = Math.max(0, e2.clientY - startY)
-      card.style.left = c.x + 'px'
-      card.style.top = c.y + 'px'
+      card.style.left = c.x + 'px'; card.style.top = c.y + 'px'
     }
     const up = () => {
-      card.classList.remove('cv-drag')
-      document.removeEventListener('mousemove', move)
-      document.removeEventListener('mouseup', up)
+      card.classList.remove('cv-drag'); saveS()
+      document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up)
     }
-    document.addEventListener('mousemove', move)
-    document.addEventListener('mouseup', up)
+    document.addEventListener('mousemove', move); document.addEventListener('mouseup', up)
   })
   return card
 }
 
-// ---------- Bausteine + Narrative (dieselben wie in der Schreibansicht) ----------
+// ---------- Bausteine + Narrative (dieselben Daten wie im Editor) ----------
 function rebuildStructColumns() {
   const s = document.getElementById('stStruct')
   const n = document.getElementById('stNarr')
   if (!s || !n) return
   s.innerHTML = ''
   s.appendChild(el('div', 'panel-head', 'Struktur'))
-  s.appendChild(el('div', 'panel-sub', 'Bausteine ordnen — klicken zum Öffnen, ziehen zum Verschieben. Alles hier erscheint genauso in der Schreibansicht.'))
+  s.appendChild(el('div', 'panel-sub', 'Bausteine ordnen — klicken zum Öffnen, ziehen zum Verschieben. Erscheint genauso in der Schreibansicht.'))
   renderBlocksInto(s, { drag: true, note: true, onChange: notifyStructChanged })
   n.innerHTML = ''
   n.appendChild(el('div', 'panel-head', 'Narrative'))
-  n.appendChild(el('div', 'panel-sub', 'Die Fäden, die sich durch den Text ziehen — Struktur und Narrative halten sich im Einklang.'))
+  n.appendChild(el('div', 'panel-sub', 'Die Fäden, die sich durch den Text ziehen — im Einklang mit der Struktur.'))
   renderNarrativeInto(n)
 }
