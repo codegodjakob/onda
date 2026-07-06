@@ -200,7 +200,7 @@ export function buildStructPanel() {
   const body = el('div', 'sp-body')
   const head = el('div', 'sp-head')
   head.appendChild(el('div', 'panel-head', 'Struktur & Narrative'))
-  head.appendChild(el('div', 'panel-sub', 'Von oben nach unten die Timeline — jede Zeile ein Schritt. Links, was passiert · rechts, warum (je Faden).'))
+  head.appendChild(el('div', 'panel-sub', 'Timeline von oben nach unten. Links deine Bausteine (was passiert), rechts die Metastruktur je Faden — die zieht die KI automatisch nach.'))
   body.appendChild(head)
   const wrap = el('div', 'tl-wrap')
   renderTimelineGrid(wrap, { drag: true, onChange: onStructChanged })
@@ -306,20 +306,25 @@ export function renderTimelineGrid(parent, opts = {}) {
   }
   parent.appendChild(grid)
 
-  // Verwaiste Notizen sichtbar machen: Schritte, deren Baustein nicht (mehr) existiert.
+  // Die KI hat die Fäden noch nicht abgeleitet (leerer/neuer Text) — ruhiger Hinweis.
+  if (!threads.length) {
+    const rest = el('div', 'tl-ki-rest')
+    rest.appendChild(el('div', 'ki-empty-title', 'Die Metastruktur entsteht automatisch.'))
+    rest.appendChild(el('div', 'ki-empty-hint', 'Sobald die KI angeschlossen ist, liest sie deinen Text und die Bausteine, zieht die Erzählfäden nach und hält sie aktuell — du musst nichts zuordnen.'))
+    parent.appendChild(rest)
+  }
+
+  // Verwaiste Notizen sichtbar machen (die KI ordnet sie beim nächsten Durchgang neu ein).
   const liveIds = new Set(); const gather = arr => arr.forEach(b => { liveIds.add(b.id); gather(b.children || []) }); gather(list)
   const orphans = []
   threads.forEach((t, ti) => (t.steps || []).forEach(s => { if (!liveIds.has(s.blockId)) orphans.push({ t, ti, s }) }))
   if (orphans.length) {
     const box = el('div', 'tl-orphans')
-    box.appendChild(el('div', 'panel-sub', 'Nicht zugeordnet — diese Notizen zeigen auf keinen Baustein mehr:'))
+    box.appendChild(el('div', 'panel-sub', 'Noch ohne Baustein — die KI ordnet das beim nächsten Durchgang neu ein:'))
     orphans.forEach(o => {
       const row = el('div', 'tl-orphan')
       const sw = el('span', 'narr-swatch'); sw.style.background = threadColorOf(o.t, o.ti); row.appendChild(sw)
       row.appendChild(el('div', 'tl-orphan-txt', ((o.s.h ? o.s.h + ' — ' : '') + (o.s.p || '(leer)'))))
-      const assign = el('button', 'narr-add', 'zuordnen')
-      assign.addEventListener('click', ev => { ev.stopPropagation(); openBlockPicker(assign, id => { if (id) { o.s.blockId = id; save(); rebuildStructEverywhere() } }) })
-      row.appendChild(assign)
       const del = el('button', 'narr-del'); del.innerHTML = icon(PIC.x); del.title = 'Notiz entfernen'
       del.addEventListener('click', () => { const i = o.t.steps.indexOf(o.s); if (i >= 0) o.t.steps.splice(i, 1); save(); rebuildStructEverywhere() })
       row.appendChild(del)
@@ -332,10 +337,8 @@ export function renderTimelineGrid(parent, opts = {}) {
   const add = el('button', 'narr-add', '+ Baustein')
   add.addEventListener('click', () => { const nb = newBlockObj(); list.push(nb); save(); rebuildStructEverywhere(); openBlockOverlay(nb) })
   actions.appendChild(add)
-  const addTh = el('button', 'narr-add', '+ Faden')
-  addTh.addEventListener('click', () => { threads.push({ id: nid('n'), title: 'Neuer Faden', color: threads.length, steps: [] }); save(); rebuildStructEverywhere() })
-  actions.appendChild(addTh)
-  kiSuggestButton(actions, 'Aus Text vorschlagen')
+  // Die Metastruktur (Fäden + Warum je Schritt) leitet die KI ab und hält sie aktuell.
+  kiSuggestButton(actions, 'Metastruktur aktualisieren')
   parent.appendChild(actions)
 
   function threadHeaderCell(t, ti) {
@@ -384,12 +387,8 @@ export function renderTimelineGrid(parent, opts = {}) {
       c.appendChild(del)
       c.addEventListener('mouseenter', () => highlightThread(ti))
       c.addEventListener('mouseleave', () => highlightThread(null))
-    } else {
-      const plus = el('button', 'tl-add-note'); plus.innerHTML = icon('<path d="M12 5v14M5 12h14"/>')
-      plus.title = 'Metastruktur für „' + t.title + '" an diesem Baustein'
-      plus.addEventListener('click', () => { t.steps = t.steps || []; t.steps.push({ id: nid('s'), h: '', p: '', blockId: b.id }); save(); rebuildStructEverywhere() })
-      c.appendChild(plus)
     }
+    // Leere Zelle bleibt leer — die KI trägt die Metastruktur hier automatisch ein.
     return c
   }
 }
@@ -400,26 +399,6 @@ function collectIds(b, out) { out = out || []; out.push(b.id); (b.children || []
 // Faden-Notizen entfernen, die auf gelöschte Bausteine zeigen — keine Karteileichen.
 function pruneNarrativeSteps(ids) { const set = new Set(ids); narr().forEach(t => { t.steps = (t.steps || []).filter(s => !set.has(s.blockId)) }) }
 
-// Kleines Schwebemenü: an welchen Baustein wird eine verwaiste Notiz gehängt?
-let pickerEl = null
-function closePicker() { if (pickerEl) { pickerEl.remove(); pickerEl = null } }
-function openBlockPicker(anchorEl, onPick) {
-  closePicker()
-  pickerEl = el('div', 'menu blk-picker open')
-  const add = (arr, depth) => arr.forEach(b => {
-    const it = el('button', 'mi'); it.appendChild(el('span', 'mi-label', '·  '.repeat(depth) + b.title))
-    it.addEventListener('mousedown', e => e.preventDefault())
-    it.addEventListener('click', () => { onPick(b.id); closePicker() })
-    pickerEl.appendChild(it)
-    add(b.children || [], depth + 1)
-  })
-  add(blocks(), 0)
-  document.body.appendChild(pickerEl)
-  const r = anchorEl.getBoundingClientRect()
-  pickerEl.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 250)) + 'px'
-  pickerEl.style.top = (r.bottom + 4) + 'px'
-  setTimeout(() => document.addEventListener('mousedown', closePicker, { once: true }), 0)
-}
 
 function attachBlockDrag(row, b, opts) {
   row.addEventListener('dragstart', ev => {

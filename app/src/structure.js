@@ -120,7 +120,7 @@ function rebuildStructColumns() {
   if (!g) return
   g.innerHTML = ''
   g.appendChild(el('div', 'panel-head', 'Struktur & Narrative'))
-  g.appendChild(el('div', 'panel-sub', 'Von oben nach unten die Timeline — jede Zeile ein Schritt. Links, was passiert · rechts, warum (je Faden).'))
+  g.appendChild(el('div', 'panel-sub', 'Timeline von oben nach unten. Links deine Bausteine (was passiert), rechts die Metastruktur je Faden — die zieht die KI automatisch nach.'))
   const wrap = el('div', 'tl-wrap')
   renderTimelineGrid(wrap, { drag: true, onChange: notifyStructChanged })
   g.appendChild(wrap)
