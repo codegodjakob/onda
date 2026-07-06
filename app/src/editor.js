@@ -126,6 +126,7 @@ const NATIVE = !!(window.webkit && window.webkit.messageHandlers && window.webki
 const DEFAULTS = { theme: 'auto', fontSize: 17, lineWidth: 720, font: 'serif', spellcheck: false, showWords: true, structWidth: 620 }
 const TRASH_DAYS = 30
 const SCHEMA = 3
+const EX_VERSION = 2   // hochzählen, wenn sich das Beispiel-Projekt ändert → frisch aufsetzen
 
 export const state = { docs: [], active: null, projects: [], activeProject: null, settings: { ...DEFAULTS }, editor: null, native: NATIVE }
 
@@ -230,9 +231,12 @@ function load() {
   // das „Calm Technology"-Beispiel wandert einmalig in ein eigenes, echtes Projekt.
   state.projects.forEach(ensureProjectShape)
   state.docs.forEach(ensureDocShape)
-  const version = (d && d.schemaVersion) || 0
-  if (!state.settings.exampleSeeded) {
+  // Beispiel-Projekt anlegen bzw. bei neuer Version frisch aufsetzen (eigene Texte bleiben).
+  if ((state.settings.exampleVersion || 0) < EX_VERSION) {
+    state.docs = state.docs.filter(x => x.projectId !== 'p-example')
+    state.projects = state.projects.filter(p => p.id !== 'p-example')
     seedExampleProject()
+    state.settings.exampleVersion = EX_VERSION
     state.settings.exampleSeeded = true
   }
   state.activeProject = (d && d.activeProject && state.projects.some(p => p.id === d.activeProject))

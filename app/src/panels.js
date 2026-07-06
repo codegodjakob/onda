@@ -310,6 +310,7 @@ export function renderTimelineGrid(parent, opts = {}) {
     grid.appendChild(end)
   }
   parent.appendChild(grid)
+  if (threads.length) drawThreadLines(grid, threads)
 
   // Die KI hat die Fäden noch nicht abgeleitet (leerer/neuer Text) — ruhiger Hinweis.
   if (!threads.length) {
@@ -398,6 +399,44 @@ export function renderTimelineGrid(parent, opts = {}) {
   }
 }
 function newBlockObj() { return { id: nid('b'), title: 'Neuer Baustein', role: '', content: '', why: '', sources: [], note: null, collapsed: false, children: [] } }
+
+// Verbundene Faden-Linien im Raster: je Faden eine Linie von der ersten bis zur
+// letzten Notiz mit Punkten — man sieht, wann ein Faden beginnt und endet.
+function drawThreadLines(grid, threads) {
+  const NS = 'http://www.w3.org/2000/svg'
+  const draw = () => {
+    const old = grid.querySelector(':scope > .tl-lines'); if (old) old.remove()
+    if (!grid.offsetHeight) return
+    const grect = grid.getBoundingClientRect()
+    const svg = document.createElementNS(NS, 'svg')
+    svg.setAttribute('class', 'tl-lines'); svg.setAttribute('width', grid.clientWidth); svg.setAttribute('height', grid.scrollHeight)
+    threads.forEach((t, ti) => {
+      const cells = grid.querySelectorAll('.tl-tcell.filled[data-thread="' + ti + '"]')
+      if (!cells.length) return
+      const color = threadColorOf(t, ti)
+      const x = cells[0].getBoundingClientRect().left - grect.left + 8
+      const ys = Array.from(cells).map(c => {
+        const hh = c.querySelector('.tl-tc-h'); const rr = (hh || c).getBoundingClientRect()
+        return rr.top - grect.top + (hh ? rr.height / 2 : 11)
+      })
+      const g = document.createElementNS(NS, 'g'); g.setAttribute('data-thread', ti)
+      if (ys.length > 1) {
+        const ln = document.createElementNS(NS, 'line')
+        ln.setAttribute('x1', x); ln.setAttribute('x2', x)
+        ln.setAttribute('y1', Math.min.apply(null, ys)); ln.setAttribute('y2', Math.max.apply(null, ys))
+        ln.setAttribute('stroke-width', '2'); ln.setAttribute('stroke-linecap', 'round'); ln.style.stroke = color
+        g.appendChild(ln)
+      }
+      ys.forEach(y => { const c = document.createElementNS(NS, 'circle'); c.setAttribute('cx', x); c.setAttribute('cy', y); c.setAttribute('r', '3.5'); c.style.fill = color; g.appendChild(c) })
+      svg.appendChild(g)
+    })
+    grid.appendChild(svg)
+  }
+  requestAnimationFrame(draw)
+  if (grid._ro) grid._ro.disconnect()
+  grid._ro = new ResizeObserver(() => requestAnimationFrame(draw))
+  grid._ro.observe(grid)
+}
 
 // Alle IDs eines Baustein-Teilbaums (für die Bereinigung beim Löschen).
 function collectIds(b, out) { out = out || []; out.push(b.id); (b.children || []).forEach(c => collectIds(c, out)); return out }
@@ -550,13 +589,18 @@ function layoutAnnotations() {
   if (!scroll || !page || !mb || !page.offsetHeight) { ctx.editor.commands.setAnnos([]); return }
   const srect = scroll.getBoundingClientRect()
   const mbr = mb.getBoundingClientRect()
+  const prr = page.getBoundingClientRect()
+  // Linien starten immer am rechten Textrand (in der Marge) — nie quer durch Text.
+  const textRight = prr.right - 40 - mbr.left
   const laneLeft = lane.getBoundingClientRect().left - mbr.left
   const anchors = [], decos = []
   items.forEach(c => {
     const r = findInDoc(c.target); if (!r) return
-    let co, ce
-    try { co = ctx.editor.view.coordsAtPos(r.from); ce = ctx.editor.view.coordsAtPos(r.to) } catch (e) { return }
-    anchors.push({ c, y: co.top - srect.top + scroll.scrollTop, sx: ce.right - mbr.left, sy: (ce.top + ce.bottom) / 2 - mbr.top + scroll.scrollTop })
+    let co
+    try { co = ctx.editor.view.coordsAtPos(r.from) } catch (e) { return }
+    const yTop = co.top - mbr.top + scroll.scrollTop
+    const yMid = (co.top + co.bottom) / 2 - mbr.top + scroll.scrollTop
+    anchors.push({ c, y: yTop, sx: textRight, sy: yMid })
     decos.push({ from: r.from, to: r.to, kind: c.kind || 'form' })
   })
   ctx.editor.commands.setAnnos(decos)

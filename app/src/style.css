@@ -597,10 +597,10 @@ body.zen #minimap, body.zen #lane { display: none; }
 .anno-inhalt .anno-tag { background: color-mix(in srgb, var(--ok) 15%, var(--bg)); color: var(--ok); }
 .anno-short { font-size: 12.5px; line-height: 1.5; color: var(--txt); }
 
-/* Textmarkierung (Dekoration, nicht gespeichert) */
-.anno-mark.anno-form { text-decoration: underline; text-decoration-style: wavy; text-decoration-color: color-mix(in srgb, var(--accent) 70%, transparent); text-underline-offset: 3px; text-decoration-thickness: 1.5px; }
+/* Textmarkierung (Dekoration, nicht gespeichert) — sanfte Fläche, keine Unterstreichung */
+.anno-mark.anno-form { background: color-mix(in srgb, var(--accent) 13%, transparent); border-radius: 2px; box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 16%, transparent); }
 .anno-mark.anno-inhalt { background: color-mix(in srgb, var(--ok) 14%, transparent); border-radius: 2px; box-shadow: 0 0 0 1px color-mix(in srgb, var(--ok) 18%, transparent); }
-.anno-mark.anno-form.anno-hi { text-decoration-color: var(--accent); background: var(--accentbg); border-radius: 2px; }
+.anno-mark.anno-form.anno-hi { background: color-mix(in srgb, var(--accent) 26%, transparent); }
 .anno-mark.anno-inhalt.anno-hi { background: color-mix(in srgb, var(--ok) 26%, transparent); }
 .tbtn-lane { position: relative; }
 
@@ -911,7 +911,10 @@ body.zen #minimap, body.zen #lane { display: none; }
   row-gap: 20px;
   align-items: start;
   padding-bottom: 4px;
+  position: relative;
 }
+/* Verbundene Faden-Linien (Punkte + Linie je Faden) — im Notiz-Randbereich, klick-durchlässig */
+.tl-lines { position: absolute; top: 0; left: 0; pointer-events: none; overflow: visible; z-index: 0; }
 .tl-cell { min-width: 0; font-size: 12px; }
 .tl-cell[data-thread] { transition: opacity var(--dur) var(--ease); }
 
@@ -939,7 +942,7 @@ body.zen #minimap, body.zen #lane { display: none; }
 
 /* Metastruktur-Notiz (warum, je Faden) — feiner farbiger Randstrich statt Kasten */
 .tl-tcell { min-width: 0; }
-.tl-tcell.filled { position: relative; border-left: 2px solid; padding-left: 11px; }
+.tl-tcell.filled { position: relative; padding-left: 18px; }
 .tl-tc-h { font-size: 11.5px; font-weight: 500; color: var(--txt); line-height: 1.4; }
 .tl-tc-p { font-size: 11px; color: var(--txt2); line-height: 1.5; margin-top: 2px; }
 .tl-tc-h:empty::before, .tl-tc-p:empty::before { content: attr(data-ph); color: var(--txt3); }

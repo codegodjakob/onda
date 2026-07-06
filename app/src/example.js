@@ -96,10 +96,28 @@ export function buildExampleLane() {
       action: 'zerteilen die Aufmerksamkeit in immer kleinere Stücke',
       variants: ['zerteilen die Aufmerksamkeit in immer kleinere Stücke', 'zersplittern die Aufmerksamkeit', 'hacken die Aufmerksamkeit in Fetzen'] },
     { id: sid('l'), kind: 'inhalt', status: 'open',
-      target: 'Für Schreibsoftware heißt das: Werkzeuge erscheinen im Kontext, Hinweise sammeln sich leise, nichts drängt sich in den Fluss.',
+      target: 'Der eigentliche Schaden ist nicht die einzelne Meldung, sondern die Summe der kleinen Unterbrechungen über den Tag.',
+      short: 'Starker Gedanke — trägt vielleicht den ganzen Absatz.',
+      why: 'Dieser Satz ist die eigentliche Pointe des Absatzes, steht aber hinten. Nach vorn gezogen, gibt er dem „Warum" sofort Gewicht — der Rest belegt ihn dann.',
+      action: 'Vorschlag: den Satz an den Anfang des Absatzes ziehen.',
+      variants: [] },
+    { id: sid('l'), kind: 'form', status: 'open',
+      target: 'ohne sich in den Vordergrund zu drängen',
+      short: 'Bild schärfen — „Vordergrund" ist blass.',
+      why: 'Ein konkreteres Bild trägt weiter als die räumliche Metapher „Vordergrund".',
+      action: 'ohne nach Aufmerksamkeit zu rufen',
+      variants: ['ohne nach Aufmerksamkeit zu rufen', 'ohne sich vorzudrängen', 'ohne laut zu werden'] },
+    { id: sid('l'), kind: 'inhalt', status: 'open',
+      target: 'Für Schreibsoftware bedeutet das: Werkzeuge erscheinen im Kontext, Hinweise sammeln sich leise, nichts drängt sich in den Fluss.',
       short: 'Behauptet die Wirkung, zeigt sie aber nicht.',
-      why: 'Der Absatz nennt drei Prinzipien, bleibt aber abstrakt. Ein konkretes Beispiel — eine Statusleuchte, die nur bei Bedarf aufleuchtet — würde die Behauptung tragen und an den Anfangston (Teekanne) anknüpfen. So bekommt die Passage Boden unter den Füßen.',
+      why: 'Der Absatz nennt drei Prinzipien, bleibt aber abstrakt. Ein konkretes Beispiel — eine Statusleuchte, die nur bei Bedarf aufleuchtet — würde die Behauptung tragen und an den Anfangston (Teekanne) anknüpfen.',
       action: 'Ein Beispiel macht es greifbar: Die Rechtschreibprüfung sammelt ihre Funde am Rand, statt bei jedem Wort zu unterbrechen — sichtbar, aber nie im Weg.',
+      variants: [] },
+    { id: sid('l'), kind: 'form', status: 'open',
+      target: 'volle Kraft, leise Präsentation',
+      short: 'Schöne Formel — verdient vielleicht einen eigenen Satz.',
+      why: 'Die Antithese ist der Merksatz des Textes. Als eigenständiger Schlusssatz gesetzt, klingt sie stärker nach.',
+      action: 'Ruhige Technik ist kein Verzicht, sondern eine Haltung. Volle Kraft, leise Präsentation.',
       variants: [] },
   ]
 }
@@ -108,8 +126,11 @@ export function buildExampleBody() {
   return '<h1>Calm Technology</h1>'
     + '<p>Calm Technology beschreibt Technik, die in der Peripherie bleibt und Aufmerksamkeit nur beansprucht, wenn sie wirklich gebraucht wird.</p>'
     + '<h2>Warum es wichtig ist</h2>'
-    + '<p>Ständige Benachrichtigungen fragmentieren die Aufmerksamkeit und zerreißen den Denkfluss.</p>'
-    + '<p>Für Schreibsoftware heißt das: Werkzeuge erscheinen im Kontext, Hinweise sammeln sich leise, nichts drängt sich in den Fluss.</p>'
+    + '<p>Ständige Benachrichtigungen fragmentieren die Aufmerksamkeit und zerreißen den Denkfluss. Der eigentliche Schaden ist nicht die einzelne Meldung, sondern die Summe der kleinen Unterbrechungen über den Tag.</p>'
+    + '<p>Weiser und Brown beschrieben schon 1996, wie Technik zwischen Zentrum und Peripherie der Aufmerksamkeit wechseln kann. Eine gute Statusanzeige informiert, ohne sich in den Vordergrund zu drängen.</p>'
+    + '<h2>Was das fürs Schreiben heißt</h2>'
+    + '<p>Für Schreibsoftware bedeutet das: Werkzeuge erscheinen im Kontext, Hinweise sammeln sich leise, nichts drängt sich in den Fluss.</p>'
+    + '<p>Am Ende ist ruhige Technik keine Frage des Verzichts, sondern der Haltung: volle Kraft, leise Präsentation.</p>'
 }
 
 export function buildExampleMaterial() {
