@@ -274,19 +274,20 @@ export function renderTimelineGrid(parent, opts = {}) {
 
   const grid = el('div', 'tl-grid')
   // Spalten in JS setzen — repeat(0,…) wäre ungültiges CSS und zerbräche das Raster bei 0 Fäden.
-  grid.style.gridTemplateColumns = 'minmax(148px, 1.6fr) ' + 'minmax(94px, 1fr) '.repeat(threads.length) + '30px'
+  grid.style.gridTemplateColumns = 'minmax(160px, 1.4fr) ' + 'minmax(104px, 1fr) '.repeat(threads.length)
 
-  grid.appendChild(el('div', 'tl-cell tl-h tl-corner', 'Bausteine · was passiert'))
+  grid.appendChild(el('div', 'tl-cell tl-h tl-corner', 'Zeit ↓'))
   threads.forEach((t, ti) => grid.appendChild(threadHeaderCell(t, ti)))
-  const addThH = el('div', 'tl-cell tl-h tl-addth')
-  const addThBtn = el('button', 'tl-icon-btn'); addThBtn.innerHTML = icon('<path d="M12 5v14M5 12h14"/>'); addThBtn.title = 'Faden hinzufügen'
-  addThBtn.addEventListener('click', () => { threads.push({ id: nid('n'), title: 'Neuer Faden', color: threads.length, steps: [] }); save(); rebuildStructEverywhere() })
-  addThH.appendChild(addThBtn); grid.appendChild(addThH)
 
-  rows.forEach(({ b, depth }) => {
-    grid.appendChild(blockCell(b, depth))
-    threads.forEach((t, ti) => grid.appendChild(threadCell(b, t, ti)))
-    grid.appendChild(el('div', 'tl-cell tl-filler'))
+  rows.forEach(({ b, depth }, ri) => {
+    const rowCells = [blockCell(b, depth)]
+    threads.forEach((t, ti) => rowCells.push(threadCell(b, t, ti)))
+    // sanftes Zeilen-Aufleuchten zum Nachverfolgen (was passiert ↔ warum, gleiche Höhe)
+    rowCells.forEach(c => {
+      c.addEventListener('mouseenter', () => rowCells.forEach(x => x.classList.add('tl-rowhi')))
+      c.addEventListener('mouseleave', () => rowCells.forEach(x => x.classList.remove('tl-rowhi')))
+      grid.appendChild(c)
+    })
   })
 
   if (opts.drag) {
@@ -331,6 +332,9 @@ export function renderTimelineGrid(parent, opts = {}) {
   const add = el('button', 'narr-add', '+ Baustein')
   add.addEventListener('click', () => { const nb = newBlockObj(); list.push(nb); save(); rebuildStructEverywhere(); openBlockOverlay(nb) })
   actions.appendChild(add)
+  const addTh = el('button', 'narr-add', '+ Faden')
+  addTh.addEventListener('click', () => { threads.push({ id: nid('n'), title: 'Neuer Faden', color: threads.length, steps: [] }); save(); rebuildStructEverywhere() })
+  actions.appendChild(addTh)
   kiSuggestButton(actions, 'Aus Text vorschlagen')
   parent.appendChild(actions)
 
@@ -339,7 +343,7 @@ export function renderTimelineGrid(parent, opts = {}) {
     c.addEventListener('mouseenter', () => highlightThread(ti))
     c.addEventListener('mouseleave', () => highlightThread(null))
     const sw = el('span', 'narr-swatch'); sw.style.background = threadColorOf(t, ti); c.appendChild(sw)
-    const lab = el('div', 'tl-thread-name', t.title); makeEditable(lab, v => { t.title = v || t.title; save() }); c.appendChild(lab)
+    const lab = el('div', 'tl-thread-name', t.title); lab.style.color = threadColorOf(t, ti); makeEditable(lab, v => { t.title = v || t.title; save() }); c.appendChild(lab)
     const del = el('button', 'narr-del'); del.innerHTML = icon(PIC.x); del.title = 'Faden entfernen'
     del.addEventListener('click', () => { const i = threads.indexOf(t); if (i >= 0) threads.splice(i, 1); save(); rebuildStructEverywhere() })
     c.appendChild(del)

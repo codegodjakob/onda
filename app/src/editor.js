@@ -90,7 +90,7 @@ const Cue = Extension.create({
 
 // ---------- Zustand & Speicher ----------
 const NATIVE = !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.store)
-const DEFAULTS = { theme: 'auto', fontSize: 17, lineWidth: 720, font: 'serif', spellcheck: false, showWords: true, structWidth: 560 }
+const DEFAULTS = { theme: 'auto', fontSize: 17, lineWidth: 720, font: 'serif', spellcheck: false, showWords: true, structWidth: 620 }
 const TRASH_DAYS = 30
 const SCHEMA = 3
 
