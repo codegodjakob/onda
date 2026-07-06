@@ -283,9 +283,6 @@ function buildToolbar() {
     persistPanelState()
     buildLane()
   })
-  right.appendChild(laneBtn)
-  right.appendChild(el('span', 'bar-sep'))
-
   counterEl = el('span', 'counter', '')
   right.appendChild(counterEl)
   dotEl = el('span', 'savedot')
@@ -299,6 +296,10 @@ function buildToolbar() {
   gearBtn.title = 'Einstellungen'
   makeDropdown(gearBtn, buildGearPanel, true)
   right.appendChild(gearBtn)
+
+  // Anmerkungs-Icon ganz außen rechts (obere Ecke) — es steuert die rechte Spalte.
+  right.appendChild(el('span', 'bar-sep'))
+  right.appendChild(laneBtn)
 
   bar.appendChild(left)
   bar.appendChild(right)
