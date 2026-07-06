@@ -103,9 +103,13 @@ const Annos = Extension.create({
           const meta = tr.getMeta(annoKey)
           if (meta !== undefined) {
             if (!meta || !meta.length) return DecorationSet.empty
-            const decos = meta.map(r => Decoration.inline(r.from, r.to, {
-              class: 'anno-mark anno-' + r.kind + (r.hi ? ' anno-hi' : ''),
-            }))
+            const decos = []
+            meta.forEach(r => {
+              decos.push(Decoration.inline(r.from, r.to, { class: 'anno-mark anno-' + r.kind + (r.hi ? ' anno-hi' : '') }))
+              if (r.num != null) decos.push(Decoration.widget(r.to, () => {
+                const s = document.createElement('span'); s.className = 'anno-num anno-' + r.kind; s.textContent = String(r.num); return s
+              }, { side: 1, ignoreSelection: true }))
+            })
             return DecorationSet.create(tr.doc, decos)
           }
           return old.map(tr.mapping, tr.doc)

@@ -375,7 +375,15 @@ export function renderTimelineGrid(parent, opts = {}) {
       head.appendChild(dot)
     }
     c.appendChild(head)
-    if (b.content) c.appendChild(el('div', 'tl-block-body', b.content))
+    if (b.content) {
+      const body = el('div', 'tl-block-body', b.content)
+      c.appendChild(body)
+      if (b.content.length > 70) {
+        const tog = el('button', 'tl-more', 'mehr')
+        tog.addEventListener('click', ev => { ev.stopPropagation(); const open = body.classList.toggle('open'); tog.textContent = open ? 'weniger' : 'mehr' })
+        c.appendChild(tog)
+      }
+    }
     c.addEventListener('click', () => openBlockOverlay(b))
     if (opts.drag) { c.draggable = true; attachBlockDrag(c, b, opts) }
     return c
@@ -593,17 +601,18 @@ function layoutAnnotations() {
   // Linien starten immer am rechten Textrand (in der Marge) — nie quer durch Text.
   const textRight = prr.right - 40 - mbr.left
   const laneLeft = lane.getBoundingClientRect().left - mbr.left
-  const anchors = [], decos = []
+  const anchors = []
   items.forEach(c => {
     const r = findInDoc(c.target); if (!r) return
     let co
     try { co = ctx.editor.view.coordsAtPos(r.from) } catch (e) { return }
     const yTop = co.top - mbr.top + scroll.scrollTop
     const yMid = (co.top + co.bottom) / 2 - mbr.top + scroll.scrollTop
-    anchors.push({ c, y: yTop, sx: textRight, sy: yMid })
-    decos.push({ from: r.from, to: r.to, kind: c.kind || 'form' })
+    anchors.push({ c, r, y: yTop, sx: textRight, sy: yMid })
   })
-  ctx.editor.commands.setAnnos(decos)
+  anchors.sort((a, b) => a.y - b.y)
+  anchors.forEach((a, i) => { a.num = i + 1; a.c._num = i + 1 })   // Nummern in Textreihenfolge
+  ctx.editor.commands.setAnnos(anchors.map(a => ({ from: a.r.from, to: a.r.to, kind: a.c.kind || 'form', num: a.num })))
   const h = page.offsetHeight
   laneInner.style.height = h + 'px'
   const NS = 'http://www.w3.org/2000/svg'
@@ -638,7 +647,10 @@ function applyLaneTransform() {
 }
 function annoBubble(c) {
   const b = el('div', 'anno-bubble anno-' + (c.kind || 'form'))
-  b.appendChild(el('span', 'anno-tag', c.kind === 'inhalt' ? 'Inhalt' : 'Formulierung'))
+  const head = el('div', 'anno-bhead')
+  if (c._num != null) head.appendChild(el('span', 'anno-num anno-' + (c.kind || 'form'), String(c._num)))
+  head.appendChild(el('span', 'anno-tag', c.kind === 'inhalt' ? 'Inhalt' : 'Formulierung'))
+  b.appendChild(head)
   b.appendChild(el('div', 'anno-short', c.short))
   b.addEventListener('mouseenter', () => emphasizeAnno(c.id, true))
   b.addEventListener('mouseleave', () => emphasizeAnno(c.id, false))
@@ -648,10 +660,9 @@ function annoBubble(c) {
 // Beim Zeigen auf eine Bubble die zugehörige Textstelle + Linie betonen (und zurück).
 function emphasizeAnno(id, on) {
   document.querySelectorAll('.lane-conn').forEach(p => p.classList.toggle('hi', on && p.dataset.aid === id))
-  document.querySelectorAll('.anno-bubble').forEach(b => {})
   const decos = []
   laneList().filter(c => c.status === 'open').forEach(c => {
-    const r = findInDoc(c.target); if (r) decos.push({ from: r.from, to: r.to, kind: c.kind || 'form', hi: on && c.id === id })
+    const r = findInDoc(c.target); if (r) decos.push({ from: r.from, to: r.to, kind: c.kind || 'form', num: c._num, hi: on && c.id === id })
   })
   ctx.editor.commands.setAnnos(decos)
 }
@@ -695,6 +706,12 @@ function overlayShell(typeLabel, tone, onAccept, onReject) {
   return box
 }
 
+// Großes Overlay (fast ganze Seite) für Coach- und Text-Anmerkungen.
+function overlayShellHuge(label, tone, onA, onR) {
+  const box = overlayShell(label, tone, onA, onR)
+  box.classList.add('ai-box-huge')
+  return box
+}
 function chatSection(box, topic) {
   box.appendChild(el('div', 'panel-head', 'Rückfrage an die KI'))
   const thread = el('div', 'ai-chat')
@@ -733,7 +750,7 @@ function insertIntoText(htmlOrText, asBlock) {
 }
 
 export function openCardOverlay(card) {
-  const box = overlayShell(card.type, card.tone,
+  const box = overlayShellHuge(card.type, card.tone,
     card.action ? () => {
       const edit = box.querySelector('.ai-prop')
       insertIntoText(edit ? edit.textContent : card.action, true)
@@ -776,7 +793,7 @@ export function openCardOverlay(card) {
 // Rote KI-Anmerkung in der Struktur: Begründung + Korrekturvorschlag.
 function openNoteOverlay(block) {
   const note = block.note
-  const box = overlayShell('Struktur', 'warn',
+  const box = overlayShellHuge('Struktur', 'warn',
     () => { insertIntoText(box.querySelector('.ai-prop').textContent || note.fix, true); note.resolved = true; save(); rebuildStructEverywhere(); closeOverlay() },
     () => { note.resolved = true; save(); rebuildStructEverywhere(); closeOverlay() })
   box.appendChild(el('div', 'ai-title', note.text))
@@ -791,7 +808,7 @@ function openNoteOverlay(block) {
 
 export function openAnnoOverlay(c) {
   const isForm = (c.kind || 'form') === 'form'
-  const box = overlayShell(isForm ? 'Formulierung' : 'Inhalt', isForm ? 'style' : 'idea',
+  const box = overlayShellHuge(isForm ? 'Formulierung' : 'Inhalt', isForm ? 'style' : 'idea',
     () => {
       const edit = box.querySelector('.ai-prop')
       const text = edit ? edit.textContent : c.action
