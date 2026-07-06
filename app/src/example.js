@@ -80,18 +80,27 @@ export function buildExampleCoach() {
   ]
 }
 
+// Anmerkungen am Text: kind 'form' (Formulierung, Satzebene) · 'inhalt' (inhaltlich/generell).
 export function buildExampleLane() {
   return [
-    { id: sid('l'), status: 'open',
-      target: 'Aufmerksamkeit nur beansprucht, wenn sie wirklich gebraucht wird',
-      action: 'Aufmerksamkeit nur dann beansprucht, wenn sie wirklich gebraucht wird',
-      short: 'Kleines „dann" schärft den Rhythmus.',
-      why: 'Das eingeschobene „dann" setzt eine hörbare Zäsur und betont die Bedingung — der Satz bekommt Kontur, ohne länger zu werden.' },
-    { id: sid('l'), status: 'open',
+    { id: sid('l'), kind: 'form', status: 'open',
+      target: 'nur beansprucht, wenn sie wirklich gebraucht wird',
+      short: 'Doppelt abgeschwächt — dichter geht’s.',
+      why: '„nur … wenn wirklich gebraucht" schwächt gleich zweifach ab. Eine der beiden Abtönungen genügt; der Satz wird klarer und behält sein Tempo.',
+      action: 'nur beansprucht, wenn es nötig ist',
+      variants: ['nur beansprucht, wenn es nötig ist', 'sich nur meldet, wenn es zählt', 'nur dann anklopft, wenn es wirklich zählt'] },
+    { id: sid('l'), kind: 'form', status: 'open',
       target: 'fragmentieren die Aufmerksamkeit',
-      action: 'zerteilen die Aufmerksamkeit in immer kleinere Stücke',
       short: 'Konkreteres Verb — „fragmentieren" bleibt abstrakt.',
-      why: 'Ein Bild („in immer kleinere Stücke") macht den Schaden fühlbar, statt ihn nur zu behaupten. Fachwort raus, Wirkung rein.' },
+      why: 'Ein Bild macht den Schaden fühlbar, statt ihn nur zu behaupten. Fachwort raus, Wirkung rein.',
+      action: 'zerteilen die Aufmerksamkeit in immer kleinere Stücke',
+      variants: ['zerteilen die Aufmerksamkeit in immer kleinere Stücke', 'zersplittern die Aufmerksamkeit', 'hacken die Aufmerksamkeit in Fetzen'] },
+    { id: sid('l'), kind: 'inhalt', status: 'open',
+      target: 'Für Schreibsoftware heißt das: Werkzeuge erscheinen im Kontext, Hinweise sammeln sich leise, nichts drängt sich in den Fluss.',
+      short: 'Behauptet die Wirkung, zeigt sie aber nicht.',
+      why: 'Der Absatz nennt drei Prinzipien, bleibt aber abstrakt. Ein konkretes Beispiel — eine Statusleuchte, die nur bei Bedarf aufleuchtet — würde die Behauptung tragen und an den Anfangston (Teekanne) anknüpfen. So bekommt die Passage Boden unter den Füßen.',
+      action: 'Ein Beispiel macht es greifbar: Die Rechtschreibprüfung sammelt ihre Funde am Rand, statt bei jedem Wort zu unterbrechen — sichtbar, aber nie im Weg.',
+      variants: [] },
   ]
 }
 
@@ -100,6 +109,7 @@ export function buildExampleBody() {
     + '<p>Calm Technology beschreibt Technik, die in der Peripherie bleibt und Aufmerksamkeit nur beansprucht, wenn sie wirklich gebraucht wird.</p>'
     + '<h2>Warum es wichtig ist</h2>'
     + '<p>Ständige Benachrichtigungen fragmentieren die Aufmerksamkeit und zerreißen den Denkfluss.</p>'
+    + '<p>Für Schreibsoftware heißt das: Werkzeuge erscheinen im Kontext, Hinweise sammeln sich leise, nichts drängt sich in den Fluss.</p>'
 }
 
 export function buildExampleMaterial() {

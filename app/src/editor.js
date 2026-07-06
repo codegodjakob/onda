@@ -88,6 +88,39 @@ const Cue = Extension.create({
   },
 })
 
+// ---------- KI-Anmerkungen: dauerhaft sichtbare, aber NICHT gespeicherte Markierungen ----------
+// Formulierung (blau, welliger Strich) und Inhalt (grün, sanfte Fläche) — als
+// Dekoration aus den Anmerkungsdaten abgeleitet, nie Teil des Dokuments.
+const annoKey = new PluginKey('aiwtAnno')
+const Annos = Extension.create({
+  name: 'aiwtAnnos',
+  addProseMirrorPlugins() {
+    return [new Plugin({
+      key: annoKey,
+      state: {
+        init() { return DecorationSet.empty },
+        apply(tr, old) {
+          const meta = tr.getMeta(annoKey)
+          if (meta !== undefined) {
+            if (!meta || !meta.length) return DecorationSet.empty
+            const decos = meta.map(r => Decoration.inline(r.from, r.to, {
+              class: 'anno-mark anno-' + r.kind + (r.hi ? ' anno-hi' : ''),
+            }))
+            return DecorationSet.create(tr.doc, decos)
+          }
+          return old.map(tr.mapping, tr.doc)
+        },
+      },
+      props: { decorations(state) { return annoKey.getState(state) } },
+    })]
+  },
+  addCommands() {
+    return {
+      setAnnos: ranges => ({ tr, dispatch }) => { if (dispatch) dispatch(tr.setMeta(annoKey, ranges)); return true },
+    }
+  },
+})
+
 // ---------- Zustand & Speicher ----------
 const NATIVE = !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.store)
 const DEFAULTS = { theme: 'auto', fontSize: 17, lineWidth: 720, font: 'serif', spellcheck: false, showWords: true, structWidth: 620 }
@@ -111,6 +144,8 @@ function ensureDocShape(d) {
   if (!d.panels || typeof d.panels !== 'object') d.panels = { struct: false, coach: false, lane: false }
   // Jeder Erzählfaden hat eine feste Farbe (Index in der Faden-Palette).
   d.narrative.forEach((t, i) => { if (t.color == null) t.color = i })
+  // Anmerkungen: Standard-Art ist Formulierung.
+  d.lane.forEach(c => { if (!c.kind) c.kind = 'form' })
   return d
 }
 // Ein Projekt trägt sein Material (Canvas) — geteilt über alle Texte des Projekts.
@@ -468,6 +503,7 @@ export function boot() {
       CharacterCount,
       Typography,
       Cue,
+      Annos,
     ],
     content: (activeDoc() && activeDoc().body) || '',
     editorProps: {

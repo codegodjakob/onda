@@ -86,17 +86,22 @@ export function initPanels(context) {
   ctx = context
   buildRails()
   ctx.editor.on('update', scheduleMapRefresh)
+  ctx.editor.on('update', scheduleAnnoRelayout)
+  const scroll = document.getElementById('scroll')
+  if (scroll) scroll.addEventListener('scroll', onLaneScroll)
+  window.addEventListener('resize', scheduleAnnoRelayout)
   refreshAllPanels()
 }
 
 // Baut alle Panels aus dem aktuell aktiven Text neu auf (nach Textwechsel/Boot).
 export function refreshAllPanels() {
   ensureIds(blocks())
+  applyPanelState()          // erst Sichtbarkeit setzen …
   buildStructPanel()
   renderCoach()
-  buildLane()
+  buildLane()                // … dann die Anmerkungen aufbauen (kennt die richtige Sichtbarkeit)
   refreshToc()
-  applyPanelState()
+  scheduleAnnoRelayout()     // nach dem Layout noch einmal exakt ausrichten
   // Struktur-Seite (falls schon initialisiert) an denselben Text/das Projekt angleichen.
   if (window.__rebuildStructView) window.__rebuildStructView()
   if (window.__renderStructCoach) window.__renderStructCoach()
@@ -475,23 +480,19 @@ export function renderCoachInto(p) {
 }
 
 // ============================================================
-// Formulierungs-Spalte rechts am Text
+// KI-Anmerkungen: schwebende Rand-Bubbles an ihrer Textstelle (immer sichtbar).
+// Formulierung (blau) + Inhalt (grün) in einer Spalte; Linie zur Stelle, Passage
+// dezent markiert; Klick → großes Overlay. Von der KI erzeugt, nicht manuell.
 // ============================================================
+let laneInner = null
 export function buildLane() {
   const lane = document.getElementById('lane')
   if (!lane) return
   lane.innerHTML = ''
-  lane.appendChild(el('div', 'panel-head', 'Formulierung'))
-  const open = laneList().filter(c => c.status === 'open')
-  if (!open.length) lane.appendChild(el('div', 'panel-empty', 'Keine Anmerkungen im Text.'))
-  open.forEach(c => {
-    const card = el('button', 'lane-card')
-    card.appendChild(el('span', 'lane-text', c.short))
-    card.addEventListener('mouseenter', () => markTarget(c.target, false))
-    card.addEventListener('mouseleave', () => { if (!c._pinned) unmarkTarget() })
-    card.addEventListener('click', () => { c._pinned = true; markTarget(c.target, true); openLaneOverlay(c) })
-    lane.appendChild(card)
-  })
+  if (lane.hasAttribute('hidden')) { if (ctx) ctx.editor.commands.setAnnos([]); updateLaneBadge(); return }
+  laneInner = el('div', 'lane-inner')
+  lane.appendChild(laneInner)
+  layoutAnnotations()
   updateLaneBadge()
 }
 export function updateLaneBadge() {
@@ -520,19 +521,75 @@ export function findInDoc(text) {
   if (i < 0) return null
   return { from: map[i], to: map[i + text.length - 1] + 1 }
 }
-// Flüchtige Markierung (Dekoration) — ändert das Dokument NICHT.
-export function markTarget(target, scroll) {
-  const r = findInDoc(target)
-  if (!r) return
-  ctx.editor.commands.setCue(r)
-  if (scroll) {
-    let dom
-    try { dom = ctx.editor.view.domAtPos(r.from).node } catch (e) { return }
-    const elx = dom && dom.nodeType === 1 ? dom : (dom && dom.parentElement)
-    if (elx && elx.scrollIntoView) elx.scrollIntoView({ behavior: 'smooth', block: 'center' })
-  }
+// Bubbles an die Höhe ihrer Passage setzen, Passagen markieren (Dekoration, nicht
+// gespeichert), Verbindungslinien zeichnen; sich überlappende Bubbles rücken nach unten.
+function layoutAnnotations() {
+  if (!laneInner || !ctx) return
+  laneInner.innerHTML = ''
+  const scroll = document.getElementById('scroll')
+  const page = document.getElementById('page')
+  const items = laneList().filter(c => c.status === 'open')
+  if (!scroll || !page || !page.offsetHeight) { ctx.editor.commands.setAnnos([]); return }
+  const srect = scroll.getBoundingClientRect()
+  const anchors = [], decos = []
+  items.forEach(c => {
+    const r = findInDoc(c.target); if (!r) return
+    let co; try { co = ctx.editor.view.coordsAtPos(r.from) } catch (e) { return }
+    anchors.push({ c, y: co.top - srect.top + scroll.scrollTop })
+    decos.push({ from: r.from, to: r.to, kind: c.kind || 'form' })
+  })
+  ctx.editor.commands.setAnnos(decos)
+  const h = page.offsetHeight
+  laneInner.style.height = h + 'px'
+  const NS = 'http://www.w3.org/2000/svg'
+  const svg = document.createElementNS(NS, 'svg')
+  svg.setAttribute('class', 'lane-svg'); svg.setAttribute('width', '100%'); svg.setAttribute('height', h)
+  laneInner.appendChild(svg)
+  anchors.sort((a, b) => a.y - b.y)
+  let prevBottom = -999
+  anchors.forEach(a => {
+    const bub = annoBubble(a.c)
+    laneInner.appendChild(bub)
+    const top = Math.max(Math.round(a.y) - 4, prevBottom + 12)
+    bub.style.top = top + 'px'
+    prevBottom = top + bub.offsetHeight
+    const y2 = top + 15
+    const path = document.createElementNS(NS, 'path')
+    path.setAttribute('d', 'M0 ' + a.y + ' C13 ' + a.y + ' 8 ' + y2 + ' 22 ' + y2)
+    path.setAttribute('fill', 'none'); path.setAttribute('class', 'lane-conn anno-' + (a.c.kind || 'form'))
+    path.dataset.aid = a.c.id
+    svg.appendChild(path)
+  })
+  applyLaneTransform()
 }
-export function unmarkTarget() { if (ctx) ctx.editor.commands.clearCue() }
+function applyLaneTransform() {
+  if (!laneInner) return
+  const scroll = document.getElementById('scroll')
+  laneInner.style.transform = 'translateY(' + (-(scroll ? scroll.scrollTop : 0)) + 'px)'
+}
+function annoBubble(c) {
+  const b = el('div', 'anno-bubble anno-' + (c.kind || 'form'))
+  b.appendChild(el('span', 'anno-tag', c.kind === 'inhalt' ? 'Inhalt' : 'Formulierung'))
+  b.appendChild(el('div', 'anno-short', c.short))
+  b.addEventListener('mouseenter', () => emphasizeAnno(c.id, true))
+  b.addEventListener('mouseleave', () => emphasizeAnno(c.id, false))
+  b.addEventListener('click', () => openAnnoOverlay(c))
+  return b
+}
+// Beim Zeigen auf eine Bubble die zugehörige Textstelle + Linie betonen (und zurück).
+function emphasizeAnno(id, on) {
+  document.querySelectorAll('.lane-conn').forEach(p => p.classList.toggle('hi', on && p.dataset.aid === id))
+  document.querySelectorAll('.anno-bubble').forEach(b => {})
+  const decos = []
+  laneList().filter(c => c.status === 'open').forEach(c => {
+    const r = findInDoc(c.target); if (r) decos.push({ from: r.from, to: r.to, kind: c.kind || 'form', hi: on && c.id === id })
+  })
+  ctx.editor.commands.setAnnos(decos)
+}
+// Nach Textänderung/Scroll/Größenänderung neu ausrichten (debounced).
+let annoTimer = null
+export function scheduleAnnoRelayout() { if (annoTimer) clearTimeout(annoTimer); annoTimer = setTimeout(() => { if (laneInner && !document.getElementById('lane').hasAttribute('hidden')) layoutAnnotations() }, 120) }
+export function onLaneScroll() { applyLaneTransform() }
 
 // ============================================================
 // Overlays — ✓ übernehmen · ⊗ verwerfen · ✕ schließen (oben rechts); Chat unten
@@ -663,41 +720,50 @@ function openNoteOverlay(block) {
   chatSection(box, note.text)
 }
 
-export function openLaneOverlay(c) {
-  const box = overlayShell('Formulierung', 'style',
+export function openAnnoOverlay(c) {
+  const isForm = (c.kind || 'form') === 'form'
+  const box = overlayShell(isForm ? 'Formulierung' : 'Inhalt', isForm ? 'style' : 'idea',
     () => {
       const edit = box.querySelector('.ai-prop')
+      const text = edit ? edit.textContent : c.action
       const r = findInDoc(c.target)
-      if (!r) {
-        let warn = box.querySelector('.ai-warn')
-        if (!warn) { warn = el('div', 'ai-warn', 'Diese Passage steht so nicht mehr im Text — vielleicht schon geändert. Der Vorschlag bleibt offen.'); box.querySelector('.ai-prop').after(warn) }
-        return
+      if (isForm) {
+        if (!r) { flagNotFound(box); return }
+        ctx.editor.chain().setTextSelection(r).insertContent(escHtml(text)).run()   // Passage ersetzen
+      } else {
+        // Inhaltlicher Vorschlag: als neuen Absatz hinter der Passage einfügen (nicht ersetzen).
+        const at = r ? r.to : ctx.editor.state.doc.content.size
+        ctx.editor.chain().insertContentAt(at, '<p>' + escHtml(text) + '</p>').run()
       }
-      ctx.editor.commands.clearCue()
-      ctx.editor.chain().setTextSelection(r).insertContent(escHtml(edit ? edit.textContent : c.action)).run()
-      c.status = 'done'; c._pinned = false
-      buildLane(); ctx.scheduleSave(); closeOverlay()
+      c.status = 'done'; buildLane(); ctx.scheduleSave(); closeOverlay()
     },
-    () => { unmarkTarget(); c.status = 'rejected'; c._pinned = false; buildLane(); save(); closeOverlay() })
+    () => { c.status = 'rejected'; buildLane(); save(); closeOverlay() })
   box.appendChild(el('div', 'ai-title', c.short))
-  box.appendChild(el('div', 'panel-head', 'Original'))
+  box.appendChild(el('div', 'panel-head', isForm ? 'Im Text' : 'Betrifft die Passage'))
   box.appendChild(el('div', 'ai-orig', '„' + c.target + '“'))
-  box.appendChild(el('div', 'panel-head', 'Vorschlag (bearbeitbar)'))
-  const prop = el('div', 'ai-prop', c.action)
-  makeEditable(prop, v => { c.action = v || c.action; save() }, { multiline: true })
-  box.appendChild(prop)
   box.appendChild(el('div', 'panel-head', 'Warum'))
   box.appendChild(el('div', 'ai-why', c.why))
+  box.appendChild(el('div', 'panel-head', isForm ? 'Vorschlag (bearbeitbar)' : 'Vorschlag — als Absatz einfügen (bearbeitbar)'))
+  const prop = el('div', 'ai-prop', c.action || '')
+  makeEditable(prop, v => { c.action = v || c.action; save() }, { multiline: true })
+  box.appendChild(prop)
+  // Varianten (nur Formulierung): Klick setzt den Vorschlag.
+  if (isForm && (c.variants || []).length) {
+    const vv = el('div', 'ai-variants')
+    c.variants.forEach(v => {
+      const chip = el('button', 'ai-variant', v)
+      chip.addEventListener('click', () => { prop.textContent = v; c.action = v; save() })
+      vv.appendChild(chip)
+    })
+    box.appendChild(el('div', 'panel-head', 'Varianten'))
+    box.appendChild(vv)
+  }
   chatSection(box, c.short)
-  // Beim Schließen ohne Entscheidung die Markierung wieder aufheben.
-  const was = overlayEl
-  const obs = new MutationObserver(() => {
-    if (!document.body.contains(was)) {
-      if (c.status === 'open') { c._pinned = false; unmarkTarget() }
-      obs.disconnect()
-    }
-  })
-  obs.observe(document.body, { childList: true })
+}
+function flagNotFound(box) {
+  if (box.querySelector('.ai-warn')) return
+  const warn = el('div', 'ai-warn', 'Diese Passage steht so nicht mehr im Text — vielleicht schon geändert. Die KI aktualisiert die Anmerkung beim nächsten Durchgang.')
+  box.querySelector('.ai-prop').after(warn)
 }
 
 // ============================================================

@@ -8,7 +8,7 @@ let searchQuery = ''
 let openPanel = null
 const panels = []
 
-import { persistPanelState } from './panels.js'
+import { persistPanelState, buildLane } from './panels.js'
 
 // Prinzip „begrenzte Auswahl": Hervorheben = genau eine Markierfarbe.
 const HL_COLOR = '#f6e7a9'
@@ -268,7 +268,7 @@ function buildToolbar() {
   // Formulierungs-Spalte: KI-Anmerkungen rechts am Text ein-/ausblenden.
   const laneBtn = el('button', 'tbtn tbtn-lane')
   laneBtn.innerHTML = icon('<path d="M7 8h13M7 12h13M7 16h8"/><path d="M4 7.2v9.6"/>')
-  laneBtn.title = 'Formulierung — Anmerkungen am Text'
+  laneBtn.title = 'KI-Anmerkungen am Text ein-/ausblenden'
   laneBtn.appendChild(el('span', 'rail-badge'))
   laneBtn.querySelector('.rail-badge').id = 'laneBadge'
   laneBtn.addEventListener('mousedown', e => e.preventDefault())
@@ -281,6 +281,7 @@ function buildToolbar() {
     else lane.setAttribute('hidden', '')
     laneBtn.classList.toggle('on', show)
     persistPanelState()
+    buildLane()
   })
   right.appendChild(laneBtn)
   right.appendChild(el('span', 'bar-sep'))
