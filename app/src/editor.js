@@ -109,6 +109,8 @@ function ensureDocShape(d) {
   if (!Array.isArray(d.coach)) d.coach = []
   if (!Array.isArray(d.lane)) d.lane = []
   if (!d.panels || typeof d.panels !== 'object') d.panels = { struct: false, coach: false, lane: false }
+  // Jeder Erzählfaden hat eine feste Farbe (Index in der Faden-Palette).
+  d.narrative.forEach((t, i) => { if (t.color == null) t.color = i })
   return d
 }
 // Ein Projekt trägt sein Material (Canvas) — geteilt über alle Texte des Projekts.
@@ -196,9 +198,10 @@ function seedExampleProject() {
   const proj = ensureProjectShape({ id: 'p-example', name: 'Beispiel: Calm Technology', created: now(), example: true })
   proj.material = buildExampleMaterial()
   state.projects.push(proj)
+  const struct = buildExampleStructure()
   state.docs.push(ensureDocShape({
     id: uid(), title: 'Calm Technology', body: buildExampleBody(), updated: now(), projectId: proj.id,
-    structure: buildExampleStructure(), narrative: buildExampleNarrative(),
+    structure: struct, narrative: buildExampleNarrative(struct),
     coach: buildExampleCoach(), lane: buildExampleLane(),
   }))
 }

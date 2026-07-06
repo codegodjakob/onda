@@ -26,21 +26,33 @@ export function buildExampleStructure() {
   ]
 }
 
-export function buildExampleNarrative() {
+// Findet die id eines Bausteins über seinen Titel (der Anker eines Erzähl-Punkts).
+function idByTitle(struct, title) {
+  for (const b of struct) {
+    if (b.title === title) return b.id
+    const r = idByTitle(b.children || [], title); if (r) return r
+  }
+  return null
+}
+
+// Die Erzählfäden werden an Bausteine geankert (blockId) — daher braucht diese
+// Funktion die konkrete Struktur mit ihren IDs. color = Index in der Faden-Palette.
+export function buildExampleNarrative(struct) {
+  const at = t => idByTitle(struct, t)
   return [
-    { id: sid('n'), title: 'Problem: laute Technik', steps: [
-      { id: sid('s'), h: 'Eröffnung (Einleitung)', p: 'Der Text beginnt mit einer vertrauten Erfahrung: Geräte, die sich ständig melden. Die Leserin erkennt ihr eigenes Genervt-Sein wieder — das Problem braucht keine Statistik, es ist fühlbar.', open: false },
-      { id: sid('s'), h: 'Vertiefung (Beispiele)', p: 'An Teekanne und Statusleuchte wird sichtbar, dass es auch anders geht: dieselbe Information, aber ohne Unterbrechung. Das Problem bekommt eine Kontrastfolie.', open: false },
-      { id: sid('s'), h: 'Auflösung (Schluss)', p: 'Der Schluss kehrt zur Anfangserfahrung zurück und zeigt: Lautheit ist keine Eigenschaft von Technik, sondern eine Design-Entscheidung — sie lässt sich anders treffen.', open: false },
+    { id: sid('n'), title: 'Problem: laute Technik', color: 0, steps: [
+      { id: sid('s'), h: 'Eröffnung', p: 'Der Text beginnt mit einer vertrauten Erfahrung: Geräte, die sich ständig melden. Die Leserin erkennt ihr eigenes Genervt-Sein wieder — das Problem braucht keine Statistik, es ist fühlbar.', open: false, blockId: at('Einleitung') },
+      { id: sid('s'), h: 'Vertiefung', p: 'An Teekanne und Statusleuchte wird sichtbar, dass es auch anders geht: dieselbe Information, aber ohne Unterbrechung. Das Problem bekommt eine Kontrastfolie.', open: false, blockId: at('Beispiele') },
+      { id: sid('s'), h: 'Auflösung', p: 'Der Schluss kehrt zur Anfangserfahrung zurück und zeigt: Lautheit ist keine Eigenschaft von Technik, sondern eine Design-Entscheidung — sie lässt sich anders treffen.', open: false, blockId: at('Schluss') },
     ]},
-    { id: sid('n'), title: 'These: Peripherie statt Alarm', steps: [
-      { id: sid('s'), h: 'Ankündigung (Leitfrage)', p: 'Die Leitfrage deutet die These bereits an: Ein gutes Werkzeug unterstützt das Denken, statt es zu unterbrechen — Aufmerksamkeit ist die knappe Ressource.', open: false },
-      { id: sid('s'), h: 'Begründung (Prinzipien)', p: 'Mit Weiser und Brown erhält die These ihr Fundament: Technik kann zwischen Zentrum und Peripherie der Aufmerksamkeit wechseln. Ruhe ist machbar, nicht nur wünschenswert.', open: false },
-      { id: sid('s'), h: 'Noch offen: Rückbindung im Schluss', p: 'Die These wird im Schluss bisher nur angedeutet. Es fehlt der Satz, der sie ausdrücklich als Antwort auf die Leitfrage feststellt.', open: true },
+    { id: sid('n'), title: 'These: Peripherie statt Alarm', color: 1, steps: [
+      { id: sid('s'), h: 'Ankündigung', p: 'Die Leitfrage deutet die These bereits an: Ein gutes Werkzeug unterstützt das Denken, statt es zu unterbrechen — Aufmerksamkeit ist die knappe Ressource.', open: false, blockId: at('Leitfrage') },
+      { id: sid('s'), h: 'Begründung', p: 'Mit Weiser und Brown erhält die These ihr Fundament: Technik kann zwischen Zentrum und Peripherie der Aufmerksamkeit wechseln. Ruhe ist machbar, nicht nur wünschenswert.', open: false, blockId: at('Prinzipien') },
+      { id: sid('s'), h: 'Noch offen: Rückbindung im Schluss', p: 'Die These wird im Schluss bisher nur angedeutet. Es fehlt der Satz, der sie ausdrücklich als Antwort auf die Leitfrage feststellt.', open: true, blockId: at('Schluss') },
     ]},
-    { id: sid('n'), title: 'Methode: vom Prinzip zum Werkzeug', steps: [
-      { id: sid('s'), h: 'Maßstab setzen (Prinzipien)', p: 'Zuerst wird der Bewertungsmaßstab etabliert — was „ruhig" überhaupt heißt. Ohne ihn wären die Beispiele beliebig.', open: false },
-      { id: sid('s'), h: 'Anwenden (Übertragung)', p: 'Dann wird der Maßstab auf Schreibsoftware angewendet: Werkzeuge im Kontext, Hinweise in der Peripherie. Hier entsteht die Eigenleistung des Textes.', open: false },
+    { id: sid('n'), title: 'Methode: vom Prinzip zum Werkzeug', color: 2, steps: [
+      { id: sid('s'), h: 'Maßstab setzen', p: 'Zuerst wird der Bewertungsmaßstab etabliert — was „ruhig" überhaupt heißt. Ohne ihn wären die Beispiele beliebig.', open: false, blockId: at('Prinzipien') },
+      { id: sid('s'), h: 'Anwenden', p: 'Dann wird der Maßstab auf Schreibsoftware angewendet: Werkzeuge im Kontext, Hinweise in der Peripherie. Hier entsteht die Eigenleistung des Textes.', open: false, blockId: at('Übertragung aufs Schreiben') },
     ]},
   ]
 }

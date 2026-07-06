@@ -24,6 +24,7 @@
   --ok: #5a8f4e;
   --warn: #b9831f;
   --cue: #efe4c6;
+  --th1: #3a6ea5; --th2: #b9831f; --th3: #5a8f4e; --th4: #7a5aa8; --th5: #a3402a;
   --r: 8px;
   --r2: 12px;
   --dur: 180ms;
@@ -49,6 +50,7 @@
   --ok: #83ab77;
   --warn: #cfa050;
   --cue: #3c4453;
+  --th1: #7ba7d4; --th2: #cfa050; --th3: #83ab77; --th4: #b39ad8; --th5: #cf7458;
   --shadow: 0 8px 28px rgba(0, 0, 0, .45), 0 1px 3px rgba(0, 0, 0, .3);
 }
 
@@ -805,3 +807,47 @@ body.zen #minimap, body.zen #lane { display: none; }
 
 /* Reject-Icon (⊗) etwas kräftiger vom Schließen (✕) abgesetzt */
 .ai-ok svg, .ai-no svg { width: 17px; height: 17px; }
+
+/* ================================================================
+   Station 2 — Struktur + Narrative gekoppelt: Faden-Linien (Variante A),
+   kompakte Punkte (Variante C bei engem Platz), Legende, Baustein-Anker.
+   ================================================================ */
+
+.sp-col, .st-col { container-type: inline-size; }
+
+/* Bausteine als Rückgrat + rechte Gutter für die Faden-Linien */
+.blk-list { position: relative; }
+.blk-list.has-threads { padding-right: 46px; }
+.thread-svg { position: absolute; top: 0; right: 0; pointer-events: none; }
+.thread-svg g { transition: opacity var(--dur) var(--ease); }
+
+/* Kompakte Faden-Punkte im Baustein (Variante C) — normal ausgeblendet */
+.blk-idots { display: none; flex: none; align-items: center; gap: 4px; margin-left: 6px; }
+.blk-idot { width: 7px; height: 7px; border-radius: 50%; display: block; }
+
+/* Wird die Spalte wirklich eng, klappt A auf die ruhige C-Darstellung zusammen */
+@container (max-width: 198px) {
+  .thread-svg { display: none; }
+  .blk-list.has-threads { padding-right: 0; }
+  .blk-idots { display: flex; }
+}
+
+/* Narrative: Legende (Farbe + Name) und erzählter Text mit Baustein-Anker */
+.narr-strands { display: flex; flex-direction: column; }
+.narr-thread { border-left: 2px solid var(--line2); padding-left: 12px; margin-bottom: 18px; }
+.narr-thead { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
+.narr-swatch { width: 11px; height: 11px; border-radius: 3px; flex: none; }
+.narr-thead .narr-label { flex: 1; min-width: 0; font-size: 12.5px; font-weight: 500; color: var(--txt); }
+.narr-pt { position: relative; margin: 0 0 11px; }
+.narr-anchor {
+  display: inline-flex; align-items: center; gap: 4px; margin-top: 5px;
+  font-size: 11px; color: var(--txt2);
+  border: 0.5px solid var(--line2); border-radius: 6px; padding: 2px 8px 2px 6px;
+  max-width: 100%;
+}
+.narr-anchor svg { width: 12px; height: 12px; flex: none; }
+.narr-anchor span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.narr-anchor:hover { border-color: var(--accent); color: var(--accent); }
+.narr-anchor.unset { color: var(--txt3); border-style: dashed; }
+
+.blk-picker { min-width: 200px; max-height: 320px; overflow-y: auto; }
