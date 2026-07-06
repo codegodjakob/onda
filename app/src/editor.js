@@ -105,10 +105,16 @@ const Annos = Extension.create({
             if (!meta || !meta.length) return DecorationSet.empty
             const decos = []
             meta.forEach(r => {
-              decos.push(Decoration.inline(r.from, r.to, { class: 'anno-mark anno-' + r.kind + (r.hi ? ' anno-hi' : '') }))
-              if (r.num != null) decos.push(Decoration.widget(r.to, () => {
-                const s = document.createElement('span'); s.className = 'anno-num anno-' + r.kind; s.textContent = String(r.num); return s
-              }, { side: 1, ignoreSelection: true }))
+              if (r.type === 'dot') {
+                // Kleiner Anker-Punkt für Bubble-Anmerkungen — markiert die Stelle, ohne Text zu markieren.
+                decos.push(Decoration.widget(r.to, () => {
+                  const s = document.createElement('span'); s.className = 'anno-dot anno-' + r.kind + (r.hi ? ' anno-hi' : ''); return s
+                }, { side: 1, ignoreSelection: true }))
+              } else {
+                const attrs = { class: 'anno-mark anno-' + r.kind + (r.hi ? ' anno-hi' : '') }
+                if (r.id) attrs['data-aid'] = r.id
+                decos.push(Decoration.inline(r.from, r.to, attrs))
+              }
             })
             return DecorationSet.create(tr.doc, decos)
           }
@@ -130,7 +136,7 @@ const NATIVE = !!(window.webkit && window.webkit.messageHandlers && window.webki
 const DEFAULTS = { theme: 'auto', fontSize: 17, lineWidth: 720, font: 'serif', spellcheck: false, showWords: true, structWidth: 620 }
 const TRASH_DAYS = 30
 const SCHEMA = 3
-const EX_VERSION = 2   // hochzählen, wenn sich das Beispiel-Projekt ändert → frisch aufsetzen
+const EX_VERSION = 3   // hochzählen, wenn sich das Beispiel-Projekt ändert → frisch aufsetzen
 
 export const state = { docs: [], active: null, projects: [], activeProject: null, settings: { ...DEFAULTS }, editor: null, native: NATIVE }
 

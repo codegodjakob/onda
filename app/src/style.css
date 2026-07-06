@@ -597,11 +597,25 @@ body.zen #minimap, body.zen #lane { display: none; }
 .anno-inhalt .anno-tag { background: color-mix(in srgb, var(--ok) 15%, var(--bg)); color: var(--ok); }
 .anno-short { font-size: 12.5px; line-height: 1.5; color: var(--txt); }
 
-/* Textmarkierung (Dekoration, nicht gespeichert) — sanfte Fläche, keine Unterstreichung */
+/* Form 1 — Textmarkierung (klickbar): sanfte Fläche, keine Unterstreichung */
+.anno-mark { cursor: pointer; }
 .anno-mark.anno-form { background: color-mix(in srgb, var(--accent) 13%, transparent); border-radius: 2px; box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 16%, transparent); }
 .anno-mark.anno-inhalt { background: color-mix(in srgb, var(--ok) 14%, transparent); border-radius: 2px; box-shadow: 0 0 0 1px color-mix(in srgb, var(--ok) 18%, transparent); }
-.anno-mark.anno-form.anno-hi { background: color-mix(in srgb, var(--accent) 26%, transparent); }
-.anno-mark.anno-inhalt.anno-hi { background: color-mix(in srgb, var(--ok) 26%, transparent); }
+.anno-mark.anno-form.anno-hi, .anno-mark.anno-form:hover { background: color-mix(in srgb, var(--accent) 26%, transparent); }
+.anno-mark.anno-inhalt.anno-hi, .anno-mark.anno-inhalt:hover { background: color-mix(in srgb, var(--ok) 26%, transparent); }
+
+/* Form 2 — Anker-Punkt: markiert die Stelle für eine Bubble, ohne Text zu markieren */
+.anno-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; vertical-align: 12%; margin: 0 1px 0 2px; }
+.anno-dot.anno-form { background: var(--accent); }
+.anno-dot.anno-inhalt { background: var(--ok); }
+.anno-dot.anno-hi { box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 22%, transparent); }
+.anno-dot.anno-form.anno-hi { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent); }
+.anno-dot.anno-inhalt.anno-hi { box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 25%, transparent); }
+
+/* Form 3 — Absatz-Klammer: etwas rundere Ecken */
+.lane-bracket { stroke-linejoin: round; stroke-linecap: round; }
+/* "Absatz"-Kennzeichen in der Bubble */
+.anno-scope { display: inline-block; font-size: 9.5px; font-weight: 500; letter-spacing: .03em; color: var(--txt3); border: 0.5px solid var(--line2); padding: 1px 6px; border-radius: 999px; }
 .tbtn-lane { position: relative; }
 
 /* ---------- Struktur+Narrative: eine breite Leiste, zwei Spalten ---------- */

@@ -544,11 +544,24 @@ export function buildLane() {
   }
   laneInner = el('div', 'lane-inner')
   lane.appendChild(laneInner)
+  bindMarkClicks()
   layoutAnnotations()
   // Nach dem nächsten Frame noch einmal ausrichten — der Editor ist beim ersten
   // Aufbau (Ansichtswechsel) oft noch nicht vermessen (coordsAtPos wäre falsch).
   requestAnimationFrame(() => { if (laneInner && !document.getElementById('lane').hasAttribute('hidden')) layoutAnnotations() })
   updateLaneBadge()
+}
+// Klick auf eine Text-Markierung ('mark'-Form) öffnet das große Overlay — einmalig gebunden.
+let markClickBound = false
+function bindMarkClicks() {
+  if (markClickBound || !ctx || !ctx.editor) return
+  markClickBound = true
+  ctx.editor.view.dom.addEventListener('click', e => {
+    const m = e.target.closest && e.target.closest('.anno-mark[data-aid]')
+    if (!m) return
+    const c = laneList().find(x => x.id === m.getAttribute('data-aid'))
+    if (c) { e.preventDefault(); openAnnoOverlay(c) }
+  })
 }
 export function updateLaneBadge() {
   const b = document.getElementById('laneBadge')
@@ -595,48 +608,106 @@ function layoutAnnotations() {
   const lane = document.getElementById('lane')
   const items = laneList().filter(c => c.status === 'open')
   if (!scroll || !page || !mb || !page.offsetHeight) { ctx.editor.commands.setAnnos([]); return }
-  const srect = scroll.getBoundingClientRect()
   const mbr = mb.getBoundingClientRect()
   const prr = page.getBoundingClientRect()
-  // Linien starten immer am rechten Textrand (in der Marge) — nie quer durch Text.
+  // Rand rechts vom Text — Linien/Klammern leben hier, nie quer durch Text.
   const textRight = prr.right - 40 - mbr.left
   const laneLeft = lane.getBoundingClientRect().left - mbr.left
-  const anchors = []
+
+  // Dekoration im Text: 'mark' = Markierung, 'note' = Anker-Punkt, 'para' = nichts.
+  ctx.editor.commands.setAnnos(annoDecos(null))
+
+  // Nur Bubble-Formen (note = Linie zur Stelle, para = Klammer um den Absatz) sammeln.
+  const bubbleAnchors = []
   items.forEach(c => {
+    const form = c.form || 'note'
+    if (form === 'mark') return
     const r = findInDoc(c.target); if (!r) return
-    let co
-    try { co = ctx.editor.view.coordsAtPos(r.from) } catch (e) { return }
-    const yTop = co.top - mbr.top + scroll.scrollTop
-    const yMid = (co.top + co.bottom) / 2 - mbr.top + scroll.scrollTop
-    anchors.push({ c, r, y: yTop, sx: textRight, sy: yMid })
+    if (form === 'para') {
+      const ext = paragraphExtent(r.from); if (!ext) return
+      const yTop = ext.top - mbr.top + scroll.scrollTop
+      const yBot = ext.bottom - mbr.top + scroll.scrollTop
+      bubbleAnchors.push({ c, form, sx: textRight, yTop, yBot, sy: (yTop + yBot) / 2 })
+    } else {
+      let co; try { co = ctx.editor.view.coordsAtPos(r.from) } catch (e) { return }
+      const sy = (co.top + co.bottom) / 2 - mbr.top + scroll.scrollTop
+      bubbleAnchors.push({ c, form: 'note', sx: textRight, sy })
+    }
   })
-  anchors.sort((a, b) => a.y - b.y)
-  anchors.forEach((a, i) => { a.num = i + 1; a.c._num = i + 1 })   // Nummern in Textreihenfolge
-  ctx.editor.commands.setAnnos(anchors.map(a => ({ from: a.r.from, to: a.r.to, kind: a.c.kind || 'form', num: a.num })))
+
   const h = page.offsetHeight
   laneInner.style.height = h + 'px'
   const NS = 'http://www.w3.org/2000/svg'
   let svg = null
   if (layer) { svg = document.createElementNS(NS, 'svg'); svg.setAttribute('class', 'anno-svg'); svg.setAttribute('width', Math.round(mbr.width)); svg.setAttribute('height', h); layer.appendChild(svg) }
-  anchors.sort((a, b) => a.y - b.y)
+
+  bubbleAnchors.sort((a, b) => a.sy - b.sy)
   let prevBottom = -999
-  anchors.forEach(a => {
+  bubbleAnchors.forEach(a => {
     const bub = annoBubble(a.c)
     laneInner.appendChild(bub)
-    const top = Math.max(Math.round(a.y) - 4, prevBottom + 12)
+    const top = Math.max(Math.round(a.sy) - 14, prevBottom + 12)
     bub.style.top = top + 'px'
     prevBottom = top + bub.offsetHeight
     if (svg) {
-      const tx = laneLeft + 13, ty = top + 15
-      const c1x = a.sx + (tx - a.sx) * 0.45, c2x = a.sx + (tx - a.sx) * 0.6
-      const path = document.createElementNS(NS, 'path')
-      path.setAttribute('d', 'M' + a.sx + ' ' + a.sy + ' C' + c1x + ' ' + a.sy + ' ' + c2x + ' ' + ty + ' ' + tx + ' ' + ty)
-      path.setAttribute('fill', 'none'); path.setAttribute('class', 'lane-conn anno-' + (a.c.kind || 'form'))
-      path.dataset.aid = a.c.id
-      svg.appendChild(path)
+      const tx = laneLeft + 13, ty = top + 16
+      if (a.form === 'para') drawBracket(svg, a, tx, ty)
+      else drawConnector(svg, a.sx, a.sy, tx, ty, a.c)
     }
   })
   applyLaneTransform()
+}
+// Dekorationen je nach Form. hiId = hervorgehobene Anmerkung (Hover) oder null.
+function annoDecos(hiId) {
+  const decos = []
+  laneList().filter(c => c.status === 'open').forEach(c => {
+    const form = c.form || 'note'
+    if (form === 'para') return                       // Absatz-Form: keine Text-Dekoration
+    const r = findInDoc(c.target); if (!r) return
+    if (form === 'mark') decos.push({ from: r.from, to: r.to, kind: c.kind || 'form', type: 'mark', id: c.id, hi: c.id === hiId })
+    else decos.push({ to: r.to, kind: c.kind || 'form', type: 'dot', id: c.id, hi: c.id === hiId })
+  })
+  return decos
+}
+// Vertikale Ausdehnung des Absatz-Blocks an einer Position — für die Absatz-Klammer.
+function paragraphExtent(pos) {
+  try {
+    const pm = ctx.editor.view.dom
+    const node = ctx.editor.view.domAtPos(pos).node
+    let elx = node.nodeType === 3 ? node.parentElement : node
+    while (elx && elx.parentElement && elx.parentElement !== pm) elx = elx.parentElement
+    if (!elx) return null
+    const r = elx.getBoundingClientRect()
+    return { top: r.top, bottom: r.bottom }
+  } catch (e) { return null }
+}
+// Weiche Linie von der Stelle (am Rand) zur Bubble.
+function drawConnector(svg, sx, sy, tx, ty, c) {
+  const NS = 'http://www.w3.org/2000/svg'
+  const c1x = sx + (tx - sx) * 0.45, c2x = sx + (tx - sx) * 0.6
+  const path = document.createElementNS(NS, 'path')
+  path.setAttribute('d', 'M' + sx + ' ' + sy + ' C' + c1x + ' ' + sy + ' ' + c2x + ' ' + ty + ' ' + tx + ' ' + ty)
+  path.setAttribute('fill', 'none'); path.setAttribute('class', 'lane-conn anno-' + (c.kind || 'form'))
+  path.dataset.aid = c.id
+  svg.appendChild(path)
+}
+// Absatz-Klammer: senkrechter Strich mit Ticks oben/unten + weiche Linie zur Bubble.
+function drawBracket(svg, a, tx, ty) {
+  const NS = 'http://www.w3.org/2000/svg'
+  const x = a.sx
+  const yTop = a.yTop + 2, yBot = a.yBot - 2
+  const br = document.createElementNS(NS, 'path')
+  br.setAttribute('d', 'M' + (x - 7) + ' ' + yTop + ' L' + x + ' ' + yTop + ' L' + x + ' ' + yBot + ' L' + (x - 7) + ' ' + yBot)
+  br.setAttribute('fill', 'none'); br.setAttribute('class', 'lane-conn lane-bracket anno-' + (a.c.kind || 'form'))
+  br.dataset.aid = a.c.id
+  svg.appendChild(br)
+  const midY = (yTop + yBot) / 2
+  const c1x = x + (tx - x) * 0.45, c2x = x + (tx - x) * 0.6
+  const conn = document.createElementNS(NS, 'path')
+  conn.setAttribute('d', 'M' + x + ' ' + midY + ' C' + c1x + ' ' + midY + ' ' + c2x + ' ' + ty + ' ' + tx + ' ' + ty)
+  conn.setAttribute('fill', 'none'); conn.setAttribute('class', 'lane-conn anno-' + (a.c.kind || 'form'))
+  conn.dataset.aid = a.c.id
+  svg.appendChild(conn)
 }
 function applyLaneTransform() {
   const scroll = document.getElementById('scroll')
@@ -648,8 +719,8 @@ function applyLaneTransform() {
 function annoBubble(c) {
   const b = el('div', 'anno-bubble anno-' + (c.kind || 'form'))
   const head = el('div', 'anno-bhead')
-  if (c._num != null) head.appendChild(el('span', 'anno-num anno-' + (c.kind || 'form'), String(c._num)))
   head.appendChild(el('span', 'anno-tag', c.kind === 'inhalt' ? 'Inhalt' : 'Formulierung'))
+  if ((c.form || 'note') === 'para') head.appendChild(el('span', 'anno-scope', 'Absatz'))
   b.appendChild(head)
   b.appendChild(el('div', 'anno-short', c.short))
   b.addEventListener('mouseenter', () => emphasizeAnno(c.id, true))
@@ -660,11 +731,7 @@ function annoBubble(c) {
 // Beim Zeigen auf eine Bubble die zugehörige Textstelle + Linie betonen (und zurück).
 function emphasizeAnno(id, on) {
   document.querySelectorAll('.lane-conn').forEach(p => p.classList.toggle('hi', on && p.dataset.aid === id))
-  const decos = []
-  laneList().filter(c => c.status === 'open').forEach(c => {
-    const r = findInDoc(c.target); if (r) decos.push({ from: r.from, to: r.to, kind: c.kind || 'form', num: c._num, hi: on && c.id === id })
-  })
-  ctx.editor.commands.setAnnos(decos)
+  ctx.editor.commands.setAnnos(annoDecos(on ? id : null))
 }
 // Nach Textänderung/Scroll/Größenänderung neu ausrichten (debounced).
 let annoTimer = null
