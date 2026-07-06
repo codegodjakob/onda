@@ -70,6 +70,10 @@ body {
 button { font-family: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
 input { font-family: inherit; }
 
+/* Keine sichtbaren Scroll-Leisten irgendwo — Scrollen (Trackpad/Rad) bleibt. */
+::-webkit-scrollbar { width: 0; height: 0; background: transparent; }
+* { scrollbar-width: none; -ms-overflow-style: none; }
+
 #app { height: 100vh; }
 /* Drei Seiten: Bibliothek · Struktur · Schreiben — es ist immer genau eine sichtbar. */
 #home, #editorView, #structView { display: none; }
