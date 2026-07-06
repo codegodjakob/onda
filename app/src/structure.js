@@ -1,7 +1,7 @@
 // Struktur-Seite: Material sammeln (Canvas) → Bausteine ordnen → Narrative → Coach.
 // Material gehört zum Projekt, Struktur/Narrative zum Text — dieselben Daten wie im Editor.
 
-import { el, icon, PIC, renderBlocksInto, renderNarrativeInto, renderCoachInto, openBlockOverlay, notifyStructChanged, addRootBlock } from './panels.js'
+import { el, icon, PIC, renderTimelineGrid, renderCoachInto, openBlockOverlay, notifyStructChanged, addRootBlock } from './panels.js'
 import { showHomeView, setHomeMode, showEditorView } from './ui.js'
 
 let ctxS = null
@@ -114,17 +114,14 @@ function canvasCard(c, cv) {
   return card
 }
 
-// ---------- Bausteine + Narrative (dieselben Daten wie im Editor) ----------
+// ---------- Timeline-Raster (dieselben Daten wie im Editor) ----------
 function rebuildStructColumns() {
-  const s = document.getElementById('stStruct')
-  const n = document.getElementById('stNarr')
-  if (!s || !n) return
-  s.innerHTML = ''
-  s.appendChild(el('div', 'panel-head', 'Struktur'))
-  s.appendChild(el('div', 'panel-sub', 'Bausteine ordnen — klicken zum Öffnen, ziehen zum Verschieben. Erscheint genauso in der Schreibansicht.'))
-  renderBlocksInto(s, { drag: true, note: true, onChange: notifyStructChanged })
-  n.innerHTML = ''
-  n.appendChild(el('div', 'panel-head', 'Narrative'))
-  n.appendChild(el('div', 'panel-sub', 'Die Fäden, die sich durch den Text ziehen — im Einklang mit der Struktur.'))
-  renderNarrativeInto(n)
+  const g = document.getElementById('stGrid')
+  if (!g) return
+  g.innerHTML = ''
+  g.appendChild(el('div', 'panel-head', 'Struktur & Narrative'))
+  g.appendChild(el('div', 'panel-sub', 'Von oben nach unten die Timeline — jede Zeile ein Schritt. Links, was passiert · rechts, warum (je Faden).'))
+  const wrap = el('div', 'tl-wrap')
+  renderTimelineGrid(wrap, { drag: true, onChange: notifyStructChanged })
+  g.appendChild(wrap)
 }

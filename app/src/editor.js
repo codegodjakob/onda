@@ -90,7 +90,7 @@ const Cue = Extension.create({
 
 // ---------- Zustand & Speicher ----------
 const NATIVE = !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.store)
-const DEFAULTS = { theme: 'auto', fontSize: 17, lineWidth: 720, font: 'serif', spellcheck: false, showWords: true }
+const DEFAULTS = { theme: 'auto', fontSize: 17, lineWidth: 720, font: 'serif', spellcheck: false, showWords: true, structWidth: 560 }
 const TRASH_DAYS = 30
 const SCHEMA = 3
 
@@ -166,6 +166,8 @@ function load() {
   state.docs = (d && Array.isArray(d.docs)) ? d.docs : []
   state.active = d ? d.active : null
   state.settings = Object.assign({}, DEFAULTS, (d && d.settings) || {})
+  // Panel-Breite gegen kaputte/fremde Werte absichern.
+  state.settings.structWidth = Math.max(360, Math.min(940, +state.settings.structWidth || 560))
   // Projekte: bestehende Texte wandern in ein Standard-Projekt (Migration).
   state.projects = (d && Array.isArray(d.projects) && d.projects.length) ? d.projects : []
   if (!state.projects.length) {

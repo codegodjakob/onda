@@ -42,12 +42,11 @@ function save() { if (ctx) ctx.scheduleSave() }
 
 // Faden-Farben (an das App-Palette gekoppelt, hell- und dunkelmodus-fest).
 const THREAD_N = 5
-const GUTTER = 46
 function threadColorVar(i) { return 'var(--th' + ((((i % THREAD_N) + THREAD_N) % THREAD_N) + 1) + ')' }
 function threadColorOf(t, ti) { return threadColorVar(t.color != null ? t.color : ti) }
-// Faden hervorheben (beim Zeigen auf einen Faden in der Narrative).
+// Faden hervorheben (beim Zeigen auf eine Faden-Spalte im Raster).
 function highlightThread(ti) {
-  document.querySelectorAll('.thread-svg g').forEach(g => { g.style.opacity = (ti == null || +g.dataset.thread === ti) ? '1' : '0.14' })
+  document.querySelectorAll('.tl-cell[data-thread]').forEach(c => { c.style.opacity = (ti == null || +c.dataset.thread === ti) ? '1' : '0.32' })
 }
 
 let idSeq = 0
@@ -196,17 +195,40 @@ export function buildStructPanel() {
   const p = document.getElementById('pStruct')
   if (!p) return
   p.innerHTML = ''
-  const wrap = el('div', 'sp-cols')
-  const colB = el('div', 'sp-col')
-  colB.appendChild(el('div', 'panel-head', 'Struktur'))
-  colB.appendChild(el('div', 'panel-sub', 'Dein roter Faden — ziehen zum Verschieben, klicken zum Öffnen.'))
-  renderBlocksInto(colB, { drag: true, note: true, onChange: onStructChanged })
-  const colN = el('div', 'sp-col sp-col-n')
-  colN.appendChild(el('div', 'panel-head', 'Narrative'))
-  colN.appendChild(el('div', 'panel-sub', 'Die Fäden, die sich durch den Text ziehen — Struktur und Narrative im Einklang.'))
-  renderNarrativeInto(colN)
-  wrap.appendChild(colB); wrap.appendChild(colN)
-  p.appendChild(wrap)
+  applyStructWidth()
+  // Der Inhalt scrollt in .sp-body — der Ziehgriff sitzt außerhalb und bleibt stehen.
+  const body = el('div', 'sp-body')
+  const head = el('div', 'sp-head')
+  head.appendChild(el('div', 'panel-head', 'Struktur & Narrative'))
+  head.appendChild(el('div', 'panel-sub', 'Von oben nach unten die Timeline — jede Zeile ein Schritt. Links, was passiert · rechts, warum (je Faden).'))
+  body.appendChild(head)
+  const wrap = el('div', 'tl-wrap')
+  renderTimelineGrid(wrap, { drag: true, onChange: onStructChanged })
+  body.appendChild(wrap)
+  p.appendChild(body)
+  addResizeHandle(p)
+}
+function clampWidth(w) { return Math.max(360, Math.min(940, w || 560)) }
+function applyStructWidth() {
+  const p = document.getElementById('pStruct')
+  if (p && ctx) p.style.width = clampWidth(ctx.state.settings.structWidth) + 'px'
+}
+function addResizeHandle(p) {
+  const h = el('div', 'panel-resize')
+  h.title = 'Breite ziehen'
+  h.addEventListener('mousedown', ev => {
+    ev.preventDefault()
+    const startX = ev.clientX, startW = p.getBoundingClientRect().width
+    document.body.style.cursor = 'col-resize'
+    const move = e2 => { p.style.width = clampWidth(startW + (e2.clientX - startX)) + 'px' }
+    const up = () => {
+      document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up)
+      document.body.style.cursor = ''
+      ctx.state.settings.structWidth = clampWidth(Math.round(p.getBoundingClientRect().width)); ctx.persist()
+    }
+    document.addEventListener('mousemove', move); document.addEventListener('mouseup', up)
+  })
+  p.appendChild(h)
 }
 
 // Einladender Leerzustand + KI-Vorschlag-Knopf (ruht, bis die KI angeschlossen ist).
@@ -229,144 +251,157 @@ function kiSuggestButton(parent, label) {
   parent.appendChild(b)
 }
 
-export function renderBlocksInto(parent, opts = {}) {
+// Timeline-Raster: Zeile = Schritt. Links der Baustein (was passiert),
+// rechts je Faden die Metastruktur (warum) — auf exakt gleicher Höhe.
+export function renderTimelineGrid(parent, opts = {}) {
   const list = blocks()
   ensureIds(list)
   const threads = narr()
-  // Welche Fäden docken an einem Baustein an? (Punkt mit passendem blockId)
-  const anchoredOf = id => threads.map((t, ti) => ({ t, ti })).filter(x => (x.t.steps || []).some(s => s.blockId === id))
-  const render = (arr, container, depth) => {
-    arr.forEach(b => {
-      const wrapEl = el('div', 'blk-wrap')
-      const row = el('div', 'blk d' + depth)
-      row.dataset.bid = b.id
-      if (opts.drag) row.draggable = true
-      row.appendChild(el('span', 'blk-grip', '⠿'))
-      const mainCol = el('div', 'blk-main')
-      mainCol.appendChild(el('div', 'blk-title', b.title))
-      if (b.content) mainCol.appendChild(el('div', 'blk-sub', b.content.slice(0, 76) + (b.content.length > 76 ? '…' : '')))
-      row.appendChild(mainCol)
-      // Kompakte Faden-Punkte (Variante C — sichtbar, wenn die Spalte eng wird)
-      const anc = anchoredOf(b.id)
-      if (anc.length) {
-        const dots = el('div', 'blk-idots')
-        anc.forEach(x => { const d = el('span', 'blk-idot'); d.style.background = threadColorOf(x.t, x.ti); d.title = x.t.title; dots.appendChild(d) })
-        row.appendChild(dots)
-      }
-      if ((b.children || []).length) {
-        const chev = el('button', 'blk-chev', '▾')
-        chev.setAttribute('aria-label', 'Ein-/ausklappen')
-        chev.addEventListener('click', ev => { ev.stopPropagation(); wrapEl.classList.toggle('col') })
-        row.appendChild(chev)
-      }
-      row.addEventListener('click', () => openBlockOverlay(b))
-      if (opts.drag) attachBlockDrag(row, b, opts)
-      wrapEl.appendChild(row)
-      if (opts.note && b.note && !b.note.resolved) {
-        const note = el('button', 'struct-note')
-        note.appendChild(el('span', 'struct-note-line'))
-        note.appendChild(el('span', 'struct-note-txt', b.note.text))
-        note.addEventListener('click', () => openNoteOverlay(b))
-        wrapEl.appendChild(note)
-      }
-      if ((b.children || []).length) {
-        const kids = el('div', 'blk-kids')
-        render(b.children, kids, depth + 1)
-        wrapEl.appendChild(kids)
-      }
-      container.appendChild(wrapEl)
-    })
-  }
+
   if (!list.length) {
-    emptyKiState(parent, 'Noch keine Bausteine.', 'Bau deinen roten Faden Stück für Stück — jeder Baustein ist ein Gedanke, den der Text tragen soll.')
-  } else {
-    const listEl = el('div', 'blk-list')
-    if (threads.length) listEl.classList.add('has-threads')
-    render(list, listEl, 0)
-    // Ablegen ganz unten hängt einen Baustein ans Ende der obersten Ebene.
-    const endZone = el('div', 'blk-endzone')
-    if (opts.drag) {
-      endZone.addEventListener('dragover', ev => {
-        if (Array.from(ev.dataTransfer.types).includes('application/x-blkid')) { ev.preventDefault(); endZone.classList.add('drop-in') }
-      })
-      endZone.addEventListener('dragleave', () => endZone.classList.remove('drop-in'))
-      endZone.addEventListener('drop', ev => {
-        endZone.classList.remove('drop-in')
-        const id = ev.dataTransfer.getData('application/x-blkid'); if (!id) return
-        ev.preventDefault(); ev.stopPropagation()
-        const src = findBlock(list, id); if (!src) return
-        src.arr.splice(src.idx, 1); list.push(src.b)
-        save(); if (opts.onChange) opts.onChange()
-      })
-    }
-    listEl.appendChild(endZone)
-    parent.appendChild(listEl)
-    if (threads.length) drawThreadGutter(listEl)
+    emptyKiState(parent, 'Noch keine Bausteine.', 'Bau deinen roten Faden Stück für Stück — jede Zeile ist ein Schritt im Text.')
+    const a0 = el('div', 'blk-actions')
+    const add0 = el('button', 'narr-add', '+ Baustein')
+    add0.addEventListener('click', () => { const nb = newBlockObj(); list.push(nb); save(); rebuildStructEverywhere(); openBlockOverlay(nb) })
+    a0.appendChild(add0); kiSuggestButton(a0, 'Aus Text vorschlagen'); parent.appendChild(a0)
+    return
   }
+
+  // Flache Zeilenliste in Lese-Reihenfolge, zugeklappte Zweige werden übersprungen.
+  const rows = []
+  const walk = (arr, depth) => arr.forEach(b => { rows.push({ b, depth }); if ((b.children || []).length && !b.collapsed) walk(b.children, depth + 1) })
+  walk(list, 0)
+
+  const grid = el('div', 'tl-grid')
+  // Spalten in JS setzen — repeat(0,…) wäre ungültiges CSS und zerbräche das Raster bei 0 Fäden.
+  grid.style.gridTemplateColumns = 'minmax(148px, 1.6fr) ' + 'minmax(94px, 1fr) '.repeat(threads.length) + '30px'
+
+  grid.appendChild(el('div', 'tl-cell tl-h tl-corner', 'Bausteine · was passiert'))
+  threads.forEach((t, ti) => grid.appendChild(threadHeaderCell(t, ti)))
+  const addThH = el('div', 'tl-cell tl-h tl-addth')
+  const addThBtn = el('button', 'tl-icon-btn'); addThBtn.innerHTML = icon('<path d="M12 5v14M5 12h14"/>'); addThBtn.title = 'Faden hinzufügen'
+  addThBtn.addEventListener('click', () => { threads.push({ id: nid('n'), title: 'Neuer Faden', color: threads.length, steps: [] }); save(); rebuildStructEverywhere() })
+  addThH.appendChild(addThBtn); grid.appendChild(addThH)
+
+  rows.forEach(({ b, depth }) => {
+    grid.appendChild(blockCell(b, depth))
+    threads.forEach((t, ti) => grid.appendChild(threadCell(b, t, ti)))
+    grid.appendChild(el('div', 'tl-cell tl-filler'))
+  })
+
+  if (opts.drag) {
+    const end = el('div', 'tl-endzone'); end.style.gridColumn = '1 / -1'
+    end.addEventListener('dragover', ev => { if (Array.from(ev.dataTransfer.types).includes('application/x-blkid')) { ev.preventDefault(); end.classList.add('drop-in') } })
+    end.addEventListener('dragleave', () => end.classList.remove('drop-in'))
+    end.addEventListener('drop', ev => {
+      end.classList.remove('drop-in')
+      const id = ev.dataTransfer.getData('application/x-blkid'); if (!id) return
+      ev.preventDefault()
+      const src = findBlock(list, id); if (!src) return
+      src.arr.splice(src.idx, 1); list.push(src.b)
+      save(); (opts.onChange || rebuildStructEverywhere)()
+    })
+    grid.appendChild(end)
+  }
+  parent.appendChild(grid)
+
+  // Verwaiste Notizen sichtbar machen: Schritte, deren Baustein nicht (mehr) existiert.
+  const liveIds = new Set(); const gather = arr => arr.forEach(b => { liveIds.add(b.id); gather(b.children || []) }); gather(list)
+  const orphans = []
+  threads.forEach((t, ti) => (t.steps || []).forEach(s => { if (!liveIds.has(s.blockId)) orphans.push({ t, ti, s }) }))
+  if (orphans.length) {
+    const box = el('div', 'tl-orphans')
+    box.appendChild(el('div', 'panel-sub', 'Nicht zugeordnet — diese Notizen zeigen auf keinen Baustein mehr:'))
+    orphans.forEach(o => {
+      const row = el('div', 'tl-orphan')
+      const sw = el('span', 'narr-swatch'); sw.style.background = threadColorOf(o.t, o.ti); row.appendChild(sw)
+      row.appendChild(el('div', 'tl-orphan-txt', ((o.s.h ? o.s.h + ' — ' : '') + (o.s.p || '(leer)'))))
+      const assign = el('button', 'narr-add', 'zuordnen')
+      assign.addEventListener('click', ev => { ev.stopPropagation(); openBlockPicker(assign, id => { if (id) { o.s.blockId = id; save(); rebuildStructEverywhere() } }) })
+      row.appendChild(assign)
+      const del = el('button', 'narr-del'); del.innerHTML = icon(PIC.x); del.title = 'Notiz entfernen'
+      del.addEventListener('click', () => { const i = o.t.steps.indexOf(o.s); if (i >= 0) o.t.steps.splice(i, 1); save(); rebuildStructEverywhere() })
+      row.appendChild(del)
+      box.appendChild(row)
+    })
+    parent.appendChild(box)
+  }
+
   const actions = el('div', 'blk-actions')
   const add = el('button', 'narr-add', '+ Baustein')
-  add.addEventListener('click', () => {
-    const nb = { id: nid('b'), title: 'Neuer Baustein', role: '', content: '', why: '', sources: [], note: null, children: [] }
-    list.push(nb); save(); rebuildStructEverywhere(); openBlockOverlay(nb)
-  })
+  add.addEventListener('click', () => { const nb = newBlockObj(); list.push(nb); save(); rebuildStructEverywhere(); openBlockOverlay(nb) })
   actions.appendChild(add)
   kiSuggestButton(actions, 'Aus Text vorschlagen')
   parent.appendChild(actions)
-}
 
-// Variante A: durchgehende Faden-Linien rechts an den Bausteinen, an ihre Anker
-// gemessen. Verschiebt sich ein Baustein, wandert die Linie automatisch mit.
-function drawThreadGutter(listEl) {
-  const draw = () => {
-    const old = listEl.querySelector('.thread-svg'); if (old) old.remove()
-    const lrect = listEl.getBoundingClientRect()
-    if (!lrect.height) return
-    const threads = narr()
-    const rows = {}
-    listEl.querySelectorAll('.blk[data-bid]').forEach(r => { rows[r.dataset.bid] = r })
-    const NS = 'http://www.w3.org/2000/svg'
-    const h = listEl.scrollHeight
-    const svg = document.createElementNS(NS, 'svg')
-    svg.setAttribute('class', 'thread-svg')
-    svg.setAttribute('width', GUTTER); svg.setAttribute('height', h)
-    svg.setAttribute('viewBox', '0 0 ' + GUTTER + ' ' + h)
-    threads.forEach((t, ti) => {
-      const ys = (t.steps || []).map(s => rows[s.blockId]).filter(Boolean).map(r => {
-        const rr = r.getBoundingClientRect(); return rr.top - lrect.top + rr.height / 2
-      })
-      if (!ys.length) return
-      const x = GUTTER - 9 - ti * 11
-      const color = threadColorOf(t, ti)
-      const g = document.createElementNS(NS, 'g'); g.setAttribute('data-thread', ti)
-      if (ys.length > 1) {
-        const ln = document.createElementNS(NS, 'line')
-        ln.setAttribute('x1', x); ln.setAttribute('x2', x)
-        ln.setAttribute('y1', Math.min.apply(null, ys)); ln.setAttribute('y2', Math.max.apply(null, ys))
-        ln.setAttribute('stroke-width', '2'); ln.setAttribute('stroke-linecap', 'round')
-        ln.style.stroke = color
-        g.appendChild(ln)
-      }
-      ys.forEach(y => { const c = document.createElementNS(NS, 'circle'); c.setAttribute('cx', x); c.setAttribute('cy', y); c.setAttribute('r', '3.5'); c.style.fill = color; g.appendChild(c) })
-      svg.appendChild(g)
-    })
-    listEl.appendChild(svg)
+  function threadHeaderCell(t, ti) {
+    const c = el('div', 'tl-cell tl-h tl-thread-h'); c.dataset.thread = ti
+    c.addEventListener('mouseenter', () => highlightThread(ti))
+    c.addEventListener('mouseleave', () => highlightThread(null))
+    const sw = el('span', 'narr-swatch'); sw.style.background = threadColorOf(t, ti); c.appendChild(sw)
+    const lab = el('div', 'tl-thread-name', t.title); makeEditable(lab, v => { t.title = v || t.title; save() }); c.appendChild(lab)
+    const del = el('button', 'narr-del'); del.innerHTML = icon(PIC.x); del.title = 'Faden entfernen'
+    del.addEventListener('click', () => { const i = threads.indexOf(t); if (i >= 0) threads.splice(i, 1); save(); rebuildStructEverywhere() })
+    c.appendChild(del)
+    return c
   }
-  requestAnimationFrame(draw)
-  if (listEl._ro) listEl._ro.disconnect()
-  listEl._ro = new ResizeObserver(() => requestAnimationFrame(draw))
-  listEl._ro.observe(listEl)
+  function blockCell(b, depth) {
+    const c = el('div', 'tl-cell tl-block'); c.dataset.bid = b.id
+    c.style.paddingLeft = (10 + depth * 15) + 'px'
+    const head = el('div', 'tl-block-head')
+    if ((b.children || []).length) {
+      const chev = el('button', 'tl-chev' + (b.collapsed ? ' col' : ''))
+      chev.innerHTML = icon('<path d="M9 6l6 6-6 6"/>'); chev.title = b.collapsed ? 'Aufklappen' : 'Zuklappen'
+      chev.addEventListener('click', ev => { ev.stopPropagation(); b.collapsed = !b.collapsed; save(); rebuildStructEverywhere() })
+      head.appendChild(chev)
+    } else head.appendChild(el('span', 'tl-chev-spacer'))
+    head.appendChild(el('div', 'tl-block-title', b.title))
+    if (b.note && !b.note.resolved) {
+      const dot = el('button', 'tl-note-dot'); dot.title = b.note.text
+      dot.addEventListener('click', ev => { ev.stopPropagation(); openNoteOverlay(b) })
+      head.appendChild(dot)
+    }
+    c.appendChild(head)
+    if (b.content) c.appendChild(el('div', 'tl-block-body', b.content))
+    c.addEventListener('click', () => openBlockOverlay(b))
+    if (opts.drag) { c.draggable = true; attachBlockDrag(c, b, opts) }
+    return c
+  }
+  function threadCell(b, t, ti) {
+    const step = (t.steps || []).find(s => s.blockId === b.id)
+    const c = el('div', 'tl-cell tl-tcell ' + (step ? 'filled' : 'empty')); c.dataset.thread = ti
+    if (step) {
+      c.style.borderLeftColor = threadColorOf(t, ti)
+      const h = el('div', 'tl-tc-h', step.h); if (!step.h) h.dataset.ph = 'Schritt'; makeEditable(h, v => { step.h = v; save() })
+      const p = el('div', 'tl-tc-p', step.p); if (!step.p) p.dataset.ph = 'Was macht dieser Schritt für den Faden?'; makeEditable(p, v => { step.p = v; save() }, { multiline: true })
+      c.appendChild(h); c.appendChild(p)
+      const del = el('button', 'tl-tc-del'); del.innerHTML = icon(PIC.x); del.title = 'Notiz entfernen'
+      del.addEventListener('click', ev => { ev.stopPropagation(); const i = t.steps.indexOf(step); if (i >= 0) t.steps.splice(i, 1); save(); rebuildStructEverywhere() })
+      c.appendChild(del)
+      c.addEventListener('mouseenter', () => highlightThread(ti))
+      c.addEventListener('mouseleave', () => highlightThread(null))
+    } else {
+      const plus = el('button', 'tl-add-note'); plus.innerHTML = icon('<path d="M12 5v14M5 12h14"/>')
+      plus.title = 'Metastruktur für „' + t.title + '" an diesem Baustein'
+      plus.addEventListener('click', () => { t.steps = t.steps || []; t.steps.push({ id: nid('s'), h: '', p: '', blockId: b.id }); save(); rebuildStructEverywhere() })
+      c.appendChild(plus)
+    }
+    return c
+  }
 }
+function newBlockObj() { return { id: nid('b'), title: 'Neuer Baustein', role: '', content: '', why: '', sources: [], note: null, collapsed: false, children: [] } }
 
-// Kleiner Auswahl-Schwebemenü: an welchen Baustein wird ein Erzähl-Punkt geheftet?
+// Alle IDs eines Baustein-Teilbaums (für die Bereinigung beim Löschen).
+function collectIds(b, out) { out = out || []; out.push(b.id); (b.children || []).forEach(c => collectIds(c, out)); return out }
+// Faden-Notizen entfernen, die auf gelöschte Bausteine zeigen — keine Karteileichen.
+function pruneNarrativeSteps(ids) { const set = new Set(ids); narr().forEach(t => { t.steps = (t.steps || []).filter(s => !set.has(s.blockId)) }) }
+
+// Kleines Schwebemenü: an welchen Baustein wird eine verwaiste Notiz gehängt?
 let pickerEl = null
 function closePicker() { if (pickerEl) { pickerEl.remove(); pickerEl = null } }
 function openBlockPicker(anchorEl, onPick) {
   closePicker()
   pickerEl = el('div', 'menu blk-picker open')
-  const none = el('button', 'mi'); none.appendChild(el('span', 'mi-label', '— kein Baustein'))
-  none.addEventListener('mousedown', e => e.preventDefault())
-  none.addEventListener('click', () => { onPick(null); closePicker() })
-  pickerEl.appendChild(none)
   const add = (arr, depth) => arr.forEach(b => {
     const it = el('button', 'mi'); it.appendChild(el('span', 'mi-label', '·  '.repeat(depth) + b.title))
     it.addEventListener('mousedown', e => e.preventDefault())
@@ -411,64 +446,8 @@ function attachBlockDrag(row, b, opts) {
   })
 }
 
-export function renderNarrativeInto(parent) {
-  const list = narr()
-  if (!list.length) {
-    emptyKiState(parent, 'Noch keine Erzählfäden.', 'Ein Faden ist eine Linie, die sich durch den ganzen Text zieht — ein Argument, eine Spannung, eine Frage. Häng seine Punkte an Bausteine, dann siehst du links, wo er verläuft.')
-  }
-  const strands = el('div', 'narr-strands')
-  list.forEach((t, ti) => {
-    const box = el('div', 'narr-thread')
-    box.style.borderLeftColor = threadColorOf(t, ti)
-    box.addEventListener('mouseenter', () => highlightThread(ti))
-    box.addEventListener('mouseleave', () => highlightThread(null))
-    const head = el('div', 'narr-thead')
-    const sw = el('span', 'narr-swatch'); sw.style.background = threadColorOf(t, ti)
-    head.appendChild(sw)
-    const lab = el('div', 'narr-label', t.title)
-    makeEditable(lab, v => { t.title = v || t.title; save(); rebuildStructEverywhere() })
-    head.appendChild(lab)
-    const delTh = el('button', 'narr-del'); delTh.innerHTML = icon(PIC.x); delTh.title = 'Faden entfernen'
-    delTh.addEventListener('click', () => { const i = list.indexOf(t); if (i >= 0) list.splice(i, 1); save(); rebuildStructEverywhere() })
-    head.appendChild(delTh)
-    box.appendChild(head)
-    ;(t.steps || []).forEach(st => {
-      const item = el('div', 'narr-pt' + (st.open ? ' open' : ''))
-      const body = el('div', 'narr-body')
-      const h = el('div', 'narr-h', st.h)
-      makeEditable(h, v => { st.h = v || st.h; save() })
-      const pEl = el('div', 'narr-p', st.p)
-      makeEditable(pEl, v => { st.p = v || st.p; save() }, { multiline: true })
-      body.appendChild(h); body.appendChild(pEl)
-      // Anker: an welchem Baustein hängt dieser Punkt?
-      const chip = el('button', 'narr-anchor')
-      const setChip = () => {
-        const f = st.blockId ? findBlock(blocks(), st.blockId) : null
-        chip.innerHTML = icon('<path d="M12 3v18M7 8l5-5 5 5M6 12h12"/>') + '<span>' + (f ? f.b.title : 'Baustein wählen') + '</span>'
-        chip.classList.toggle('unset', !f)
-      }
-      setChip()
-      chip.addEventListener('click', ev => { ev.stopPropagation(); openBlockPicker(chip, id => { st.blockId = id; save(); rebuildStructEverywhere() }) })
-      body.appendChild(chip)
-      item.appendChild(body)
-      const delPt = el('button', 'narr-del narr-del-pt'); delPt.innerHTML = icon(PIC.x); delPt.title = 'Punkt entfernen'
-      delPt.addEventListener('click', () => { const i = t.steps.indexOf(st); if (i >= 0) t.steps.splice(i, 1); save(); rebuildStructEverywhere() })
-      item.appendChild(delPt)
-      box.appendChild(item)
-    })
-    const addPt = el('button', 'narr-add', '+ Punkt')
-    addPt.addEventListener('click', () => { t.steps = t.steps || []; t.steps.push({ id: nid('s'), h: 'Neuer Punkt', p: 'Beschreibung …', blockId: null }); save(); rebuildStructEverywhere() })
-    box.appendChild(addPt)
-    strands.appendChild(box)
-  })
-  parent.appendChild(strands)
-  const addTh = el('button', 'narr-add narr-add-thread', '+ Faden')
-  addTh.addEventListener('click', () => { list.push({ id: nid('n'), title: 'Neuer Faden', color: list.length, steps: [{ id: nid('s'), h: 'Beginn', p: 'Worum es in diesem Faden geht …', blockId: null }] }); save(); rebuildStructEverywhere() })
-  parent.appendChild(addTh)
-}
-
-// Nach einer Umstrukturierung beide Orte neu bauen. Die Faden-Linien wandern
-// automatisch mit (sie hängen an den Baustein-Ankern) — kein falscher Hinweis nötig.
+// Nach einer Umstrukturierung beide Orte neu bauen. Die Metastruktur-Zellen
+// bleiben zeilengleich mit ihren Bausteinen (dasselbe Raster) — echt gekoppelt.
 function onStructChanged() { rebuildStructEverywhere(); save() }
 
 export function rebuildStructEverywhere() {
@@ -807,7 +786,7 @@ export function openBlockOverlay(b) {
   const del = el('button', 'blk-del', 'Baustein entfernen')
   del.addEventListener('click', () => {
     const f = findBlock(blocks(), b.id)
-    if (f) { f.arr.splice(f.idx, 1); save(); rebuildStructEverywhere(); closeOverlay() }
+    if (f) { pruneNarrativeSteps(collectIds(b)); f.arr.splice(f.idx, 1); save(); rebuildStructEverywhere(); closeOverlay() }
   })
   foot.appendChild(del)
   box.appendChild(foot)
