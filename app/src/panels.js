@@ -816,6 +816,7 @@ function insertIntoText(htmlOrText, asBlock) {
   ctx.scheduleSave()
 }
 
+// Coach-Overlay als Bento: Widget-Kacheln links (nach Wichtigkeit), KI-Chat als feste Säule rechts.
 export function openCardOverlay(card) {
   const box = overlayShellHuge(card.type, card.tone,
     card.action ? () => {
@@ -824,37 +825,117 @@ export function openCardOverlay(card) {
       card.status = 'done'; save(); renderCoach(); closeOverlay()
     } : null,
     () => { card.status = 'rejected'; save(); renderCoach(); closeOverlay() })
+  box.classList.add('ai-box-bento')
   box.appendChild(el('div', 'ai-title', card.text))
-  box.appendChild(el('div', 'panel-head', 'Warum'))
-  box.appendChild(el('div', 'ai-why', card.why))
-  if (card.narrative) {
-    box.appendChild(el('div', 'panel-head', 'Für deine Narrative'))
-    box.appendChild(el('div', 'ai-why ai-narr', card.narrative))
+  renderBento(box, card)
+}
+
+// Baut das Bento-Raster + die Chat-Säule. Widgets in Jakobs Prioritäts-Reihenfolge;
+// fehlt ein Inhalt, entfällt die Kachel (der Satz „es kommt auf den Kontext an“).
+function renderBento(box, card) {
+  const stage = el('div', 'bento-ov-stage')
+  const grid = el('div', 'bento-ov-grid')
+  const add = t => { if (t) grid.appendChild(t) }
+  if (card.gesamt) add(bText('Gesamt-Bild', card.gesamt, 'gross'))
+  else if (card.why) add(bText('Warum', card.why, 'gross'))
+  if (card.narrative) add(bNarr(card))
+  if (card.action != null) add(bVorschlag(card))
+  if (card.quote) add(bQuote(card))
+  if (card.sources && card.sources.length) add(bSources(card))
+  if (card.image) add(bDiagram(card))
+  stage.appendChild(grid)
+  stage.appendChild(bChatCol())
+  box.appendChild(stage)
+}
+function bTile(size, title) {
+  const t = el('div', 'bento-tile b-' + size)
+  t.appendChild(el('div', 'bento-th', title))
+  return t
+}
+function bText(title, text, size) {
+  const t = bTile(size || 'breit', title)
+  t.appendChild(el('div', 'bento-p', text))
+  return t
+}
+function bNarr(card) {
+  const t = bTile('breit', 'Für deine Narrative')
+  t.appendChild(el('div', 'bento-p', card.narrative))
+  if (card.thread) {
+    const chip = el('span', 'bento-thread', card.thread)
+    const wrap = el('div', 'bento-chiprow'); wrap.appendChild(el('span', 'bento-chip-lbl', 'stützt')); wrap.appendChild(chip)
+    t.appendChild(wrap)
   }
-  if (card.image) {
-    const img = document.createElement('img')
-    img.className = 'ai-img'; img.src = card.image; img.alt = card.imageCaption || ''
-    box.appendChild(img)
-    if (card.imageCaption) box.appendChild(el('div', 'ai-cap', card.imageCaption))
+  return t
+}
+function bVorschlag(card) {
+  const t = bTile('breit', 'Textvorschlag')
+  const prop = el('div', 'ai-prop bento-prop', card.action || '')
+  makeEditable(prop, v => { card.action = v || card.action; save() }, { multiline: true })
+  t.appendChild(prop)
+  const row = el('div', 'bento-actions')
+  const ins = el('button', 'bento-btn bento-btn-pri', 'Übernehmen')
+  ins.addEventListener('click', () => { insertIntoText(prop.textContent, true); card.status = 'done'; save(); renderCoach(); closeOverlay() })
+  row.appendChild(ins)
+  t.appendChild(row)
+  return t
+}
+function bQuote(card) {
+  const t = bTile('breit', 'Zitat')
+  t.appendChild(el('div', 'bento-quote', '„' + card.quote.text + '“'))
+  if (card.quote.by) t.appendChild(el('div', 'bento-quote-by', '— ' + card.quote.by))
+  return t
+}
+function bSources(card) {
+  const t = bTile('gross', 'Quellen — mehrere zum Reinlesen')
+  const list = el('div', 'bento-srclist')
+  card.sources.forEach(s => {
+    const sc = el('div', 'bento-src')
+    const head = el('div', 'bento-src-head')
+    head.appendChild(el('div', 'bento-src-thumb', (s.type || 'Q').slice(0, 1)))
+    const meta = el('div', 'bento-src-meta')
+    const title = el('button', 'bento-src-title', (s.label || s) + '  ↗')
+    if (s.url) { title.title = s.url; title.addEventListener('click', () => openExternal(s.url)) }
+    meta.appendChild(title)
+    if (s.type) meta.appendChild(el('span', 'bento-src-type', s.type))
+    head.appendChild(meta)
+    sc.appendChild(head)
+    if (s.preview) sc.appendChild(el('div', 'bento-src-prev', s.preview))
+    list.appendChild(sc)
+  })
+  t.appendChild(list)
+  return t
+}
+function bDiagram(card) {
+  const t = bTile('breit', 'Diagramm / Konzept')
+  const img = document.createElement('img')
+  img.className = 'bento-img'; img.src = card.image; img.alt = card.imageCaption || ''
+  t.appendChild(img)
+  if (card.imageCaption) t.appendChild(el('div', 'bento-cap', card.imageCaption))
+  return t
+}
+function bChatCol() {
+  const col = el('div', 'bento-chat-col')
+  col.appendChild(el('div', 'bento-th', 'KI-Chat'))
+  const thread = el('div', 'bento-chat-thread')
+  const hint = el('div', 'bento-chat-empty', 'Stell hier Rückfragen zu dieser Anmerkung — die KI antwortet mit deinem ganzen Projekt als Kontext.')
+  thread.appendChild(hint)
+  col.appendChild(thread)
+  const row = el('div', 'bento-chat-row')
+  const inp = el('div', 'ai-chat-input'); inp.contentEditable = 'true'; inp.spellcheck = false
+  inp.setAttribute('data-ph', 'Frag nach …')
+  const send = el('button', 'ai-ico'); send.innerHTML = icon(PIC.send); send.title = 'Senden'
+  const submit = () => {
+    const q = inp.textContent.trim(); if (!q) return
+    if (hint.parentNode) hint.remove()
+    thread.appendChild(el('div', 'ai-msg ai-msg-user', q)); inp.textContent = ''
+    thread.appendChild(el('div', 'ai-msg ai-msg-ai ki-resting-note', 'Die Rückfrage-KI ist noch nicht angeschlossen. Sobald sie es ist, antwortet sie hier mit deinem ganzen Projekt als Kontext.'))
+    thread.scrollTop = thread.scrollHeight
   }
-  if (card.sources && card.sources.length) {
-    box.appendChild(el('div', 'panel-head', 'Quellen — direkt reinlesen'))
-    card.sources.forEach(s => {
-      const sc = el('div', 'ai-source')
-      const top = el('button', 'ai-src', (s.label || s) + '  ↗')
-      if (s.url) { top.title = s.url; top.addEventListener('click', () => openExternal(s.url)) }
-      sc.appendChild(top)
-      if (s.preview) sc.appendChild(el('div', 'ai-src-prev', s.preview))
-      box.appendChild(sc)
-    })
-  }
-  if (card.action) {
-    box.appendChild(el('div', 'panel-head', 'Vorschlag (bearbeitbar)'))
-    const prop = el('div', 'ai-prop', card.action)
-    makeEditable(prop, v => { card.action = v || card.action; save() }, { multiline: true })
-    box.appendChild(prop)
-  }
-  chatSection(box, card.text)
+  send.addEventListener('click', submit)
+  inp.addEventListener('keydown', ev => { if (ev.key === 'Escape') { ev.preventDefault(); closeOverlay(); return } ev.stopPropagation(); if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); submit() } })
+  row.appendChild(inp); row.appendChild(send)
+  col.appendChild(row)
+  return col
 }
 
 // Rote KI-Anmerkung in der Struktur: Begründung + Korrekturvorschlag.
