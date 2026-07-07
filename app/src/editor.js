@@ -136,7 +136,7 @@ const NATIVE = !!(window.webkit && window.webkit.messageHandlers && window.webki
 const DEFAULTS = { theme: 'auto', fontSize: 17, lineWidth: 720, font: 'serif', spellcheck: false, showWords: true, structWidth: 620 }
 const TRASH_DAYS = 30
 const SCHEMA = 3
-const EX_VERSION = 4   // hochzählen, wenn sich das Beispiel-Projekt ändert → frisch aufsetzen
+const EX_VERSION = 5   // hochzählen, wenn sich das Beispiel-Projekt ändert → frisch aufsetzen
 
 export const state = { docs: [], active: null, projects: [], activeProject: null, settings: { ...DEFAULTS }, editor: null, native: NATIVE }
 

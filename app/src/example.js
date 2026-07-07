@@ -78,8 +78,49 @@ export function buildExampleCoach() {
         { label: 'Weiser & Brown (1996): The Coming Age of Calm Technology', type: 'Primärquelle', url: 'https://calmtech.com/papers', preview: 'Originalaufsatz (Xerox PARC). Kernsatz: „…a focus on calm." Führt die Unterscheidung Zentrum/Peripherie der Aufmerksamkeit ein.' },
         { label: 'Wikipedia: Calm technology', type: 'Enzyklopädie', url: 'https://en.wikipedia.org/wiki/Calm_technology', preview: '„Calm technology is a type of information technology where the interaction … is designed to occur in the user’s periphery rather than constantly at the center of attention."' },
         { label: 'Case, A. (2015): Calm Technology — Principles', type: 'Buch', url: 'https://calmtech.com', preview: 'Amber Case destilliert acht Prinzipien, u. a. „Technology should require the smallest possible amount of attention" — die praktische Fortschreibung von Weisers Idee.' },
+      ] },
+
+    // Begriff + Zeitstrahl: hier ergeben Definition und Einordnung Sinn — kein Diagramm, keine Zitate.
+    { id: sid('c'), type: 'Inhalt', tone: 'idea', status: 'open', createdAt: Date.now(),
+      text: 'Bevor „Calm Technology" trägt, sollte „Ubiquitous Computing" kurz definiert und historisch eingeordnet werden.',
+      gesamt: 'Calm Technology ist die Gestaltungsantwort auf eine ältere Idee: dass Rechner in den Alltag verschwinden. Wer den Begriff „Ubiquitous Computing" kurz einführt, gibt der Definition ein Fundament — sonst hängt „ruhige Technik" in der Luft.',
+      definition: { term: 'Ubiquitous Computing', text: 'Von Mark Weiser 1988 am Xerox PARC geprägt: Rechenkraft verteilt sich unsichtbar in Alltagsdinge, statt im Zentrum eines Bildschirms zu sitzen. Calm Technology beschreibt, wie sich solche allgegenwärtige Technik anfühlen soll.' },
+      timeline: [
+        { when: '1988', what: 'Weiser prägt „Ubiquitous Computing" (Xerox PARC).' },
+        { when: '1996', what: 'Weiser & Brown: „The Coming Age of Calm Technology".' },
+        { when: '2015', what: 'Amber Case fasst es zu acht Design-Prinzipien.' },
+        { when: 'heute', what: 'Wearables und Ambient Displays machen es alltäglich.' },
       ],
-      image: CALM_IMG, imageCaption: 'Weisers Modell: Aufmerksamkeit wandert zwischen Zentrum und Peripherie.' },
+      narrative: 'Legt das Fundament für den Faden „These: Peripherie statt Alarm" — die Definition kommt, bevor die These sie braucht.',
+      thread: 'These: Peripherie statt Alarm',
+      action: 'Der Begriff geht auf Mark Weisers „Ubiquitous Computing" (1988) zurück: Technik verschwindet in den Alltag, statt ihn zu beherrschen.',
+      sources: [
+        { label: 'Weiser (1991): The Computer for the 21st Century', type: 'Primärquelle', url: 'https://calmtech.com/papers', preview: 'Der Gründungstext des Ubiquitous Computing. Kernbild: „The most profound technologies are those that disappear."' },
+      ] },
+
+    // Pro/Contra: eine zu absolute These — hier zählen Argumente von beiden Seiten, kein Diagramm.
+    { id: sid('c'), type: 'Inhalt', tone: 'warn', status: 'open', createdAt: Date.now(),
+      text: 'Deine These „Unterbrechung ist immer schädlich" ist zu absolut — es gibt starke Gegenbeispiele.',
+      gesamt: 'Der Text behauptet, jede Unterbrechung schade. Das stimmt für Benachrichtigungs-Fluten, aber nicht ausnahmslos: Manche Unterbrechungen sind lebenswichtig. Eine These, die das einräumt, wirkt souveräner und ist schwerer angreifbar.',
+      procontra: {
+        pro: ['Ständige Benachrichtigungen zerstören den Fokus (Mark, 2008).', 'Nach einer Unterbrechung dauert es im Schnitt 23 Minuten zurück in die Aufgabe.', 'Multitasking senkt messbar die Ergebnisqualität.'],
+        contra: ['Sicherheits- und Notfallwarnungen MÜSSEN unterbrechen.', 'Eine nahende Deadline profitiert von einem rechtzeitigen Hinweis.', 'Ganz ohne Signale verpasst man Relevantes.'],
+      },
+      narrative: 'Schützt den Faden „These: Peripherie statt Alarm" vor dem Vorwurf der Einseitigkeit — die These überlebt den Einwand, statt an ihm zu zerbrechen.',
+      thread: 'These: Peripherie statt Alarm',
+      action: 'Ruhige Technik heißt nicht, nie zu unterbrechen — sondern nur dann, wenn es die Sache wirklich verlangt.' },
+
+    // Diagramm + verwandte Stellen: hier trägt ein Bild, und die Idee kommt im Text schon vor.
+    { id: sid('c'), type: 'Inhalt', tone: 'idea', status: 'open', createdAt: Date.now(),
+      text: 'Das Zentrum-Peripherie-Modell erklärt deine Definition am schnellsten als Bild.',
+      gesamt: 'Weisers Kernidee lässt sich in einem Bild fassen: Aufmerksamkeit wandert zwischen Zentrum und Peripherie. Ein kleines Diagramm nimmt der abstrakten Definition die Schwere — und die Idee taucht in deinem Text ohnehin schon zweimal auf.',
+      image: CALM_IMG, imageCaption: 'Weisers Modell: Aufmerksamkeit wandert zwischen Zentrum und Peripherie.',
+      related: [
+        'Abschnitt „Einleitung": „…nur beansprucht, wenn sie wirklich gebraucht wird" — dieselbe Idee, noch ohne Bild.',
+        'Abschnitt „Beispiele": die Teekanne, die erst bei Relevanz pfeift — ein Beleg fürs selbe Modell.',
+      ],
+      narrative: 'Verankert den Faden „These: Peripherie statt Alarm" visuell, genau dort, wo die Definition eingeführt wird.',
+      thread: 'These: Peripherie statt Alarm' },
   ]
 }
 

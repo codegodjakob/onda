@@ -742,7 +742,7 @@ export function onLaneScroll() { applyLaneTransform() }
 // Overlays — ✓ übernehmen · ⊗ verwerfen · ✕ schließen (oben rechts); Chat unten
 // ============================================================
 let overlayEl = null
-export function closeOverlay() { if (overlayEl) { overlayEl.remove(); overlayEl = null } }
+export function closeOverlay() { if (overlayEl) { const b = overlayEl.querySelector('.ai-box-bento'); if (b && b._bentoRO) b._bentoRO.disconnect(); overlayEl.remove(); overlayEl = null } }
 const escHtml = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
 function overlayShell(typeLabel, tone, onAccept, onReject) {
@@ -840,30 +840,77 @@ function renderBento(box, card) {
   else if (card.why) add(bText('Warum', card.why, 'gross'))
   if (card.narrative) add(bNarr(card))
   if (card.action != null) add(bVorschlag(card))
+  if (card.definition) add(bDef(card))
+  if (card.procontra) add(bProContra(card))
+  if (card.contra) add(bText('Gegenargument', card.contra, 'breit'))
   if (card.quote) add(bQuote(card))
+  if (card.related && card.related.length) add(bRelated(card))
   if (card.sources && card.sources.length) add(bSources(card))
+  if (card.timeline && card.timeline.length) add(bTimeline(card))
   if (card.image) add(bDiagram(card))
   stage.appendChild(grid)
   stage.appendChild(bChatCol())
   box.appendChild(stage)
+  addChatToggle(box)                       // Chat-Säule ein-/ausklappbar (Standard: aus)
+  // Kachelhöhe = Inhalt (nie im Widget scrollen). rAF-gebündelt, damit der
+  // ResizeObserver keine Endlosschleife auslöst.
+  let raf = 0
+  const relayout = () => { if (raf) return; raf = requestAnimationFrame(() => { raf = 0; layoutBento(grid) }) }
+  box._bentoRelayout = relayout
+  box._bentoLayoutNow = () => layoutBento(grid)   // synchron (getBoundingClientRect erzwingt Reflow)
+  requestAnimationFrame(() => { layoutBento(grid); requestAnimationFrame(() => layoutBento(grid)) })
+  setTimeout(() => layoutBento(grid), 140)   // nachmessen, wenn Bilder/Schriften fertig sind
+  box.querySelectorAll('.bento-img, .bento-src-shot').forEach(img => { img.addEventListener('load', relayout); img.addEventListener('error', relayout) })
+  // Chat auf/zu ändert die Breite → Höhen neu (rAF-gebündelt, Schreibschutz in layoutBento).
+  if (window.ResizeObserver) {
+    const ro = new ResizeObserver(relayout)
+    grid.querySelectorAll('.bento-tile-in').forEach(inr => ro.observe(inr))
+    box._bentoRO = ro
+  }
+}
+// Masonry: jede Kachel bekommt so viele Rasterzeilen, dass ihr voller Inhalt hineinpasst (aufrunden!).
+function layoutBento(grid) {
+  if (!grid) return
+  const rowH = 4, gap = 14
+  grid.querySelectorAll('.bento-tile').forEach(t => {
+    const inner = t._in || t.querySelector('.bento-tile-in'); if (!inner) return
+    const h = inner.getBoundingClientRect().height
+    const val = 'span ' + Math.max(1, Math.ceil((h + gap) / (rowH + gap)))
+    if (t.style.gridRowEnd !== val) t.style.gridRowEnd = val
+  })
+}
+function addChatToggle(box) {
+  const actions = box.querySelector('.ai-actions'); if (!actions) return
+  const b = el('button', 'ai-ico bento-chat-toggle')
+  b.innerHTML = icon('<path d="M20 15a2 2 0 0 1-2 2H8l-4 4V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2z"/>')
+  b.title = 'KI-Chat ein-/ausblenden'; b.setAttribute('aria-label', 'KI-Chat ein-/ausblenden')
+  b.addEventListener('click', () => {
+    box.classList.toggle('chat-open')
+    b.classList.toggle('on', box.classList.contains('chat-open'))
+    if (box._bentoLayoutNow) { box._bentoLayoutNow(); setTimeout(box._bentoLayoutNow, 50) }
+  })
+  actions.insertBefore(b, actions.firstChild)
 }
 function bTile(size, title) {
   const t = el('div', 'bento-tile b-' + size)
-  t.appendChild(el('div', 'bento-th', title))
+  const inner = el('div', 'bento-tile-in')
+  inner.appendChild(el('div', 'bento-th', title))
+  t.appendChild(inner); t._in = inner
   return t
 }
 function bText(title, text, size) {
   const t = bTile(size || 'breit', title)
-  t.appendChild(el('div', 'bento-p', text))
+  t._in.appendChild(el('div', 'bento-p', text))
   return t
 }
 function bNarr(card) {
   const t = bTile('breit', 'Für deine Narrative')
-  t.appendChild(el('div', 'bento-p', card.narrative))
+  t._in.appendChild(el('div', 'bento-p', card.narrative))
   if (card.thread) {
-    const chip = el('span', 'bento-thread', card.thread)
-    const wrap = el('div', 'bento-chiprow'); wrap.appendChild(el('span', 'bento-chip-lbl', 'stützt')); wrap.appendChild(chip)
-    t.appendChild(wrap)
+    const wrap = el('div', 'bento-chiprow')
+    wrap.appendChild(el('span', 'bento-chip-lbl', 'stützt'))
+    wrap.appendChild(el('span', 'bento-thread', card.thread))
+    t._in.appendChild(wrap)
   }
   return t
 }
@@ -871,18 +918,57 @@ function bVorschlag(card) {
   const t = bTile('breit', 'Textvorschlag')
   const prop = el('div', 'ai-prop bento-prop', card.action || '')
   makeEditable(prop, v => { card.action = v || card.action; save() }, { multiline: true })
-  t.appendChild(prop)
+  t._in.appendChild(prop)
   const row = el('div', 'bento-actions')
   const ins = el('button', 'bento-btn bento-btn-pri', 'Übernehmen')
   ins.addEventListener('click', () => { insertIntoText(prop.textContent, true); card.status = 'done'; save(); renderCoach(); closeOverlay() })
   row.appendChild(ins)
-  t.appendChild(row)
+  t._in.appendChild(row)
   return t
 }
 function bQuote(card) {
   const t = bTile('breit', 'Zitat')
-  t.appendChild(el('div', 'bento-quote', '„' + card.quote.text + '“'))
-  if (card.quote.by) t.appendChild(el('div', 'bento-quote-by', '— ' + card.quote.by))
+  t._in.appendChild(el('div', 'bento-quote', '„' + card.quote.text + '“'))
+  if (card.quote.by) t._in.appendChild(el('div', 'bento-quote-by', '— ' + card.quote.by))
+  return t
+}
+function bDef(card) {
+  const t = bTile('klein', 'Begriff')
+  t._in.appendChild(el('div', 'bento-term', card.definition.term))
+  t._in.appendChild(el('div', 'bento-p', card.definition.text))
+  return t
+}
+function bProContra(card) {
+  const t = bTile('breit', 'Pro und Contra')
+  const cols = el('div', 'bento-pc')
+  const mk = (label, items, cls) => {
+    const c = el('div', 'bento-pc-col ' + cls)
+    c.appendChild(el('div', 'bento-pc-h', label))
+    ;(items || []).forEach(x => c.appendChild(el('div', 'bento-pc-item', x)))
+    return c
+  }
+  cols.appendChild(mk('Dafür', card.procontra.pro, 'pc-pro'))
+  cols.appendChild(mk('Dagegen', card.procontra.contra, 'pc-con'))
+  t._in.appendChild(cols)
+  return t
+}
+function bRelated(card) {
+  const t = bTile('breit', 'Verwandte Stellen in deinem Text')
+  const list = el('div', 'bento-related')
+  card.related.forEach(r => list.appendChild(el('div', 'bento-rel-item', r)))
+  t._in.appendChild(list)
+  return t
+}
+function bTimeline(card) {
+  const t = bTile('breit', 'Zeitliche Einordnung')
+  const tl = el('div', 'bento-timeline')
+  card.timeline.forEach(s => {
+    const row = el('div', 'bento-tl-row')
+    row.appendChild(el('span', 'bento-tl-when', s.when))
+    row.appendChild(el('span', 'bento-tl-what', s.what))
+    tl.appendChild(row)
+  })
+  t._in.appendChild(tl)
   return t
 }
 function bSources(card) {
@@ -890,27 +976,41 @@ function bSources(card) {
   const list = el('div', 'bento-srclist')
   card.sources.forEach(s => {
     const sc = el('div', 'bento-src')
-    const head = el('div', 'bento-src-head')
-    head.appendChild(el('div', 'bento-src-thumb', (s.type || 'Q').slice(0, 1)))
-    const meta = el('div', 'bento-src-meta')
+    const img = document.createElement('img')
+    img.className = 'bento-src-shot'; img.src = s.shot || sourceThumb(s); img.alt = ''
+    sc.appendChild(img)
+    const body = el('div', 'bento-src-body')
     const title = el('button', 'bento-src-title', (s.label || s) + '  ↗')
     if (s.url) { title.title = s.url; title.addEventListener('click', () => openExternal(s.url)) }
-    meta.appendChild(title)
-    if (s.type) meta.appendChild(el('span', 'bento-src-type', s.type))
-    head.appendChild(meta)
-    sc.appendChild(head)
-    if (s.preview) sc.appendChild(el('div', 'bento-src-prev', s.preview))
+    body.appendChild(title)
+    if (s.type) body.appendChild(el('span', 'bento-src-type', s.type))
+    if (s.preview) body.appendChild(el('div', 'bento-src-prev', s.preview))
+    sc.appendChild(body)
     list.appendChild(sc)
   })
-  t.appendChild(list)
+  t._in.appendChild(list)
   return t
+}
+// Platzhalter-Vorschau einer Quelle (faux „Screenshot“) — wird später durch echte Ausschnitte ersetzt.
+function sourceThumb(s) {
+  const c = s.type === 'Primärquelle' ? '#3a6ea5' : s.type === 'Enzyklopädie' ? '#5a8f4e' : s.type === 'Buch' ? '#b9831f' : '#7a5aa8'
+  const svg = "<svg xmlns='http://www.w3.org/2000/svg' width='320' height='96' viewBox='0 0 320 96'>"
+    + "<rect width='320' height='96' fill='#f4f2ec'/>"
+    + "<rect width='320' height='26' fill='" + c + "'/>"
+    + "<rect x='12' y='9' width='120' height='8' rx='4' fill='#ffffff' opacity='0.9'/>"
+    + "<rect x='12' y='40' width='296' height='6' rx='3' fill='#cfccc2'/>"
+    + "<rect x='12' y='54' width='296' height='6' rx='3' fill='#cfccc2'/>"
+    + "<rect x='12' y='68' width='200' height='6' rx='3' fill='#d9d6cd'/>"
+    + "<rect x='12' y='82' width='250' height='6' rx='3' fill='#d9d6cd'/>"
+    + "</svg>"
+  return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg)
 }
 function bDiagram(card) {
   const t = bTile('breit', 'Diagramm / Konzept')
   const img = document.createElement('img')
   img.className = 'bento-img'; img.src = card.image; img.alt = card.imageCaption || ''
-  t.appendChild(img)
-  if (card.imageCaption) t.appendChild(el('div', 'bento-cap', card.imageCaption))
+  t._in.appendChild(img)
+  if (card.imageCaption) t._in.appendChild(el('div', 'bento-cap', card.imageCaption))
   return t
 }
 function bChatCol() {

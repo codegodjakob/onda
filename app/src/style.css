@@ -1011,49 +1011,68 @@ body.zen #minimap, body.zen #lane { display: none; }
 /* ============================================================
    Coach-Bento: Widget-Kacheln links, KI-Chat als feste Säule rechts
    ============================================================ */
-.ai-box-bento { display: flex; flex-direction: column; height: 88vh; max-height: 92vh; overflow: hidden; padding: 16px 18px; }
+.ai-box-bento { display: flex; flex-direction: column; max-height: 92vh; overflow: hidden; padding: 16px 18px; }
 .ai-box-bento .ai-head { flex: none; }
 .ai-box-bento .ai-title { flex: none; margin: 2px 0 12px; max-width: none; }
 .bento-ov-stage { flex: 1; min-height: 0; display: flex; gap: 16px; }
-.bento-ov-grid { flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: minmax(100px, auto); grid-auto-flow: row dense; gap: 14px; overflow-y: auto; align-content: start; }
-.bento-tile { background: var(--bg2); border: 0.5px solid var(--line); border-radius: var(--r2); padding: 12px 14px; display: flex; flex-direction: column; gap: 7px; overflow: hidden; min-width: 0; }
-.b-klein { grid-column: span 1; grid-row: span 1; }
-.b-breit { grid-column: span 2; grid-row: span 1; }
-.b-gross { grid-column: span 2; grid-row: span 2; }
-.b-hoch  { grid-column: span 1; grid-row: span 2; }
-.bento-th { font-size: 10.5px; font-weight: 500; letter-spacing: .05em; text-transform: uppercase; color: var(--txt3); flex: none; }
-.bento-p { font-size: 13px; line-height: 1.6; color: var(--txt2); font-family: var(--doc-font); overflow-y: auto; min-height: 0; }
-.bento-chiprow { display: flex; align-items: center; gap: 7px; flex: none; margin-top: auto; flex-wrap: wrap; }
+/* Masonry: Spalten fest, Zeilenhöhe fein — jede Kachel spannt so viele Zeilen wie ihr Inhalt (JS). */
+.bento-ov-grid { flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: 4px; column-gap: 14px; row-gap: 14px; overflow-y: auto; align-content: start; }
+.bento-tile { background: var(--bg2); border: 0.5px solid var(--line); border-radius: var(--r2); overflow: hidden; min-width: 0; }
+.bento-tile-in { padding: 12px 14px; display: flex; flex-direction: column; gap: 7px; }
+.b-klein, .b-hoch { grid-column: span 1; }
+.b-breit, .b-gross { grid-column: span 2; }
+.bento-th { font-size: 10.5px; font-weight: 500; letter-spacing: .05em; text-transform: uppercase; color: var(--txt3); }
+.bento-p { font-size: 13px; line-height: 1.6; color: var(--txt2); font-family: var(--doc-font); }
+.bento-chiprow { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; margin-top: 2px; }
 .bento-chip-lbl { font-size: 11px; color: var(--txt3); }
 .bento-thread { font-size: 11px; padding: 2px 9px; border-radius: 999px; background: color-mix(in srgb, var(--warn) 15%, var(--bg)); color: var(--warn); }
-.bento-prop { font-size: 13px; line-height: 1.55; color: var(--txt); font-family: var(--doc-font); background: var(--bg); border: 0.5px solid var(--line2); border-radius: var(--r); padding: 8px 10px; overflow-y: auto; min-height: 0; outline: none; }
+.bento-prop { font-size: 13px; line-height: 1.55; color: var(--txt); font-family: var(--doc-font); background: var(--bg); border: 0.5px solid var(--line2); border-radius: var(--r); padding: 8px 10px; outline: none; }
 .bento-prop:focus { border-color: var(--accent); }
-.bento-actions { display: flex; gap: 7px; flex: none; }
+.bento-actions { display: flex; gap: 7px; }
 .bento-btn { font-size: 12px; padding: 5px 12px; border-radius: var(--r); border: 0.5px solid var(--line2); color: var(--txt2); background: var(--bg); }
 .bento-btn:hover { border-color: var(--accent); color: var(--accent); }
 .bento-btn-pri { background: var(--accent); color: #fff; border-color: var(--accent); }
 .bento-btn-pri:hover { color: #fff; opacity: .92; }
-.bento-quote { font-family: var(--doc-font); font-style: italic; font-size: 14px; line-height: 1.5; color: var(--txt); overflow-y: auto; min-height: 0; }
-.bento-quote-by { font-size: 11.5px; color: var(--txt3); flex: none; margin-top: 4px; }
-.bento-srclist { display: flex; flex-direction: column; gap: 10px; overflow-y: auto; min-height: 0; }
-.bento-src { border-top: 0.5px solid var(--line); padding-top: 9px; }
-.bento-src:first-child { border-top: 0; padding-top: 0; }
-.bento-src-head { display: flex; gap: 9px; align-items: flex-start; }
-.bento-src-thumb { width: 30px; height: 30px; border-radius: 7px; background: var(--bg3); color: var(--txt3); font-size: 13px; font-weight: 600; display: flex; align-items: center; justify-content: center; flex: none; }
-.bento-src-meta { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.bento-quote { font-family: var(--doc-font); font-style: italic; font-size: 14px; line-height: 1.5; color: var(--txt); }
+.bento-quote-by { font-size: 11.5px; color: var(--txt3); margin-top: 4px; }
+.bento-term { font-family: var(--doc-font); font-weight: 600; font-size: 14px; color: var(--txt); }
+/* Pro und Contra */
+.bento-pc { display: flex; gap: 14px; }
+.bento-pc-col { flex: 1; min-width: 0; }
+.bento-pc-h { font-size: 11px; font-weight: 500; margin-bottom: 6px; }
+.pc-pro .bento-pc-h { color: var(--ok); }
+.pc-con .bento-pc-h { color: var(--danger); }
+.bento-pc-item { font-size: 12px; line-height: 1.5; color: var(--txt2); padding-left: 13px; position: relative; margin-bottom: 6px; }
+.bento-pc-item::before { content: '–'; position: absolute; left: 0; color: var(--txt3); }
+/* Verwandte Stellen */
+.bento-related { display: flex; flex-direction: column; gap: 7px; }
+.bento-rel-item { font-size: 12px; line-height: 1.5; color: var(--txt2); padding-left: 15px; position: relative; }
+.bento-rel-item::before { content: '↳'; position: absolute; left: 0; color: var(--txt3); }
+/* Zeitstrahl */
+.bento-timeline { display: flex; flex-direction: column; gap: 9px; }
+.bento-tl-row { display: flex; gap: 11px; }
+.bento-tl-when { flex: none; width: 46px; font-variant-numeric: tabular-nums; font-weight: 500; color: var(--accent); font-size: 12.5px; }
+.bento-tl-what { font-size: 12.5px; line-height: 1.45; color: var(--txt2); }
+/* Quellen — mit Bildausschnitt (faux Screenshot, später echt) */
+.bento-srclist { display: flex; flex-direction: column; gap: 14px; }
+.bento-src { display: flex; flex-direction: column; gap: 6px; }
+.bento-src-shot { width: 100%; height: 78px; object-fit: cover; object-position: top; border-radius: var(--r); border: 0.5px solid var(--line2); display: block; }
+.bento-src-body { display: flex; flex-direction: column; gap: 2px; }
 .bento-src-title { text-align: left; font-size: 12.5px; color: var(--accent); padding: 0; line-height: 1.35; overflow-wrap: anywhere; }
 .bento-src-title:hover { text-decoration: underline; }
 .bento-src-type { font-size: 10.5px; color: var(--txt3); }
-.bento-src-prev { font-size: 11.5px; color: var(--txt2); line-height: 1.5; margin-top: 5px; }
-.bento-img { width: 100%; max-height: 100%; object-fit: contain; border-radius: var(--r); min-height: 0; }
-.bento-cap { font-size: 11px; color: var(--txt3); flex: none; margin-top: 4px; }
-.bento-chat-col { width: 264px; flex: none; display: flex; flex-direction: column; gap: 8px; background: var(--bg2); border: 0.5px solid var(--line); border-radius: var(--r2); padding: 12px 14px; min-height: 0; }
+.bento-src-prev { font-size: 11.5px; color: var(--txt2); line-height: 1.5; margin-top: 3px; }
+.bento-img { width: 100%; border-radius: var(--r); display: block; }
+.bento-cap { font-size: 11px; color: var(--txt3); margin-top: 4px; }
+.bento-chat-empty { font-size: 12px; color: var(--txt3); line-height: 1.55; }
+/* KI-Chat als einklappbare Säule (Standard: aus) */
+.bento-chat-col { display: none; width: 264px; flex: none; flex-direction: column; gap: 8px; background: var(--bg2); border: 0.5px solid var(--line); border-radius: var(--r2); padding: 12px 14px; min-height: 0; }
+.ai-box-bento.chat-open .bento-chat-col { display: flex; }
 .bento-chat-thread { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
 .bento-chat-col .ai-chat-row { margin-top: 0; flex: none; }
+.bento-chat-toggle.on { color: var(--accent); }
 @media (max-width: 760px) {
   .bento-ov-stage { flex-direction: column; }
-  .bento-chat-col { width: auto; height: 200px; }
+  .bento-chat-col { width: auto; }
   .bento-ov-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
-
-.bento-chat-empty { font-size: 12px; color: var(--txt3); line-height: 1.55; }
