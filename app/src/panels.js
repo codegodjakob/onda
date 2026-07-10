@@ -716,8 +716,14 @@ function applyLaneTransform() {
   const layer = document.querySelector('#mainBody > .anno-layer')
   if (layer) layer.style.transform = t
 }
+// Klickbare Nicht-Buttons per Tastatur bedienbar machen (Enter/Leertaste).
+function activateOnKey(elm, fn) {
+  elm.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn() } })
+}
 function annoBubble(c) {
   const b = el('div', 'anno-bubble anno-' + (c.kind || 'form'))
+  b.setAttribute('role', 'button'); b.tabIndex = 0
+  b.setAttribute('aria-label', (c.kind === 'inhalt' ? 'Inhalt' : 'Formulierung') + ': ' + c.short)
   const head = el('div', 'anno-bhead')
   head.appendChild(el('span', 'anno-tag', c.kind === 'inhalt' ? 'Inhalt' : 'Formulierung'))
   if ((c.form || 'note') === 'para') head.appendChild(el('span', 'anno-scope', 'Absatz'))
@@ -725,7 +731,10 @@ function annoBubble(c) {
   b.appendChild(el('div', 'anno-short', c.short))
   b.addEventListener('mouseenter', () => emphasizeAnno(c.id, true))
   b.addEventListener('mouseleave', () => emphasizeAnno(c.id, false))
+  b.addEventListener('focus', () => emphasizeAnno(c.id, true))
+  b.addEventListener('blur', () => emphasizeAnno(c.id, false))
   b.addEventListener('click', () => openAnnoOverlay(c))
+  activateOnKey(b, () => openAnnoOverlay(c))
   return b
 }
 // Beim Zeigen auf eine Bubble die zugehörige Textstelle + Linie betonen (und zurück).
@@ -742,13 +751,24 @@ export function onLaneScroll() { applyLaneTransform() }
 // Overlays — ✓ übernehmen · ⊗ verwerfen · ✕ schließen (oben rechts); Chat unten
 // ============================================================
 let overlayEl = null
-export function closeOverlay() { if (overlayEl) { const b = overlayEl.querySelector('.ai-box-bento'); if (b && b._bentoRO) b._bentoRO.disconnect(); overlayEl.remove(); overlayEl = null } }
+let overlayPrevFocus = null
+export function closeOverlay() {
+  if (!overlayEl) return
+  const b = overlayEl.querySelector('.ai-box-bento'); if (b && b._bentoRO) b._bentoRO.disconnect()
+  overlayEl.remove(); overlayEl = null
+  if (overlayPrevFocus && overlayPrevFocus.focus) { try { overlayPrevFocus.focus() } catch (e) {} }
+  overlayPrevFocus = null
+}
 const escHtml = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
 function overlayShell(typeLabel, tone, onAccept, onReject) {
+  const prev = document.activeElement
   closeOverlay()
+  overlayPrevFocus = (prev && prev !== document.body) ? prev : null
   overlayEl = el('div', 'ai-overlay')
   const box = el('div', 'ai-box')
+  box.setAttribute('role', 'dialog'); box.setAttribute('aria-modal', 'true'); box.setAttribute('aria-label', typeLabel)
+  box.tabIndex = -1
   const head = el('div', 'ai-head')
   head.appendChild(el('span', 'coach-type', typeLabel))
   const actions = el('div', 'ai-actions')
@@ -770,6 +790,7 @@ function overlayShell(typeLabel, tone, onAccept, onReject) {
   overlayEl.appendChild(box)
   overlayEl.addEventListener('click', ev => { if (ev.target === overlayEl) closeOverlay() })
   document.body.appendChild(overlayEl)
+  requestAnimationFrame(() => box.focus())   // Fokus in den Dialog (Tastatur/Screenreader)
   return box
 }
 
@@ -782,6 +803,7 @@ function overlayShellHuge(label, tone, onA, onR) {
 function chatSection(box, topic) {
   box.appendChild(el('div', 'panel-head', 'Rückfrage an die KI'))
   const thread = el('div', 'ai-chat')
+  thread.setAttribute('aria-live', 'polite')
   box.appendChild(thread)
   const row = el('div', 'ai-chat-row')
   const inp = el('div', 'ai-chat-input')
@@ -851,9 +873,11 @@ function renderBento(box, card) {
   stage.appendChild(grid)
   stage.appendChild(bChatCol())
   box.appendChild(stage)
+  finishBento(box, grid)
+}
+// Chat-Toggle + Masonry-Nachmessen — identisch für Coach- und Anmerkungs-Bento.
+function finishBento(box, grid) {
   addChatToggle(box)                       // Chat-Säule ein-/ausklappbar (Standard: aus)
-  // Kachelhöhe = Inhalt (nie im Widget scrollen). rAF-gebündelt, damit der
-  // ResizeObserver keine Endlosschleife auslöst.
   let raf = 0
   const relayout = () => { if (raf) return; raf = requestAnimationFrame(() => { raf = 0; layoutBento(grid) }) }
   box._bentoRelayout = relayout
@@ -861,22 +885,34 @@ function renderBento(box, card) {
   requestAnimationFrame(() => { layoutBento(grid); requestAnimationFrame(() => layoutBento(grid)) })
   setTimeout(() => layoutBento(grid), 140)   // nachmessen, wenn Bilder/Schriften fertig sind
   box.querySelectorAll('.bento-img, .bento-src-shot').forEach(img => { img.addEventListener('load', relayout); img.addEventListener('error', relayout) })
-  // Chat auf/zu ändert die Breite → Höhen neu (rAF-gebündelt, Schreibschutz in layoutBento).
   if (window.ResizeObserver) {
     const ro = new ResizeObserver(relayout)
     grid.querySelectorAll('.bento-tile-in').forEach(inr => ro.observe(inr))
     box._bentoRO = ro
   }
 }
-// Masonry: jede Kachel bekommt so viele Rasterzeilen, dass ihr voller Inhalt hineinpasst (aufrunden!).
+// Ausgeglichenes 2-Spalten-Masonry: jede Kachel so hoch wie ihr Inhalt, breite Kacheln über beide Spalten,
+// schmale in die jeweils kürzere Spalte — so bleiben die Spalten gleich hoch.
 function layoutBento(grid) {
   if (!grid) return
-  const rowH = 4, gap = 14
+  const rowH = 4, gap = 14, unit = rowH + gap
+  const cols = Math.max(1, getComputedStyle(grid).gridTemplateColumns.split(' ').filter(Boolean).length)
+  const next = new Array(cols).fill(1)   // nächste freie Rasterzeile je Spalte (1-basiert)
   grid.querySelectorAll('.bento-tile').forEach(t => {
     const inner = t._in || t.querySelector('.bento-tile-in'); if (!inner) return
-    const h = inner.getBoundingClientRect().height
-    const val = 'span ' + Math.max(1, Math.ceil((h + gap) / (rowH + gap)))
-    if (t.style.gridRowEnd !== val) t.style.gridRowEnd = val
+    const span = Math.max(1, Math.ceil((inner.getBoundingClientRect().height + gap) / unit))
+    const wide = cols > 1 && t.classList.contains('b-gross')   // nur „gross“ über beide Spalten (Hero)
+    if (wide) {
+      const start = Math.max.apply(null, next)
+      t.style.gridColumn = '1 / span ' + cols
+      t.style.gridRow = start + ' / span ' + span
+      for (let i = 0; i < cols; i++) next[i] = start + span
+    } else {
+      let c = 0; for (let i = 1; i < cols; i++) if (next[i] < next[c]) c = i
+      t.style.gridColumn = (c + 1) + ' / span 1'
+      t.style.gridRow = next[c] + ' / span ' + span
+      next[c] += span
+    }
   })
 }
 function addChatToggle(box) {
@@ -939,7 +975,7 @@ function bDef(card) {
   return t
 }
 function bProContra(card) {
-  const t = bTile('breit', 'Pro und Contra')
+  const t = bTile('gross', 'Pro und Contra')
   const cols = el('div', 'bento-pc')
   const mk = (label, items, cls) => {
     const c = el('div', 'bento-pc-col ' + cls)
@@ -1017,6 +1053,7 @@ function bChatCol() {
   const col = el('div', 'bento-chat-col')
   col.appendChild(el('div', 'bento-th', 'KI-Chat'))
   const thread = el('div', 'bento-chat-thread')
+  thread.setAttribute('aria-live', 'polite')
   const hint = el('div', 'bento-chat-empty', 'Stell hier Rückfragen zu dieser Anmerkung — die KI antwortet mit deinem ganzen Projekt als Kontext.')
   thread.appendChild(hint)
   col.appendChild(thread)
@@ -1036,6 +1073,36 @@ function bChatCol() {
   row.appendChild(inp); row.appendChild(send)
   col.appendChild(row)
   return col
+}
+// Text-Anmerkung als Bento (gleiche Sprache wie Coach): Stelle · Warum · Vorschlag/Varianten · Chat.
+function renderAnnoBento(box, c, isForm) {
+  const stage = el('div', 'bento-ov-stage')
+  const grid = el('div', 'bento-ov-grid')
+  const add = t => { if (t) grid.appendChild(t) }
+  add(bText(isForm ? 'Im Text' : 'Betrifft die Passage', '„' + c.target + '“', 'gross'))
+  if (c.why) add(bText('Warum', c.why, 'breit'))
+  add(bAnnoProp(c, isForm))
+  stage.appendChild(grid)
+  stage.appendChild(bChatCol())
+  box.appendChild(stage)
+  finishBento(box, grid)
+}
+function bAnnoProp(c, isForm) {
+  const t = bTile('breit', isForm ? 'Vorschlag — ersetzt die Stelle' : 'Vorschlag — als Absatz einfügen')
+  const prop = el('div', 'ai-prop bento-prop', c.action || '')
+  makeEditable(prop, v => { c.action = v || c.action; save() }, { multiline: true })
+  t._in.appendChild(prop)
+  if (isForm && (c.variants || []).length) {
+    t._in.appendChild(el('div', 'bento-th', 'Varianten'))
+    const vv = el('div', 'ai-variants')
+    c.variants.forEach(v => {
+      const chip = el('button', 'ai-variant', v)
+      chip.addEventListener('click', () => { prop.textContent = v; c.action = v; save() })
+      vv.appendChild(chip)
+    })
+    t._in.appendChild(vv)
+  }
+  return t
 }
 
 // Rote KI-Anmerkung in der Struktur: Begründung + Korrekturvorschlag.
@@ -1072,27 +1139,9 @@ export function openAnnoOverlay(c) {
       c.status = 'done'; buildLane(); ctx.scheduleSave(); closeOverlay()
     },
     () => { c.status = 'rejected'; buildLane(); save(); closeOverlay() })
+  box.classList.add('ai-box-bento')
   box.appendChild(el('div', 'ai-title', c.short))
-  box.appendChild(el('div', 'panel-head', isForm ? 'Im Text' : 'Betrifft die Passage'))
-  box.appendChild(el('div', 'ai-orig', '„' + c.target + '“'))
-  box.appendChild(el('div', 'panel-head', 'Warum'))
-  box.appendChild(el('div', 'ai-why', c.why))
-  box.appendChild(el('div', 'panel-head', isForm ? 'Vorschlag (bearbeitbar)' : 'Vorschlag — als Absatz einfügen (bearbeitbar)'))
-  const prop = el('div', 'ai-prop', c.action || '')
-  makeEditable(prop, v => { c.action = v || c.action; save() }, { multiline: true })
-  box.appendChild(prop)
-  // Varianten (nur Formulierung): Klick setzt den Vorschlag.
-  if (isForm && (c.variants || []).length) {
-    const vv = el('div', 'ai-variants')
-    c.variants.forEach(v => {
-      const chip = el('button', 'ai-variant', v)
-      chip.addEventListener('click', () => { prop.textContent = v; c.action = v; save() })
-      vv.appendChild(chip)
-    })
-    box.appendChild(el('div', 'panel-head', 'Varianten'))
-    box.appendChild(vv)
-  }
-  chatSection(box, c.short)
+  renderAnnoBento(box, c, isForm)
 }
 function flagNotFound(box) {
   if (box.querySelector('.ai-warn')) return

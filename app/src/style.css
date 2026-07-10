@@ -10,6 +10,7 @@
 @font-face { font-family: "Literata"; src: url("../fonts/Literata-VarItalic.woff2") format("woff2"); font-weight: 400 700; font-style: italic; font-display: swap; }
 
 :root {
+  color-scheme: light;
   --bg: #ffffff;
   --bg2: #fbfaf7;
   --bg3: #f2f1ea;
@@ -36,6 +37,7 @@
   --shadow: 0 8px 28px rgba(30, 30, 28, .10), 0 1px 3px rgba(30, 30, 28, .06);
 }
 [data-theme="dark"] {
+  color-scheme: dark;
   --bg: #1f1f1d;
   --bg2: #242422;
   --bg3: #2d2d2a;
@@ -264,7 +266,9 @@ body.view-struct #structView { display: flex; }
   width: 460px; max-width: calc(100vw - 48px); max-height: 80vh; overflow-y: auto;
   background: var(--bg); border: 0.5px solid var(--line2); border-radius: var(--r2);
   box-shadow: var(--shadow); padding: 18px 20px;
+  overscroll-behavior: contain;
 }
+.ai-box:focus { outline: none; }
 .ai-title { font-size: 15px; font-weight: 500; color: var(--txt); margin: 4px 0 6px; line-height: 1.45; }
 .ai-why { font-size: 12.5px; color: var(--txt2); line-height: 1.55; }
 .ai-edit {
@@ -1015,12 +1019,12 @@ body.zen #minimap, body.zen #lane { display: none; }
 .ai-box-bento .ai-head { flex: none; }
 .ai-box-bento .ai-title { flex: none; margin: 2px 0 12px; max-width: none; }
 .bento-ov-stage { flex: 1; min-height: 0; display: flex; gap: 16px; }
-/* Masonry: Spalten fest, Zeilenhöhe fein — jede Kachel spannt so viele Zeilen wie ihr Inhalt (JS). */
-.bento-ov-grid { flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: 4px; column-gap: 14px; row-gap: 14px; overflow-y: auto; align-content: start; }
+/* Masonry: 2 Spalten fest, Zeilenhöhe fein — jede Kachel spannt so viele Zeilen wie ihr Inhalt (JS). */
+.bento-ov-grid { flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: 4px; column-gap: 14px; row-gap: 14px; overflow-y: auto; align-content: start; overscroll-behavior: contain; }
 .bento-tile { background: var(--bg2); border: 0.5px solid var(--line); border-radius: var(--r2); overflow: hidden; min-width: 0; }
 .bento-tile-in { padding: 12px 14px; display: flex; flex-direction: column; gap: 7px; }
-.b-klein, .b-hoch { grid-column: span 1; }
-.b-breit, .b-gross { grid-column: span 2; }
+.b-klein, .b-hoch, .b-breit { grid-column: span 1; }
+.b-gross { grid-column: span 2; }
 .bento-th { font-size: 10.5px; font-weight: 500; letter-spacing: .05em; text-transform: uppercase; color: var(--txt3); }
 .bento-p { font-size: 13px; line-height: 1.6; color: var(--txt2); font-family: var(--doc-font); }
 .bento-chiprow { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; margin-top: 2px; }
@@ -1053,8 +1057,8 @@ body.zen #minimap, body.zen #lane { display: none; }
 .bento-tl-row { display: flex; gap: 11px; }
 .bento-tl-when { flex: none; width: 46px; font-variant-numeric: tabular-nums; font-weight: 500; color: var(--accent); font-size: 12.5px; }
 .bento-tl-what { font-size: 12.5px; line-height: 1.45; color: var(--txt2); }
-/* Quellen — mit Bildausschnitt (faux Screenshot, später echt) */
-.bento-srclist { display: flex; flex-direction: column; gap: 14px; }
+/* Quellen — mit Bildausschnitt (faux Screenshot, später echt); passt sich der Kachelbreite an */
+.bento-srclist { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
 .bento-src { display: flex; flex-direction: column; gap: 6px; }
 .bento-src-shot { width: 100%; height: 78px; object-fit: cover; object-position: top; border-radius: var(--r); border: 0.5px solid var(--line2); display: block; }
 .bento-src-body { display: flex; flex-direction: column; gap: 2px; }
@@ -1071,8 +1075,8 @@ body.zen #minimap, body.zen #lane { display: none; }
 .bento-chat-thread { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
 .bento-chat-col .ai-chat-row { margin-top: 0; flex: none; }
 .bento-chat-toggle.on { color: var(--accent); }
-@media (max-width: 760px) {
+@media (max-width: 640px) {
   .bento-ov-stage { flex-direction: column; }
   .bento-chat-col { width: auto; }
-  .bento-ov-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .bento-ov-grid { grid-template-columns: minmax(0, 1fr); }
 }
