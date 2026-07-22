@@ -2577,3 +2577,107 @@ button.onda-aura:focus-visible {
   button.onda-aura:hover,
   button.onda-aura:active { transform: none; }
 }
+
+/* ADOPTION NOTES (consumers wire these up in their own tasks, not here):
+   - agent chat send button `.agent-chat-send` (workspace.js:751) and
+     `.surface-close` (workspace.js:1364) → `.onda-icon-btn`
+   - primary agent/evidence actions and `.evidence-copy` (style.css:2203)
+     → `.onda-btn` / `.onda-btn--sm`
+   - `.semantic-insert-choice` (style.css:2007) rows keep their layout but
+     adopt `.onda-btn--ghost` hover tokens
+   - local-hint action buttons in AREA C use `.onda-btn--ghost` / `.onda-btn--sm`
+   - finding-kind labels → `.onda-badge` (+ `--warning` for risk)
+   - source-type chips → `.onda-tag` */
+/* ============================================================
+   Onda primitives — buttons, icon buttons, badges, tags
+   ============================================================ */
+.onda-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  height: 34px;
+  padding: 0 var(--space-4);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: var(--accent);
+  color: var(--on-accent);
+  font: var(--fw-semibold) var(--text-sm)/1 var(--font-sans);
+  letter-spacing: var(--tracking-tight);
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+.onda-btn:hover { background: var(--accent-hover); }
+.onda-btn:active { background: var(--accent-active); transform: scale(0.98); }
+.onda-btn:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
+.onda-btn:disabled { opacity: 0.5; cursor: default; transform: none; }
+
+.onda-btn--ghost { background: transparent; color: var(--text-secondary); }
+.onda-btn--ghost:hover { background: var(--bg-hover); color: var(--text-primary); }
+.onda-btn--ghost:active { background: var(--bg-active); }
+
+.onda-btn--danger { background: var(--danger); color: #fff; }
+.onda-btn--danger:hover { background: var(--danger); filter: brightness(1.06); }
+.onda-btn--danger:active { background: var(--danger); filter: brightness(0.94); transform: scale(0.98); }
+
+.onda-btn--sm { height: 28px; padding: 0 var(--space-3); font-size: var(--text-xs); }
+
+.onda-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+.onda-icon-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+.onda-icon-btn:active { background: var(--bg-active); }
+.onda-icon-btn:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
+.onda-icon-btn svg { width: 18px; height: 18px; }
+
+.onda-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  height: 20px;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  font: var(--fw-semibold) var(--text-xs)/1 var(--font-sans);
+  letter-spacing: var(--tracking-wide);
+}
+.onda-badge__dot {
+  width: 5px;
+  height: 5px;
+  flex: none;
+  border-radius: var(--radius-pill);
+  background: currentColor;
+}
+.onda-badge--success { background: var(--success-tint); color: var(--success); }
+.onda-badge--warning { background: var(--warning-tint); color: var(--warning); }
+
+.onda-tag {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  background: var(--surface-inset);
+  color: var(--text-tertiary);
+  font: var(--fw-medium) var(--text-xs)/1 var(--font-mono);
+  letter-spacing: var(--tracking-tight);
+}
