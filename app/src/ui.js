@@ -140,16 +140,17 @@ export function setSaveState(s) {
 }
 
 // ---------- Einstellungen anwenden ----------
-const SERIF = '"Literata", "Iowan Old Style", Georgia, serif'
 let mediaBound = false
 export function applySettings() {
   const s = ctx.state.settings
   const root = document.documentElement
   const dark = s.theme === 'dark' || (s.theme === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches)
   root.dataset.theme = dark ? 'dark' : 'light'
-  root.style.setProperty('--doc-size', '18px')
-  root.style.setProperty('--doc-width', '700px')
-  root.style.setProperty('--doc-font', SERIF)
+  // Akzentvariante: 'sky' ist Standard (kein Attribut), sonst data-accent setzen.
+  if (s.accent && s.accent !== 'sky') root.setAttribute('data-accent', s.accent)
+  else root.removeAttribute('data-accent')
+  // Schreibkoerper kommt jetzt komplett aus dem CSS (Hanken Grotesk 16.5px/1.7) —
+  // kein Literata-/18px-Override mehr.
   const pm = document.querySelector('#editor .ProseMirror')
   if (pm) pm.setAttribute('spellcheck', s.spellcheck ? 'true' : 'false')
   const t = document.getElementById('title')

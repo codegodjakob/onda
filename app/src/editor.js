@@ -12,6 +12,7 @@ import { initUI, setSaveState, refreshSidebar, applySettings, focusTitle, showEd
 import { __workspaceTestBridge, initWorkspace, refreshWorkspace } from './workspace.js'
 import { ensureProjectUnderstanding, ensureReasoningModel } from './reasoning-model.mjs'
 import { ensureWorkspaceState } from './workspace-model.mjs'
+import { DEFAULT_SETTINGS, normalizeSettings } from './settings-model.mjs'
 import { BlockIdentity, ensureTopLevelBlockIds, getActiveBlockId, getEditorBlocks, insertSemanticBlock, replaceFindingTarget } from './block-identity.js'
 import { buildExampleStructure, buildExampleNarrative, buildExampleCoach, buildExampleLane, buildExampleBody, buildExampleMaterial, buildExampleUnderstanding, buildExampleAgentMessages } from './example.js'
 import { EXAMPLE_PROJECT_ID, migrateExampleSeed } from './example-seed.mjs'
@@ -50,7 +51,7 @@ const Cue = Extension.create({
 
 // ---------- Zustand & Speicher ----------
 const NATIVE = !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.store)
-const DEFAULTS = { theme: 'auto', spellcheck: false, showWords: true, structWidth: 620 }
+const DEFAULTS = DEFAULT_SETTINGS
 const TRASH_DAYS = 30
 const SCHEMA = 6
 const EX_VERSION = 9
@@ -167,9 +168,7 @@ function load() {
   }
   state.docs = (d && Array.isArray(d.docs)) ? d.docs : []
   state.active = d ? d.active : null
-  state.settings = Object.assign({}, DEFAULTS, (d && d.settings) || {})
-  // Panel-Breite gegen kaputte/fremde Werte absichern.
-  state.settings.structWidth = Math.max(360, Math.min(940, +state.settings.structWidth || 560))
+  state.settings = normalizeSettings(d && d.settings)
   // Projekte: bestehende Texte wandern in ein Standard-Projekt (Migration).
   state.projects = (d && Array.isArray(d.projects) && d.projects.length) ? d.projects : []
   if (!state.projects.length) {
