@@ -3,3 +3,4 @@ app/dist/
 Schreibwerkzeug.app/
 mac/AppIcon.iconset/
 .DS_Store
+.superpowers/
