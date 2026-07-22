@@ -1545,14 +1545,17 @@ body.zen #minimap, body.zen #lane { display: none; }
   max-width: calc(var(--container-reading) + 48px);
   min-height: 100%;
   margin: 0 auto;
-  padding: 68px 24px 38vh;
+  padding: 64px 24px 38vh;
 }
 
 #editorView #title {
-  color: var(--text-primary);
   font-family: var(--font-sans);
-  margin-bottom: 24px;
+  font-size: 30px;
+  font-weight: var(--fw-semibold);
+  line-height: 1.2;
   letter-spacing: var(--tracking-tight);
+  color: var(--text-primary);
+  margin-bottom: 20px;
 }
 
 #editorView #title::placeholder,
@@ -1576,18 +1579,23 @@ body.zen #minimap, body.zen #lane { display: none; }
 
 #editorView #editor .ProseMirror > [data-block-id] {
   position: relative;
-  border-radius: 8px;
-  transition: background 160ms var(--ease), box-shadow 160ms var(--ease);
+  border-radius: var(--radius-card);
+  transition: background var(--dur-quick) var(--ease-out), box-shadow var(--dur-quick) var(--ease-out);
 }
 
 #editorView #editor .ProseMirror > [data-block-id].is-active-block {
-  background: var(--v2-surface-active);
-  box-shadow: 0 0 0 8px var(--v2-surface-active);
+  background: var(--bg-active);
+  box-shadow: 0 0 0 8px var(--bg-active);
 }
 
 #editorView #editor .ProseMirror > [data-block-id].has-local-finding {
-  background: color-mix(in srgb, var(--v2-surface-active) 78%, transparent);
-  box-shadow: 0 0 0 7px color-mix(in srgb, var(--v2-surface-active) 78%, transparent);
+  background: var(--accent-tint);
+  box-shadow: 0 0 0 7px var(--accent-tint);
+}
+
+#editorView #editor .ProseMirror > [data-block-id].has-local-finding.is-evidence {
+  background: var(--warning-tint);
+  box-shadow: 0 0 0 7px var(--warning-tint);
 }
 
 #editorView .anno-mark,
