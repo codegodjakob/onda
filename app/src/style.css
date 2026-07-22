@@ -2383,104 +2383,75 @@ body.zen #minimap, body.zen #lane { display: none; }
 }
 
 @media (max-width: 760px) {
-  .onda-sidebar {
+  #ondaSidebar {
     position: fixed;
-    top: 0;
-    left: 0;
-    bottom: 0;
+    inset: 0 auto 0 0;
     z-index: 60;
+    width: var(--sidebar-width);
+    max-width: 86vw;
+    margin-left: 0;
+    transform: translateX(0);
+    transition: transform var(--dur-normal) var(--ease-out);
     box-shadow: var(--shadow-xl);
   }
 
-  .structure-shelf-header {
-    padding: 18px 20px 14px;
+  #editorView.is-sidebar-collapsed #ondaSidebar {
+    transform: translateX(-100%);
+    box-shadow: none;
   }
 
-  .structure-blocks {
-    padding-inline: 12px;
+  /* visual dim only — never blocks the editor */
+  #editorView::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: 55;
+    background: rgba(28, 26, 23, .28);
+    opacity: 1;
+    transition: opacity var(--dur-normal) var(--ease-out);
+    pointer-events: none;
   }
+  #editorView.is-sidebar-collapsed::before { opacity: 0; }
 
-  #editorView #page {
-    width: 100%;
-    padding: 44px 24px 34vh;
-  }
+  .onda-editor-col { width: 100%; min-width: 0; }
 
-  #editorView #title {
-    font-size: 28px;
-  }
+  #editorView #page { width: 100%; padding: 44px 24px 34vh; }
+  #editorView #title { font-size: 28px; }
 
   #agentWidget,
   #evidenceWindow {
+    left: 12px;
     right: 12px;
-    width: calc(100vw - 24px);
+    width: auto;
     max-height: 70dvh;
   }
+  #agentWidget { top: 62px; height: 70dvh; min-height: 0; }
+  #evidenceWindow { top: 62px; }
 
-  #agentWidget {
-    top: 62px;
-    height: 70dvh;
-    min-height: 0;
-  }
-
-  #evidenceWindow {
-    top: 62px;
-  }
-
-  .semantic-insert-menu {
-    width: min(214px, calc(100vw - 20px));
-  }
-
+  .semantic-insert-menu { width: min(214px, calc(100vw - 20px)); }
   .local-finding,
-  .local-suggestion {
-    max-width: calc(100vw - 32px);
-  }
+  .local-suggestion { max-width: calc(100vw - 32px); }
+  .suggestion-version { grid-template-columns: 74px minmax(0, 1fr); gap: 8px; }
 
-  .suggestion-version {
-    grid-template-columns: 74px minmax(0, 1fr);
-    gap: 8px;
-  }
-}
-
-@media (max-width: 760px) {
-  .icon-button,
+  .onda-icon-btn,
   .block-insert,
   .block-insert-trigger,
   .suggestion-action,
   .agent-chat-send,
   .surface-close {
-    width: 44px;
-    min-width: 44px;
-    height: 44px;
-    min-height: 44px;
+    width: 44px; min-width: 44px; height: 44px; min-height: 44px;
   }
-
-  .agent-chat-form {
-    grid-template-columns: minmax(0, 1fr) 44px;
-  }
-
+  .agent-chat-form { grid-template-columns: minmax(0, 1fr) 44px; }
   .block-insert-trigger,
   .block-insert-trigger:hover {
-    border-color: transparent;
-    background: transparent;
-    box-shadow: none;
-    opacity: 1;
-    pointer-events: auto;
+    border-color: transparent; background: transparent; box-shadow: none;
+    opacity: 1; pointer-events: auto;
   }
-
-  .block-insert-trigger.is-typing:not(:focus-visible) {
-    opacity: 1;
-    pointer-events: auto;
-  }
-
+  .block-insert-trigger.is-typing:not(:focus-visible) { opacity: 1; pointer-events: auto; }
   .block-insert-trigger::before {
-    content: '';
-    position: absolute;
-    width: 26px;
-    height: 26px;
-    border: 1px solid var(--v2-line-strong);
-    border-radius: 50%;
-    background: var(--v2-surface);
-    box-shadow: 0 2px 10px rgba(31, 39, 46, .06);
+    content: ''; position: absolute; width: 26px; height: 26px;
+    border: 1px solid var(--border-strong); border-radius: 50%;
+    background: var(--bg-surface); box-shadow: var(--shadow-sm);
   }
 }
 
@@ -2509,20 +2480,23 @@ body.zen #minimap, body.zen #lane { display: none; }
     color: #000 !important;
   }
 
-  .onda-sidebar,
+  #ondaSidebar,
   .onda-topbar,
   #agentWidget,
   #evidenceWindow,
   #blockInsertLayer,
   #localAgentLayer,
   .semantic-insert-menu,
-  #saveAlert {
+  #pvModal,
+  #saveAlert,
+  #editorView::before {
     display: none !important;
   }
 
   #app,
   #editorView,
   .onda-editor-col,
+  #editorView #main,
   #editorView #scroll,
   #editorView #page {
     display: block !important;
