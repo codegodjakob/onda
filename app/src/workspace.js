@@ -144,15 +144,16 @@ function setLocalFindingDecoration(blockId, spacing = 0, force = false) {
 
 function elements() {
   return {
-    back: document.getElementById('workspaceBack'),
-    path: document.getElementById('workspacePath'),
-    body: document.getElementById('workspaceBody'),
-    shelf: document.getElementById('structureShelf'),
-    main: document.getElementById('main'),
+    view: document.getElementById('editorView'),
+    sidebar: document.getElementById('ondaSidebar'),
+    back: document.getElementById('sidebarBack'),
+    collapse: document.getElementById('sidebarCollapse'),
+    reopen: document.getElementById('sidebarReopen'),
+    structureNav: document.getElementById('structureNav'),
     scroll: document.getElementById('scroll'),
     insertLayer: document.getElementById('blockInsertLayer'),
     localLayer: document.getElementById('localAgentLayer'),
-    agentPresence: document.getElementById('agentPresence'),
+    agentPresence: document.getElementById('ondaAura'),
     agentWidget: document.getElementById('agentWidget'),
     evidenceWindow: document.getElementById('evidenceWindow'),
   }
@@ -1718,22 +1719,18 @@ export function refreshWorkspace({ reconcileEditing = false } = {}) {
   if (reconcileEditing) reconcilePersistedEditingFinding()
   enforceExclusiveLayers(workspace)
 
-  const project = ctx.activeProjectObj()
   const ui = elements()
-  const liveTitle = document.getElementById('title')?.value.trim()
-  const documentTitle = liveTitle || ctx.docTitle(doc)
-  if (ui.path) ui.path.textContent = `${project?.name || 'Projekt'} / ${documentTitle}`
+  const project = ctx.activeProjectObj()
+  const backLabel = ui.back?.querySelector('.onda-side-back-label')
+  if (backLabel) backLabel.textContent = project?.name || 'Projekt'
 
-  setLayerVisibility(ui.shelf, workspace.shelfOpen)
-  ui.body?.classList.toggle('is-shelf-open', workspace.shelfOpen)
-  ui.body?.classList.toggle('is-agent-open', workspace.agent.open)
-  ui.body?.classList.toggle('is-evidence-open', Boolean(workspace.evidenceFindingId))
-  ui.path?.setAttribute('aria-expanded', String(workspace.shelfOpen))
+  ui.view?.classList.toggle('is-agent-open', workspace.agent.open)
+  ui.view?.classList.toggle('is-evidence-open', Boolean(workspace.evidenceFindingId))
 
   setLayerVisibility(ui.agentWidget, workspace.agent.open)
   ui.agentPresence?.setAttribute('aria-expanded', String(workspace.agent.open))
   setLayerVisibility(ui.evidenceWindow, Boolean(workspace.evidenceFindingId))
-  const localPaused = Boolean(workspace.shelfOpen || workspace.agent.open || workspace.evidenceFindingId)
+  const localPaused = Boolean(workspace.agent.open || workspace.evidenceFindingId)
   ui.localLayer?.classList.toggle('is-paused', localPaused)
   ui.localLayer?.setAttribute('aria-hidden', String(localPaused))
 
@@ -1772,37 +1769,9 @@ export function initWorkspace(context) {
     cleanups.push(() => ctx?.editor?.off(type, handler))
   }
 
-  const openShelf = () => {
-    const workspace = activeWorkspace()
-    if (!workspace) return
-    const changed = !workspace.shelfOpen
-      || workspace.agent.open
-      || Boolean(workspace.evidenceFindingId)
-      || hasLocalDepth(workspace)
-    workspace.shelfOpen = true
-    workspace.agent.open = false
-    workspace.evidenceFindingId = null
-    closeLocalDepth(workspace)
-    if (!changed) return
-    closeInsertMenu({ restoreFocus: false })
-    refreshWorkspace()
-    persistWorkspace()
-  }
-
-  const closeShelf = () => {
-    const workspace = activeWorkspace()
-    if (!workspace || !workspace.shelfOpen) return false
-    workspace.shelfOpen = false
-    closeInsertMenu({ restoreFocus: false })
-    refreshWorkspace()
-    persistWorkspace()
-    return true
-  }
-
   const closeTopLayer = () => {
     const workspace = activeWorkspace()
     if (!workspace) return false
-    let restoreShelfFocus = false
     if (workspace.suggestionFindingId) {
       const findingId = workspace.suggestionFindingId
       workspace.suggestionFindingId = null
@@ -1822,14 +1791,10 @@ export function initWorkspace(context) {
       if (message) dismissAgentMessage(workspace, message.id)
       else workspace.agent.open = false
       agentPresenceFocusRequest = true
-    } else if (workspace.shelfOpen) {
-      restoreShelfFocus = Boolean(ui.shelf?.contains(document.activeElement))
-      workspace.shelfOpen = false
     } else {
       return false
     }
     refreshWorkspace()
-    if (restoreShelfFocus) ui.path?.focus({ preventScroll: true })
     persistWorkspace()
     return true
   }
@@ -1838,8 +1803,6 @@ export function initWorkspace(context) {
     activeDocumentId: null,
     inputByDocument: new Map(),
     destroyed: false,
-    openShelf,
-    closeShelf,
     closeTopLayer,
     invalidateInitiative(options) {
       invalidateAgentInitiative(options)
@@ -1863,9 +1826,6 @@ export function initWorkspace(context) {
     ctx.flushSave()
     ctx.showHomeView()
   }
-  const onPath = () => {
-    if (!closeShelf()) openShelf()
-  }
   const onAgentPresence = () => {
     const workspace = activeWorkspace()
     if (!workspace) return
@@ -1883,6 +1843,23 @@ export function initWorkspace(context) {
     refreshWorkspace()
     persistWorkspace()
   }
+
+  const applySidebarCollapsed = collapsed => {
+    ui.view?.classList.toggle('is-sidebar-collapsed', collapsed)
+    ui.collapse?.setAttribute('aria-expanded', String(!collapsed))
+    ui.reopen?.setAttribute('aria-expanded', String(!collapsed))
+    if (ui.reopen) ui.reopen.hidden = !collapsed
+  }
+  const setSidebarCollapsed = collapsed => {
+    if (Boolean(ctx.state.settings.sidebarCollapsed) !== collapsed) {
+      ctx.state.settings.sidebarCollapsed = collapsed
+      ctx.persist()
+    }
+    applySidebarCollapsed(collapsed)
+  }
+  const onSidebarCollapse = () => setSidebarCollapsed(true)
+  const onSidebarReopen = () => setSidebarCollapsed(false)
+  applySidebarCollapsed(Boolean(ctx.state.settings.sidebarCollapsed))
 
   const onPointerOver = event => {
     const block = event.target.closest('[data-block-id]')
@@ -1946,8 +1923,9 @@ export function initWorkspace(context) {
   }
 
   listen(ui.back, 'click', onBack)
-  listen(ui.path, 'click', onPath)
   listen(ui.agentPresence, 'click', onAgentPresence)
+  listen(ui.collapse, 'click', onSidebarCollapse)
+  listen(ui.reopen, 'click', onSidebarReopen)
   listen(ctx.editor.view.dom, 'pointerover', onPointerOver)
   listen(ctx.editor.view.dom, 'pointerout', onPointerOut)
   listen(ctx.editor.view.dom, 'keydown', handleEditorKeyDown, true)
@@ -1955,7 +1933,7 @@ export function initWorkspace(context) {
   listen(ctx.editor.view.dom, 'compositionstart', startComposition)
   listen(ctx.editor.view.dom, 'compositionend', endComposition)
   listen(ui.scroll, 'scroll', onEditorScroll, { passive: true })
-  listen(ui.shelf, 'scroll', onShelfScroll, { passive: true })
+  listen(ui.sidebar, 'scroll', onShelfScroll, { passive: true })
   listen(window, 'resize', onResize)
   listen(document, 'aiwt:viewchange', onViewChange)
   listen(document, 'visibilitychange', onVisibilityChange)
