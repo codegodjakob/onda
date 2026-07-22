@@ -1652,6 +1652,7 @@ body.zen #minimap, body.zen #lane { display: none; }
 .local-finding {
   padding: 4px 0;
   font: 13px/1.48 var(--font-sans);
+  animation: ondaHintIn var(--dur-normal) var(--ease-out);
 }
 
 .local-finding-connector {
@@ -2474,7 +2475,11 @@ body.zen #minimap, body.zen #lane { display: none; }
 @media (prefers-reduced-motion: reduce) {
   #editorView *,
   #editorView *::before,
-  #editorView *::after {
+  #editorView *::after,
+  #pvModal,
+  #pvModal *,
+  #pvModal *::before,
+  #pvModal *::after {
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
@@ -2854,7 +2859,7 @@ button.onda-aura:focus-visible {
   color: var(--text-primary);
   box-shadow: var(--shadow-xl), var(--shadow-glow);
   overflow: hidden;
-  animation: onda-dialog-rise var(--dur-normal) var(--ease-out);
+  animation: ondaHintIn var(--dur-normal) var(--ease-out);
 }
 .onda-dialog-header {
   display: flex;
@@ -2876,7 +2881,6 @@ button.onda-aura:focus-visible {
   gap: var(--space-4);
 }
 @keyframes onda-dialog-fade { from { opacity: 0; } to { opacity: 1; } }
-@keyframes onda-dialog-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .onda-dialog-scrim, .onda-dialog { animation: none; } }
 
 .onda-pv-field { display: flex; flex-direction: column; gap: var(--space-1); }
