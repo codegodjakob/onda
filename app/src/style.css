@@ -1628,11 +1628,16 @@ body.zen #minimap, body.zen #lane { display: none; }
   transition-delay: 0s, 160ms;
 }
 
+@keyframes ondaHintIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .local-finding,
 .local-suggestion {
   position: absolute;
   pointer-events: auto;
-  color: var(--v2-text);
+  color: var(--text-primary);
   letter-spacing: 0;
 }
 
@@ -1646,7 +1651,7 @@ body.zen #minimap, body.zen #lane { display: none; }
 
 .local-finding {
   padding: 4px 0;
-  font: 13px/1.48 var(--sans);
+  font: 13px/1.48 var(--font-sans);
 }
 
 .local-finding-connector {
@@ -1655,7 +1660,7 @@ body.zen #minimap, body.zen #lane { display: none; }
   left: -27px;
   width: 20px;
   height: 1px;
-  background: var(--v2-line-strong);
+  background: var(--border-strong);
 }
 
 .local-finding.is-below .local-finding-connector {
@@ -1676,17 +1681,17 @@ body.zen #minimap, body.zen #lane { display: none; }
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: var(--v2-text-soft);
+  color: var(--text-secondary);
   font: inherit;
   letter-spacing: 0;
   text-align: left;
-  transition: color 160ms var(--ease), background 160ms var(--ease);
+  transition: color var(--dur-quick) var(--ease-out), background var(--dur-quick) var(--ease-out);
 }
 
 .local-finding-summary:hover,
 .local-finding-summary:focus-visible {
-  color: var(--v2-text);
-  background: color-mix(in srgb, var(--v2-surface-soft) 72%, transparent);
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--bg-hover) 72%, transparent);
 }
 
 .local-finding-summary:focus-visible,
@@ -1700,17 +1705,18 @@ body.zen #minimap, body.zen #lane { display: none; }
 }
 
 .local-finding-disclosure {
-  color: var(--v2-text-soft);
-  font: 16px/1.2 var(--sans);
+  color: var(--text-tertiary);
+  font: 16px/1.2 var(--font-sans);
   text-align: center;
 }
 
 .local-finding.is-expanded {
   padding: 7px;
-  border: 1px solid var(--v2-line);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--v2-surface) 96%, transparent);
-  box-shadow: 0 8px 24px rgba(31, 39, 46, .06);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-panel);
+  background: var(--surface);
+  box-shadow: var(--shadow-xl), var(--shadow-glow);
+  animation: ondaHintIn var(--dur-normal) var(--ease-out);
 }
 
 .local-finding-detail {
@@ -1727,13 +1733,13 @@ body.zen #minimap, body.zen #lane { display: none; }
   overflow: hidden;
   margin: 6px 5px 2px;
   padding-top: 11px;
-  border-top: 1px solid var(--v2-line);
+  border-top: 1px solid var(--border-subtle);
 }
 
 .local-dialogue-title {
   margin: 0;
-  color: var(--v2-text-soft);
-  font: 11px/1.35 var(--sans);
+  color: var(--text-secondary);
+  font: 11px/1.35 var(--font-sans);
 }
 
 .local-dialogue-messages,
@@ -1757,7 +1763,7 @@ body.zen #minimap, body.zen #lane { display: none; }
   bottom: 0;
   z-index: 1;
   padding-top: 2px;
-  background: var(--v2-surface);
+  background: var(--surface);
   scroll-margin-block: 14px;
 }
 
@@ -1774,14 +1780,14 @@ body.zen #minimap, body.zen #lane { display: none; }
 .agent-message-role,
 .evidence-kicker,
 .evidence-excerpt-label {
-  color: var(--v2-text-soft);
-  font: 10.5px/1.35 var(--sans);
+  color: var(--text-secondary);
+  font: 10.5px/1.35 var(--font-sans);
 }
 
 .agent-message-text {
   margin: 0;
-  color: var(--v2-text);
-  font: 13px/1.5 var(--sans);
+  color: var(--text-primary);
+  font: 13px/1.5 var(--font-sans);
   overflow-wrap: anywhere;
 }
 
@@ -1798,40 +1804,34 @@ body.zen #minimap, body.zen #lane { display: none; }
   min-width: 0;
   height: 34px;
   padding: 6px 9px;
-  border: 1px solid var(--v2-line-strong);
-  border-radius: 6px;
-  background: var(--v2-canvas);
-  color: var(--v2-text);
-  font: 13px/1.4 var(--sans);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface-inset);
+  color: var(--text-primary);
+  font: 13px/1.4 var(--font-sans);
   letter-spacing: 0;
 }
 
 .agent-chat-input:focus {
   border-color: var(--accent);
-  outline: 2px solid color-mix(in srgb, var(--accent) 20%, transparent);
-  outline-offset: 0;
+  outline: none;
+  box-shadow: var(--shadow-focus);
 }
 
 .agent-chat-send,
 .surface-close {
-  width: 32px;
-  height: 32px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: 0;
-  border-radius: 7px;
+  width: 32px; height: 32px;
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0; border: 0;
+  border-radius: var(--radius-control);
   background: transparent;
-  color: var(--v2-text-soft);
-  font: 17px/1 var(--sans);
+  color: var(--text-tertiary);
+  font: 17px/1 var(--font-sans);
+  transition: color var(--dur-quick) var(--ease-out), background var(--dur-quick) var(--ease-out);
 }
 
 .agent-chat-send:hover,
-.surface-close:hover {
-  color: var(--v2-text);
-  background: var(--v2-surface-soft);
-}
+.surface-close:hover { color: var(--text-primary); background: var(--bg-hover); }
 
 .agent-chat-send:focus-visible,
 .surface-close:focus-visible {
@@ -1846,8 +1846,8 @@ body.zen #minimap, body.zen #lane { display: none; }
 
 .local-finding-detail-label,
 .suggestion-version-label {
-  color: var(--v2-text-soft);
-  font: 11px/1.3 var(--sans);
+  color: var(--text-secondary);
+  font: 11px/1.3 var(--font-sans);
   letter-spacing: 0;
 }
 
@@ -1855,8 +1855,8 @@ body.zen #minimap, body.zen #lane { display: none; }
 .suggestion-version-text,
 .local-finding-error {
   margin: 0;
-  color: var(--v2-text);
-  font: 13px/1.48 var(--sans);
+  color: var(--text-primary);
+  font: 13px/1.48 var(--font-sans);
   letter-spacing: 0;
   overflow-wrap: anywhere;
 }
@@ -1864,9 +1864,10 @@ body.zen #minimap, body.zen #lane { display: none; }
 .local-suggestion {
   min-width: 0;
   padding: 13px 0 10px;
-  border-top: 1px solid var(--v2-line-strong);
-  border-bottom: 1px solid var(--v2-line);
-  background: color-mix(in srgb, var(--v2-canvas) 96%, var(--v2-surface));
+  border-top: 1px solid var(--border-default);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-2);
+  animation: ondaHintIn var(--dur-normal) var(--ease-out);
 }
 
 .suggestion-versions {
@@ -1882,7 +1883,7 @@ body.zen #minimap, body.zen #lane { display: none; }
 }
 
 .suggestion-version-text {
-  font-family: var(--doc-font);
+  font-family: var(--font-sans);
   font-size: 15px;
   line-height: 1.55;
 }
@@ -1896,11 +1897,13 @@ body.zen #minimap, body.zen #lane { display: none; }
 }
 
 .suggestion-old-change {
-  background: var(--v2-peach);
+  background: var(--danger-tint);
+  text-decoration: line-through;
+  text-decoration-color: var(--danger);
 }
 
 .suggestion-new-change {
-  background: var(--v2-mint);
+  background: var(--success-tint);
 }
 
 .suggestion-actions {
@@ -1911,24 +1914,15 @@ body.zen #minimap, body.zen #lane { display: none; }
 }
 
 .suggestion-action {
-  width: 30px;
-  height: 30px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--v2-text-soft);
-  font: 16px/1 var(--sans);
-  transition: color 160ms var(--ease), background 160ms var(--ease);
+  width: 30px; height: 30px;
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0; border: 0; border-radius: var(--radius-pill);
+  background: transparent; color: var(--text-tertiary);
+  font: 16px/1 var(--font-sans);
+  transition: color var(--dur-quick) var(--ease-out), background var(--dur-quick) var(--ease-out);
 }
 
-.suggestion-action:hover {
-  color: var(--v2-text);
-  background: var(--v2-surface-soft);
-}
+.suggestion-action:hover { color: var(--text-primary); background: var(--bg-hover); }
 
 .suggestion-action:disabled {
   opacity: .42;
@@ -1940,22 +1934,22 @@ body.zen #minimap, body.zen #lane { display: none; }
   gap: 7px;
   margin: 10px 5px 3px;
   padding-top: 10px;
-  border-top: 1px solid var(--v2-line);
+  border-top: 1px solid var(--border-subtle);
 }
 
 .own-version-title,
 .integrity-risk-title,
 .unplaced-findings-title {
-  color: var(--v2-text);
-  font: 500 12px/1.4 var(--sans);
+  color: var(--text-primary);
+  font: 500 12px/1.4 var(--font-sans);
 }
 
 .own-version-message,
 .integrity-risk-consequence,
 .unplaced-finding-text {
   margin: 0;
-  color: var(--v2-text-soft);
-  font: 12px/1.5 var(--sans);
+  color: var(--text-secondary);
+  font: 12px/1.5 var(--font-sans);
   overflow-wrap: anywhere;
 }
 
@@ -1970,16 +1964,16 @@ body.zen #minimap, body.zen #lane { display: none; }
   gap: 9px;
   margin-top: 12px;
   padding: 12px;
-  border: 1px solid var(--v2-line-strong);
+  border: 1px solid var(--border-strong);
   border-radius: 7px;
-  background: var(--v2-surface-soft);
+  background: var(--bg-hover);
 }
 
 .integrity-risk-reason-label {
   display: grid;
   gap: 5px;
-  color: var(--v2-text-soft);
-  font: 11px/1.4 var(--sans);
+  color: var(--text-secondary);
+  font: 11px/1.4 var(--font-sans);
 }
 
 .integrity-risk-reason {
@@ -1987,11 +1981,11 @@ body.zen #minimap, body.zen #lane { display: none; }
   min-height: 58px;
   resize: vertical;
   padding: 7px 8px;
-  border: 1px solid var(--v2-line-strong);
+  border: 1px solid var(--border-strong);
   border-radius: 6px;
-  background: var(--v2-surface);
-  color: var(--v2-text);
-  font: 12px/1.45 var(--sans);
+  background: var(--surface);
+  color: var(--text-primary);
+  font: 12px/1.45 var(--font-sans);
 }
 
 .integrity-risk-actions {
@@ -2005,24 +1999,24 @@ body.zen #minimap, body.zen #lane { display: none; }
 .integrity-risk-confirm {
   min-height: 32px;
   padding: 6px 9px;
-  border: 1px solid var(--v2-line-strong);
+  border: 1px solid var(--border-strong);
   border-radius: 6px;
-  color: var(--v2-text);
-  background: var(--v2-surface);
-  font: 11px/1.35 var(--sans);
+  color: var(--text-primary);
+  background: var(--surface);
+  font: 11px/1.35 var(--font-sans);
 }
 
 .integrity-risk-confirm {
-  background: var(--v2-text);
-  color: var(--v2-surface);
+  background: var(--text-primary);
+  color: var(--surface);
 }
 
 .local-finding-error {
   margin-top: 9px;
   padding: 7px 9px;
-  border-left: 2px solid var(--v2-line-strong);
-  color: var(--v2-text-soft);
-  background: var(--v2-surface-soft);
+  border-left: 2px solid var(--border-strong);
+  color: var(--text-secondary);
+  background: var(--surface-2);
 }
 
 .block-insert-trigger {
