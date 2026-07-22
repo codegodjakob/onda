@@ -2102,10 +2102,11 @@ body.zen #minimap, body.zen #lane { display: none; }
   width: min(380px, calc(100vw - 40px));
   max-height: min(620px, calc(100dvh - 104px));
   overflow: hidden;
-  background: var(--v2-surface);
-  border: 1px solid var(--v2-line-strong);
-  border-radius: 8px;
-  box-shadow: 0 18px 48px rgba(31, 39, 46, .13), 0 2px 8px rgba(31, 39, 46, .06);
+  background: var(--surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-panel);
+  box-shadow: var(--shadow-xl), var(--shadow-glow);
+  animation: ondaHintIn var(--dur-normal) var(--ease-out);
 }
 
 #agentWidget {
@@ -2131,13 +2132,13 @@ body.zen #minimap, body.zen #lane { display: none; }
   justify-content: space-between;
   gap: 12px;
   padding: 8px 10px 8px 16px;
-  border-bottom: 1px solid var(--v2-line);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .agent-widget-title,
 .evidence-title {
-  color: var(--v2-text);
-  font: 500 14px/1.4 var(--sans);
+  color: var(--text-primary);
+  font: var(--fw-semibold) 14px/1.4 var(--font-sans);
   letter-spacing: 0;
 }
 
@@ -2152,7 +2153,24 @@ body.zen #minimap, body.zen #lane { display: none; }
 .agent-widget-form {
   flex: none;
   padding: 12px;
-  border-top: 1px solid var(--v2-line);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.agent-widget-form .agent-chat-input {
+  height: 38px;
+  border-radius: var(--radius-pill);
+  padding: 6px 14px;
+}
+
+.agent-widget-form .agent-chat-send {
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.agent-widget-form .agent-chat-send:hover {
+  background: var(--accent-hover);
+  color: var(--on-accent);
 }
 
 .unplaced-findings {
@@ -2162,8 +2180,8 @@ body.zen #minimap, body.zen #lane { display: none; }
   display: grid;
   gap: 8px;
   padding: 13px 16px;
-  border-bottom: 1px solid var(--v2-line);
-  background: color-mix(in srgb, var(--v2-surface-soft) 54%, transparent);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-2);
 }
 
 .unplaced-finding {
@@ -2172,7 +2190,7 @@ body.zen #minimap, body.zen #lane { display: none; }
 }
 
 .unplaced-finding-kind {
-  color: var(--v2-text-soft);
+  color: var(--text-tertiary);
   font: 10.5px/1.35 var(--sans);
 }
 
@@ -2180,7 +2198,7 @@ body.zen #minimap, body.zen #lane { display: none; }
 .evidence-empty {
   margin: 0;
   padding: 16px;
-  color: var(--v2-text-soft);
+  color: var(--text-secondary);
   font: 13px/1.5 var(--sans);
 }
 
