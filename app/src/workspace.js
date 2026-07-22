@@ -11,6 +11,7 @@ import {
   resolveFindingBlock,
   resolveFindingPlacement,
   shouldOpenAgentWidget,
+  structureHintMap,
 } from './workspace-model.mjs'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
@@ -43,7 +44,7 @@ let typingTimer = null
 let triggerFrame = null
 let isTyping = false
 let isComposing = false
-let shelfRenderState = null
+let structureNavState = null
 let localDecoratedDocId = null
 let localDecoratedFindingId = null
 let localDecoratedBlockId = null
@@ -404,80 +405,68 @@ function openInsertMenu(afterBlockId, opener) {
   menu.querySelector('button')?.focus()
 }
 
-function createShelfBlockNodes(block) {
+function createNavBlockNode(block) {
   const preview = createNode('button', 'block-preview')
   preview.type = 'button'
   preview.dataset.blockId = block.id
   const excerpt = createNode('span', 'block-preview-excerpt')
   const role = createNode('span', 'block-preview-role')
-  preview.append(excerpt, role)
+  const hint = createNode('span', 'block-preview-hint')
+  hint.setAttribute('aria-hidden', 'true')
+  preview.append(excerpt, role, hint)
   preview.addEventListener('click', () => focusBlock(block.id))
-
-  const insert = createNode('button', 'block-insert', '+')
-  insert.type = 'button'
-  insert.dataset.afterBlockId = block.id
-  insert.setAttribute('aria-label', 'Textbaustein danach einfügen')
-  insert.title = 'Textbaustein einfügen'
-  insert.addEventListener('click', () => openInsertMenu(block.id, insert))
-  return { preview, excerpt, role, insert }
+  return { preview, excerpt, role, hint }
 }
 
-function updateShelfBlockNodes(nodes, block, activeBlockId) {
+function updateNavBlockNode(nodes, block, activeBlockId, hintKind) {
   const roleLabel = ROLE_LABELS.get(block.role) || 'Freier Absatz'
   const excerpt = block.excerpt || 'Noch leer'
-  nodes.preview.setAttribute('aria-label', `${roleLabel}: ${excerpt}`)
-  if (block.id === activeBlockId) {
-    nodes.preview.setAttribute('aria-current', 'true')
-  } else {
-    nodes.preview.removeAttribute('aria-current')
-  }
+  const hintLabel = hintKind === 'evidence'
+    ? ' — Beleg offen'
+    : hintKind === 'style' ? ' — Formulierung offen' : ''
+  nodes.preview.setAttribute('aria-label', `${roleLabel}: ${excerpt}${hintLabel}`)
+  if (block.id === activeBlockId) nodes.preview.setAttribute('aria-current', 'true')
+  else nodes.preview.removeAttribute('aria-current')
   nodes.excerpt.textContent = excerpt
   nodes.excerpt.classList.toggle('is-empty', !block.excerpt)
   nodes.role.textContent = roleLabel
+  nodes.preview.classList.toggle('has-hint', Boolean(hintKind))
+  nodes.hint.dataset.hint = hintKind || ''
 }
 
-function rebuildStructureShelf(ui, doc, blocks) {
-  const scrollTop = ui.shelf.scrollTop
-  const header = createNode('header', 'structure-shelf-header')
-  const label = createNode('span', 'structure-shelf-label', 'Strukturablage')
-  const title = createNode('strong', 'structure-shelf-title')
-  header.append(label, title)
-
-  const list = createNode('div', 'structure-blocks')
+function rebuildStructureNav(list, doc, blocks) {
   const blockNodes = new Map()
-  if (!blocks.length) list.append(createNode('p', 'structure-shelf-empty', 'Noch keine Textabschnitte.'))
+  const children = []
+  if (!blocks.length) children.push(createNode('p', 'structure-nav-empty', 'Noch keine Textabschnitte.'))
   blocks.forEach(block => {
-    const nodes = createShelfBlockNodes(block)
+    const nodes = createNavBlockNode(block)
     blockNodes.set(block.id, nodes)
-    list.append(nodes.preview, nodes.insert)
+    children.push(nodes.preview)
   })
-
-  ui.shelf.replaceChildren(header, list)
-  ui.shelf.scrollTop = scrollTop
-  shelfRenderState = {
-    docId: doc.id,
-    ids: blocks.map(block => block.id),
-    title,
-    blockNodes,
-  }
+  list.replaceChildren(...children)
+  structureNavState = { docId: doc.id, ids: blocks.map(block => block.id), blockNodes }
 }
 
-function renderStructureShelf() {
-  const ui = elements()
+function renderStructureNav() {
+  const nav = document.getElementById('structureNav')
   const workspace = activeWorkspace()
-  if (!ui.shelf || !workspace?.shelfOpen) return
+  if (!nav || !workspace) return
+  const doc = ctx.activeDoc()
+  if (!doc) return
+  let list = nav.querySelector('.structure-nav-list')
+  if (!list) { list = createNode('div', 'structure-nav-list'); nav.append(list) }
 
   const blocks = getEditorBlocks(ctx.editor).filter(block => block.id)
-  const doc = ctx.activeDoc()
   const ids = blocks.map(block => block.id)
-  const orderChanged = shelfRenderState?.docId !== doc.id
-    || shelfRenderState.ids.length !== ids.length
-    || ids.some((id, index) => shelfRenderState.ids[index] !== id)
-  if (orderChanged) rebuildStructureShelf(ui, doc, blocks)
+  const orderChanged = structureNavState?.docId !== doc.id
+    || structureNavState.ids.length !== ids.length
+    || ids.some((id, index) => structureNavState.ids[index] !== id)
+  if (orderChanged) rebuildStructureNav(list, doc, blocks)
 
-  shelfRenderState.title.textContent = ctx.docTitle(doc)
+  const hints = structureHintMap(doc, blocks)
   blocks.forEach(block => {
-    updateShelfBlockNodes(shelfRenderState.blockNodes.get(block.id), block, workspace.activeBlockId)
+    const nodes = structureNavState.blockNodes.get(block.id)
+    if (nodes) updateNavBlockNode(nodes, block, workspace.activeBlockId, hints.get(block.id) || null)
   })
 }
 
@@ -1758,7 +1747,7 @@ export function refreshWorkspace({ reconcileEditing = false } = {}) {
     ctx.editor.view.dispatch(ctx.editor.state.tr.setMeta(activeBlockKey, activeBlockId))
   }
 
-  renderStructureShelf()
+  renderStructureNav()
   renderLocalFinding()
   renderAgentWidget()
   renderEvidenceWindow()
@@ -1992,7 +1981,7 @@ export function initWorkspace(context) {
     triggerFrame = null
     isTyping = false
     isComposing = false
-    shelfRenderState = null
+    structureNavState = null
     localDecoratedDocId = null
     localDecoratedFindingId = null
     localDecoratedBlockId = null
