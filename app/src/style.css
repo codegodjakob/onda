@@ -1780,7 +1780,7 @@ body.zen #minimap, body.zen #lane { display: none; }
 .agent-message-role,
 .evidence-kicker,
 .evidence-excerpt-label {
-  color: var(--text-secondary);
+  color: var(--text-tertiary);
   font: 10.5px/1.35 var(--font-sans);
 }
 
@@ -2206,32 +2206,36 @@ body.zen #minimap, body.zen #lane { display: none; }
   display: grid;
   gap: 5px;
   padding: 16px;
-  border-bottom: 1px solid var(--v2-line);
-  background: color-mix(in srgb, var(--v2-surface-soft) 48%, transparent);
+  border-bottom: 1px solid var(--border-subtle);
+  border-left: 3px solid var(--accent);
+  background: var(--accent-tint);
 }
 
 .evidence-claim {
   margin: 0;
-  color: var(--v2-text);
-  font: 15px/1.5 var(--doc-font);
+  color: var(--text-primary);
+  font: 15px/1.5 var(--font-sans);
   overflow-wrap: anywhere;
 }
 
 .evidence-sources {
   display: grid;
-  padding: 0 16px 8px;
+  gap: 10px;
+  padding: 12px 16px 16px;
 }
 
 .evidence-source {
   min-width: 0;
   display: grid;
   gap: 7px;
-  padding: 15px 0;
-  border-bottom: 1px solid var(--v2-line);
+  padding: 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  background: var(--surface-inset);
 }
 
 .evidence-source:last-child {
-  border-bottom: 0;
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .evidence-source-meta {
@@ -2240,30 +2244,46 @@ body.zen #minimap, body.zen #lane { display: none; }
 }
 
 .evidence-source-label {
-  color: var(--v2-text);
-  font: 500 13px/1.45 var(--sans);
+  color: var(--text-primary);
+  font: 500 13px/1.45 var(--font-sans);
   overflow-wrap: anywhere;
 }
 
 .evidence-source-type {
-  color: var(--v2-text-soft);
-  font: 11px/1.35 var(--sans);
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 9px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-default);
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  font: 11px/1.4 var(--font-sans);
 }
 
 .evidence-source-verification {
-  color: var(--v2-text-soft);
-  font: 11px/1.35 var(--sans);
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px;
+  border-radius: var(--radius-pill);
+  background: var(--success-tint);
+  color: var(--success);
+  font: 500 11px/1.4 var(--font-sans);
+  letter-spacing: var(--tracking-wide);
 }
 
 .evidence-source-verification.is-demo,
 .evidence-source-verification.is-unverified {
-  color: #6d5a2d;
+  background: var(--warning-tint);
+  color: var(--warning);
 }
 
 .evidence-source-preview {
   margin: 0;
-  color: var(--v2-text);
-  font: 13px/1.55 var(--doc-font);
+  color: var(--text-primary);
+  font: 13px/1.55 var(--font-sans);
   overflow-wrap: anywhere;
 }
 
@@ -2273,15 +2293,21 @@ body.zen #minimap, body.zen #lane { display: none; }
 }
 
 .evidence-source-note-label {
-  color: var(--v2-text-soft);
-  font: 10.5px/1.35 var(--sans);
+  color: var(--text-tertiary);
+  font: 10.5px/1.35 var(--font-sans);
 }
 
-.evidence-source-note-text,
+.evidence-source-note-text {
+  margin: 0;
+  color: var(--text-primary);
+  font: 12px/1.5 var(--font-sans);
+  overflow-wrap: anywhere;
+}
+
 .evidence-source-citation {
   margin: 0;
-  color: var(--v2-text);
-  font: 12px/1.5 var(--sans);
+  color: var(--text-primary);
+  font: 12px/1.5 var(--font-mono);
   overflow-wrap: anywhere;
 }
 
@@ -2293,19 +2319,20 @@ body.zen #minimap, body.zen #lane { display: none; }
 
 .evidence-copy {
   width: fit-content;
-  padding: 4px 7px;
-  border: 1px solid var(--v2-line);
-  border-radius: 6px;
+  padding: 5px 10px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-control);
   background: transparent;
-  color: var(--v2-text-soft);
-  font: 11px/1.35 var(--sans);
-  letter-spacing: 0;
+  color: var(--text-secondary);
+  font: 11px/1.35 var(--font-sans);
+  transition: color var(--dur-quick) var(--ease-out), border-color var(--dur-quick) var(--ease-out), background var(--dur-quick) var(--ease-out);
 }
 
 .evidence-copy:hover,
 .evidence-copy:focus-visible {
-  border-color: var(--v2-line-strong);
-  color: var(--v2-text);
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+  background: var(--bg-hover);
 }
 
 .evidence-copy:focus-visible {
@@ -2315,8 +2342,8 @@ body.zen #minimap, body.zen #lane { display: none; }
 
 .evidence-source-link {
   width: fit-content;
-  color: var(--accent);
-  font: 12px/1.4 var(--sans);
+  color: var(--text-link);
+  font: 12px/1.4 var(--font-sans);
   text-decoration: none;
 }
 
