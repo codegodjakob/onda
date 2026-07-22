@@ -9,6 +9,7 @@ import {
   dismissAgentMessage,
   ensureWorkspaceState,
   findBlockForTarget,
+  hasUnseenInitiative,
   normalizeThread,
   reconcileEditingFinding,
   resolveFindingBlock,
@@ -430,4 +431,28 @@ test('persisted editing finding keeps divergent block text explicitly stale', ()
       editingFinding: { ...editingFinding, status: 'stale', staleReason: 'text-diverged' },
     },
   )
+})
+
+test('hasUnseenInitiative flags a new, undismissed message while the widget is closed', () => {
+  const workspace = {
+    agent: {
+      open: false,
+      dismissedIds: [],
+      messages: [{ id: 'm1', status: 'new', text: 'Hinweis', thread: [] }],
+    },
+  }
+  assert.equal(hasUnseenInitiative(workspace), true)
+
+  workspace.agent.open = true
+  assert.equal(hasUnseenInitiative(workspace), false, 'open widget is already seen')
+
+  workspace.agent.open = false
+  workspace.agent.dismissedIds = ['m1']
+  assert.equal(hasUnseenInitiative(workspace), false, 'dismissed message is not unseen')
+
+  workspace.agent.dismissedIds = []
+  workspace.agent.messages[0].status = 'seen'
+  assert.equal(hasUnseenInitiative(workspace), false, 'non-new message is not unseen')
+
+  assert.equal(hasUnseenInitiative(null), false)
 })

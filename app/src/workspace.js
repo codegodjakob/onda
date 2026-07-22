@@ -6,6 +6,7 @@ import {
   createEditingFindingState,
   dismissAgentMessage,
   ensureWorkspaceState,
+  hasUnseenInitiative,
   reconcileEditingFinding,
   resolveFindingBlock,
   resolveFindingPlacement,
@@ -1300,6 +1301,21 @@ function renderLocalFinding() {
   scrollThreadToLatest(surface.querySelector('.local-dialogue-messages'))
 }
 
+function applyAuraState() {
+  const orb = elements().agentPresence
+  if (!orb) return
+  const workspace = activeWorkspace()
+  const active = Boolean(workspace?.agent.open)
+  const unseen = hasUnseenInitiative(workspace)
+  orb.classList.toggle('is-thinking', active)
+  orb.classList.toggle('is-quiet', !active)
+  orb.classList.toggle('has-unseen', unseen)
+  orb.setAttribute(
+    'aria-label',
+    unseen ? 'Agentengespräch öffnen (neue Anmerkung)' : 'Agentengespräch öffnen',
+  )
+}
+
 function activeAgentMessage(workspace) {
   const messages = workspace.agent.messages
   const selected = messages.find(message => message.id === workspace.agent.activeMessageId)
@@ -1729,6 +1745,7 @@ export function refreshWorkspace({ reconcileEditing = false } = {}) {
 
   setLayerVisibility(ui.agentWidget, workspace.agent.open)
   ui.agentPresence?.setAttribute('aria-expanded', String(workspace.agent.open))
+  applyAuraState()
   setLayerVisibility(ui.evidenceWindow, Boolean(workspace.evidenceFindingId))
   const localPaused = Boolean(workspace.agent.open || workspace.evidenceFindingId)
   ui.localLayer?.classList.toggle('is-paused', localPaused)

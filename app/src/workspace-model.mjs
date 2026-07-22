@@ -285,3 +285,12 @@ export function dismissAgentMessage(workspace, messageId) {
   agent.open = false
   return workspace
 }
+
+export function hasUnseenInitiative(workspace) {
+  const agent = workspace?.agent
+  if (!agent || agent.open) return false
+  const dismissed = agent.dismissedIds || []
+  return (agent.messages || []).some(
+    message => message.status === 'new' && !dismissed.includes(message.id),
+  )
+}
