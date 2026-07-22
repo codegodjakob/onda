@@ -1281,24 +1281,10 @@ body.zen #minimap, body.zen #lane { display: none; }
   position: relative;
   height: 100vh;
   min-width: 0;
-  flex-direction: column;
+  flex-direction: row;
   overflow: hidden;
-  background: var(--v2-canvas);
-  color: var(--v2-text);
-}
-
-#workspaceHeader {
-  position: relative;
-  z-index: 20;
-  display: grid;
-  grid-template-columns: 36px minmax(0, 1fr) 36px;
-  align-items: center;
-  gap: 8px;
-  min-height: 52px;
-  padding: 8px 16px;
-  flex: none;
-  background: color-mix(in srgb, var(--v2-canvas) 94%, transparent);
-  border-bottom: 1px solid var(--v2-line);
+  background: var(--bg-app);
+  color: var(--text-primary);
 }
 
 .icon-button {
@@ -1358,32 +1344,6 @@ body.zen #minimap, body.zen #lane { display: none; }
 .workspace-path[aria-expanded="true"] {
   color: var(--v2-text);
   background: var(--v2-surface-soft);
-}
-
-#workspaceBody {
-  min-width: 0;
-  min-height: 0;
-  flex: 1;
-  display: grid;
-  grid-template-columns: 0 minmax(0, 1fr);
-  overflow: hidden;
-  padding-right: 0;
-  transition: grid-template-columns 240ms var(--ease), padding-right 240ms var(--ease);
-}
-
-#workspaceBody.is-shelf-open {
-  grid-template-columns: 340px minmax(0, 1fr);
-}
-
-#structureShelf {
-  grid-column: 1;
-  width: 100%;
-  min-width: 0;
-  height: 100%;
-  overflow-y: auto;
-  overflow-x: hidden;
-  background: var(--v2-canvas);
-  border-right: 1px solid var(--v2-line);
 }
 
 .structure-shelf-header {
@@ -1495,22 +1455,96 @@ body.zen #minimap, body.zen #lane { display: none; }
   font: 13px/1.5 var(--sans);
 }
 
-#structureShelf[hidden],
 #agentWidget[hidden],
 #evidenceWindow[hidden] {
   display: none;
 }
 
-#editorView #main {
-  grid-column: 2;
-  position: relative;
-  min-width: 0;
-  min-height: 0;
+/* --- Onda Rahmen: Seitenleiste + Editor-Spalte --- */
+.onda-sidebar {
+  flex: none;
+  width: var(--sidebar-width);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-4) var(--space-3);
+  background: var(--bg-surface);
+  border-right: 1px solid var(--border-default);
+  overflow-y: auto;
+  overflow-x: hidden;
+  margin-left: 0;
+  transition: margin-left var(--dur-slow) var(--ease-out);
+}
+
+#editorView.is-sidebar-collapsed .onda-sidebar {
+  margin-left: calc(-1 * var(--sidebar-width));
+}
+
+.onda-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 32px;
+}
+.onda-brand .onda-wordmark {
   flex: 1;
+  min-width: 0;
+  font: var(--fw-bold) var(--text-md)/1.2 var(--font-sans);
+  letter-spacing: var(--tracking-tight);
+  color: var(--text-primary);
+}
+.onda-brand #sidebarCollapse { flex: none; }
+
+.onda-side-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.onda-side-material { margin-top: var(--space-1); }
+
+.onda-side-footer {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+}
+.onda-side-footer .onda-side-user {
+  flex: 1;
+  min-width: 0;
+  font: var(--fw-medium) var(--text-sm)/1.2 var(--font-sans);
+  color: var(--text-primary);
+}
+
+.onda-editor-col {
+  --onda-topbar-h: 52px;
+  grid-column: auto;
+  position: relative;
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
+
+.onda-topbar {
+  flex: none;
+  height: var(--onda-topbar-h);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-4);
+}
+
+#ondaAura {
+  margin-left: auto;
+  --aura-size: 30px;
+}
+
+#sidebarReopen { flex: none; }
+#sidebarReopen[hidden] { display: none; }
 
 #editorView #scroll {
   min-width: 0;
@@ -1524,31 +1558,32 @@ body.zen #minimap, body.zen #lane { display: none; }
 }
 
 #editorView #page {
-  width: min(calc(100% - 48px), calc(var(--doc-width) + 48px));
-  max-width: calc(var(--doc-width) + 48px);
+  width: min(calc(100% - 48px), calc(var(--container-reading) + 48px));
+  max-width: calc(var(--container-reading) + 48px);
   min-height: 100%;
   margin: 0 auto;
   padding: 68px 24px 38vh;
 }
 
 #editorView #title {
-  color: var(--v2-text);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
   margin-bottom: 24px;
-  letter-spacing: 0;
+  letter-spacing: var(--tracking-tight);
 }
 
 #editorView #title::placeholder,
 #editorView #editor .ProseMirror p.is-editor-empty:first-child::before {
-  color: var(--v2-text-soft);
+  color: var(--text-tertiary);
 }
 
 #editorView #editor .ProseMirror {
   width: 100%;
-  font-family: var(--doc-font);
-  font-size: 18px;
-  line-height: 1.76;
+  font-family: var(--font-sans);
+  font-size: 16.5px;
+  line-height: 1.7;
   letter-spacing: 0;
-  color: var(--v2-text);
+  color: var(--text-primary);
   caret-color: var(--accent);
 }
 
@@ -1582,7 +1617,10 @@ body.zen #minimap, body.zen #lane { display: none; }
 #blockInsertLayer,
 #localAgentLayer {
   position: absolute;
-  inset: 0;
+  top: var(--onda-topbar-h, 52px);
+  right: 0;
+  bottom: 0;
+  left: 0;
   z-index: 8;
   pointer-events: none;
 }
@@ -2305,44 +2343,20 @@ body.zen #minimap, body.zen #lane { display: none; }
 }
 
 @media (min-width: 761px) {
-  #workspaceBody.is-agent-open,
-  #workspaceBody.is-evidence-open {
+  #editorView.is-agent-open .onda-editor-col,
+  #editorView.is-evidence-open .onda-editor-col {
     padding-right: 420px;
   }
 }
 
 @media (max-width: 760px) {
-  #workspaceHeader {
-    padding-inline: 10px;
-  }
-
-  #workspaceBody {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: 0 minmax(0, 1fr);
-  }
-
-  #workspaceBody.is-shelf-open {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(0, min(38vh, 300px)) minmax(0, 1fr);
-  }
-
-  #structureShelf {
-    grid-column: 1;
-    grid-row: 1;
-    position: static;
-    width: 100%;
-    min-width: 0;
-    height: auto;
-    max-height: min(38vh, 300px);
-    flex: none;
-    border-right: 0;
-    border-bottom: 1px solid var(--v2-line);
-    box-shadow: none;
-  }
-
-  #editorView #main {
-    grid-column: 1;
-    grid-row: 2;
+  .onda-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 60;
+    box-shadow: var(--shadow-xl);
   }
 
   .structure-shelf-header {
@@ -2395,10 +2409,6 @@ body.zen #minimap, body.zen #lane { display: none; }
 }
 
 @media (max-width: 760px) {
-  #workspaceHeader {
-    grid-template-columns: 44px minmax(0, 1fr) 44px;
-  }
-
   .icon-button,
   .block-insert,
   .block-insert-trigger,
@@ -2462,8 +2472,8 @@ body.zen #minimap, body.zen #lane { display: none; }
     color: #000 !important;
   }
 
-  #workspaceHeader,
-  #structureShelf,
+  .onda-sidebar,
+  .onda-topbar,
   #agentWidget,
   #evidenceWindow,
   #blockInsertLayer,
@@ -2475,8 +2485,7 @@ body.zen #minimap, body.zen #lane { display: none; }
 
   #app,
   #editorView,
-  #workspaceBody,
-  #editorView #main,
+  .onda-editor-col,
   #editorView #scroll,
   #editorView #page {
     display: block !important;
