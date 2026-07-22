@@ -1,5 +1,5 @@
 import { getActiveBlockId, getEditorBlocks, insertSemanticBlock, replaceFindingTarget } from './block-identity.js'
-import { decideFinding, getFindingQueue, isIntegrityCategory } from './reasoning-model.mjs'
+import { decideFinding, ensureProjectUnderstanding, getFindingQueue, isIntegrityCategory } from './reasoning-model.mjs'
 import {
   appendThreadMessage,
   completeEditingFinding,
@@ -59,6 +59,7 @@ let pendingParagraphBoundaryDocId = null
 let evidenceFocusRequest = false
 let evidenceReturnFindingId = null
 let riskConfirmationFocusRequest = false
+let ondaDialog = null
 
 const AGENT_IDLE_MS = 3000
 const AGENT_BOUNDARY_IDLE_MS = 300
@@ -468,6 +469,109 @@ function renderStructureNav() {
     const nodes = structureNavState.blockNodes.get(block.id)
     if (nodes) updateNavBlockNode(nodes, block, workspace.activeBlockId, hints.get(block.id) || null)
   })
+}
+
+function closeOndaDialog({ restoreFocus = true } = {}) {
+  if (!ondaDialog) return false
+  const { scrim, opener, keyHandler } = ondaDialog
+  document.removeEventListener('keydown', keyHandler, true)
+  scrim.remove()
+  ondaDialog = null
+  if (restoreFocus && opener?.isConnected) opener.focus()
+  return true
+}
+
+function dialogFocusables(panel) {
+  return [...panel.querySelectorAll('button, [href], input, textarea, select, [tabindex]:not([tabindex="-1"])')]
+    .filter(node => !node.disabled && node.offsetParent !== null)
+}
+
+function openOndaDialog({ id, title, opener, build }) {
+  closeOndaDialog({ restoreFocus: false })
+  const scrim = createNode('div', 'onda-dialog-scrim')
+  const panel = createNode('section', 'onda-dialog')
+  panel.id = id
+  panel.setAttribute('role', 'dialog')
+  panel.setAttribute('aria-modal', 'true')
+  const titleId = `${id}-title`
+  panel.setAttribute('aria-labelledby', titleId)
+
+  const header = createNode('header', 'onda-dialog-header')
+  const heading = createNode('h2', 'onda-dialog-title', title)
+  heading.id = titleId
+  const close = createNode('button', 'onda-icon-btn onda-dialog-close', '×')
+  close.type = 'button'
+  close.setAttribute('aria-label', 'Schließen')
+  close.addEventListener('click', () => closeOndaDialog())
+  header.append(heading, close)
+
+  const body = createNode('div', 'onda-dialog-body')
+  build(body)
+  panel.append(header, body)
+  scrim.append(panel)
+  scrim.addEventListener('pointerdown', event => { if (event.target === scrim) closeOndaDialog() })
+
+  const keyHandler = event => {
+    if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeOndaDialog(); return }
+    if (event.key !== 'Tab') return
+    const items = dialogFocusables(panel)
+    if (!items.length) return
+    const first = items[0]
+    const last = items[items.length - 1]
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus() }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus() }
+  }
+  document.addEventListener('keydown', keyHandler, true)
+  document.getElementById('editorView').append(scrim)
+  ondaDialog = { scrim, panel, opener: opener || document.activeElement, keyHandler }
+  requestAnimationFrame(() => { (dialogFocusables(panel)[0] || close).focus({ preventScroll: true }) })
+  return panel
+}
+
+function renderProjectUnderstandingCard() {
+  const card = document.getElementById('pvCard')
+  if (!card) return
+  const project = ctx.activeProjectObj()
+  const understanding = project ? ensureProjectUnderstanding(project) : null
+  const task = understanding?.task?.trim() || ''
+  const effect = understanding?.desiredEffect?.trim() || ''
+  card.setAttribute('aria-haspopup', 'dialog')
+  card.classList.toggle('is-empty', !task)
+  card.replaceChildren(
+    createNode('span', 'onda-pv-card-title', task || 'Projektverständnis öffnen'),
+    createNode('span', 'onda-pv-card-claim', effect || 'Aufgabe, Zielgruppe und beabsichtigte Wirkung festhalten'),
+  )
+}
+
+function splitList(value, byLine) {
+  return String(value || '').split(byLine ? /\r?\n/ : ',').map(part => part.trim()).filter(Boolean)
+}
+
+function understandingField(body, label, value, onCommit, { line = false } = {}) {
+  const row = createNode('div', 'onda-pv-field')
+  row.append(createNode('span', 'onda-pv-label', label))
+  const field = createNode('textarea', 'onda-pv-input')
+  field.rows = line ? 3 : 2
+  field.value = value
+  field.setAttribute('aria-label', label)
+  field.addEventListener('input', () => onCommit(field.value))
+  row.append(field)
+  body.append(row)
+}
+
+function openProjectUnderstandingModal(opener) {
+  const project = ctx.activeProjectObj()
+  if (!project) return
+  const u = ensureProjectUnderstanding(project)
+  const commit = () => { ctx.scheduleSave(); renderProjectUnderstandingCard() }
+  openOndaDialog({ id: 'pvModal', title: 'Projektverständnis', opener, build: body => {
+    understandingField(body, 'Aufgabe', u.task, value => { u.task = value; commit() })
+    understandingField(body, 'Zielgruppe', u.audience.join(', '), value => { u.audience = splitList(value, false); commit() })
+    understandingField(body, 'Beabsichtigte Wirkung', u.desiredEffect, value => { u.desiredEffect = value; commit() })
+    understandingField(body, 'Belegstandard', u.evidenceStandard, value => { u.evidenceStandard = value; commit() })
+    understandingField(body, 'Geschützte Absicht', u.protectedIntentions.join('\n'), value => { u.protectedIntentions = splitList(value, true); commit() }, { line: true })
+    understandingField(body, 'Offene Frage', u.openQuestions.join('\n'), value => { u.openQuestions = splitList(value, true); commit() }, { line: true })
+  }})
 }
 
 function scheduleTriggerRender() {
@@ -1748,6 +1852,7 @@ export function refreshWorkspace({ reconcileEditing = false } = {}) {
   }
 
   renderStructureNav()
+  renderProjectUnderstandingCard()
   renderLocalFinding()
   renderAgentWidget()
   renderEvidenceWindow()
@@ -1944,6 +2049,7 @@ export function initWorkspace(context) {
   listen(document, 'aiwt:viewchange', onViewChange)
   listen(document, 'visibilitychange', onVisibilityChange)
   listen(document.getElementById('title'), 'input', refreshWorkspace)
+  listen(document.getElementById('pvCard'), 'click', event => openProjectUnderstandingModal(event.currentTarget))
   listenEditor('selectionUpdate', onSelectionUpdate)
   listenEditor('update', onEditorUpdate)
 
@@ -1952,6 +2058,7 @@ export function initWorkspace(context) {
     instance.destroyed = true
     clearAgentInitiativeTimer()
     closeInsertMenu({ restoreFocus: false })
+    closeOndaDialog({ restoreFocus: false })
     cleanups.splice(0).reverse().forEach(cleanup => cleanup())
 
     clearTimeout(hoverTimer)
