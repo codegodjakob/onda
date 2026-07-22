@@ -1313,16 +1313,6 @@ body.zen #minimap, body.zen #lane { display: none; }
   outline-offset: 2px;
 }
 
-.agent-presence {
-  justify-self: end;
-  font-size: 21px;
-}
-
-.agent-presence[aria-expanded="true"] {
-  color: var(--v2-text);
-  background: var(--v2-mint);
-}
-
 .workspace-path {
   min-width: 0;
   width: fit-content;
@@ -2510,4 +2500,80 @@ body.zen #minimap, body.zen #lane { display: none; }
   #editorView #editor .ProseMirror {
     color: #000 !important;
   }
+}
+
+/* ============================================================
+   Onda primitives — Aura orb (signature element)
+   ============================================================ */
+.onda-aura {
+  --aura-size: 46px;
+  position: relative;
+  width: var(--aura-size);
+  height: var(--aura-size);
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--gradient-aura);
+  box-shadow: var(--shadow-glow);
+}
+/* size modifiers: --sm 20px (wordmark), --xs 14px (hint headers), --lg 64px */
+.onda-aura--lg { --aura-size: 64px; }
+.onda-aura--sm {
+  --aura-size: 20px;
+  box-shadow: 0 0 0 1px rgba(142, 195, 230, 0.35), 0 2px 8px rgba(127, 184, 222, 0.3);
+}
+.onda-aura--xs {
+  --aura-size: 14px;
+  box-shadow: 0 0 0 1px rgba(142, 195, 230, 0.35);
+}
+
+/* interactive orb (the #ondaAura agent toggle is a <button>) */
+button.onda-aura {
+  cursor: pointer;
+  transition:
+    transform var(--dur-quick) var(--ease-out),
+    box-shadow var(--dur-normal) var(--ease-out);
+}
+button.onda-aura:hover { transform: scale(1.04); }
+button.onda-aura:active { transform: scale(0.97); }
+button.onda-aura:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-glow), var(--shadow-focus);
+}
+
+/* states: quiet (still) vs. thinking (calm breathe on --ease-spring, no bounce) */
+.onda-aura.is-quiet { animation: none; }
+.onda-aura.is-thinking {
+  animation: onda-aura-breathe 3.2s var(--ease-spring) infinite;
+}
+@keyframes onda-aura-breathe {
+  0%, 100% { transform: scale(1); box-shadow: var(--shadow-glow); }
+  50% {
+    transform: scale(1.05);
+    box-shadow: 0 0 0 1px rgba(142, 195, 230, 0.45), 0 6px 30px rgba(127, 184, 222, 0.45);
+  }
+}
+
+/* unseen-initiative dot */
+.onda-aura.has-unseen::after {
+  content: "";
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  width: 9px;
+  height: 9px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-active);
+  box-shadow: 0 0 0 2px var(--bg-surface);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .onda-aura,
+  .onda-aura.is-thinking { animation: none; transition: none; }
+  button.onda-aura:hover,
+  button.onda-aura:active { transform: none; }
 }
