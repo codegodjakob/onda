@@ -15,6 +15,7 @@ import {
 } from './workspace-model.mjs'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
+import { applySettings } from './ui.js'
 
 const BLOCK_TYPES = [
   ['paragraph', 'Freier Absatz'],
@@ -60,6 +61,9 @@ let evidenceFocusRequest = false
 let evidenceReturnFindingId = null
 let riskConfirmationFocusRequest = false
 let ondaDialog = null
+let accentMenu = null
+const ONDA_ACCENTS = ['sky', 'sage', 'blue', 'clay', 'lavender', 'sand']
+const ONDA_ACCENT_LABELS = { sky: 'Himmel', sage: 'Salbei', blue: 'Blau', clay: 'Ton', lavender: 'Lavendel', sand: 'Sand' }
 
 const AGENT_IDLE_MS = 3000
 const AGENT_BOUNDARY_IDLE_MS = 300
@@ -526,6 +530,109 @@ function openOndaDialog({ id, title, opener, build }) {
   ondaDialog = { scrim, panel, opener: opener || document.activeElement, keyHandler }
   requestAnimationFrame(() => { (dialogFocusables(panel)[0] || close).focus({ preventScroll: true }) })
   return panel
+}
+
+function renderMaterialEntry() {
+  const button = document.getElementById('materialSources')
+  if (!button) return
+  const project = ctx.activeProjectObj()
+  const count = Array.isArray(project?.material) ? project.material.length : 0
+  button.setAttribute('aria-haspopup', 'dialog')
+  button.replaceChildren(
+    createNode('span', 'onda-material-label', 'Quellen im Projekt'),
+    createNode('span', 'onda-badge onda-material-count', String(count)),
+  )
+}
+
+function openProjectSourcesModal(opener) {
+  const project = ctx.activeProjectObj()
+  const material = Array.isArray(project?.material) ? project.material : []
+  openOndaDialog({ id: 'materialModal', title: 'Quellen im Projekt', opener, build: body => {
+    if (!material.length) {
+      body.append(createNode('p', 'onda-material-empty', 'Noch kein Material im Projekt.'))
+      return
+    }
+    const list = createNode('div', 'onda-material-list')
+    material.forEach(item => {
+      const entry = createNode('article', 'onda-material-item')
+      entry.append(
+        createNode('span', 'onda-tag onda-material-kind', item.kind || 'Material'),
+        createNode('p', 'onda-material-text', item.text || ''),
+      )
+      list.append(entry)
+    })
+    body.append(list)
+  }})
+}
+
+function syncThemeToggle() {
+  const button = document.getElementById('themeToggle')
+  if (!button) return
+  const dark = document.documentElement.dataset.theme === 'dark'
+  button.textContent = dark ? '☀' : '☾'
+  button.setAttribute('aria-pressed', String(dark))
+  const label = dark ? 'Zu hellem Erscheinungsbild wechseln' : 'Zu dunklem Erscheinungsbild wechseln'
+  button.setAttribute('aria-label', label)
+  button.title = label
+}
+
+function toggleTheme() {
+  const settings = ctx.state.settings
+  settings.theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+  applySettings()
+  ctx.persist()
+  syncThemeToggle()
+}
+
+function closeAccentMenu({ restoreFocus = true } = {}) {
+  if (!accentMenu) return false
+  const { node, opener, outsideHandler } = accentMenu
+  document.removeEventListener('pointerdown', outsideHandler, true)
+  node.remove()
+  accentMenu = null
+  if (restoreFocus && opener?.isConnected) opener.focus()
+  return true
+}
+
+function openAccentMenu(opener) {
+  closeAccentMenu({ restoreFocus: false })
+  const settings = ctx.state.settings
+  const current = ONDA_ACCENTS.includes(settings.accent) ? settings.accent : 'sky'
+  const menu = createNode('div', 'onda-accent-menu')
+  menu.setAttribute('role', 'menu')
+  menu.setAttribute('aria-label', 'Akzentfarbe wählen')
+  ONDA_ACCENTS.forEach(accent => {
+    const swatch = createNode('button', 'onda-accent-swatch')
+    swatch.type = 'button'
+    swatch.setAttribute('role', 'menuitemradio')
+    swatch.setAttribute('aria-checked', String(accent === current))
+    swatch.dataset.accent = accent
+    swatch.title = ONDA_ACCENT_LABELS[accent]
+    swatch.setAttribute('aria-label', ONDA_ACCENT_LABELS[accent])
+    swatch.classList.toggle('is-current', accent === current)
+    swatch.addEventListener('click', () => {
+      settings.accent = accent
+      applySettings()
+      ctx.persist()
+      closeAccentMenu()
+    })
+    menu.append(swatch)
+  })
+  const outsideHandler = event => {
+    if (menu.contains(event.target) || opener.contains(event.target)) return
+    closeAccentMenu({ restoreFocus: false })
+  }
+  menu.addEventListener('keydown', event => {
+    if (event.key === 'Escape') { event.preventDefault(); closeAccentMenu() }
+  })
+  document.getElementById('editorView').append(menu)
+  const rect = opener.getBoundingClientRect()
+  const menuRect = menu.getBoundingClientRect()
+  menu.style.left = `${Math.max(8, rect.left)}px`
+  menu.style.top = `${Math.max(8, rect.top - menuRect.height - 8)}px`
+  accentMenu = { node: menu, opener, outsideHandler }
+  document.addEventListener('pointerdown', outsideHandler, true)
+  menu.querySelector('button')?.focus()
 }
 
 function renderProjectUnderstandingCard() {
@@ -1853,6 +1960,8 @@ export function refreshWorkspace({ reconcileEditing = false } = {}) {
 
   renderStructureNav()
   renderProjectUnderstandingCard()
+  renderMaterialEntry()
+  syncThemeToggle()
   renderLocalFinding()
   renderAgentWidget()
   renderEvidenceWindow()
@@ -2050,6 +2159,9 @@ export function initWorkspace(context) {
   listen(document, 'visibilitychange', onVisibilityChange)
   listen(document.getElementById('title'), 'input', refreshWorkspace)
   listen(document.getElementById('pvCard'), 'click', event => openProjectUnderstandingModal(event.currentTarget))
+  listen(document.getElementById('materialSources'), 'click', event => openProjectSourcesModal(event.currentTarget))
+  listen(document.getElementById('themeToggle'), 'click', toggleTheme)
+  listen(document.getElementById('accentToggle'), 'click', event => openAccentMenu(event.currentTarget))
   listenEditor('selectionUpdate', onSelectionUpdate)
   listenEditor('update', onEditorUpdate)
 
@@ -2059,6 +2171,7 @@ export function initWorkspace(context) {
     clearAgentInitiativeTimer()
     closeInsertMenu({ restoreFocus: false })
     closeOndaDialog({ restoreFocus: false })
+    closeAccentMenu({ restoreFocus: false })
     cleanups.splice(0).reverse().forEach(cleanup => cleanup())
 
     clearTimeout(hoverTimer)
