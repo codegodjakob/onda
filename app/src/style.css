@@ -1361,32 +1361,38 @@ body.zen #minimap, body.zen #lane { display: none; }
 }
 
 .block-preview {
+  position: relative;
   display: flex;
   width: 100%;
   min-width: 0;
   flex-direction: column;
-  gap: 9px;
-  padding: 13px 14px 11px;
-  border: 1px solid var(--v2-line);
-  border-radius: 8px;
-  background: var(--v2-surface);
-  color: var(--v2-text);
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  background: var(--bg-surface);
+  color: var(--text-primary);
   text-align: left;
-  transition: background 160ms var(--ease), border-color 160ms var(--ease), box-shadow 160ms var(--ease);
+  cursor: pointer;
+  transition: background var(--dur-quick) var(--ease-out), border-color var(--dur-quick) var(--ease-out), box-shadow var(--dur-quick) var(--ease-out);
 }
 
 .block-preview:hover {
-  border-color: var(--v2-line-strong);
-  box-shadow: 0 3px 14px rgba(31, 39, 46, .05);
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-sm);
 }
 
 .block-preview[aria-current="true"] {
-  border-color: var(--v2-line-strong);
-  background: var(--v2-surface-active);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--v2-line-strong) 32%, transparent);
+  border-color: var(--accent);
+  background: var(--accent-tint);
+  box-shadow: 0 0 0 1px var(--accent);
 }
 
-.block-preview:focus-visible,
+.block-preview:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+
 .block-insert:focus-visible,
 .block-insert-trigger:focus-visible,
 .semantic-insert-choice:focus-visible {
@@ -1395,26 +1401,26 @@ body.zen #minimap, body.zen #lane { display: none; }
 }
 
 .block-preview-excerpt {
-  min-height: calc(1.48em * 2);
+  min-height: calc(1.5em * 2);
   display: -webkit-box;
   overflow: hidden;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
-  color: var(--v2-text);
-  font: 14px/1.48 var(--doc-font);
-  letter-spacing: 0;
+  -webkit-line-clamp: 2;
+  color: var(--text-primary);
+  font: var(--fw-regular) var(--text-sm)/1.5 var(--font-sans);
   overflow-wrap: anywhere;
 }
 
 .block-preview-excerpt.is-empty {
-  color: var(--v2-text-soft);
+  color: var(--text-tertiary);
   font-style: italic;
 }
 
 .block-preview-role {
-  color: var(--v2-text-soft);
-  font: 11px/1.3 var(--sans);
-  letter-spacing: 0;
+  color: var(--text-tertiary);
+  font: var(--fw-medium) 11px/1.2 var(--font-sans);
+  letter-spacing: var(--tracking-wider);
+  text-transform: uppercase;
 }
 
 .block-insert {
@@ -1486,21 +1492,8 @@ body.zen #minimap, body.zen #lane { display: none; }
 }
 .onda-brand #sidebarCollapse { flex: none; }
 
-.onda-side-section {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
 .onda-side-material { margin-top: var(--space-1); }
 
-.onda-side-footer {
-  margin-top: auto;
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding-top: var(--space-3);
-  border-top: 1px solid var(--border-subtle);
-}
 .onda-side-footer .onda-side-user {
   flex: 1;
   min-width: 0;
@@ -2681,3 +2674,233 @@ button.onda-aura:focus-visible {
   font: var(--fw-medium) var(--text-xs)/1 var(--font-mono);
   letter-spacing: var(--tracking-tight);
 }
+
+/* ==================== Onda sidebar sections (Area C) ==================== */
+.onda-side-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4) 0 0;
+}
+.onda-eyebrow {
+  margin: 0;
+  color: var(--text-tertiary);
+  font: var(--fw-semibold) 11px/1.2 var(--font-sans);
+  letter-spacing: var(--tracking-wider);
+  text-transform: uppercase;
+}
+
+.onda-side-back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: var(--space-3) 0 0;
+  padding: var(--space-1) var(--space-2);
+  width: fit-content;
+  max-width: calc(100% - var(--space-8));
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-secondary);
+  font: var(--fw-medium) var(--text-sm)/1.3 var(--font-sans);
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition: color var(--dur-quick) var(--ease-out), background var(--dur-quick) var(--ease-out);
+}
+.onda-side-back:hover { color: var(--text-primary); background: var(--bg-hover); }
+.onda-side-back:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
+
+/* Projektverständnis-Kachel */
+#pvCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  width: 100%;
+  padding: var(--space-3);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-card);
+  background: var(--bg-surface);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--dur-quick) var(--ease-out), box-shadow var(--dur-quick) var(--ease-out);
+}
+#pvCard:hover { border-color: var(--border-strong); box-shadow: var(--shadow-sm); }
+#pvCard:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
+.onda-pv-card-title {
+  color: var(--text-primary);
+  font: var(--fw-semibold) var(--text-base)/1.35 var(--font-sans);
+  letter-spacing: var(--tracking-tight);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.onda-pv-card-claim {
+  color: var(--text-secondary);
+  font: var(--fw-regular) var(--text-sm)/1.45 var(--font-sans);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+#pvCard.is-empty .onda-pv-card-title { color: var(--text-tertiary); }
+
+/* Struktur-Liste + Hinweis-Punkt */
+.structure-nav-list { display: flex; flex-direction: column; gap: var(--space-2); }
+.structure-nav-empty { margin: 0; color: var(--text-tertiary); font: var(--fw-regular) var(--text-sm)/1.5 var(--font-sans); }
+.block-preview-hint {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  width: 7px;
+  height: 7px;
+  border-radius: var(--radius-full);
+  background: transparent;
+}
+.block-preview.has-hint .block-preview-hint[data-hint="style"] { background: var(--accent); }
+.block-preview.has-hint .block-preview-hint[data-hint="evidence"] { background: var(--warning); }
+/* Punkt braucht Platz neben dem Rollen-Label */
+.block-preview.has-hint .block-preview-role { padding-right: var(--space-4); }
+
+/* Material-Eintrag */
+#materialSources {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font: var(--fw-medium) var(--text-sm)/1.3 var(--font-sans);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--dur-quick) var(--ease-out), background var(--dur-quick) var(--ease-out);
+}
+#materialSources:hover { border-color: var(--border-strong); background: var(--bg-hover); }
+#materialSources:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
+.onda-material-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.onda-material-count { flex: none; }
+
+/* Fußzeile */
+.onda-side-footer {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) 0 0;
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* Onda-Dialog (Projektverständnis / Quellen) */
+.onda-dialog-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-6);
+  background: rgba(28, 26, 23, 0.4);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  animation: onda-dialog-fade var(--dur-normal) var(--ease-out);
+}
+:root[data-theme="dark"] .onda-dialog-scrim { background: rgba(0, 0, 0, 0.55); }
+.onda-dialog {
+  width: min(560px, 100%);
+  max-height: 82vh;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-panel);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-xl), var(--shadow-glow);
+  overflow: hidden;
+  animation: onda-dialog-rise var(--dur-normal) var(--ease-out);
+}
+.onda-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-5) var(--space-5) var(--space-3);
+}
+.onda-dialog-title {
+  margin: 0;
+  font: var(--fw-bold) 18px/1.3 var(--font-sans);
+  letter-spacing: var(--tracking-tight);
+}
+.onda-dialog-body {
+  padding: 0 var(--space-5) var(--space-5);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+@keyframes onda-dialog-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes onda-dialog-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .onda-dialog-scrim, .onda-dialog { animation: none; } }
+
+.onda-pv-field { display: flex; flex-direction: column; gap: var(--space-1); }
+.onda-pv-label {
+  color: var(--text-tertiary);
+  font: var(--fw-semibold) 11px/1.2 var(--font-sans);
+  letter-spacing: var(--tracking-wider);
+  text-transform: uppercase;
+}
+.onda-pv-input {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-control);
+  background: var(--bg-app);
+  color: var(--text-primary);
+  font: var(--fw-regular) var(--text-base)/1.5 var(--font-sans);
+  resize: vertical;
+}
+.onda-pv-input:focus-visible { outline: none; border-color: var(--accent); box-shadow: var(--shadow-focus); }
+
+.onda-material-list { display: flex; flex-direction: column; gap: var(--space-3); }
+.onda-material-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  background: var(--surface-2);
+}
+.onda-material-kind { align-self: flex-start; }
+.onda-material-text { margin: 0; color: var(--text-primary); font: var(--fw-regular) var(--text-sm)/1.5 var(--font-sans); }
+.onda-material-empty { margin: 0; color: var(--text-tertiary); font: var(--fw-regular) var(--text-sm)/1.5 var(--font-sans); }
+
+/* Akzent-Auswahl (Popover) */
+.onda-accent-menu {
+  position: fixed;
+  z-index: 70;
+  display: grid;
+  grid-template-columns: repeat(3, auto);
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-overlay);
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-lg);
+}
+.onda-accent-swatch {
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-full);
+  border: 2px solid transparent;
+  box-shadow: inset 0 0 0 1px var(--line);
+  cursor: pointer;
+}
+.onda-accent-swatch.is-current { border-color: var(--text-primary); }
+.onda-accent-swatch:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
+.onda-accent-swatch[data-accent="sky"] { background: #79b4dc; }
+.onda-accent-swatch[data-accent="sage"] { background: #7a9d6f; }
+.onda-accent-swatch[data-accent="blue"] { background: #5b8fce; }
+.onda-accent-swatch[data-accent="clay"] { background: #c07a5c; }
+.onda-accent-swatch[data-accent="lavender"] { background: #9a86c4; }
+.onda-accent-swatch[data-accent="sand"] { background: #c2a15e; }
