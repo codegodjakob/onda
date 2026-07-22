@@ -26,6 +26,7 @@ function assertReachableSurfaceIsV2Only() {
     /\bbuildBubble\s*\(/,
     /\bshowBubble\s*\(/,
     /\bid=["'](?:railL|railR|pCoach|pStruct|structView)["']/,
+    /\bid=["'](?:workspaceHeader|workspaceBack|workspacePath|agentPresence|structureShelf|workspaceBody)["']/,
   ]
   forbidden.forEach(pattern => {
     assert.equal(pattern.test(reachable), false, `Alte erreichbare Oberfläche gefunden: ${pattern}`)
@@ -33,6 +34,11 @@ function assertReachableSurfaceIsV2Only() {
 
   const example = readFileSync(new URL('../src/example.js', import.meta.url), 'utf8')
   assert.match(example, /volle Kraft, leise Präsentation/)
+
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8')
+  for (const id of ['ondaSidebar', 'structureNav', 'ondaAura', 'pvCard', 'sidebarBack']) {
+    assert.match(html, new RegExp(`id=["']${id}["']`), `Neue Rahmenstruktur fehlt: #${id}`)
+  }
 }
 
 assertReachableSurfaceIsV2Only()
@@ -150,21 +156,28 @@ async function runDesktop(browser) {
   assert.equal(new Set(blockIds).size, blockIds.length)
 
   assert.equal(await page.locator('#railL, #railR, #pCoach, #pStruct').count(), 0)
-  assert.equal(await page.locator('#workspaceHeader').count(), 1)
-  assert.equal(await page.locator('#structureShelf').isHidden(), true)
-  assert.equal(await page.locator('#agentPresence').count(), 1)
+  assert.equal(await page.locator('.onda-topbar').count(), 1)
+  assert.equal(await page.locator('#ondaSidebar').isVisible(), true)
+  assert.equal(await page.locator('#structureNav').isVisible(), true)
+  assert.equal(await page.locator('#ondaAura').count(), 1)
   assert.equal(await page.getByText('Recherche aktuell', { exact: true }).count(), 0)
   assert.equal(await page.getByText('Prüfen', { exact: true }).count(), 0)
   assert.equal(await page.getByTitle('Schriftgröße (Auswahl / Gesamt)').count(), 0)
   assert.equal(await page.getByTitle('Einfügen (Bild)').count(), 0)
 
-  await page.locator('#workspacePath').click()
-  const shelf = page.locator('#structureShelf')
-  await expectVisible(shelf)
-  assert.equal(await page.locator('#workspacePath').getAttribute('aria-controls'), 'structureShelf')
+  const shelf = page.locator('#structureNav')
   assert.equal(await shelf.locator('.block-preview').count(), blockIds.length)
-  assert.equal(await shelf.locator('.block-insert').count(), blockIds.length)
   assert.equal(await shelf.locator('.black-spine, .status-dot').count(), 0)
+
+  // Seitenleiste einklappen/ausklappen persistiert in settings.sidebarCollapsed
+  await page.locator('#sidebarCollapse').click()
+  assert.equal(await page.locator('#editorView').evaluate(n => n.classList.contains('is-sidebar-collapsed')), true)
+  assert.equal(await page.locator('#sidebarReopen').isVisible(), true)
+  assert.equal(await page.evaluate(() => AIWT.state.settings.sidebarCollapsed), true)
+  await page.locator('#sidebarReopen').click()
+  assert.equal(await page.locator('#editorView').evaluate(n => n.classList.contains('is-sidebar-collapsed')), false)
+  assert.equal(await page.locator('#sidebarReopen').isHidden(), true)
+  assert.equal(await page.evaluate(() => AIWT.state.settings.sidebarCollapsed), false)
 
   const previewText = await shelf.locator('.block-preview-excerpt').first().textContent()
   assert.ok(previewText.trim().length > 20)
@@ -173,8 +186,11 @@ async function runDesktop(browser) {
   assert.equal(await page.locator('#editor .ProseMirror').evaluate(node => node.contains(document.activeElement)), true)
   assert.equal(await page.locator(`#editor .ProseMirror > [data-block-id="${previewTargetId}"]`).evaluate(node => node.classList.contains('is-active-block')), true)
 
+  // Einfügen läuft ausschließlich über den Editor-Trigger (die Seitenleiste hat keine Insert-Buttons mehr)
+  const trigger = page.locator('#blockInsertTrigger')
+  assert.equal(await trigger.count(), 1)
   const beforeInsert = await page.locator('#editor .ProseMirror > [data-block-id]').count()
-  await shelf.locator('.block-insert').first().click()
+  await trigger.evaluate(node => node.click())
   const shelfMenu = page.locator('.semantic-insert-menu')
   await expectVisible(shelfMenu)
   assert.deepEqual(await shelfMenu.getByRole('menuitem').allTextContents(), [
@@ -190,8 +206,6 @@ async function runDesktop(browser) {
   const insertedBlock = page.locator('#editor .ProseMirror > [data-semantic-role="counterpoint"]')
   assert.equal(await insertedBlock.count(), 1)
 
-  const trigger = page.locator('#blockInsertTrigger')
-  assert.equal(await trigger.count(), 1)
   await insertedBlock.hover()
   await expectVisible(trigger)
   const triggerPosition = await trigger.boundingBox()
@@ -222,8 +236,8 @@ async function runDesktop(browser) {
   await page.evaluate(() => window.AIWT.flushSave())
   await page.reload({ waitUntil: 'networkidle' })
   await openExample(page, false)
-  await expectVisible(page.locator('#structureShelf'))
-  assert.equal(await page.locator('#structureShelf .block-preview').count(), beforeInsert + 1)
+  await expectVisible(page.locator('#structureNav'))
+  assert.equal(await page.locator('#structureNav .block-preview').count(), beforeInsert + 1)
   assert.equal(await page.locator('#editor .ProseMirror > [data-semantic-role="counterpoint"]').count(), 1)
   const insertedPersisted = await page.evaluate(() => {
     const stored = JSON.parse(localStorage.getItem('aiwt.v2'))
@@ -232,11 +246,7 @@ async function runDesktop(browser) {
   })
   assert.equal(insertedPersisted, true)
 
-  await page.keyboard.press('Escape')
-  assert.equal(await page.locator('#structureShelf').isHidden(), true)
-  assert.equal(await page.locator('body').evaluate(node => node.classList.contains('view-editor')), true)
-
-  await page.locator('#agentPresence').click()
+  await page.locator('#ondaAura').click()
   assert.equal(await page.locator('#agentWidget').isVisible(), true)
   await page.keyboard.press('Escape')
   assert.equal(await page.locator('#agentWidget').isHidden(), true)
@@ -264,51 +274,43 @@ async function runMobile(browser) {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } })
   await openExample(page)
 
-  await page.locator('#workspacePath').click()
-  await page.locator('#structureShelf').evaluate(node => {
-    node.innerHTML = '<div data-layout-probe style="height: 180px"></div>'
-  })
-  const shelfLayout = await page.evaluate(() => {
-    const shelf = document.getElementById('structureShelf').getBoundingClientRect()
-    const main = document.getElementById('main').getBoundingClientRect()
+  // structure is always in the sidebar drawer
+  assert.equal(await page.locator('#structureNav .block-preview').count() > 0, true)
+
+  // collapse -> editor full width, drawer off-canvas, no horizontal overflow
+  await page.locator('#sidebarCollapse').click()
+  await page.waitForFunction(() => document.getElementById('editorView').classList.contains('is-sidebar-collapsed'))
+  const collapsed = await page.evaluate(() => {
+    const sidebar = document.getElementById('ondaSidebar').getBoundingClientRect()
     return {
-      shelfVisible: !document.getElementById('structureShelf').hidden,
-      agentHidden: document.getElementById('agentWidget').hidden,
-      evidenceHidden: document.getElementById('evidenceWindow').hidden,
-      separated: shelf.bottom <= main.top + 1 || shelf.right <= main.left + 1,
+      offCanvas: sidebar.right <= 1,
+      overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
     }
   })
-  assert.deepEqual(shelfLayout, {
-    shelfVisible: true,
-    agentHidden: true,
-    evidenceHidden: true,
-    separated: true,
-  })
+  assert.equal(collapsed.offCanvas, true)
+  assert.ok(collapsed.overflow <= 1, `Horizontales Overflow (collapsed): ${collapsed.overflow}px`)
 
-  await page.locator('#agentPresence').click()
-  assert.equal(await page.locator('#structureShelf').isHidden(), true)
+  // reopen the drawer
+  await page.locator('#sidebarReopen').click()
+  await page.waitForFunction(() => !document.getElementById('editorView').classList.contains('is-sidebar-collapsed'))
+  assert.equal(await page.locator('#ondaSidebar').isVisible(), true)
+
+  // agent panel is near-full-width and does not steal focus
+  await page.locator('#ondaAura').click()
   assert.equal(await page.locator('#agentWidget').isVisible(), true)
-  assert.equal(await page.locator('#evidenceWindow').isHidden(), true)
+  assert.equal(await page.locator('#agentWidget').evaluate(node => node.contains(document.activeElement)), false)
+  const agentBox = await page.locator('#agentWidget').boundingBox()
+  assert.ok(agentBox.width >= 390 - 40, `Agent-Panel zu schmal: ${agentBox.width}`)
+  await page.keyboard.press('Escape')
 
+  // evidence panel opens near-full-width
   await page.evaluate(() => {
     const doc = window.AIWT.state.docs.find(candidate => candidate.id === window.AIWT.state.active)
     doc.workspace.evidenceFindingId = 'mobile-evidence-probe'
     window.AIWT.state.editor.commands.insertContent(' ')
   })
-  assert.equal(await page.locator('#structureShelf').isHidden(), true)
-  assert.equal(await page.locator('#agentWidget').isHidden(), true)
   assert.equal(await page.locator('#evidenceWindow').isVisible(), true)
 
-  await page.locator('#workspacePath').click()
-  assert.equal(await page.locator('#structureShelf').isVisible(), true)
-  assert.equal(await page.locator('#agentWidget').isHidden(), true)
-  assert.equal(await page.locator('#evidenceWindow').isHidden(), true)
-
-  await page.locator('#agentPresence').click()
-  const openLayers = await page.locator('#structureShelf, #agentWidget, #evidenceWindow').evaluateAll(nodes => (
-    nodes.filter(node => !node.hidden && getComputedStyle(node).display !== 'none').length
-  ))
-  assert.equal(openLayers, 1)
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
   assert.ok(overflow <= 1, `Horizontales Overflow: ${overflow}px`)
   await page.screenshot({ path: `${screenshotDir}/aiwt-v2-mobile.png`, fullPage: true })
@@ -333,7 +335,7 @@ async function runSaveAlert(browser) {
     Storage.prototype.setItem = () => { throw new Error('Erzwungener Speicherfehler') }
   })
   await page.locator('#title').fill('Speichertest fehlgeschlagen')
-  await page.locator('#workspaceBack').click()
+  await page.locator('#sidebarBack').click()
   assert.equal(await page.locator('body').evaluate(node => node.classList.contains('view-home')), true)
   assert.equal(await alert.isVisible(), true)
   assert.match(await alert.textContent(), /Speichern fehlgeschlagen/)
@@ -361,15 +363,15 @@ async function runPrintLayout(browser) {
   const page = await browser.newPage({ viewport: { width: 1100, height: 800 } })
   await openExample(page)
   await page.evaluate(() => {
-    for (const id of ['structureShelf', 'agentWidget', 'evidenceWindow']) {
+    for (const id of ['ondaSidebar', 'agentWidget', 'evidenceWindow']) {
       document.getElementById(id).hidden = false
     }
   })
   await page.emulateMedia({ media: 'print' })
 
   for (const selector of [
-    '#workspaceHeader',
-    '#structureShelf',
+    '.onda-topbar',
+    '#ondaSidebar',
     '#agentWidget',
     '#evidenceWindow',
     '#blockInsertLayer',
@@ -381,10 +383,11 @@ async function runPrintLayout(browser) {
 
   const printLayout = await page.evaluate(() => {
     const styles = id => getComputedStyle(document.getElementById(id))
+    const editorCol = getComputedStyle(document.querySelector('.onda-editor-col'))
     return {
       bodyOverflow: getComputedStyle(document.body).overflow,
-      workspaceDisplay: styles('workspaceBody').display,
-      mainPosition: styles('main').position,
+      editorColDisplay: editorCol.display,
+      editorColPosition: editorCol.position,
       scrollOverflow: styles('scroll').overflow,
       pageMaxWidth: styles('page').maxWidth,
       pagePaddingTop: styles('page').paddingTop,
@@ -392,8 +395,8 @@ async function runPrintLayout(browser) {
   })
   assert.deepEqual(printLayout, {
     bodyOverflow: 'visible',
-    workspaceDisplay: 'block',
-    mainPosition: 'static',
+    editorColDisplay: 'block',
+    editorColPosition: 'static',
     scrollOverflow: 'visible',
     pageMaxWidth: 'none',
     pagePaddingTop: '0px',
@@ -405,7 +408,7 @@ async function runHomeFocus(browser) {
   const page = await browser.newPage({ viewport: { width: 1100, height: 800 } })
   await openExample(page)
 
-  await page.locator('#workspaceBack').click()
+  await page.locator('#sidebarBack').click()
   await page.waitForFunction(() => document.activeElement?.id === 'search')
   assert.equal(await page.locator('#search').isVisible(), true)
 
@@ -667,11 +670,12 @@ async function runTask4InteractionRegressions(browser) {
   assert.deepEqual(horizontalRuleSetup.map(block => block.type), ['horizontalRule', 'horizontalRule', 'paragraph'])
   assert.equal(horizontalRuleSetup.every(block => block.id), true)
 
-  await page.locator('#workspacePath').click()
-  const shelf = page.locator('#structureShelf')
+  // Struktur ist dauerhaft in der Seitenleiste sichtbar (kein Shelf-Toggle mehr)
+  const shelf = page.locator('#structureNav')
   await expectVisible(shelf)
+  await page.waitForFunction(() => document.querySelectorAll('#structureNav .block-preview').length === 3)
   assert.equal(await shelf.locator('.block-preview').count(), 3)
-  assert.equal(await shelf.locator('[data-block-id="null"], [data-after-block-id="null"]').count(), 0)
+  assert.equal(await shelf.locator('[data-block-id="null"]').count(), 0)
 
   const secondRuleId = horizontalRuleSetup[1].id
   await shelf.locator('.block-preview').nth(1).click()
@@ -682,7 +686,8 @@ async function runTask4InteractionRegressions(browser) {
   assert.equal(ruleSelection.selectedNodeType, 'horizontalRule')
   assert.equal(ruleSelection.activeBlockId, secondRuleId)
 
-  await shelf.locator('.block-insert').nth(1).click()
+  // Einfügen läuft über den Editor-Trigger; er fügt hinter dem aktiven Block (secondRule) ein
+  await page.locator('#blockInsertTrigger').evaluate(node => node.click())
   await page.locator('.semantic-insert-choice[data-semantic-role="counterpoint"]').click()
   const insertedAfterSecondRule = await page.evaluate(() => window.AIWT.__blockIdentityTestBridge.getJSON())
   assert.deepEqual(insertedAfterSecondRule.content.map(node => node.type), [
@@ -694,60 +699,48 @@ async function runTask4InteractionRegressions(browser) {
   assert.equal(insertedAfterSecondRule.content[2].attrs.semanticRole, 'counterpoint')
   assert.equal(insertedAfterSecondRule.content[3].content[0].text, 'Absatz danach')
 
+  // Strukturkarten behalten ihre Knotenidentität über Auswahl- und Textänderungen
   const stableShelf = await page.evaluate(() => {
-    const previews = [...document.querySelectorAll('#structureShelf .block-preview')]
-    const inserts = [...document.querySelectorAll('#structureShelf .block-insert')]
-    window.__task4ShelfNodes = { previews, inserts }
+    const previews = [...document.querySelectorAll('#structureNav .block-preview')]
+    window.__task4ShelfNodes = { previews }
     const blocks = window.AIWT.__blockIdentityTestBridge.getBlocks()
     window.AIWT.state.editor.commands.setTextSelection(blocks.at(-1).pos + 1)
     return {
-      previewsStable: previews.every((node, index) => node === document.querySelectorAll('#structureShelf .block-preview')[index]),
-      insertsStable: inserts.every((node, index) => node === document.querySelectorAll('#structureShelf .block-insert')[index]),
+      previewsStable: previews.every((node, index) => node === document.querySelectorAll('#structureNav .block-preview')[index]),
     }
   })
-  assert.deepEqual(stableShelf, { previewsStable: true, insertsStable: true })
+  assert.deepEqual(stableShelf, { previewsStable: true })
 
   const afterSelectionIdentity = await page.evaluate(() => ({
-    previewsStable: window.__task4ShelfNodes.previews.every((node, index) => node === document.querySelectorAll('#structureShelf .block-preview')[index]),
-    insertsStable: window.__task4ShelfNodes.inserts.every((node, index) => node === document.querySelectorAll('#structureShelf .block-insert')[index]),
+    previewsStable: window.__task4ShelfNodes.previews.every((node, index) => node === document.querySelectorAll('#structureNav .block-preview')[index]),
   }))
-  assert.deepEqual(afterSelectionIdentity, { previewsStable: true, insertsStable: true })
+  assert.deepEqual(afterSelectionIdentity, { previewsStable: true })
 
   await page.evaluate(() => window.AIWT.state.editor.commands.insertContent('Neu '))
   const afterTextIdentity = await page.evaluate(() => ({
-    previewsStable: window.__task4ShelfNodes.previews.every((node, index) => node === document.querySelectorAll('#structureShelf .block-preview')[index]),
-    insertsStable: window.__task4ShelfNodes.inserts.every((node, index) => node === document.querySelectorAll('#structureShelf .block-insert')[index]),
+    previewsStable: window.__task4ShelfNodes.previews.every((node, index) => node === document.querySelectorAll('#structureNav .block-preview')[index]),
     excerpt: window.__task4ShelfNodes.previews.at(-1).querySelector('.block-preview-excerpt')?.textContent,
   }))
   assert.equal(afterTextIdentity.previewsStable, true)
-  assert.equal(afterTextIdentity.insertsStable, true)
   assert.match(afterTextIdentity.excerpt || '', /Neu Absatz danach/)
 
-  const firstShelfInsert = shelf.locator('.block-insert').first()
-  await firstShelfInsert.click()
+  // Das Trigger-Menü schließt beim Öffnen des Agenten
+  await page.locator('#blockInsertTrigger').evaluate(node => node.click())
   await expectVisible(page.locator('.semantic-insert-menu'))
-  assert.equal(await shelf.isVisible(), true)
-  await shelf.evaluate(node => {
-    node.scrollTop += 80
-    node.dispatchEvent(new Event('scroll'))
-  })
-  assert.equal(await page.locator('.semantic-insert-menu').count(), 0)
-
-  await firstShelfInsert.click()
-  await expectVisible(page.locator('.semantic-insert-menu'))
-  await page.locator('#agentPresence').click()
+  await page.locator('#ondaAura').click()
   assert.equal(await page.locator('.semantic-insert-menu').count(), 0)
   assert.equal(await page.locator('#agentWidget').isVisible(), true)
 
+  // Das erneute Trigger-Menü schließt den Agenten; die Struktur bleibt dauerhaft sichtbar
   await page.locator('#blockInsertTrigger').evaluate(node => node.click())
   assert.equal(await page.locator('.semantic-insert-menu').count(), 1)
   assert.equal(await page.locator('#agentWidget').isHidden(), true)
-  assert.equal(await shelf.isHidden(), true)
+  assert.equal(await page.locator('#structureNav .block-preview').count() > 0, true)
 
-  await page.locator('#agentPresence').click()
+  await page.locator('#ondaAura').click()
   assert.equal(await page.locator('.semantic-insert-menu').count(), 0)
   assert.equal(await page.locator('#agentWidget').isVisible(), true)
-  await page.locator('#agentPresence').click()
+  await page.locator('#ondaAura').click()
 
   await page.locator('#blockInsertTrigger').evaluate(node => node.click())
   await page.evaluate(() => {
@@ -761,26 +754,21 @@ async function runTask4InteractionRegressions(browser) {
   await page.locator('#blockInsertTrigger').evaluate(node => node.click())
   assert.equal(await page.locator('.semantic-insert-menu').count(), 1)
   assert.equal(await page.locator('#evidenceWindow').isHidden(), true)
+  await expectVisible(shelf)
 
-  await page.locator('#workspacePath').click()
-  assert.equal(await page.locator('.semantic-insert-menu').count(), 0)
-  assert.equal(await shelf.isVisible(), true)
-  await shelf.locator('.block-insert').first().click()
-  assert.equal(await page.locator('.semantic-insert-menu').count(), 1)
-  assert.equal(await shelf.isVisible(), true)
-
-  const shelfOpenerIdentity = await shelf.locator('.block-insert').first().evaluate(node => {
-    window.__task4ShelfOpener = node
+  // Der Trigger ist ein stabiler Einzelknoten; Escape schließt das Menü und gibt ihm den Fokus zurück
+  const triggerOpenerConnected = await page.locator('#blockInsertTrigger').evaluate(node => {
+    window.__task4TriggerOpener = node
     return node.isConnected
   })
-  assert.equal(shelfOpenerIdentity, true)
+  assert.equal(triggerOpenerConnected, true)
   await page.evaluate(() => {
     const blocks = window.AIWT.__blockIdentityTestBridge.getBlocks()
     window.AIWT.state.editor.commands.setTextSelection(blocks.at(-1).pos + 1)
   })
-  assert.equal(await page.evaluate(() => window.__task4ShelfOpener === document.querySelector('#structureShelf .block-insert')), true)
+  assert.equal(await page.evaluate(() => window.__task4TriggerOpener === document.getElementById('blockInsertTrigger')), true)
   await page.keyboard.press('Escape')
-  assert.equal(await page.evaluate(() => document.activeElement === window.__task4ShelfOpener), true)
+  assert.equal(await page.evaluate(() => document.activeElement === window.__task4TriggerOpener), true)
 
   await page.locator('#blockInsertTrigger').evaluate(node => node.click())
   await page.locator('#scroll').evaluate(node => {
@@ -1348,7 +1336,7 @@ async function runFinalFindingRegressions(browser) {
     return doc.findings.find(finding => finding.id === 'final-stale-known').status
   }), 'open')
 
-  await page.locator('#agentPresence').click()
+  await page.locator('#ondaAura').click()
   const agent = page.locator('#agentWidget')
   await expectVisible(agent)
   assert.equal(await agent.getByText('Hinweise ohne sichere Textstelle', { exact: true }).count(), 1)
@@ -1632,7 +1620,7 @@ async function runTask6DialogueAndEvidence(browser) {
   assert.equal(await page.evaluate(() => window.AIWT.state.settings.exampleVersion), 9)
   assert.equal(await page.locator('#agentWidget').isHidden(), true)
   assert.equal(await page.locator('[data-agent-launcher]').count(), 0)
-  assert.equal(await page.locator('#agentPresence').count(), 1)
+  assert.equal(await page.locator('#ondaAura').count(), 1)
 
   await page.evaluate(() => {
     const blocks = window.AIWT.__blockIdentityTestBridge.getBlocks()
@@ -1684,7 +1672,7 @@ async function runTask6DialogueAndEvidence(browser) {
   assert.match(await page.locator('#agentLiveStatus').textContent(), /Beispielreaktion/)
   await page.keyboard.press('Escape')
   assert.equal(await widget.isHidden(), true)
-  assert.equal(await page.locator('#agentPresence').evaluate(node => document.activeElement === node), true)
+  assert.equal(await page.locator('#ondaAura').evaluate(node => document.activeElement === node), true)
   await page.evaluate(() => window.AIWT.flushSave())
   await page.reload({ waitUntil: 'networkidle' })
   await openExample(page, false)
@@ -1701,11 +1689,11 @@ async function runTask6DialogueAndEvidence(browser) {
   assert.equal(persistedGlobal.dismissed, true)
   assert.ok(persistedGlobal.texts.includes('Die gestaltete Bedingung.'))
 
-  await page.locator('#agentPresence').click()
+  await page.locator('#ondaAura').click()
   await expectVisible(page.locator('#agentWidget'))
   await page.locator('#agentWidget [data-close-agent]').focus()
   await page.keyboard.press('Enter')
-  assert.equal(await page.locator('#agentPresence').evaluate(node => document.activeElement === node), true)
+  assert.equal(await page.locator('#ondaAura').evaluate(node => document.activeElement === node), true)
 
   const fixture = await injectTask6PassageFinding(page, false)
   let local = page.locator(`#localAgentLayer [data-finding-id="${fixture.findingId}"]`)
@@ -1717,7 +1705,7 @@ async function runTask6DialogueAndEvidence(browser) {
   await expectVisible(localDialogue)
   assert.equal(await local.locator('.local-finding-connector').count(), 1)
   assert.equal(await page.locator('#agentWidget').isHidden(), true)
-  assert.equal(await page.locator('#structureShelf').isHidden(), true)
+  assert.equal(await page.locator('#structureNav .block-preview').count() > 0, true)
   assert.equal(await page.locator('.semantic-insert-menu').count(), 0)
   assert.equal(await localDialogue.locator('form input').count(), 1)
   await localDialogue.locator('input').focus()
@@ -1793,7 +1781,7 @@ async function runTask6DialogueAndEvidence(browser) {
   assert.doesNotMatch(await page.locator('#agentLiveStatus').textContent(), /zitierfähig/i)
   assert.equal(await evidence.locator('a[href="https://calmtech.com/papers"]').count(), 2)
   assert.equal(await page.locator('#agentWidget').isHidden(), true)
-  assert.equal(await page.locator('#structureShelf').isHidden(), true)
+  assert.equal(await page.locator('#structureNav .block-preview').count() > 0, true)
   assert.equal(await page.locator('.local-dialogue').count(), 0)
   const evidenceGeometry = await evidence.evaluate(node => {
     const rect = node.getBoundingClientRect()
@@ -1851,7 +1839,7 @@ async function runTask6Mobile(browser) {
   const page = await context.newPage()
   await openExample(page)
 
-  await page.locator('#agentPresence').tap()
+  await page.locator('#ondaAura').tap()
   const widget = page.locator('#agentWidget')
   await expectVisible(widget)
   const widgetLayout = await widget.evaluate(node => {
@@ -1953,7 +1941,7 @@ async function runTask6InitiativeAndLifecycle(browser) {
   }
 
   await typeAtEnd('h')
-  await page.locator('#workspaceBack').click()
+  await page.locator('#sidebarBack').click()
   await page.waitForTimeout(3300)
   assert.equal(await page.locator('#agentWidget').isHidden(), true)
   assert.equal(await page.evaluate(() => {
@@ -2106,7 +2094,6 @@ async function prepareTask7Scenario(page, name) {
   if (name === 'shelf') {
     await expectVisible(page.locator('#localAgentLayer [data-finding-id]'))
     await captureTask7PassageState(page)
-    await page.locator('#workspacePath').click()
   } else if (name === 'local-dialogue') {
     const fixture = await injectTask6PassageFinding(page, false)
     const local = page.locator(`#localAgentLayer [data-finding-id="${fixture.findingId}"]`)
@@ -2122,7 +2109,7 @@ async function prepareTask7Scenario(page, name) {
   } else if (name === 'agent') {
     await expectVisible(page.locator('#localAgentLayer [data-finding-id]'))
     await captureTask7PassageState(page)
-    await page.locator('#agentPresence').click()
+    await page.locator('#ondaAura').click()
   } else if (name === 'evidence') {
     const fixture = await injectTask6PassageFinding(page, true)
     const local = page.locator(`#localAgentLayer [data-finding-id="${fixture.findingId}"]`)
@@ -2142,7 +2129,6 @@ async function assertTask7IconControls(page, label) {
     '.surface-close',
     '.agent-chat-send',
     '.suggestion-action',
-    '.block-insert',
     '.block-insert-trigger',
     '#newBtn',
     '#sortBtn',
@@ -2244,13 +2230,13 @@ async function assertVisibleTabSequence(page, startSelector, steps, label) {
 
 async function assertTask7MobileHitboxes(page, name) {
   const required = {
-    base: ['#workspaceBack', '#agentPresence', '#blockInsertTrigger'],
-    shelf: ['#workspaceBack', '#agentPresence', '#structureShelf .block-insert'],
-    finding: ['#workspaceBack', '#agentPresence', '#blockInsertTrigger'],
-    suggestion: ['#workspaceBack', '#agentPresence', '.suggestion-action'],
-    'local-dialogue': ['#workspaceBack', '#agentPresence', '.local-dialogue .agent-chat-send'],
-    agent: ['#workspaceBack', '#agentPresence', '#agentWidget .surface-close', '#agentWidget .agent-chat-send'],
-    evidence: ['#workspaceBack', '#agentPresence', '#evidenceWindow .surface-close'],
+    base: ['#sidebarBack', '#ondaAura', '#blockInsertTrigger'],
+    shelf: ['#sidebarBack', '#ondaAura', '#structureNav .block-preview'],
+    finding: ['#sidebarBack', '#ondaAura', '#blockInsertTrigger'],
+    suggestion: ['#sidebarBack', '#ondaAura', '.suggestion-action'],
+    'local-dialogue': ['#sidebarBack', '#ondaAura', '.local-dialogue .agent-chat-send'],
+    agent: ['#sidebarBack', '#ondaAura', '#agentWidget .surface-close', '#agentWidget .agent-chat-send'],
+    evidence: ['#sidebarBack', '#ondaAura', '#evidenceWindow .surface-close'],
   }[name] || []
 
   for (const selector of required) {
@@ -2264,7 +2250,7 @@ async function assertTask7MobileHitboxes(page, name) {
     }
   }
 
-  for (const selector of ['#blockInsertTrigger', '#structureShelf .block-insert']) {
+  for (const selector of ['#blockInsertTrigger']) {
     const control = page.locator(selector).first()
     if (!await control.count() || !await control.isVisible()) continue
     const contrast = await control.evaluate(node => {
@@ -2298,9 +2284,8 @@ async function assertTask7MobileHitboxes(page, name) {
 
 async function assertTask7CommonLayout(page, name, mobile) {
   const layout = await page.evaluate(() => {
-    const rect = selector => document.querySelector(selector)?.getBoundingClientRect() || null
     const visibleRects = [...document.querySelectorAll(
-      '#structureShelf, #agentWidget, #evidenceWindow, #localAgentLayer .local-finding, #localAgentLayer .local-suggestion',
+      '#structureNav, #agentWidget, #evidenceWindow, #localAgentLayer .local-finding, #localAgentLayer .local-suggestion',
     )]
       .filter(node => {
         const style = getComputedStyle(node)
@@ -2311,27 +2296,23 @@ async function assertTask7CommonLayout(page, name, mobile) {
         left: node.getBoundingClientRect().left,
         right: node.getBoundingClientRect().right,
       }))
-    const back = rect('#workspaceBack')
-    const path = rect('#workspacePath')
-    const agent = rect('#agentPresence')
     return {
       overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
       viewportWidth: document.documentElement.clientWidth,
       visibleRects,
-      headerClear: Boolean(back && path && agent && back.right <= path.left + 1 && path.right <= agent.left + 1),
-      openMajorLayers: [...document.querySelectorAll('#structureShelf, #agentWidget, #evidenceWindow')]
+      // Struktur ist dauerhaft in der Seitenleiste; nur Agent/Belege sind konkurrierende Overlays
+      openMajorLayers: [...document.querySelectorAll('#agentWidget, #evidenceWindow')]
         .filter(node => !node.hidden && getComputedStyle(node).display !== 'none').length,
     }
   })
   assert.ok(layout.overflow <= 1, `${mobile ? 'mobile' : 'desktop'} ${name}: horizontales Overflow ${layout.overflow}px`)
-  assert.equal(layout.headerClear, true, `${mobile ? 'mobile' : 'desktop'} ${name}: Header-Elemente überlappen`)
   layout.visibleRects.forEach(rect => {
     assert.ok(rect.left >= -1, `${name}: ${rect.selector} ragt links heraus`)
     assert.ok(rect.right <= layout.viewportWidth + 1, `${name}: ${rect.selector} ragt rechts heraus`)
   })
   assert.ok(layout.openMajorLayers <= 1, `${name}: konkurrierende Hauptflächen sind gleichzeitig offen`)
 
-  if (['shelf', 'agent', 'evidence'].includes(name)) {
+  if (['agent', 'evidence'].includes(name)) {
     const localPause = await page.evaluate(() => {
       const doc = window.AIWT.state.docs.find(candidate => candidate.id === window.AIWT.state.active)
       const layer = document.getElementById('localAgentLayer')
@@ -2372,7 +2353,7 @@ async function assertTask7CommonLayout(page, name, mobile) {
           * Math.max(0, Math.min(localRect.bottom, widget.bottom) - Math.max(localRect.top, widget.top))
         : 0
       return {
-        bodyClass: document.getElementById('workspaceBody').classList.contains(openClass),
+        bodyClass: document.getElementById('editorView').classList.contains(openClass),
         widgetLeft: widget.left,
         textRight: Math.max(...blocks.map(rect => rect.right)),
         localOverlap,
@@ -2383,40 +2364,13 @@ async function assertTask7CommonLayout(page, name, mobile) {
     assert.equal(panelClearance.localOverlap, 0)
   }
 
-  const originalPath = await page.locator('#workspacePath').textContent()
-  assert.ok(originalPath.trim().length > 0)
-  await page.locator('#workspacePath').evaluate(node => {
-    node.textContent = 'Ein sehr lang benanntes Forschungsprojekt / Eine absichtlich sehr lange Textbezeichnung für den mobilen Kopfbereich'
-  })
-  const pathLayout = await page.locator('#workspacePath').evaluate(node => {
-    const style = getComputedStyle(node)
-    const rect = node.getBoundingClientRect()
-    const agentRect = document.getElementById('agentPresence').getBoundingClientRect()
-    return {
-      overflowed: node.scrollWidth > node.clientWidth,
-      ellipsis: style.textOverflow,
-      right: rect.right,
-      agentLeft: agentRect.left,
-    }
-  })
-  assert.equal(pathLayout.ellipsis, 'ellipsis')
-  assert.ok(pathLayout.right <= pathLayout.agentLeft + 1)
-  if (mobile) assert.equal(pathLayout.overflowed, true)
-  await page.locator('#workspacePath').evaluate((node, value) => { node.textContent = value }, originalPath)
-
   if (name === 'shelf') {
-    const shelfLayout = await page.evaluate(() => {
-      const shelfNode = document.getElementById('structureShelf')
-      const shelf = shelfNode.getBoundingClientRect()
-      const main = document.getElementById('main').getBoundingClientRect()
-      return {
-        position: getComputedStyle(shelfNode).position,
-        separated: innerWidth <= 760 ? shelf.bottom <= main.top + 1 : shelf.right <= main.left + 1,
-        backdropCount: document.querySelectorAll('.workspace-backdrop, [data-workspace-backdrop]').length,
-      }
-    })
-    assert.equal(shelfLayout.position, 'static')
-    assert.equal(shelfLayout.separated, true)
+    // Struktur lebt dauerhaft in der Seitenleiste — als Karten, ohne modales Backdrop
+    const shelfLayout = await page.evaluate(() => ({
+      previews: document.querySelectorAll('#structureNav .block-preview').length,
+      backdropCount: document.querySelectorAll('.workspace-backdrop, [data-workspace-backdrop]').length,
+    }))
+    assert.ok(shelfLayout.previews > 0)
     assert.equal(shelfLayout.backdropCount, 0)
   }
 
@@ -2500,7 +2454,7 @@ async function runTask7Scenarios(browser, mobile) {
     await page.mouse.move(0, 0)
     await page.evaluate(() => {
       if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
-      document.getElementById('structureShelf').scrollTop = 0
+      document.getElementById('structureNav').scrollTop = 0
       document.getElementById('scroll').scrollTop = 0
       document.getElementById('title').dispatchEvent(new Event('input', { bubbles: true }))
     })
@@ -2568,9 +2522,9 @@ async function runTask7KeyboardAndMotion(browser) {
   })
   assert.equal(await page.locator('.bubble, .bb-b, .bb-i, .bb-u, .bb-s, .bb-hl').count(), 0)
 
-  await page.locator('#workspacePath').click()
-  await assertReducedTransition(page, '#workspaceBody')
-  await page.keyboard.press('Escape')
+  await page.locator('#sidebarCollapse').click()
+  await assertReducedTransition(page, '#ondaSidebar')
+  await page.locator('#sidebarReopen').click()
 
   const finding = page.locator('#localAgentLayer [data-finding-id]')
   await finding.locator('.local-finding-summary').click()
@@ -2580,7 +2534,7 @@ async function runTask7KeyboardAndMotion(browser) {
   await page.keyboard.press('Escape')
   await page.keyboard.press('Escape')
 
-  await page.locator('#agentPresence').click()
+  await page.locator('#ondaAura').click()
   await assertReducedTransition(page, '#agentWidget')
   await page.keyboard.press('Escape')
 
@@ -2592,15 +2546,15 @@ async function runTask7KeyboardAndMotion(browser) {
   await page.keyboard.press('Escape')
   assert.equal(await page.locator('#evidenceWindow').isHidden(), true)
 
-  await page.locator('#agentPresence').click()
+  await page.locator('#ondaAura').click()
   await page.keyboard.press('Escape')
   assert.equal(await page.locator('#agentWidget').isHidden(), true)
 
-  await page.locator('#workspacePath').click()
-  await page.locator('#structureShelf .block-preview').first().focus()
+  await page.locator('#pvCard').click()
+  await expectVisible(page.locator('#pvModal[role="dialog"]'))
   await page.keyboard.press('Escape')
-  assert.equal(await page.locator('#structureShelf').isHidden(), true)
-  assert.equal(await page.locator('#workspacePath').evaluate(node => document.activeElement === node), true)
+  assert.equal(await page.locator('#pvModal').isHidden(), true)
+  assert.equal(await page.locator('#pvCard').evaluate(node => document.activeElement === node), true)
 
   await page.locator('#editor .ProseMirror').focus()
   await page.keyboard.press('Escape')
