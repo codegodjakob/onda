@@ -2,59 +2,19 @@ import { Editor, Extension } from '@tiptap/core'
 import { EditorState, Plugin, PluginKey } from '@tiptap/pm/state'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import StarterKit from '@tiptap/starter-kit'
-import Underline from '@tiptap/extension-underline'
 import Link from '@tiptap/extension-link'
 import TaskList from '@tiptap/extension-task-list'
 import TaskItem from '@tiptap/extension-task-item'
-import Image from '@tiptap/extension-image'
-import TextStyle from '@tiptap/extension-text-style'
-import { Color } from '@tiptap/extension-color'
-import Highlight from '@tiptap/extension-highlight'
-import TextAlign from '@tiptap/extension-text-align'
 import Placeholder from '@tiptap/extension-placeholder'
 import CharacterCount from '@tiptap/extension-character-count'
 import Typography from '@tiptap/extension-typography'
-import { initUI, setSaveState, refreshSidebar, applySettings, focusTitle, showEditorView } from './ui.js'
-import { initPanels, refreshAllPanels } from './panels.js'
-import { initStructure } from './structure.js'
-import { buildExampleStructure, buildExampleNarrative, buildExampleCoach, buildExampleLane, buildExampleBody, buildExampleMaterial } from './example.js'
-
-// ---------- Schriftgröße pro Auswahl (Word-granular) ----------
-const FontSize = Extension.create({
-  name: 'fontSize',
-  addGlobalAttributes() {
-    return [{
-      types: ['textStyle'],
-      attributes: {
-        fontSize: {
-          default: null,
-          parseHTML: el => el.style.fontSize || null,
-          renderHTML: attrs => attrs.fontSize ? { style: `font-size:${attrs.fontSize}` } : {},
-        },
-      },
-    }]
-  },
-  addCommands() {
-    return {
-      setFontSize: size => ({ chain }) => chain().setMark('textStyle', { fontSize: size }).run(),
-      unsetFontSize: () => ({ chain }) => chain().setMark('textStyle', { fontSize: null }).removeEmptyTextStyle().run(),
-    }
-  },
-})
-
-// ---------- Bild mit einstellbarer Breite ----------
-const ImageX = Image.extend({
-  addAttributes() {
-    return {
-      ...this.parent?.(),
-      width: {
-        default: null,
-        parseHTML: el => el.style.width || null,
-        renderHTML: attrs => attrs.width ? { style: `width:${attrs.width}` } : {},
-      },
-    }
-  },
-})
+import { initUI, setSaveState, refreshSidebar, applySettings, focusTitle, showEditorView, showHomeView } from './ui.js'
+import { __workspaceTestBridge, initWorkspace, refreshWorkspace } from './workspace.js'
+import { ensureProjectUnderstanding, ensureReasoningModel } from './reasoning-model.mjs'
+import { ensureWorkspaceState } from './workspace-model.mjs'
+import { BlockIdentity, ensureTopLevelBlockIds, getActiveBlockId, getEditorBlocks, insertSemanticBlock, replaceFindingTarget } from './block-identity.js'
+import { buildExampleStructure, buildExampleNarrative, buildExampleCoach, buildExampleLane, buildExampleBody, buildExampleMaterial, buildExampleUnderstanding, buildExampleAgentMessages } from './example.js'
+import { EXAMPLE_PROJECT_ID, migrateExampleSeed } from './example-seed.mjs'
 
 // ---------- Sanfte Markierung (Peripherie): eine flüchtige Dekoration ----------
 // Zeigt eine Passage kurz an, OHNE das Dokument zu ändern — sie wird nicht
@@ -88,57 +48,35 @@ const Cue = Extension.create({
   },
 })
 
-// ---------- KI-Anmerkungen: dauerhaft sichtbare, aber NICHT gespeicherte Markierungen ----------
-// Formulierung (blau, welliger Strich) und Inhalt (grün, sanfte Fläche) — als
-// Dekoration aus den Anmerkungsdaten abgeleitet, nie Teil des Dokuments.
-const annoKey = new PluginKey('aiwtAnno')
-const Annos = Extension.create({
-  name: 'aiwtAnnos',
-  addProseMirrorPlugins() {
-    return [new Plugin({
-      key: annoKey,
-      state: {
-        init() { return DecorationSet.empty },
-        apply(tr, old) {
-          const meta = tr.getMeta(annoKey)
-          if (meta !== undefined) {
-            if (!meta || !meta.length) return DecorationSet.empty
-            const decos = []
-            meta.forEach(r => {
-              if (r.type === 'dot') {
-                // Kleiner Anker-Punkt für Bubble-Anmerkungen — markiert die Stelle, ohne Text zu markieren.
-                decos.push(Decoration.widget(r.to, () => {
-                  const s = document.createElement('span'); s.className = 'anno-dot anno-' + r.kind + (r.hi ? ' anno-hi' : ''); return s
-                }, { side: 1, ignoreSelection: true }))
-              } else {
-                const attrs = { class: 'anno-mark anno-' + r.kind + (r.hi ? ' anno-hi' : '') }
-                if (r.id) attrs['data-aid'] = r.id
-                decos.push(Decoration.inline(r.from, r.to, attrs))
-              }
-            })
-            return DecorationSet.create(tr.doc, decos)
-          }
-          return old.map(tr.mapping, tr.doc)
-        },
-      },
-      props: { decorations(state) { return annoKey.getState(state) } },
-    })]
-  },
-  addCommands() {
-    return {
-      setAnnos: ranges => ({ tr, dispatch }) => { if (dispatch) dispatch(tr.setMeta(annoKey, ranges)); return true },
-    }
-  },
-})
-
 // ---------- Zustand & Speicher ----------
 const NATIVE = !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.store)
-const DEFAULTS = { theme: 'auto', fontSize: 17, lineWidth: 720, font: 'serif', spellcheck: false, showWords: true, structWidth: 620 }
+const DEFAULTS = { theme: 'auto', spellcheck: false, showWords: true, structWidth: 620 }
 const TRASH_DAYS = 30
-const SCHEMA = 3
-const EX_VERSION = 5   // hochzählen, wenn sich das Beispiel-Projekt ändert → frisch aufsetzen
+const SCHEMA = 6
+const EX_VERSION = 9
 
 export const state = { docs: [], active: null, projects: [], activeProject: null, settings: { ...DEFAULTS }, editor: null, native: NATIVE }
+
+// Schmale Test-Bridge fuer zustandsbehaftete ProseMirror-Regressionstests.
+// Sie exportiert keine UI und bleibt ausserhalb des produktiven Bedienflusses.
+export const __blockIdentityTestBridge = {
+  setContent(content, ensureIds = true) {
+    state.editor.commands.setContent(content, false)
+    if (ensureIds) ensureTopLevelBlockIds(state.editor)
+  },
+  ensureTopLevelBlockIds() { return ensureTopLevelBlockIds(state.editor) },
+  getBlocks() { return getEditorBlocks(state.editor) },
+  getActiveBlockId() { return getActiveBlockId(state.editor) },
+  insertSemanticBlock(afterBlockId, semanticRole) {
+    return insertSemanticBlock(state.editor, afterBlockId, semanticRole)
+  },
+  getJSON() { return state.editor.getJSON() },
+  replaceFindingTarget(target, replacement, blockId = null) {
+    return replaceFindingTarget(state.editor, target, replacement, blockId)
+  },
+}
+
+export { __workspaceTestBridge }
 
 function uid() { return 'd' + Math.random().toString(36).slice(2, 9) + Date.now().toString(36) }
 function now() { return Date.now() }
@@ -165,6 +103,8 @@ function ensureDocShape(d) {
   }))
   // Anmerkungen: Standard-Art ist Formulierung.
   d.lane.forEach(c => { if (!c.kind) c.kind = 'form' })
+  ensureReasoningModel(d)
+  ensureWorkspaceState(d)
   return d
 }
 function findBlockByTitle(list, title) {
@@ -177,6 +117,7 @@ function findBlockByTitle(list, title) {
 // Ein Projekt trägt sein Material (Canvas) — geteilt über alle Texte des Projekts.
 function ensureProjectShape(p) {
   if (!Array.isArray(p.material)) p.material = []
+  ensureProjectUnderstanding(p)
   return p
 }
 
@@ -241,14 +182,15 @@ function load() {
   // das „Calm Technology"-Beispiel wandert einmalig in ein eigenes, echtes Projekt.
   state.projects.forEach(ensureProjectShape)
   state.docs.forEach(ensureDocShape)
-  // Beispiel-Projekt anlegen bzw. bei neuer Version frisch aufsetzen (eigene Texte bleiben).
-  if ((state.settings.exampleVersion || 0) < EX_VERSION) {
-    state.docs = state.docs.filter(x => x.projectId !== 'p-example')
-    state.projects = state.projects.filter(p => p.id !== 'p-example')
-    seedExampleProject()
-    state.settings.exampleVersion = EX_VERSION
-    state.settings.exampleSeeded = true
-  }
+  migrateExampleSeed({
+    docs: state.docs,
+    projects: state.projects,
+    settings: state.settings,
+    targetVersion: EX_VERSION,
+    legacyBody: buildExampleBody(),
+    createProject: buildExampleProjectSeed,
+    createSeed: buildExampleDocumentSeed,
+  })
   state.activeProject = (d && d.activeProject && state.projects.some(p => p.id === d.activeProject))
     ? d.activeProject : state.projects[0].id
   purgeTrash()
@@ -260,16 +202,26 @@ function load() {
 
 // Legt „Beispiel: Calm Technology" als vollständiges, editierbares Projekt an —
 // einmalig, klar als Beispiel benannt, jederzeit löschbar. Kein Mock über echten Texten.
-function seedExampleProject() {
-  const proj = ensureProjectShape({ id: 'p-example', name: 'Beispiel: Calm Technology', created: now(), example: true })
-  proj.material = buildExampleMaterial()
-  state.projects.push(proj)
+function buildExampleProjectSeed() {
+  const project = ensureProjectShape({
+    id: EXAMPLE_PROJECT_ID,
+    name: 'Beispiel: Calm Technology',
+    created: now(),
+    example: true,
+    understanding: buildExampleUnderstanding(),
+  })
+  project.material = buildExampleMaterial()
+  return project
+}
+
+function buildExampleDocumentSeed() {
   const struct = buildExampleStructure()
-  state.docs.push(ensureDocShape({
-    id: uid(), title: 'Calm Technology', body: buildExampleBody(), updated: now(), projectId: proj.id,
+  return ensureDocShape({
+    id: uid(), title: 'Calm Technology', body: buildExampleBody(), updated: now(), projectId: EXAMPLE_PROJECT_ID,
     structure: struct, narrative: buildExampleNarrative(struct),
     coach: buildExampleCoach(), lane: buildExampleLane(),
-  }))
+    workspace: { agent: { messages: buildExampleAgentMessages() } },
+  })
 }
 
 let ackPending = false
@@ -333,12 +285,13 @@ function showDoc(id) {
   if (t) { t.value = d.title || '' }
   autoGrowTitle()
   state.editor.commands.setContent(d.body || '', false)
+  ensureTopLevelBlockIds(state.editor)
   // Undo-History leeren: ⌘Z darf nie Inhalte eines anderen Dokuments zurückholen.
   state.editor.view.updateState(EditorState.create({
     doc: state.editor.state.doc,
     plugins: state.editor.state.plugins,
   }))
-  refreshAllPanels()
+  refreshWorkspace({ reconcileEditing: true })
   persist()
   refreshSidebar()
 }
@@ -348,9 +301,13 @@ export function openDoc(id) {
   if (id !== state.active) {
     flushSave()
     showDoc(id)
+  } else {
+    persist()
+    refreshSidebar()
+    refreshWorkspace({ reconcileEditing: true })
   }
   showEditorView()
-  state.editor.commands.focus('start')
+  state.editor.commands.focus()
 }
 export function newDoc() {
   flushSave()
@@ -368,6 +325,7 @@ export function duplicateDoc(id) {
   const copy = ensureDocShape({
     id: uid(), title: (src.title ? src.title + ' Kopie' : 'Kopie'), body: src.body, updated: now(), projectId: src.projectId,
     structure: clone(src.structure), narrative: clone(src.narrative), coach: clone(src.coach), lane: clone(src.lane),
+    findings: clone(src.findings), decisions: clone(src.decisions),
     panels: Object.assign({ struct: false, coach: false, lane: false }, src.panels),
   })
   state.docs.push(copy)
@@ -405,48 +363,6 @@ export function deleteForever(id) {
   } else {
     persist(); refreshSidebar()
   }
-}
-
-// ---------- Bilder ----------
-const imgPending = {}
-window.__imgSaved__ = function (reqId, url) {
-  const cb = imgPending[reqId]
-  if (cb) { delete imgPending[reqId]; cb(url) }
-}
-export function insertImageFile(file) {
-  if (!file || !/^image\//.test(file.type)) return false
-  const targetDoc = state.active
-  const reader = new FileReader()
-  reader.onload = () => {
-    const dataUrl = reader.result
-    if (NATIVE && window.webkit.messageHandlers.saveimg) {
-      const reqId = uid()
-      const ext = (file.type.split('/')[1] || 'png').replace('jpeg', 'jpg')
-      imgPending[reqId] = (url) => { insertImgNode(url || dataUrl, targetDoc) }
-      window.webkit.messageHandlers.saveimg.postMessage(JSON.stringify({
-        id: reqId, ext, dataBase64: String(dataUrl).split(',')[1] || '',
-      }))
-      setTimeout(() => { if (imgPending[reqId]) { delete imgPending[reqId]; insertImgNode(dataUrl, targetDoc) } }, 2000)
-    } else {
-      insertImgNode(dataUrl, targetDoc)
-    }
-  }
-  reader.readAsDataURL(file)
-  return true
-}
-function insertImgNode(src, targetDoc) {
-  // Kam die Antwort erst nach einem Dokumentwechsel, gehört das Bild trotzdem ins Ursprungs-Dokument.
-  if (targetDoc && targetDoc !== state.active) {
-    const d = state.docs.find(x => x.id === targetDoc)
-    if (d) {
-      d.body = (d.body || '') + '<img src="' + src + '" style="width:100%">'
-      d.updated = now()
-      persist(); refreshSidebar()
-    }
-    return
-  }
-  state.editor.chain().focus().insertContent({ type: 'image', attrs: { src, width: '100%' } }).run()
-  scheduleSave()
 }
 
 // ---------- Markdown-Export ----------
@@ -519,34 +435,24 @@ export function boot() {
   state.editor = new Editor({
     element: document.getElementById('editor'),
     extensions: [
-      StarterKit.configure({ heading: { levels: [1, 2, 3] } }),
-      Underline,
+      StarterKit.configure({
+        heading: { levels: [1, 2, 3] },
+        bold: false,
+        italic: false,
+        strike: false,
+        code: false,
+      }),
       Link.configure({ openOnClick: false, autolink: true }),
       TaskList,
       TaskItem.configure({ nested: true }),
-      ImageX,
-      TextStyle, FontSize, Color,
-      Highlight.configure({ multicolor: true }),
-      TextAlign.configure({ types: ['heading', 'paragraph'] }),
       Placeholder.configure({ placeholder: 'Schreib hier los — „/“ für Befehle …' }),
       CharacterCount,
       Typography,
+      BlockIdentity,
       Cue,
-      Annos,
     ],
     content: (activeDoc() && activeDoc().body) || '',
     editorProps: {
-      handlePaste(view, event) {
-        const items = event.clipboardData && event.clipboardData.items
-        if (!items) return false
-        for (const it of items) {
-          if (it.kind === 'file' && /^image\//.test(it.type)) {
-            insertImageFile(it.getAsFile())
-            return true
-          }
-        }
-        return false
-      },
       handleDrop(view, event) {
         // Baustein aus dem Struktur-Panel: Inhalt als Absatz an der Zielstelle einfügen.
         const block = event.dataTransfer && event.dataTransfer.getData('application/x-baustein')
@@ -559,26 +465,24 @@ export function boot() {
           scheduleSave()
           return true
         }
-        const files = event.dataTransfer && event.dataTransfer.files
-        if (files && files.length && /^image\//.test(files[0].type)) {
-          event.preventDefault()
-          insertImageFile(files[0])
-          return true
-        }
         return false
       },
     },
-    onUpdate() { scheduleSave() },
+    onUpdate({ editor }) {
+      ensureTopLevelBlockIds(editor)
+      scheduleSave()
+    },
   })
+
+  ensureTopLevelBlockIds(state.editor)
 
   const ctx = {
     editor: state.editor, state,
     ops: { newDoc, openDoc, duplicateDoc, trashDoc, restoreDoc, deleteForever, newProject, renameProject, openProject },
-    persist, scheduleSave, flushSave, exportMd, insertImageFile, docTitle, activeDoc, autoGrowTitle, activeProjectObj,
+    persist, scheduleSave, flushSave, exportMd, docTitle, activeDoc, autoGrowTitle, activeProjectObj, showHomeView,
   }
   initUI(ctx)
-  initPanels(ctx)
-  initStructure(ctx)
+  initWorkspace(ctx)
   applySettings()
   refreshSidebar()
 

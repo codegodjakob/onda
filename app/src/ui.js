@@ -1,4 +1,4 @@
-// Bedien-Oberfläche: ruhige Toolbar mit Dropdowns, Bubble, Slash-Menü,
+// Bedien-Oberfläche: ruhige Toolbar mit Dropdowns und Slash-Menü,
 // Seitenleiste (Suche/Papierkorb), Einstellungen, Fokus-Modus.
 // Calm Technology: wenig sichtbar, alles im Kontext, Peripherie statt Alarm.
 
@@ -7,11 +7,6 @@ let sortMode = 'recent'
 let searchQuery = ''
 let openPanel = null
 const panels = []
-
-import { persistPanelState, buildLane } from './panels.js'
-
-// Prinzip „begrenzte Auswahl": Hervorheben = genau eine Markierfarbe.
-const HL_COLOR = '#f6e7a9'
 
 // Schlichte Linien-Icons (einheitlicher Strich, keine Deko)
 function icon(paths) {
@@ -39,25 +34,27 @@ const IC = {
   bCode: '<path d="M8 8l-4 4 4 4M16 8l4 4-4 4"/>',
 }
 
-// ---------- Seiten: Bibliothek (Home) ↔ Struktur ↔ Schreibansicht ----------
+// ---------- Seiten: Bibliothek (Home) ↔ Schreibansicht ----------
 export function showHomeView() {
   document.body.classList.remove('zen', 'zen-peek')
   document.body.classList.add('view-home')
-  document.body.classList.remove('view-editor', 'view-struct')
-  closeAllPanels(); hideBubble()
+  document.body.classList.remove('view-editor')
+  document.dispatchEvent(new CustomEvent('aiwt:viewchange', { detail: { view: 'home' } }))
+  closeAllPanels()
   refreshSidebar()
+  requestAnimationFrame(() => {
+    const search = document.getElementById('search')
+    const fallback = document.getElementById('newBtn')
+    const target = [search, fallback].find(node => node && node.offsetParent !== null && !node.disabled)
+    target?.focus({ preventScroll: true })
+  })
 }
 export function showEditorView() {
   document.body.classList.add('view-editor')
-  document.body.classList.remove('view-home', 'view-struct')
+  document.body.classList.remove('view-home')
+  document.dispatchEvent(new CustomEvent('aiwt:viewchange', { detail: { view: 'editor' } }))
   // Titelhöhe erst messen, wenn die Ansicht wirklich sichtbar ist.
   if (ctx) requestAnimationFrame(ctx.autoGrowTitle)
-}
-export function showStructView() {
-  document.body.classList.remove('zen', 'zen-peek')
-  document.body.classList.add('view-struct')
-  document.body.classList.remove('view-home', 'view-editor')
-  closeAllPanels(); hideBubble()
 }
 
 // ---------- kleine Helfer ----------
@@ -93,7 +90,6 @@ function makeDropdown(btn, build, alignRight) {
     e.stopPropagation()
     if (panel.classList.contains('open')) { closeAllPanels(); return }
     closeAllPanels()
-    hideBubble()
     panel.innerHTML = ''
     build(panel)
     positionPanel(panel, btn.getBoundingClientRect(), alignRight)
@@ -116,36 +112,44 @@ function menuLabel(panel, text) { panel.appendChild(el('div', 'mi-head', text)) 
 function menuDivider(panel) { panel.appendChild(el('div', 'mi-div')) }
 
 // ---------- Speicher-Punkt (Calm: Punkt statt Text) ----------
-let dotEl = null, dotTimer = null, errEl = null
+let dotEl = null, dotTimer = null, errEl = null, saveErrorActive = false
 export function setSaveState(s) {
-  if (!dotEl) return
-  dotEl.classList.remove('saving', 'saved', 'error')
-  errEl.textContent = ''
-  if (s === 'saving') { dotEl.classList.add('saving'); dotEl.title = 'Speichert …' }
-  else if (s === 'saved') {
-    dotEl.classList.add('saved')
-    dotEl.title = 'Gespeichert'
-    if (dotTimer) clearTimeout(dotTimer)
-    dotTimer = setTimeout(() => dotEl.classList.remove('saved'), 1600)
-  } else if (s === 'error') {
-    dotEl.classList.add('error')
-    dotEl.title = 'Speichern fehlgeschlagen'
-    errEl.textContent = 'Speichern fehlgeschlagen — bitte exportieren'
+  const alertEl = document.getElementById('saveAlert') || errEl
+  if (s === 'error') saveErrorActive = true
+  else if (s === 'saved') saveErrorActive = false
+  const visibleState = saveErrorActive && s === 'saving' ? 'error' : s
+
+  if (dotEl) {
+    dotEl.classList.remove('saving', 'saved', 'error')
+    if (visibleState === 'saving') { dotEl.classList.add('saving'); dotEl.title = 'Speichert …' }
+    else if (visibleState === 'saved') {
+      dotEl.classList.add('saved')
+      dotEl.title = 'Gespeichert'
+      if (dotTimer) clearTimeout(dotTimer)
+      dotTimer = setTimeout(() => dotEl?.classList.remove('saved'), 1600)
+    } else if (visibleState === 'error') {
+      dotEl.classList.add('error')
+      dotEl.title = 'Speichern fehlgeschlagen'
+    }
+  }
+
+  if (alertEl) {
+    alertEl.textContent = saveErrorActive ? 'Speichern fehlgeschlagen. Bitte exportieren.' : ''
+    alertEl.hidden = !saveErrorActive
   }
 }
 
 // ---------- Einstellungen anwenden ----------
 const SERIF = '"Literata", "Iowan Old Style", Georgia, serif'
-const SANS = '"Diatype", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif'
 let mediaBound = false
 export function applySettings() {
   const s = ctx.state.settings
   const root = document.documentElement
   const dark = s.theme === 'dark' || (s.theme === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches)
   root.dataset.theme = dark ? 'dark' : 'light'
-  root.style.setProperty('--doc-size', s.fontSize + 'px')
-  root.style.setProperty('--doc-width', s.lineWidth + 'px')
-  root.style.setProperty('--doc-font', s.font === 'sans' ? SANS : SERIF)
+  root.style.setProperty('--doc-size', '18px')
+  root.style.setProperty('--doc-width', '700px')
+  root.style.setProperty('--doc-font', SERIF)
   const pm = document.querySelector('#editor .ProseMirror')
   if (pm) pm.setAttribute('spellcheck', s.spellcheck ? 'true' : 'false')
   const t = document.getElementById('title')
@@ -164,157 +168,7 @@ function setSetting(key, value) {
   ctx.persist()
 }
 
-// ---------- Toolbar ----------
-let blockBtn = null, counterEl = null
-function currentBlock() {
-  const e = ctx.editor
-  if (e.isActive('heading', { level: 1 })) return { ic: IC.bH1, name: 'Überschrift 1' }
-  if (e.isActive('heading', { level: 2 })) return { ic: IC.bH2, name: 'Überschrift 2' }
-  if (e.isActive('heading', { level: 3 })) return { ic: IC.bH3, name: 'Überschrift 3' }
-  if (e.isActive('taskList')) return { ic: IC.bCl, name: 'Checkliste' }
-  if (e.isActive('bulletList')) return { ic: IC.bUl, name: 'Aufzählung' }
-  if (e.isActive('orderedList')) return { ic: IC.bOl, name: 'Nummerierte Liste' }
-  if (e.isActive('blockquote')) return { ic: IC.bQuote, name: 'Zitat' }
-  if (e.isActive('codeBlock')) return { ic: IC.bCode, name: 'Code' }
-  return { ic: IC.bText, name: 'Text' }
-}
-function currentBlockLabel() { return currentBlock().name }
-function curFontSize() {
-  const v = ctx.editor.getAttributes('textStyle').fontSize
-  return v ? parseInt(v, 10) : ctx.state.settings.fontSize
-}
-function bumpFontSize(delta) {
-  const size = Math.max(10, Math.min(48, curFontSize() + delta))
-  ctx.editor.chain().focus().setFontSize(size + 'px').run()
-}
-function blockItems(panel) {
-  const e = ctx.editor
-  menuItem(panel, 'Text', () => e.chain().focus().setParagraph().run(), { active: currentBlockLabel() === 'Text' })
-  menuItem(panel, 'Überschrift 1', () => e.chain().focus().toggleHeading({ level: 1 }).run(), { active: e.isActive('heading', { level: 1 }), kbd: '#' })
-  menuItem(panel, 'Überschrift 2', () => e.chain().focus().toggleHeading({ level: 2 }).run(), { active: e.isActive('heading', { level: 2 }), kbd: '##' })
-  menuItem(panel, 'Überschrift 3', () => e.chain().focus().toggleHeading({ level: 3 }).run(), { active: e.isActive('heading', { level: 3 }), kbd: '###' })
-}
-function listItems(panel) {
-  const e = ctx.editor
-  menuItem(panel, 'Aufzählung', () => e.chain().focus().toggleBulletList().run(), { active: e.isActive('bulletList'), kbd: '-' })
-  menuItem(panel, 'Nummerierte Liste', () => e.chain().focus().toggleOrderedList().run(), { active: e.isActive('orderedList'), kbd: '1.' })
-  menuItem(panel, 'Checkliste', () => e.chain().focus().toggleTaskList().run(), { active: e.isActive('taskList'), kbd: '[]' })
-}
-function elementItems(panel) {
-  const e = ctx.editor
-  menuItem(panel, 'Zitat', () => e.chain().focus().toggleBlockquote().run(), { active: e.isActive('blockquote'), kbd: '>' })
-  menuItem(panel, 'Trennlinie', () => e.chain().focus().setHorizontalRule().run(), { kbd: '---' })
-  menuItem(panel, 'Code-Block', () => e.chain().focus().toggleCodeBlock().run(), { active: e.isActive('codeBlock'), kbd: '```' })
-}
-function buildToolbar() {
-  const bar = document.getElementById('bar')
-  bar.innerHTML = ''
-  const left = el('div', 'bar-group')
-  const right = el('div', 'bar-group bar-right')
-
-  blockBtn = el('button', 'tbtn tbtn-block')
-  blockBtn.title = 'Absatzformat: Text'
-  blockBtn.innerHTML = '<span id="blockLabel">' + icon(IC.bText) + '</span>'
-  makeDropdown(blockBtn, blockItems)
-  left.appendChild(blockBtn)
-  left.appendChild(el('span', 'bar-sep'))
-
-  const listBtn = el('button', 'tbtn')
-  listBtn.innerHTML = icon(IC.bUl)
-  listBtn.title = 'Listen (Aufzählung, nummeriert, Checkliste)'
-  makeDropdown(listBtn, listItems)
-  left.appendChild(listBtn)
-
-  const elemBtn = el('button', 'tbtn')
-  elemBtn.innerHTML = icon(IC.bQuote)
-  elemBtn.title = 'Elemente (Zitat, Trennlinie, Code)'
-  makeDropdown(elemBtn, elementItems)
-  left.appendChild(elemBtn)
-  left.appendChild(el('span', 'bar-sep'))
-
-  const aaBtn = el('button', 'tbtn tbtn-label')
-  aaBtn.innerHTML = '<span>Aa</span>'
-  aaBtn.title = 'Schriftgröße (Auswahl / Gesamt)'
-  makeDropdown(aaBtn, panel => {
-    menuLabel(panel, 'Schriftgröße')
-    const stepRow = (labelText, getVal, bump) => {
-      const row = el('div', 'mi-row')
-      row.appendChild(el('span', 'mi-sublabel', labelText))
-      const minus = el('button', 'mi-step', '−')
-      const val = el('span', 'mi-val', getVal() + '')
-      const plus = el('button', 'mi-step', '+')
-      minus.addEventListener('click', () => { bump(-1); val.textContent = getVal() + '' })
-      plus.addEventListener('click', () => { bump(1); val.textContent = getVal() + '' })
-      ;[minus, plus].forEach(b => b.addEventListener('mousedown', ev => ev.preventDefault()))
-      row.appendChild(minus); row.appendChild(val); row.appendChild(plus)
-      panel.appendChild(row)
-    }
-    stepRow('Auswahl', curFontSize, d => bumpFontSize(d))
-    stepRow('Gesamt', () => ctx.state.settings.fontSize, d => {
-      setSetting('fontSize', Math.max(14, Math.min(24, ctx.state.settings.fontSize + d)))
-    })
-    panel.appendChild(el('div', 'mi-note', 'Gesamt auch mit ⌘+ / ⌘−'))
-  })
-  left.appendChild(aaBtn)
-
-  const plusBtn = el('button', 'tbtn')
-  plusBtn.innerHTML = icon(IC.plus)
-  plusBtn.title = 'Einfügen (Bild)'
-  makeDropdown(plusBtn, panel => {
-    menuItem(panel, 'Bild …', () => imgInput.click())
-  })
-  left.appendChild(plusBtn)
-
-  // Formulierungs-Spalte: KI-Anmerkungen rechts am Text ein-/ausblenden.
-  const laneBtn = el('button', 'tbtn tbtn-lane')
-  laneBtn.innerHTML = icon('<path d="M7 8h13M7 12h13M7 16h8"/><path d="M4 7.2v9.6"/>')
-  laneBtn.title = 'KI-Anmerkungen am Text ein-/ausblenden'
-  laneBtn.appendChild(el('span', 'rail-badge'))
-  laneBtn.querySelector('.rail-badge').id = 'laneBadge'
-  laneBtn.addEventListener('mousedown', e => e.preventDefault())
-  laneBtn.addEventListener('click', e => {
-    e.stopPropagation()
-    const lane = document.getElementById('lane')
-    if (!lane) return
-    const show = lane.hasAttribute('hidden')
-    if (show) lane.removeAttribute('hidden')
-    else lane.setAttribute('hidden', '')
-    laneBtn.classList.toggle('on', show)
-    persistPanelState()
-    buildLane()
-  })
-  counterEl = el('span', 'counter', '')
-  right.appendChild(counterEl)
-  dotEl = el('span', 'savedot')
-  dotEl.title = 'Automatisch gespeichert'
-  right.appendChild(dotEl)
-  errEl = el('span', 'saveerr', '')
-  right.appendChild(errEl)
-
-  const gearBtn = el('button', 'tbtn')
-  gearBtn.innerHTML = icon(IC.gear)
-  gearBtn.title = 'Einstellungen'
-  makeDropdown(gearBtn, buildGearPanel, true)
-  right.appendChild(gearBtn)
-
-  // Anmerkungs-Icon ganz außen rechts (obere Ecke) — es steuert die rechte Spalte.
-  right.appendChild(el('span', 'bar-sep'))
-  right.appendChild(laneBtn)
-
-  bar.appendChild(left)
-  bar.appendChild(right)
-
-  // verstecktes Datei-Feld für "Bild …"
-  var imgInput = document.createElement('input')
-  imgInput.type = 'file'
-  imgInput.accept = 'image/*'
-  imgInput.style.display = 'none'
-  imgInput.addEventListener('change', () => {
-    if (imgInput.files && imgInput.files[0]) ctx.insertImageFile(imgInput.files[0])
-    imgInput.value = ''
-  })
-  document.body.appendChild(imgInput)
-}
+let counterEl = null
 // Einstellungen: bleibt beim Ausprobieren offen, Segmente aktualisieren sich an Ort und Stelle.
 function buildGearPanel(panel) {
   panel.classList.add('settings')
@@ -370,68 +224,10 @@ function updateToolbarState() {
   if (counterEl) counterEl.style.display = ctx.state.settings.showWords ? '' : 'none'
 }
 
-// ---------- Auswahl-Bubble ----------
-let bubbleEl = null
-function buildBubble() {
-  bubbleEl = el('div', 'bubble')
-  const mk = (label, title, run, cls) => {
-    const b = el('button', 'bb' + (cls ? ' ' + cls : ''), label)
-    b.title = title
-    b.addEventListener('mousedown', e => e.preventDefault())
-    b.addEventListener('click', run)
-    bubbleEl.appendChild(b)
-    return b
-  }
-  mk('B', 'Fett (⌘B)', () => ctx.editor.chain().focus().toggleBold().run(), 'bb-b')
-  mk('I', 'Kursiv (⌘I)', () => ctx.editor.chain().focus().toggleItalic().run(), 'bb-i')
-  mk('U', 'Unterstrichen (⌘U)', () => ctx.editor.chain().focus().toggleUnderline().run(), 'bb-u')
-  mk('S', 'Durchgestrichen (⇧⌘S)', () => ctx.editor.chain().focus().toggleStrike().run(), 'bb-s')
-  const hl = el('button', 'bb bb-hl')
-  hl.title = 'Markieren'
-  hl.setAttribute('aria-label', 'Markieren')
-  hl.appendChild(el('span', 'bb-hl-dot'))
-  hl.addEventListener('mousedown', e => e.preventDefault())
-  hl.addEventListener('click', () => ctx.editor.chain().focus().toggleHighlight({ color: HL_COLOR }).run())
-  bubbleEl.appendChild(hl)
-  bubbleEl.appendChild(el('span', 'bb-div'))
-  mk('−', 'Kleiner', () => bumpFontSize(-1))
-  mk('+', 'Größer', () => bumpFontSize(1))
-  bubbleEl.appendChild(el('span', 'bb-div'))
-  mk('🔗', 'Link (⌘K)', () => openLinkDialog())
-  document.body.appendChild(bubbleEl)
-}
-function showBubble() {
-  const e = ctx.editor
-  const sel = e.state.selection
-  if (sel.empty || sel.node) { hideBubble(); return }
-  if (openPanel) return
-  updateBubbleStates()
-  const from = e.view.coordsAtPos(sel.from)
-  const to = e.view.coordsAtPos(sel.to)
-  bubbleEl.classList.add('open')
-  const w = bubbleEl.offsetWidth
-  let left = (from.left + to.left) / 2 - w / 2
-  left = Math.max(8, Math.min(left, window.innerWidth - w - 8))
-  let top = Math.min(from.top, to.top) - bubbleEl.offsetHeight - 8
-  if (top < 54) top = Math.max(from.bottom, to.bottom) + 8
-  bubbleEl.style.left = left + 'px'
-  bubbleEl.style.top = top + 'px'
-}
-function hideBubble() { if (bubbleEl) bubbleEl.classList.remove('open') }
-function updateBubbleStates() {
-  if (!bubbleEl) return
-  const e = ctx.editor
-  bubbleEl.querySelector('.bb-b').classList.toggle('on', e.isActive('bold'))
-  bubbleEl.querySelector('.bb-i').classList.toggle('on', e.isActive('italic'))
-  bubbleEl.querySelector('.bb-u').classList.toggle('on', e.isActive('underline'))
-  bubbleEl.querySelector('.bb-s').classList.toggle('on', e.isActive('strike'))
-  bubbleEl.querySelector('.bb-hl').classList.toggle('on', e.isActive('highlight'))
-}
-
 // ---------- Link-Dialog ----------
 let linkEl = null
 function openLinkDialog() {
-  closeAllPanels(); hideBubble()
+  closeAllPanels()
   if (!linkEl) {
     linkEl = el('div', 'menu linkbox')
     document.body.appendChild(linkEl)
@@ -496,7 +292,6 @@ function slashItems() {
     { label: 'Checkliste', run: () => e.chain().focus().toggleTaskList().run() },
     { label: 'Zitat', run: () => e.chain().focus().toggleBlockquote().run() },
     { label: 'Trennlinie', run: () => e.chain().focus().setHorizontalRule().run() },
-    { label: 'Bild …', run: () => document.querySelector('input[type=file][accept^=image]').click() },
     { label: 'Link …', run: () => openLinkDialog() },
   ]
 }
@@ -684,9 +479,11 @@ function projectRows(listEl) {
   projects.forEach(p => {
     const count = ctx.state.docs.filter(d => d.projectId === p.id && !d.trashed).length
     const item = el('div', 'doc')
-    const main = el('div', 'doc-main')
+    const main = el('button', 'doc-main')
+    main.type = 'button'
     main.appendChild(el('div', 'dt', p.name))
     main.appendChild(el('div', 'dd', count + (count === 1 ? ' Text' : ' Texte')))
+    main.addEventListener('click', () => { ctx.ops.openProject(p.id); homeMode = 'docs'; refreshSidebar() })
     item.appendChild(main)
     const acts = el('div', 'trash-acts')
     const ren = el('button', 'tico')
@@ -696,16 +493,16 @@ function projectRows(listEl) {
     ren.addEventListener('click', ev => { ev.stopPropagation(); startRename(item, p) })
     acts.appendChild(ren)
     item.appendChild(acts)
-    item.addEventListener('click', () => { ctx.ops.openProject(p.id); homeMode = 'docs'; refreshSidebar() })
     listEl.appendChild(item)
   })
 }
 function startRename(item, p) {
-  const dt = item.querySelector('.dt')
+  const main = item.querySelector('.doc-main')
+  if (!main) return
   const input = document.createElement('input')
   input.className = 'rename-input'
   input.value = p.name
-  dt.replaceWith(input)
+  main.replaceWith(input)
   input.focus(); input.select()
   let committed = false
   const done = () => {
@@ -768,12 +565,14 @@ export function refreshSidebar() {
   }
   docs.forEach(d => {
     const item = el('div', 'doc')
-    const main = el('div', 'doc-main')
+    const main = el('button', 'doc-main')
+    main.type = 'button'
     const tt = el('div', 'dt')
     tt.appendChild(highlightMatch(ctx.docTitle(d), q))
     main.appendChild(tt)
     const preview = stripHtml(d.body).trim().slice(0, 90)
     main.appendChild(el('div', 'dd', fmtDate(d.updated) + (preview ? '  \u00b7  ' + preview : '')))
+    main.addEventListener('click', () => ctx.ops.openDoc(d.id))
     item.appendChild(main)
     const acts = el('div', 'trash-acts')
     const dup = el('button', 'tico')
@@ -788,7 +587,6 @@ export function refreshSidebar() {
     tr.addEventListener('click', ev => { ev.stopPropagation(); ctx.ops.trashDoc(d.id) })
     acts.appendChild(dup); acts.appendChild(tr)
     item.appendChild(acts)
-    item.addEventListener('click', () => ctx.ops.openDoc(d.id))
     listEl.appendChild(item)
   })
 
@@ -890,22 +688,13 @@ function bindKeys() {
     else if (mod && e.key === 'e') { if (inEditor) { e.preventDefault(); ctx.exportMd() } }
     else if (mod && e.key === 'p') { if (inEditor) { e.preventDefault(); requestPrint() } }
     else if (mod && e.key === 'n' && !ctx.state.native) { e.preventDefault(); ctx.ops.newDoc() }
-    else if (mod && (e.key === '+' || e.key === '=')) {
-      e.preventDefault()
-      setSetting('fontSize', Math.min(24, ctx.state.settings.fontSize + 1))
-    }
-    else if (mod && e.key === '-') {
-      e.preventDefault()
-      setSetting('fontSize', Math.max(14, ctx.state.settings.fontSize - 1))
-    }
     else if (e.key === 'Escape') {
       const overlay = document.querySelector('.ai-overlay')
       if (overlay) overlay.querySelector('.ai-close')?.click()
       else if (openPanel) closeAllPanels()
-      else if (bubbleEl && bubbleEl.classList.contains('open')) hideBubble()
       else if (document.body.classList.contains('zen')) toggleZen()
-      else if (document.body.classList.contains('view-editor')) { ctx.flushSave(); showStructView() }
-      else if (document.body.classList.contains('view-struct')) { homeMode = 'projects'; showHomeView() }
+      else if (document.body.classList.contains('view-editor') && window.__workspaceCloseTopLayer?.()) {}
+      else if (document.body.classList.contains('view-editor')) { ctx.flushSave(); showHomeView() }
     }
   })
   document.addEventListener('click', () => closeAllPanels())
@@ -914,20 +703,14 @@ function bindKeys() {
 // ---------- Init ----------
 export function initUI(context) {
   ctx = context
-  buildToolbar()
-  buildBubble()
   bindSlash()
-  bindImageResize()
   bindSidebar()
   bindTitle()
   bindKeys()
   updateToolbarState()
-  ctx.editor.on('selectionUpdate', () => { updateToolbarState(); showBubble(); markZenBlock() })
+  ctx.editor.on('selectionUpdate', () => { updateToolbarState(); markZenBlock() })
   ctx.editor.on('update', () => { updateToolbarState(); markZenBlock() })
-  ctx.editor.on('transaction', () => { if (bubbleEl && bubbleEl.classList.contains('open')) updateBubbleStates() })
-  ctx.editor.on('blur', () => setTimeout(() => { if (!openPanel) hideBubble() }, 150))
   document.getElementById('scroll').addEventListener('scroll', () => {
-    hideBubble()
     if (openPanel) closeAllPanels()
   })
   // Fokus-Modus: Maus an den oberen Rand holt die Leiste kurz zurück.

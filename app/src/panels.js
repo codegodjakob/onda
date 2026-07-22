@@ -5,6 +5,7 @@
 // Formulierungs-Spalte rechts am Text · Coach rechts · reiche Overlays mit Rückfrage-Chat.
 
 import { showHomeView, setHomeMode, showStructView, showEditorView } from './ui.js'
+import { decideFinding, ensureProjectUnderstanding, getFindingQueue, isIntegrityCategory } from './reasoning-model.mjs'
 
 let ctx = null
 
@@ -36,8 +37,15 @@ export const PIC = {
 function doc() { return ctx ? ctx.activeDoc() : null }
 function blocks() { const d = doc(); return d ? d.structure : [] }
 function narr() { const d = doc(); return d ? d.narrative : [] }
-function coachList() { const d = doc(); return d ? d.coach : [] }
-function laneList() { const d = doc(); return d ? d.lane : [] }
+function allFindings() { const d = doc(); return d ? d.findings : [] }
+function findingQueue() {
+  const d = doc()
+  return d ? getFindingQueue(d) : { current: null, upcoming: [], parked: [], acceptedRisks: [], completed: [], pendingCount: 0 }
+}
+function laneList() {
+  const current = findingQueue().current
+  return current && current.placement === 'passage' ? [current] : []
+}
 function save() { if (ctx) ctx.scheduleSave() }
 
 // Faden-Farben (an das App-Palette gekoppelt, hell- und dunkelmodus-fest).
@@ -98,8 +106,8 @@ export function refreshAllPanels() {
   ensureIds(blocks())
   applyPanelState()          // erst Sichtbarkeit setzen …
   buildStructPanel()
-  renderCoach()
   buildLane()                // … dann die Anmerkungen aufbauen (kennt die richtige Sichtbarkeit)
+  renderCoach()
   refreshToc()
   scheduleAnnoRelayout()     // nach dem Layout noch einmal exakt ausrichten
   // Struktur-Seite (falls schon initialisiert) an denselben Text/das Projekt angleichen.
@@ -153,7 +161,7 @@ function buildRails() {
   railBtn(railL, PIC.back, 'Zur Struktur-Seite', () => { ctx.flushSave(); showStructView() })
   railL.appendChild(el('div', 'rail-div'))
   structBtn = railBtn(railL, PIC.struct, 'Struktur & Narrative', () => togglePanel('pStruct', structBtn))
-  coachBtn = railBtn(railR, PIC.coach, 'Coach (KI-Hinweise)', () => togglePanel('pCoach', coachBtn))
+  coachBtn = railBtn(railR, PIC.coach, 'Agent', () => togglePanel('pCoach', coachBtn))
   const badge = el('span', 'rail-badge', ''); badge.id = 'coachBadge'
   coachBtn.appendChild(badge)
   updateCoachBadge()
@@ -500,7 +508,7 @@ export function addRootBlock(b) {
 // Coach
 // ============================================================
 function updateCoachBadge() {
-  const n = coachList().filter(c => c.status === 'open').length
+  const n = findingQueue().pendingCount
   const badge = document.getElementById('coachBadge')
   if (!badge) return
   badge.textContent = n > 0 ? String(n) : ''
@@ -514,16 +522,117 @@ export function renderCoach() {
 export function renderCoachInto(p) {
   if (!p) return
   p.innerHTML = ''
-  p.appendChild(el('div', 'panel-head', 'Coach'))
-  const open = coachList().filter(c => c.status === 'open')
-  if (!open.length) { p.appendChild(el('div', 'panel-empty', 'Keine Hinweise. Die KI meldet sich, wenn ihr etwas auffällt.')); return }
-  open.forEach(c => {
-    const card = el('button', 'coach-card tone-' + (c.tone || 'idea'))
-    card.appendChild(el('span', 'coach-type', c.type))
-    card.appendChild(el('span', 'coach-text', c.text))
-    card.addEventListener('click', () => openCardOverlay(c))
-    p.appendChild(card)
+  p.appendChild(el('div', 'panel-head agent-panel-head', 'Agent'))
+  renderProjectUnderstanding(p)
+
+  const queue = findingQueue()
+  if (queue.current) {
+    p.appendChild(el('div', 'agent-section-label', 'Als Nächstes'))
+    p.appendChild(findingButton(queue.current, true))
+  } else {
+    p.appendChild(el('div', 'panel-empty', 'Keine offenen Hinweise. Der Agent prüft weiter, während du schreibst.'))
+  }
+  renderFindingQueue(p, queue)
+  renderFindingHistory(p, queue)
+}
+
+const UNDERSTANDING_FIELDS = [
+  ['task', 'Aufgabe', false],
+  ['audience', 'Zielgruppe', true],
+  ['desiredEffect', 'Wirkung', false],
+  ['evidenceStandard', 'Belegstandard', false],
+  ['protectedIntentions', 'Geschützte Absichten', true],
+  ['openQuestions', 'Offene Fragen', true],
+]
+
+function renderProjectUnderstanding(parent) {
+  const project = ctx.activeProjectObj()
+  if (!project) return
+  const understanding = ensureProjectUnderstanding(project)
+  const details = el('details', 'project-understanding')
+  const summary = el('summary', 'understanding-summary')
+  summary.appendChild(el('span', 'understanding-label', 'Projektverständnis'))
+  const brief = el('span', 'understanding-brief', understanding.task || 'Noch nicht beschrieben')
+  summary.appendChild(brief)
+  details.appendChild(summary)
+
+  const body = el('div', 'understanding-body')
+  UNDERSTANDING_FIELDS.forEach(([key, label, isList]) => {
+    const wrap = el('label', 'understanding-field')
+    wrap.appendChild(el('span', 'understanding-field-label', label))
+    const input = document.createElement('textarea')
+    input.rows = isList ? 2 : 2
+    input.value = isList ? understanding[key].join('\n') : (understanding[key] || '')
+    input.setAttribute('aria-label', label)
+    input.addEventListener('keydown', event => event.stopPropagation())
+    input.addEventListener('blur', () => {
+      const value = input.value.trim()
+      understanding[key] = isList ? value.split(/\n+/).map(item => item.trim()).filter(Boolean) : value
+      understanding.updatedAt = Date.now()
+      if (key === 'task') brief.textContent = value || 'Noch nicht beschrieben'
+      save()
+    })
+    wrap.appendChild(input)
+    body.appendChild(wrap)
   })
+  details.appendChild(body)
+  parent.appendChild(details)
+}
+
+function categoryLabel(category) {
+  return ({
+    fact: 'Fakt', source: 'Quelle', citation: 'Zitat', method: 'Methode', logic: 'Logik',
+    structure: 'Struktur', research: 'Recherche', content: 'Inhalt', rhetoric: 'Wirkung', wording: 'Formulierung',
+  })[category] || 'Hinweis'
+}
+
+function findingButton(finding, current) {
+  const button = el('button', 'finding-row' + (current ? ' finding-current tone-' + (finding.tone || 'idea') : ''))
+  button.dataset.findingPlacement = finding.placement
+  if (current) button.dataset.currentFinding = finding.id
+  const meta = el('span', 'finding-meta')
+  meta.appendChild(el('span', 'finding-kind', categoryLabel(finding.category)))
+  if (finding.anchorState === 'stale') meta.appendChild(el('span', 'finding-stale', 'Textstelle verändert'))
+  button.appendChild(meta)
+  button.appendChild(el('span', 'finding-title', finding.short || finding.text || 'Hinweis'))
+  button.addEventListener('click', () => finding.placement === 'passage' ? openAnnoOverlay(finding) : openCardOverlay(finding))
+  return button
+}
+
+function renderFindingQueue(parent, queue) {
+  const count = queue.upcoming.length + queue.parked.length
+  const details = el('details', 'finding-queue')
+  details.dataset.findingQueue = ''
+  const summary = el('summary', 'queue-summary', count === 1 ? '1 weiterer Hinweis vorgemerkt' : `${count} weitere Hinweise vorgemerkt`)
+  details.appendChild(summary)
+  const list = el('div', 'queue-list')
+  queue.upcoming.forEach(finding => list.appendChild(findingButton(finding, false)))
+  if (queue.parked.length) {
+    list.appendChild(el('div', 'queue-group-label', 'Wartet auf eine Grundentscheidung'))
+    queue.parked.forEach(finding => list.appendChild(findingButton(finding, false)))
+  }
+  if (!count) list.appendChild(el('div', 'panel-empty', 'Keine weiteren offenen Hinweise.'))
+  details.appendChild(list)
+  parent.appendChild(details)
+}
+
+function renderFindingHistory(parent, queue) {
+  if (queue.acceptedRisks.length) {
+    const risks = el('details', 'finding-history finding-risks')
+    risks.appendChild(el('summary', 'queue-summary', `${queue.acceptedRisks.length} bewusst akzeptierte Risiken`))
+    const list = el('div', 'queue-list')
+    queue.acceptedRisks.forEach(finding => list.appendChild(findingButton(finding, false)))
+    risks.appendChild(list)
+    parent.appendChild(risks)
+  }
+  if (queue.completed.length) {
+    const history = el('details', 'finding-history')
+    history.appendChild(el('summary', 'queue-summary', `Verlauf · ${queue.completed.length}`))
+    const list = el('div', 'queue-list')
+    queue.completed.forEach(finding => list.appendChild(findingButton(finding, false)))
+    history.appendChild(list)
+    parent.appendChild(history)
+  }
 }
 
 // ============================================================
@@ -566,7 +675,7 @@ function bindMarkClicks() {
 export function updateLaneBadge() {
   const b = document.getElementById('laneBadge')
   if (!b) return
-  const n = laneList().filter(c => c.status === 'open').length
+  const n = findingQueue().pendingCount
   b.textContent = n > 0 ? String(n) : ''
   b.style.display = n > 0 ? '' : 'none'
 }
@@ -588,6 +697,11 @@ export function findInDoc(text) {
   const i = full.indexOf(text)
   if (i < 0) return null
   return { from: map[i], to: map[i + text.length - 1] + 1 }
+}
+function findingRange(finding) {
+  const range = findInDoc(finding.target)
+  finding.anchorState = range ? 'current' : 'stale'
+  return range
 }
 // Ebene über dem ganzen Textbereich für die Verbindungslinien (bis zur echten Stelle).
 function getAnnoLayer() {
@@ -622,7 +736,7 @@ function layoutAnnotations() {
   items.forEach(c => {
     const form = c.form || 'note'
     if (form === 'mark') return
-    const r = findInDoc(c.target); if (!r) return
+    const r = findingRange(c); if (!r) return
     if (form === 'para') {
       const ext = paragraphExtent(r.from); if (!ext) return
       const yTop = ext.top - mbr.top + scroll.scrollTop
@@ -663,7 +777,7 @@ function annoDecos(hiId) {
   laneList().filter(c => c.status === 'open').forEach(c => {
     const form = c.form || 'note'
     if (form === 'para') return                       // Absatz-Form: keine Text-Dekoration
-    const r = findInDoc(c.target); if (!r) return
+    const r = findingRange(c); if (!r) return
     if (form === 'mark') decos.push({ from: r.from, to: r.to, kind: c.kind || 'form', type: 'mark', id: c.id, hi: c.id === hiId })
     else decos.push({ to: r.to, kind: c.kind || 'form', type: 'dot', id: c.id, hi: c.id === hiId })
   })
@@ -761,7 +875,7 @@ export function closeOverlay() {
 }
 const escHtml = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
-function overlayShell(typeLabel, tone, onAccept, onReject) {
+function overlayShell(typeLabel, tone, onAccept, onReject, options = {}) {
   const prev = document.activeElement
   closeOverlay()
   overlayPrevFocus = (prev && prev !== document.body) ? prev : null
@@ -774,12 +888,12 @@ function overlayShell(typeLabel, tone, onAccept, onReject) {
   const actions = el('div', 'ai-actions')
   if (onAccept) {
     const ok = el('button', 'ai-ico ai-ok'); ok.innerHTML = icon(PIC.check)
-    ok.title = 'Übernehmen'; ok.setAttribute('aria-label', 'Übernehmen')
+    ok.title = options.acceptLabel || 'Übernehmen'; ok.setAttribute('aria-label', ok.title)
     ok.addEventListener('click', onAccept); actions.appendChild(ok)
   }
   if (onReject) {
     const no = el('button', 'ai-ico ai-no'); no.innerHTML = icon(PIC.reject)
-    no.title = 'Verwerfen'; no.setAttribute('aria-label', 'Verwerfen')
+    no.title = options.rejectLabel || 'Verwerfen'; no.setAttribute('aria-label', no.title)
     no.addEventListener('click', onReject); actions.appendChild(no)
   }
   const close = el('button', 'ai-ico ai-close'); close.innerHTML = icon(PIC.x)
@@ -795,8 +909,8 @@ function overlayShell(typeLabel, tone, onAccept, onReject) {
 }
 
 // Großes Overlay (fast ganze Seite) für Coach- und Text-Anmerkungen.
-function overlayShellHuge(label, tone, onA, onR) {
-  const box = overlayShell(label, tone, onA, onR)
+function overlayShellHuge(label, tone, onA, onR, options) {
+  const box = overlayShell(label, tone, onA, onR, options)
   box.classList.add('ai-box-huge')
   return box
 }
@@ -838,18 +952,124 @@ function insertIntoText(htmlOrText, asBlock) {
   ctx.scheduleSave()
 }
 
-// Coach-Overlay als Bento: Widget-Kacheln links (nach Wichtigkeit), KI-Chat als feste Säule rechts.
+function settleFinding(finding, decision) {
+  decideFinding(doc(), finding.id, decision)
+  save()
+  refreshAllPanels()
+  closeOverlay()
+}
+
+function findingDecisionLabels(finding, hasTextAction) {
+  return {
+    acceptLabel: hasTextAction ? 'Vorschlag übernehmen' : 'Als erledigt markieren',
+    rejectLabel: isIntegrityCategory(finding.category) ? 'Risiko bewusst annehmen' : 'Verwerfen',
+  }
+}
+
+// Hinweise zeigen zuerst Sachverhalt und Empfehlung. Begründung, Fundstellen und
+// Dialog bleiben vollständig erreichbar, sind aber standardmäßig eingeklappt.
 export function openCardOverlay(card) {
-  const box = overlayShellHuge(card.type, card.tone,
-    card.action ? () => {
+  const open = card.status === 'open'
+  let box = null
+  box = overlayShellHuge(categoryLabel(card.category), card.tone,
+    open ? () => {
       const edit = box.querySelector('.ai-prop')
-      insertIntoText(edit ? edit.textContent : card.action, true)
-      card.status = 'done'; save(); renderCoach(); closeOverlay()
+      const appliedText = edit ? edit.textContent.trim() : (card.action || '')
+      if (card.action && appliedText) insertIntoText(appliedText, true)
+      settleFinding(card, { kind: 'accept', appliedText })
     } : null,
-    () => { card.status = 'rejected'; save(); renderCoach(); closeOverlay() })
-  box.classList.add('ai-box-bento')
-  box.appendChild(el('div', 'ai-title', card.text))
-  renderBento(box, card)
+    open ? () => settleFinding(card, { kind: 'reject' }) : null,
+    findingDecisionLabels(card, !!card.action))
+  box.classList.add('ai-box-finding')
+  box.appendChild(el('div', 'ai-title', card.short || card.text))
+  renderFindingDetail(box, card, { passage: false })
+}
+
+function renderFindingDetail(box, finding, options = {}) {
+  if (options.passage && finding.target) {
+    const context = el('div', 'finding-context')
+    context.appendChild(el('div', 'finding-detail-label', 'Betrifft diese Stelle'))
+    context.appendChild(el('blockquote', 'finding-passage', finding.target))
+    box.appendChild(context)
+  }
+
+  const why = finding.why || finding.gesamt
+  if (why) {
+    const overview = el('div', 'finding-overview')
+    overview.appendChild(el('div', 'finding-detail-label', 'Warum das wichtig ist'))
+    overview.appendChild(el('div', 'finding-overview-text', why))
+    box.appendChild(overview)
+  }
+
+  if (finding.action != null) {
+    const proposal = el('div', 'finding-proposal')
+    proposal.appendChild(el('div', 'finding-detail-label', options.passage && options.isForm ? 'Vorschlag für die Stelle' : 'Vorschlag'))
+    const text = el('div', 'ai-prop', finding.action || '')
+    makeEditable(text, value => { finding.action = value || finding.action; save() }, { multiline: true })
+    proposal.appendChild(text)
+    if (options.isForm && (finding.variants || []).length) {
+      const variants = el('div', 'ai-variants')
+      finding.variants.forEach(value => {
+        const choice = el('button', 'ai-variant', value)
+        choice.addEventListener('click', () => { text.textContent = value; finding.action = value; save() })
+        variants.appendChild(choice)
+      })
+      proposal.appendChild(variants)
+    }
+    box.appendChild(proposal)
+  }
+
+  const contextParts = []
+  if (finding.narrative) contextParts.push(['Bedeutung für die Argumentation', finding.narrative])
+  if (finding.definition) contextParts.push([finding.definition.term || 'Begriff', finding.definition.text])
+  if (finding.quote) contextParts.push(['Quellenausschnitt', `„${finding.quote.text}“${finding.quote.by ? ` (${finding.quote.by})` : ''}`])
+  if (finding.contra) contextParts.push(['Gegenargument', finding.contra])
+  if (finding.procontra) {
+    contextParts.push(['Dafür', (finding.procontra.pro || []).join('\n')])
+    contextParts.push(['Dagegen', (finding.procontra.contra || []).join('\n')])
+  }
+  if (finding.timeline) contextParts.push(['Zeitliche Einordnung', finding.timeline.map(item => `${item.when}: ${item.what}`).join('\n')])
+  if (finding.related) contextParts.push(['Verwandte Stellen', finding.related.join('\n')])
+  if (contextParts.length) box.appendChild(findingDisclosure('Einordnung und Folgen', contextParts))
+
+  if (finding.sources && finding.sources.length) {
+    const details = el('details', 'finding-disclosure')
+    details.appendChild(el('summary', '', `Quellen und Fundstellen · ${finding.sources.length}`))
+    const list = el('div', 'finding-source-list')
+    finding.sources.forEach(source => {
+      const item = el('div', 'finding-source')
+      const title = el(source.url ? 'button' : 'div', 'finding-source-title', source.label || String(source))
+      if (source.url) title.addEventListener('click', () => openExternal(source.url))
+      item.appendChild(title)
+      if (source.type) item.appendChild(el('div', 'finding-source-type', source.type))
+      if (source.preview) item.appendChild(el('div', 'finding-source-excerpt', source.preview))
+      list.appendChild(item)
+    })
+    details.appendChild(list)
+    box.appendChild(details)
+  }
+
+  const discuss = el('details', 'finding-disclosure finding-discuss')
+  discuss.appendChild(el('summary', '', 'Mit dem Agenten besprechen'))
+  const chat = el('div', 'finding-chat')
+  chatSection(chat, finding.short || finding.text)
+  discuss.appendChild(chat)
+  box.appendChild(discuss)
+}
+
+function findingDisclosure(label, parts) {
+  const details = el('details', 'finding-disclosure')
+  details.appendChild(el('summary', '', label))
+  const body = el('div', 'finding-disclosure-body')
+  parts.forEach(([title, text]) => {
+    if (!text) return
+    body.appendChild(el('div', 'finding-detail-label', title))
+    const value = el('div', 'finding-detail-copy', text)
+    value.style.whiteSpace = 'pre-line'
+    body.appendChild(value)
+  })
+  details.appendChild(body)
+  return details
 }
 
 // Baut das Bento-Raster + die Chat-Säule. Widgets in Jakobs Prioritäts-Reihenfolge;
@@ -1122,12 +1342,14 @@ function openNoteOverlay(block) {
 }
 
 export function openAnnoOverlay(c) {
-  const isForm = (c.kind || 'form') === 'form'
-  const box = overlayShellHuge(isForm ? 'Formulierung' : 'Inhalt', isForm ? 'style' : 'idea',
-    () => {
+  const isForm = c.category === 'wording' || (c.kind || 'form') === 'form'
+  const open = c.status === 'open'
+  let box = null
+  box = overlayShellHuge(categoryLabel(c.category), isForm ? 'style' : 'idea',
+    open ? () => {
       const edit = box.querySelector('.ai-prop')
       const text = edit ? edit.textContent : c.action
-      const r = findInDoc(c.target)
+      const r = findingRange(c)
       if (isForm) {
         if (!r) { flagNotFound(box); return }
         ctx.editor.chain().setTextSelection(r).insertContent(escHtml(text)).run()   // Passage ersetzen
@@ -1136,12 +1358,14 @@ export function openAnnoOverlay(c) {
         const at = r ? r.to : ctx.editor.state.doc.content.size
         ctx.editor.chain().insertContentAt(at, '<p>' + escHtml(text) + '</p>').run()
       }
-      c.status = 'done'; buildLane(); ctx.scheduleSave(); closeOverlay()
-    },
-    () => { c.status = 'rejected'; buildLane(); save(); closeOverlay() })
-  box.classList.add('ai-box-bento')
-  box.appendChild(el('div', 'ai-title', c.short))
-  renderAnnoBento(box, c, isForm)
+      ctx.scheduleSave()
+      settleFinding(c, { kind: 'accept', appliedText: text })
+    } : null,
+    open ? () => settleFinding(c, { kind: 'reject' }) : null,
+    findingDecisionLabels(c, !!c.action))
+  box.classList.add('ai-box-finding')
+  box.appendChild(el('div', 'ai-title', c.short || c.text))
+  renderFindingDetail(box, c, { passage: true, isForm })
 }
 function flagNotFound(box) {
   if (box.querySelector('.ai-warn')) return

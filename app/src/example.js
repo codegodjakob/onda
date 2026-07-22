@@ -5,6 +5,29 @@
 let seq = 0
 function sid(prefix) { return prefix + Date.now().toString(36) + (seq++).toString(36) }
 
+export function buildExampleUnderstanding() {
+  return {
+    task: 'Ein kurzer argumentativer Essay über Calm Technology in Schreibsoftware.',
+    audience: ['Designerinnen und Designer', 'Menschen, die konzentriert schreiben'],
+    desiredEffect: 'Das Prinzip verstehen und auf konkrete Produktentscheidungen übertragen können.',
+    evidenceStandard: 'Historische Aussagen mit sichtbarer Primärquelle belegen; die Übertragung auf Schreibsoftware als Einordnung kennzeichnen.',
+    protectedIntentions: ['Die Formel „volle Kraft, leise Präsentation“ als Schlussgedanke erhalten.'],
+    openQuestions: ['Soll der Text stärker wissenschaftlich oder essayistisch argumentieren?'],
+    updatedAt: 0,
+  }
+}
+
+export function buildExampleAgentMessages() {
+  const text = 'Beim Weiterlesen ist mir eine allgemeinere Frage aufgefallen: Soll der Text Aufmerksamkeit als individuelle Fähigkeit oder als gestaltete Bedingung behandeln?'
+  return [{
+    id: 'example-agent-initiative',
+    status: 'new',
+    earliestAt: 0,
+    text,
+    thread: [{ id: 'message-example-0', role: 'agent', text, at: 0 }],
+  }]
+}
+
 // Tiefe Kopie mit frischen IDs — jeder Aufruf liefert unabhängige Objekte.
 export function buildExampleStructure() {
   return [
@@ -57,17 +80,16 @@ export function buildExampleNarrative(struct) {
   ]
 }
 
-const CALM_IMG = "data:image/svg+xml;utf8," + encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 150'><rect width='400' height='150' fill='none'/><circle cx='200' cy='75' r='34' fill='none' stroke='#7ba7d4' stroke-width='2'/><text x='200' y='79' text-anchor='middle' font-family='sans-serif' font-size='12' fill='#7ba7d4'>Zentrum</text><circle cx='200' cy='75' r='64' fill='none' stroke='#8a8880' stroke-width='1.5' stroke-dasharray='5 5'/><text x='200' y='22' text-anchor='middle' font-family='sans-serif' font-size='11' fill='#93928a'>Peripherie</text><path d='M264 75h60' stroke='#cfa050' stroke-width='2'/><text x='328' y='62' text-anchor='middle' font-family='sans-serif' font-size='10' fill='#cfa050'>Wechsel</text></svg>")
-
 export function buildExampleCoach() {
   return [
-    { id: sid('c'), type: 'Struktur', tone: 'warn', status: 'open', createdAt: Date.now(),
+    { id: sid('c'), type: 'Struktur', category: 'structure', priority: 'critical', tone: 'warn', status: 'open', createdAt: Date.now(),
       text: 'Der Abschnitt „Beispiele" kommt vor den „Prinzipien" — die Argumentation trägt besser andersherum.',
       why: 'Deine geplante Struktur sieht Prinzipien → Beispiele vor. Im Text ist die Reihenfolge aktuell vertauscht. Leser brauchen erst den Maßstab („was heißt ruhig?"), dann die Anschauung — sonst wirken die Beispiele beliebig und ihre Pointe verpufft.',
       narrative: 'Im Faden „Methode: vom Prinzip zum Werkzeug" ist der erste Schritt „Maßstab setzen". Wird er übersprungen, bricht dieser Handlungsstrang an seiner ersten Stelle — die Narrative verlöre ihre Begründungslogik.',
       action: null, sources: [] },
-    { id: sid('c'), type: 'Inhalt', tone: 'idea', status: 'open', createdAt: Date.now(),
+    { id: sid('c'), type: 'Inhalt', category: 'research', tone: 'idea', status: 'open', createdAt: Date.now(),
       text: 'Zur Leitfrage passt Mark Weisers Aufsatz „The Coming Age of Calm Technology" (1996).',
+      claim: 'Calm Technology kann Aufmerksamkeit schonen, indem Technik zwischen Zentrum und Peripherie wechselt.',
       gesamt: 'Calm Technology ist ein Gestaltungsprinzip: Technik bleibt in der Peripherie und tritt nur ins Zentrum, wenn sie gebraucht wird. Weiser & Brown prägten es 1996 am Xerox PARC, als das Büro von piependen Geräten geflutet wurde; Amber Case führte es 2015 zu acht Prinzipien weiter. Über alle Quellen hinweg ist der Kern derselbe — die knappste Ressource ist nicht Rechenleistung, sondern menschliche Aufmerksamkeit.',
       why: 'Der Aufsatz ist die Primärquelle des Begriffs — hier wurde „Calm Technology" zum ersten Mal formuliert. Ein Verweis in den „Prinzipien" verankert deine Definition historisch.',
       narrative: 'Stärkt den Faden an seiner Begründungsstelle: Die These bekommt eine zitierfähige Autorität, bevor deine eigenen Beispiele kommen.',
@@ -75,14 +97,44 @@ export function buildExampleCoach() {
       quote: { text: 'The most potentially interesting, challenging, and profound change implied by the ubiquitous computing era is a focus on calm.', by: 'Weiser & Brown, 1996' },
       action: 'Weiser und Brown prägten den Begriff 1996 in „The Coming Age of Calm Technology" — Technik solle sich, so ihre Formel, an den Rändern unserer Aufmerksamkeit bewegen.',
       sources: [
-        { label: 'Weiser & Brown (1996): The Coming Age of Calm Technology', type: 'Primärquelle', url: 'https://calmtech.com/papers', preview: 'Originalaufsatz (Xerox PARC). Kernsatz: „…a focus on calm." Führt die Unterscheidung Zentrum/Peripherie der Aufmerksamkeit ein.' },
-        { label: 'Wikipedia: Calm technology', type: 'Enzyklopädie', url: 'https://en.wikipedia.org/wiki/Calm_technology', preview: '„Calm technology is a type of information technology where the interaction … is designed to occur in the user’s periphery rather than constantly at the center of attention."' },
-        { label: 'Case, A. (2015): Calm Technology — Principles', type: 'Buch', url: 'https://calmtech.com', preview: 'Amber Case destilliert acht Prinzipien, u. a. „Technology should require the smallest possible amount of attention" — die praktische Fortschreibung von Weisers Idee.' },
+        {
+          label: 'Weiser & Brown (1996): The Coming Age of Calm Technology',
+          type: 'Primärquelle',
+          url: 'https://calmtech.com/papers',
+          contentType: 'original-excerpt',
+          content: 'The most potentially interesting, challenging, and profound change implied by the ubiquitous computing era is a focus on calm.',
+          citation: 'Weiser, M., & Brown, J. S. (1996). The Coming Age of Calm Technology.',
+          verificationStatus: 'demo',
+          locator: 'Demo-Fundstelle: Aufsatz, einleitender Abschnitt',
+          context: 'Der Satz formuliert den historischen Ausgangspunkt des Calm-Technology-Ansatzes.',
+          limits: 'Die Quelle begründet das Gestaltungsprinzip, belegt aber nicht automatisch die Wirkung jeder konkreten Schreibsoftware.',
+        },
+        {
+          label: 'Wikipedia: Calm technology',
+          type: 'Enzyklopädie',
+          url: 'https://en.wikipedia.org/wiki/Calm_technology',
+          contentType: 'excerpt',
+          content: 'Calm technology is a type of information technology where the interaction between the technology and its user is designed to occur in the user’s periphery rather than constantly at the center of attention.',
+          citation: 'Wikipedia contributors. Calm technology. Wikipedia.',
+          verificationStatus: 'demo',
+          locator: 'Demo-Fundstelle: Einleitung des Artikels',
+        },
+        {
+          label: 'Case, A. (2015): Calm Technology — Principles',
+          type: 'Buch',
+          url: 'https://calmtech.com',
+          contentType: 'summary',
+          content: 'Amber Case überführt den Ansatz in praktische Gestaltungsprinzipien für aufmerksamkeitsarme Technik.',
+          citation: 'Case, A. (2015). Calm Technology. O’Reilly Media.',
+          verificationStatus: 'demo',
+          locator: 'Demo-Angabe: Buchzusammenfassung ohne live geprüfte Seite',
+        },
       ] },
 
     // Begriff + Zeitstrahl: hier ergeben Definition und Einordnung Sinn — kein Diagramm, keine Zitate.
     { id: sid('c'), type: 'Inhalt', tone: 'idea', status: 'open', createdAt: Date.now(),
       text: 'Bevor „Calm Technology" trägt, sollte „Ubiquitous Computing" kurz definiert und historisch eingeordnet werden.',
+      claim: 'Calm Technology ist als Gestaltungsantwort auf die Idee des Ubiquitous Computing entstanden.',
       gesamt: 'Calm Technology ist die Gestaltungsantwort auf eine ältere Idee: dass Rechner in den Alltag verschwinden. Wer den Begriff „Ubiquitous Computing" kurz einführt, gibt der Definition ein Fundament — sonst hängt „ruhige Technik" in der Luft.',
       definition: { term: 'Ubiquitous Computing', text: 'Von Mark Weiser 1988 am Xerox PARC geprägt: Rechenkraft verteilt sich unsichtbar in Alltagsdinge, statt im Zentrum eines Bildschirms zu sitzen. Calm Technology beschreibt, wie sich solche allgegenwärtige Technik anfühlen soll.' },
       timeline: [
@@ -95,32 +147,30 @@ export function buildExampleCoach() {
       thread: 'These: Peripherie statt Alarm',
       action: 'Der Begriff geht auf Mark Weisers „Ubiquitous Computing" (1988) zurück: Technik verschwindet in den Alltag, statt ihn zu beherrschen.',
       sources: [
-        { label: 'Weiser (1991): The Computer for the 21st Century', type: 'Primärquelle', url: 'https://calmtech.com/papers', preview: 'Der Gründungstext des Ubiquitous Computing. Kernbild: „The most profound technologies are those that disappear."' },
+        {
+          label: 'Weiser (1991): The Computer for the 21st Century',
+          type: 'Primärquelle',
+          url: 'https://calmtech.com/papers',
+          contentType: 'original-excerpt',
+          content: 'The most profound technologies are those that disappear.',
+          citation: 'Weiser, M. (1991). The Computer for the 21st Century. Scientific American, 265(3), 94–104.',
+          verificationStatus: 'demo',
+          locator: 'Demo-Fundstelle: Aufsatzanfang',
+        },
       ] },
 
     // Pro/Contra: eine zu absolute These — hier zählen Argumente von beiden Seiten, kein Diagramm.
-    { id: sid('c'), type: 'Inhalt', tone: 'warn', status: 'open', createdAt: Date.now(),
+    { id: sid('c'), type: 'Inhalt', category: 'logic', priority: 'high', tone: 'warn', status: 'open', createdAt: Date.now(),
       text: 'Deine These „Unterbrechung ist immer schädlich" ist zu absolut — es gibt starke Gegenbeispiele.',
       gesamt: 'Der Text behauptet, jede Unterbrechung schade. Das stimmt für Benachrichtigungs-Fluten, aber nicht ausnahmslos: Manche Unterbrechungen sind lebenswichtig. Eine These, die das einräumt, wirkt souveräner und ist schwerer angreifbar.',
       procontra: {
-        pro: ['Ständige Benachrichtigungen zerstören den Fokus (Mark, 2008).', 'Nach einer Unterbrechung dauert es im Schnitt 23 Minuten zurück in die Aufgabe.', 'Multitasking senkt messbar die Ergebnisqualität.'],
+        pro: ['Ständige Benachrichtigungen stören fokussierte Arbeit.', 'Nach Unterbrechungen ist die Rückkehr in komplexe Aufgaben erschwert.', 'Aufgabenwechsel kann die Ergebnisqualität senken.'],
         contra: ['Sicherheits- und Notfallwarnungen MÜSSEN unterbrechen.', 'Eine nahende Deadline profitiert von einem rechtzeitigen Hinweis.', 'Ganz ohne Signale verpasst man Relevantes.'],
       },
       narrative: 'Schützt den Faden „These: Peripherie statt Alarm" vor dem Vorwurf der Einseitigkeit — die These überlebt den Einwand, statt an ihm zu zerbrechen.',
       thread: 'These: Peripherie statt Alarm',
       action: 'Ruhige Technik heißt nicht, nie zu unterbrechen — sondern nur dann, wenn es die Sache wirklich verlangt.' },
 
-    // Diagramm + verwandte Stellen: hier trägt ein Bild, und die Idee kommt im Text schon vor.
-    { id: sid('c'), type: 'Inhalt', tone: 'idea', status: 'open', createdAt: Date.now(),
-      text: 'Das Zentrum-Peripherie-Modell erklärt deine Definition am schnellsten als Bild.',
-      gesamt: 'Weisers Kernidee lässt sich in einem Bild fassen: Aufmerksamkeit wandert zwischen Zentrum und Peripherie. Ein kleines Diagramm nimmt der abstrakten Definition die Schwere — und die Idee taucht in deinem Text ohnehin schon zweimal auf.',
-      image: CALM_IMG, imageCaption: 'Weisers Modell: Aufmerksamkeit wandert zwischen Zentrum und Peripherie.',
-      related: [
-        'Abschnitt „Einleitung": „…nur beansprucht, wenn sie wirklich gebraucht wird" — dieselbe Idee, noch ohne Bild.',
-        'Abschnitt „Beispiele": die Teekanne, die erst bei Relevanz pfeift — ein Beleg fürs selbe Modell.',
-      ],
-      narrative: 'Verankert den Faden „These: Peripherie statt Alarm" visuell, genau dort, wo die Definition eingeführt wird.',
-      thread: 'These: Peripherie statt Alarm' },
   ]
 }
 
@@ -173,8 +223,7 @@ export function buildExampleLane() {
 }
 
 export function buildExampleBody() {
-  return '<h1>Calm Technology</h1>'
-    + '<p>Calm Technology beschreibt Technik, die in der Peripherie bleibt und Aufmerksamkeit nur beansprucht, wenn sie wirklich gebraucht wird.</p>'
+  return '<p>Calm Technology beschreibt Technik, die in der Peripherie bleibt und Aufmerksamkeit nur beansprucht, wenn sie wirklich gebraucht wird.</p>'
     + '<h2>Warum es wichtig ist</h2>'
     + '<p>Ständige Benachrichtigungen fragmentieren die Aufmerksamkeit und zerreißen den Denkfluss. Der eigentliche Schaden ist nicht die einzelne Meldung, sondern die Summe der kleinen Unterbrechungen über den Tag.</p>'
     + '<p>Weiser und Brown beschrieben schon 1996, wie Technik zwischen Zentrum und Peripherie der Aufmerksamkeit wechseln kann. Eine gute Statusanzeige informiert, ohne sich in den Vordergrund zu drängen.</p>'

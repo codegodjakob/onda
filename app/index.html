@@ -29,36 +29,32 @@
       </div>
     </section>
 
-    <!-- Schreibansicht: Text in der Mitte, Mini-Gliederung links im Textbereich,
-         Formulierungs-Spalte rechts am Text, Panels ein-/ausklappbar über die Rand-Leisten. -->
+    <!-- Schreibansicht: Der Text bleibt dominant; weitere Ebenen erscheinen nur im Kontext. -->
     <section id="editorView">
-      <div id="railL" class="rail"></div>
-      <aside id="pStruct" class="panel" hidden></aside>
-      <div id="main">
-        <div id="bar"></div>
-        <div id="mainBody">
-          <nav id="minimap" aria-label="Gliederung"></nav>
+      <header id="workspaceHeader">
+        <button id="workspaceBack" class="icon-button" title="Zur Projektübersicht" aria-label="Zur Projektübersicht">←</button>
+        <button id="workspacePath" class="workspace-path" title="Struktur öffnen" aria-controls="structureShelf"></button>
+        <button id="agentPresence" class="icon-button agent-presence" title="Agentengespräch öffnen" aria-label="Agentengespräch öffnen" aria-controls="agentWidget">◌</button>
+      </header>
+      <div id="workspaceBody">
+        <aside id="structureShelf" hidden></aside>
+        <main id="main">
           <div id="scroll">
             <div id="page">
               <textarea id="title" rows="1" placeholder="Titel" spellcheck="false"></textarea>
               <div id="editor"></div>
             </div>
           </div>
-          <aside id="lane" hidden></aside>
-        </div>
+          <div id="blockInsertLayer"></div>
+          <aside id="localAgentLayer"></aside>
+        </main>
       </div>
-      <aside id="pCoach" class="panel panel-right" hidden></aside>
-      <div id="railR" class="rail"></div>
+      <aside id="agentWidget" hidden aria-label="Agentengespräch"></aside>
+      <aside id="evidenceWindow" hidden aria-label="Quellen und Fundstellen"></aside>
+      <div id="agentLiveStatus" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true"></div>
     </section>
 
-    <!-- Struktur-Seite: Material sammeln → Bausteine ordnen → Narrative → Coach. -->
-    <section id="structView">
-      <div id="railSL" class="rail"></div>
-      <div id="stCanvas" class="st-col st-canvas"></div>
-      <div id="stGrid" class="st-col st-grid"></div>
-      <aside id="stCoach" class="panel panel-right st-coach"></aside>
-      <div id="railSR" class="rail"></div>
-    </section>
+    <div id="saveAlert" hidden role="alert" aria-live="assertive" aria-atomic="true"></div>
 
   </div>
   <script src="dist/editor.bundle.js"></script>
