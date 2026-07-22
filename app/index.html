@@ -29,26 +29,64 @@
       </div>
     </section>
 
-    <!-- Schreibansicht: Der Text bleibt dominant; weitere Ebenen erscheinen nur im Kontext. -->
+    <!-- Schreibansicht: Der Text bleibt dominant; Rahmen (Seitenleiste, Aura) sind ruhig. -->
     <section id="editorView">
-      <header id="workspaceHeader">
-        <button id="workspaceBack" class="icon-button" title="Zur Projektübersicht" aria-label="Zur Projektübersicht">←</button>
-        <button id="workspacePath" class="workspace-path" title="Struktur öffnen" aria-controls="structureShelf"></button>
-        <button id="agentPresence" class="icon-button agent-presence" title="Agentengespräch öffnen" aria-label="Agentengespräch öffnen" aria-controls="agentWidget">◌</button>
-      </header>
-      <div id="workspaceBody">
-        <aside id="structureShelf" hidden></aside>
-        <main id="main">
-          <div id="scroll">
-            <div id="page">
-              <textarea id="title" rows="1" placeholder="Titel" spellcheck="false"></textarea>
-              <div id="editor"></div>
-            </div>
+      <aside id="ondaSidebar" class="onda-sidebar">
+        <div class="onda-brand">
+          <span class="onda-aura onda-aura--sm" aria-hidden="true"></span>
+          <span class="onda-wordmark">Onda</span>
+          <button id="sidebarCollapse" class="onda-icon-btn" title="Seitenleiste einklappen" aria-label="Seitenleiste einklappen" aria-controls="ondaSidebar" aria-expanded="true">‹</button>
+        </div>
+
+        <button id="sidebarBack" class="onda-side-back" title="Zur Projektübersicht" aria-label="Zur Projektübersicht">
+          <span class="onda-side-back-chevron" aria-hidden="true">‹</span>
+          <span class="onda-side-back-label">Projekt</span>
+        </button>
+
+        <section class="onda-side-section">
+          <span class="onda-eyebrow">Projektverständnis</span>
+          <button id="pvCard" class="onda-pv-card" aria-haspopup="dialog" aria-controls="pvModal">
+            <span class="onda-pv-title">Projektverständnis</span>
+            <span class="onda-pv-claim">Noch nicht festgelegt</span>
+          </button>
+        </section>
+
+        <nav id="structureNav" class="onda-side-section" aria-label="Struktur">
+          <span class="onda-eyebrow">Struktur</span>
+          <!-- Struktur-Karten (.block-preview) werden von workspace.js gerendert (Area C) -->
+        </nav>
+
+        <section class="onda-side-section onda-side-material">
+          <span class="onda-eyebrow">Material</span>
+          <button id="materialSources" class="onda-material-btn">
+            <span class="onda-material-label">Quellen im Projekt</span>
+            <span id="materialSourcesCount" class="onda-badge">0</span>
+          </button>
+        </section>
+
+        <div class="onda-side-footer">
+          <span class="onda-avatar" aria-hidden="true">J</span>
+          <span class="onda-side-user">Jakob</span>
+          <button id="themeToggle" class="onda-icon-btn" title="Erscheinung wechseln" aria-label="Erscheinung wechseln">☾</button>
+          <button id="accentToggle" class="onda-icon-btn" title="Akzentfarbe wechseln" aria-label="Akzentfarbe wechseln"><span class="onda-accent-dot" aria-hidden="true"></span></button>
+        </div>
+      </aside>
+
+      <div class="onda-editor-col">
+        <header class="onda-topbar">
+          <button id="sidebarReopen" class="onda-icon-btn" title="Seitenleiste einblenden" aria-label="Seitenleiste einblenden" aria-controls="ondaSidebar" aria-expanded="false" hidden>›</button>
+          <button id="ondaAura" class="onda-aura" title="Agentengespräch öffnen" aria-label="Agentengespräch öffnen" aria-controls="agentWidget" aria-expanded="false"></button>
+        </header>
+        <main id="scroll">
+          <div id="page">
+            <textarea id="title" rows="1" placeholder="Titel" spellcheck="false"></textarea>
+            <div id="editor"></div>
           </div>
-          <div id="blockInsertLayer"></div>
-          <aside id="localAgentLayer"></aside>
         </main>
+        <div id="blockInsertLayer"></div>
+        <aside id="localAgentLayer"></aside>
       </div>
+
       <aside id="agentWidget" hidden aria-label="Agentengespräch"></aside>
       <aside id="evidenceWindow" hidden aria-label="Quellen und Fundstellen"></aside>
       <div id="agentLiveStatus" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true"></div>
