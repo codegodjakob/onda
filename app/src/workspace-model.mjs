@@ -1,3 +1,5 @@
+import { isIntegrityCategory } from './reasoning-model.mjs'
+
 const WORKSPACE_VERSION = 2
 const IDLE_BEFORE_INITIATIVE_MS = 3000
 const BOUNDARY_BEFORE_INITIATIVE_MS = 300
@@ -156,6 +158,23 @@ export function resolveFindingPlacement(finding, blocks) {
   if (matches.length !== 1 || !matches[0].id) return { kind: 'unplaced', block: null }
   finding.blockId = matches[0].id
   return { kind: 'anchored', block: matches[0] }
+}
+
+// Pro Baustein: hat er einen offenen Passage-Hinweis? 'evidence' (Beleg/Integrität)
+// schlägt 'style' (Formulierung/Übergang). Rein — für die Struktur-Punkte in der Seitenleiste.
+export function structureHintMap(doc, blocks) {
+  const map = new Map()
+  const findings = doc && Array.isArray(doc.findings) ? doc.findings : []
+  for (const finding of findings) {
+    if (finding.status !== 'open' || finding.placement !== 'passage' || !finding.target) continue
+    const placement = resolveFindingPlacement(finding, blocks)
+    if (placement.kind !== 'anchored') continue
+    const kind = (Array.isArray(finding.sources) && finding.sources.length) || isIntegrityCategory(finding.category)
+      ? 'evidence'
+      : 'style'
+    if (map.get(placement.block.id) !== 'evidence') map.set(placement.block.id, kind)
+  }
+  return map
 }
 
 export function createEditingFindingState(finding, block, startedAt = Date.now()) {

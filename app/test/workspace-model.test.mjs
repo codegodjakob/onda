@@ -15,6 +15,7 @@ import {
   resolveFindingBlock,
   resolveFindingPlacement,
   shouldOpenAgentWidget,
+  structureHintMap,
 } from '../src/workspace-model.mjs'
 
 test('thread messages receive stable role and timestamp', () => {
@@ -455,4 +456,22 @@ test('hasUnseenInitiative flags a new, undismissed message while the widget is c
   assert.equal(hasUnseenInitiative(workspace), false, 'non-new message is not unseen')
 
   assert.equal(hasUnseenInitiative(null), false)
+})
+
+test('structureHintMap: evidence dot beats style dot per block', () => {
+  const blocks = [
+    { id: 'b-1', text: 'Weiser und Brown prägten den Begriff 1996.' },
+    { id: 'b-2', text: 'Der Satz schwächt gleich zweifach ab.' },
+    { id: 'b-3', text: 'Kein Hinweis hier.' },
+  ]
+  const doc = { findings: [
+    { id: 'f1', status: 'open', placement: 'passage', target: '1996', blockId: 'b-1', category: 'source', sources: [{ label: 'x' }] },
+    { id: 'f2', status: 'open', placement: 'passage', target: 'zweifach ab', blockId: 'b-2', category: 'wording' },
+    { id: 'f3', status: 'open', placement: 'passage', target: 'prägten', blockId: 'b-1', category: 'wording' }, // style on same block as evidence
+    { id: 'f4', status: 'resolved', placement: 'passage', target: 'Kein Hinweis', blockId: 'b-3', category: 'source', sources: [{ label: 'y' }] }, // not open -> ignored
+  ] }
+  const map = structureHintMap(doc, blocks)
+  assert.equal(map.get('b-1'), 'evidence') // evidence wins over the later style finding
+  assert.equal(map.get('b-2'), 'style')
+  assert.equal(map.has('b-3'), false)
 })
