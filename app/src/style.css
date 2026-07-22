@@ -86,6 +86,13 @@
   --r: var(--radius-card); --r2: var(--radius-overlay);
   --dur: var(--dur-quick); --ease: var(--ease-out); --shadow: var(--shadow-lg);
   --doc-size: 16.5px; --doc-width: 700px; --doc-font: var(--font-sans); --sans: var(--font-sans);
+
+  /* V2-Namespace-Bruecke auf Onda */
+  --v2-canvas: var(--bg-app); --v2-surface: var(--bg-surface);
+  --v2-surface-soft: var(--surface-2); --v2-surface-active: var(--surface-inset);
+  --v2-text: var(--text-primary); --v2-text-soft: var(--text-secondary);
+  --v2-line: var(--border-default); --v2-line-strong: var(--border-strong);
+  --v2-mint: var(--success-tint); --v2-peach: var(--warning-tint);
 }
 
 .visually-hidden {
@@ -1271,16 +1278,6 @@ body.zen #minimap, body.zen #lane { display: none; }
    ================================================================ */
 
 #editorView {
-  --v2-canvas: #f7f8fa;
-  --v2-surface: #ffffff;
-  --v2-surface-soft: #f1f3f5;
-  --v2-surface-active: #f0f3f4;
-  --v2-text: #25292d;
-  --v2-text-soft: #697078;
-  --v2-line: #dde1e5;
-  --v2-line-strong: #cbd1d6;
-  --v2-mint: #dcefe7;
-  --v2-peach: #f6e3d9;
   position: relative;
   height: 100vh;
   min-width: 0;
@@ -1288,19 +1285,6 @@ body.zen #minimap, body.zen #lane { display: none; }
   overflow: hidden;
   background: var(--v2-canvas);
   color: var(--v2-text);
-}
-
-[data-theme="dark"] #editorView {
-  --v2-canvas: #1e2124;
-  --v2-surface: #24282c;
-  --v2-surface-soft: #2b3035;
-  --v2-surface-active: #30363b;
-  --v2-text: #eceff1;
-  --v2-text-soft: #a9b0b6;
-  --v2-line: #3a4046;
-  --v2-line-strong: #4a5158;
-  --v2-mint: #29463b;
-  --v2-peach: #50372e;
 }
 
 #workspaceHeader {
