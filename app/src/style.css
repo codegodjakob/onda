@@ -677,6 +677,18 @@ button:focus-visible, input:focus-visible {
   outline: 2px solid var(--accent); outline-offset: 1px;
 }
 
+/* Onda focus system: soft accent ring on text inputs (writing view).
+   #title uses :focus-visible so a mouse click while writing doesn't flash a ring.
+   #editorView textarea/input also covers .agent-chat-input, .onda-pv-input's siblings
+   and .integrity-risk-reason without redeclaring them elsewhere (one source of truth). */
+#title:focus-visible,
+#editorView textarea:focus-visible,
+#editorView input:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--shadow-focus);
+}
+
 /* ---------- Fokus-Modus ---------- */
 body.zen #bar { opacity: 0; transform: translateY(-8px); pointer-events: none; }
 body.zen.zen-peek #bar { opacity: 1; transform: none; pointer-events: auto; }
@@ -2715,6 +2727,14 @@ button.onda-aura:focus-visible {
   color: var(--text-tertiary);
   font: var(--fw-medium) var(--text-xs)/1 var(--font-mono);
   letter-spacing: var(--tracking-tight);
+}
+
+/* both are plain spans today (no tabindex) — this is forward coverage for the
+   day either becomes an interactive control, matching .onda-btn/.onda-icon-btn above */
+.onda-badge:focus-visible,
+.onda-tag:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
 }
 
 /* ==================== Onda sidebar sections (Area C) ==================== */
