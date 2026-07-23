@@ -235,16 +235,13 @@ function enforceExclusiveLayers(workspace) {
   if (workspace.evidenceFindingId) {
     closeInsertMenu({ restoreFocus: false })
     workspace.agent.open = false
-    workspace.shelfOpen = false
     closeLocalDepth(workspace)
   } else if (workspace.agent.open) {
     closeInsertMenu({ restoreFocus: false })
-    workspace.shelfOpen = false
     workspace.evidenceFindingId = null
     closeLocalDepth(workspace)
   } else if (hasLocalDepth(workspace)) {
     closeInsertMenu({ restoreFocus: false })
-    workspace.shelfOpen = false
     workspace.agent.open = false
     workspace.evidenceFindingId = null
   }
@@ -352,8 +349,6 @@ function insertBlock(afterBlockId, role) {
 function openInsertMenu(afterBlockId, opener) {
   closeInsertMenu({ restoreFocus: false })
   const workspace = activeWorkspace()
-  const ui = elements()
-  const fromShelf = Boolean(ui.shelf?.contains(opener))
   if (workspace) {
     const changed = workspace.agent.open
       || Boolean(workspace.evidenceFindingId)
@@ -404,7 +399,7 @@ function openInsertMenu(afterBlockId, opener) {
   })
 
   document.getElementById('editorView').append(menu)
-  insertMenu = { node: menu, opener, outsideHandler, fromShelf }
+  insertMenu = { node: menu, opener, outsideHandler }
   placeInsertMenu(menu, opener)
   document.addEventListener('pointerdown', outsideHandler, true)
   menu.querySelector('button')?.focus()
@@ -1826,7 +1821,6 @@ function nextAgentInitiative(workspace) {
 function agentInitiativeBlocked(workspace) {
   return Boolean(
     isComposing
-    || workspace.shelfOpen
     || workspace.evidenceFindingId
     || hasLocalDepth(workspace)
     || insertMenu,
@@ -2056,7 +2050,6 @@ export function initWorkspace(context) {
     }
     workspace.agent.open = true
     activeAgentMessage(workspace)
-    workspace.shelfOpen = false
     workspace.evidenceFindingId = null
     closeLocalDepth(workspace)
     closeInsertMenu({ restoreFocus: false })

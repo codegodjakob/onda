@@ -1299,79 +1299,6 @@ body.zen #minimap, body.zen #lane { display: none; }
   color: var(--text-primary);
 }
 
-.icon-button {
-  width: 34px;
-  height: 34px;
-  padding: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 0;
-  border-radius: 8px;
-  color: var(--v2-text-soft);
-  background: transparent;
-  font: 18px/1 var(--sans);
-  transition: color 160ms var(--ease), background 160ms var(--ease);
-}
-
-.icon-button:hover {
-  color: var(--v2-text);
-  background: var(--v2-surface-soft);
-}
-
-.icon-button:focus-visible,
-.workspace-path:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-.workspace-path {
-  min-width: 0;
-  width: fit-content;
-  max-width: 100%;
-  padding: 6px 8px;
-  border: 0;
-  border-radius: 7px;
-  color: var(--v2-text-soft);
-  background: transparent;
-  font: 13px/1.35 var(--sans);
-  text-align: left;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  transition: color 160ms var(--ease), background 160ms var(--ease);
-}
-
-.workspace-path:hover,
-.workspace-path[aria-expanded="true"] {
-  color: var(--v2-text);
-  background: var(--v2-surface-soft);
-}
-
-.structure-shelf-header {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  padding: 26px 24px 18px;
-}
-
-.structure-shelf-label {
-  color: var(--v2-text-soft);
-  font: 12px/1.4 var(--sans);
-  letter-spacing: 0;
-}
-
-.structure-shelf-title {
-  color: var(--v2-text);
-  font: 500 15px/1.4 var(--sans);
-  letter-spacing: 0;
-  overflow-wrap: anywhere;
-}
-
-.structure-blocks {
-  padding: 0 16px 36px;
-}
-
 .block-preview {
   position: relative;
   display: flex;
@@ -1405,7 +1332,6 @@ body.zen #minimap, body.zen #lane { display: none; }
   box-shadow: var(--shadow-focus);
 }
 
-.block-insert:focus-visible,
 .block-insert-trigger:focus-visible,
 .semantic-insert-choice:focus-visible {
   outline: 2px solid var(--accent);
@@ -1433,34 +1359,6 @@ body.zen #minimap, body.zen #lane { display: none; }
   font: var(--fw-medium) 11px/1.2 var(--font-sans);
   letter-spacing: var(--tracking-wider);
   text-transform: uppercase;
-}
-
-.block-insert {
-  width: 28px;
-  height: 28px;
-  margin: 3px auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  color: var(--v2-text-soft);
-  background: transparent;
-  font: 18px/1 var(--sans);
-  opacity: 1;
-  transition: opacity 160ms var(--ease), color 160ms var(--ease), background 160ms var(--ease);
-}
-
-.block-insert:hover,
-.block-insert:focus-visible {
-  color: var(--v2-text);
-  background: var(--v2-surface-soft);
-  opacity: 1;
-}
-
-.structure-shelf-empty {
-  margin: 10px 8px;
-  color: var(--v2-text-soft);
-  font: 13px/1.5 var(--sans);
 }
 
 #agentWidget[hidden],
@@ -2449,7 +2347,6 @@ body.zen #minimap, body.zen #lane { display: none; }
   .suggestion-version { grid-template-columns: 74px minmax(0, 1fr); gap: 8px; }
 
   .onda-icon-btn,
-  .block-insert,
   .block-insert-trigger,
   .suggestion-action,
   .agent-chat-send,
