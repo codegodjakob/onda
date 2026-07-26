@@ -90,7 +90,10 @@ export const TASK_TABLE = Object.freeze({
 
 // Baut die komplette Anfrage in stabiler Cache-Präfix-Ordnung:
 // (1) System (SYSTEM_COACH) -> (2) Projektverständnis -> (3) Dokumenttext -> [Breakpoints]
-// -> (4) volatile Blöcke (Entscheidungsliste, Anfrage) OHNE cache_control -> (5) Chat-Verlauf.
+// -> (4) volatile Blöcke (Entscheidungsliste) OHNE cache_control -> [verlauf] -> (5) aktuelle Frage.
+// Nachrichtenordnung: messages[0] = gecachte Blöcke + volatile (OHNE aktuelle Frage),
+// danach älter Gesprächsverlauf chronologisch, zuletzt aktuelle Frage als user-Message.
+// Invariante: letzte Message ist NIE role:'assistant' (kein Prefill — 400 auf Opus 5).
 // Keine Zeitstempel, keine IDs im Präfix; maximal 3 cache_control-Breakpoints.
 // KEIN thinking-Parameter (Opus 5 denkt adaptiv von selbst), KEINE temperature/top_p
 // (auf Opus 5 ein 400-Fehler), kein Assistant-Prefill.
@@ -118,11 +121,21 @@ export function baueAnfrage(task, kontext = {}) {
   }
   if (!bloecke.length) throw new Error('Anfrage ohne Inhalt: kontext braucht verstaendnis, docText oder volatiles')
 
+  // Nachrichtenarrays: (1) Gecachte Blöcke + Volatiles, (2) ältere Konversation, (3) aktuelle Frage
+  const messages = [{ role: 'user', content: bloecke }]
+  if (kontext.verlauf) {
+    if (!kontext.anfrage) throw new Error('chat: anfrage fehlt bei vorhandenem verlauf')
+    messages.push(...kontext.verlauf)
+  }
+  if (kontext.anfrage) {
+    messages.push({ role: 'user', content: kontext.anfrage })
+  }
+
   const body = {
     model: MODELLE[eintrag.modell],
     max_tokens: eintrag.maxTokens,
     system: [{ type: 'text', text: SYSTEM_COACH, cache_control: { type: 'ephemeral' } }],
-    messages: [{ role: 'user', content: bloecke }, ...(kontext.verlauf || [])],
+    messages,
   }
   if (eintrag.stream) body.stream = true
   if (eintrag.schema) body.output_config = { format: { type: 'json_schema', schema: eintrag.schema } }

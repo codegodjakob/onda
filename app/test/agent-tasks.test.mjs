@@ -66,18 +66,54 @@ test('baueAnfrage: Wire-Format und Cache-Praefix-Ordnung exakt nach Vertrag', ()
   assert.ok(!('stream' in body))
 })
 
-test('baueAnfrage: chat streamt und haengt den Verlauf hinter das Praefix', () => {
+test('baueAnfrage: chat streamt, Verlauf vor die aktuelle Frage, letzte Message nie assistant', () => {
   const anfrage = baueAnfrage('chat', {
     verstaendnis: { task: 'Essay' },
     docText: 'Text',
     volatiles: ['Frage der Autorin'],
-    verlauf: [{ role: 'assistant', content: 'Frühere Antwort' }],
+    verlauf: [
+      { role: 'user', content: 'alte Frage' },
+      { role: 'assistant', content: 'alte Antwort' },
+    ],
+    anfrage: 'neue Frage',
   })
   assert.equal(anfrage.stream, true)
   assert.equal(anfrage.body.stream, true)
-  assert.equal(anfrage.body.messages.length, 2)
-  assert.equal(anfrage.body.messages[1].role, 'assistant')
+  assert.equal(anfrage.body.messages.length, 4)
+  assert.equal(anfrage.body.messages[0].role, 'user')
+  assert.ok(anfrage.body.messages[0].content[0].cache_control)
+  assert.equal(anfrage.body.messages[1].role, 'user')
+  assert.equal(anfrage.body.messages[1].content, 'alte Frage')
+  assert.equal(anfrage.body.messages[2].role, 'assistant')
+  assert.equal(anfrage.body.messages[2].content, 'alte Antwort')
+  assert.equal(anfrage.body.messages[3].role, 'user')
+  assert.equal(anfrage.body.messages[3].content, 'neue Frage')
   assert.ok(!('output_config' in anfrage.body))
+})
+
+test('baueAnfrage: letzte Message ist nie assistant (kein Prefill)', () => {
+  const anfrage = baueAnfrage('chat', {
+    docText: 'Text',
+    verlauf: [
+      { role: 'user', content: 'Q1' },
+      { role: 'assistant', content: 'A1' },
+    ],
+    anfrage: 'Q2',
+  })
+  const msgs = anfrage.body.messages
+  const lastMsg = msgs[msgs.length - 1]
+  assert.equal(lastMsg.role, 'user', 'letzte Message muss user sein')
+  assert.equal(lastMsg.content, 'Q2')
+})
+
+test('baueAnfrage wirft wenn Verlauf ohne anfrage', () => {
+  assert.throws(
+    () => baueAnfrage('chat', {
+      docText: 'Text',
+      verlauf: [{ role: 'user', content: 'Alte Frage' }],
+    }),
+    /anfrage fehlt bei vorhandenem verlauf/
+  )
 })
 
 test('baueAnfrage ist deterministisch: zweimal bauen ergibt byte-gleiches JSON', () => {
