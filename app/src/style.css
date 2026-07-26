@@ -2850,3 +2850,51 @@ button.onda-aura:focus-visible {
 .onda-accent-swatch[data-accent="clay"] { background: #c07a5c; }
 .onda-accent-swatch[data-accent="lavender"] { background: #9a86c4; }
 .onda-accent-swatch[data-accent="sand"] { background: #c2a15e; }
+
+/* ==================== KI-Anschluss (Einstellungen, Bereich U) ==================== */
+.ki-status-row { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+.ki-ort { margin: 0; color: var(--text-tertiary); font: var(--fw-regular) var(--text-sm)/1.5 var(--font-sans); }
+.ki-key-form { display: flex; gap: var(--space-2); }
+.ki-key-input {
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-control);
+  background: var(--bg-app);
+  color: var(--text-primary);
+  font: var(--fw-regular) var(--text-base)/1.4 var(--font-mono);
+}
+.ki-key-input:focus-visible { outline: none; border-color: var(--accent); box-shadow: var(--shadow-focus); }
+.ki-hinweis { margin: 0; color: var(--text-tertiary); font: var(--fw-regular) var(--text-sm)/1.5 var(--font-sans); }
+.ki-anleitung {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  padding: var(--space-3);
+  background: var(--surface-2);
+}
+.ki-anleitung summary { cursor: pointer; color: var(--text-secondary); font: var(--fw-medium) var(--text-sm)/1.4 var(--font-sans); }
+.ki-anleitung-schritte {
+  margin: var(--space-3) 0 0;
+  padding-left: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  color: var(--text-primary);
+  font: var(--fw-regular) var(--text-sm)/1.5 var(--font-sans);
+}
+.ki-pflicht { color: var(--warning); font-weight: var(--fw-semibold); }
+.ki-link {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: underline;
+  font: inherit;
+}
+.ki-link:focus-visible { outline: none; box-shadow: var(--shadow-focus); border-radius: 2px; }
+.ki-verbrauch { display: flex; flex-direction: column; gap: var(--space-1); }
+.ki-verbrauch p { margin: 0; color: var(--text-secondary); font: var(--fw-regular) var(--text-sm)/1.5 var(--font-sans); }
+.ki-verbrauch-kosten { color: var(--text-primary); }
+.ki-verbrauch-leer { color: var(--text-tertiary); }

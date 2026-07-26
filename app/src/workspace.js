@@ -16,6 +16,8 @@ import {
 import { Plugin, PluginKey } from '@tiptap/pm/state'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import { applySettings } from './ui.js'
+import { hatSchluessel } from './agent-gateway.mjs'
+import { beiAgentStatus } from './agent-status.mjs'
 
 const BLOCK_TYPES = [
   ['paragraph', 'Freier Absatz'],
@@ -558,6 +560,160 @@ function openProjectSourcesModal(opener) {
     })
     body.append(list)
   }})
+}
+
+// ---------- Einstellungen: KI-Anschluss (Bereich U) ----------
+// Der Schluessel wird IMMER vom Nutzer selbst eingetragen. Mac: Keychain via
+// Handler 'llmkey' (der Schluessel kommt nie an JS zurueck). Browser: Dev-Weg
+// in localStorage 'aiwt.apikey' (separat von aiwt.v2, taucht in keinem Export auf).
+
+const KI_KONSOLE_URL = 'https://console.anthropic.com'
+
+function schluesselOrtIstKeychain() {
+  return Boolean(window.webkit?.messageHandlers?.llmkey)
+}
+
+function sendeLlmkey(aktion, schluessel) {
+  const nachricht = { id: 'key-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8), aktion }
+  if (schluessel !== undefined) nachricht.schluessel = schluessel
+  window.webkit.messageHandlers.llmkey.postMessage(nachricht)
+}
+
+function speichereApiSchluessel(wert) {
+  const schluessel = String(wert || '').trim()
+  if (!schluessel) return false
+  if (schluesselOrtIstKeychain()) sendeLlmkey('setzen', schluessel)
+  else localStorage.setItem('aiwt.apikey', schluessel)
+  return true
+}
+
+function loescheApiSchluessel() {
+  if (schluesselOrtIstKeychain()) sendeLlmkey('loeschen')
+  else localStorage.removeItem('aiwt.apikey')
+}
+
+function openKiSettingsDialog(opener) {
+  openOndaDialog({ id: 'kiModal', title: 'KI-Anschluss', opener, build: body => buildKiSettingsBody(body) })
+}
+
+function buildKiSettingsBody(body) {
+  body.replaceChildren()
+  const keychain = schluesselOrtIstKeychain()
+
+  // Schluessel-Status + Ablageort
+  const statusRow = createNode('div', 'ki-status-row')
+  const statusBadge = createNode('span', 'onda-badge', 'Prüfe …')
+  statusRow.append(createNode('span', 'onda-eyebrow', 'Schlüssel'), statusBadge)
+  body.append(statusRow)
+  body.append(createNode('p', 'ki-ort', keychain
+    ? 'Ablageort: macOS-Schlüsselbund — der Schlüssel verlässt die Mac-App nicht.'
+    : 'Ablageort: dieser Browser (Entwicklungsweg).'))
+
+  // Eintragen
+  const form = createNode('form', 'ki-key-form')
+  const input = createNode('input', 'ki-key-input')
+  input.type = 'password'
+  input.placeholder = 'sk-ant-…'
+  input.autocomplete = 'off'
+  input.spellcheck = false
+  input.setAttribute('aria-label', 'Anthropic-API-Schlüssel eintragen')
+  const speichern = createNode('button', 'onda-btn onda-btn--sm', 'Speichern')
+  speichern.type = 'submit'
+  form.append(input, speichern)
+  body.append(form)
+
+  if (!keychain) {
+    body.append(createNode('p', 'ki-hinweis',
+      'Sicherheitshinweis: Im Browser liegt der Schlüssel unverschlüsselt im lokalen Speicher '
+      + '(nur für Entwicklung und Notfall gedacht). Empfohlen ist die Mac-App — dort wandert er '
+      + 'in den macOS-Schlüsselbund. In Exporten taucht der Schlüssel nie auf.'))
+  }
+
+  const loeschen = createNode('button', 'onda-btn onda-btn--ghost onda-btn--sm', 'Schlüssel löschen')
+  loeschen.type = 'button'
+  loeschen.hidden = true
+  body.append(loeschen)
+
+  const zeigeStatus = vorhanden => {
+    statusBadge.textContent = vorhanden ? 'Hinterlegt' : 'Fehlt'
+    statusBadge.classList.toggle('onda-badge--success', vorhanden)
+    statusBadge.classList.toggle('onda-badge--warning', !vorhanden)
+    loeschen.hidden = !vorhanden
+  }
+  hatSchluessel().then(zeigeStatus).catch(() => zeigeStatus(false))
+
+  const aktualisiereNachAenderung = () => {
+    // Der Schluesselbund antwortet asynchron — kurz warten, dann Status neu lesen.
+    setTimeout(() => {
+      hatSchluessel().then(zeigeStatus).catch(() => zeigeStatus(false))
+    }, 250)
+  }
+  form.addEventListener('submit', event => {
+    event.preventDefault()
+    if (!speichereApiSchluessel(input.value)) return
+    input.value = ''
+    announceAgentStatus('Schlüssel gespeichert.')
+    aktualisiereNachAenderung()
+  })
+  loeschen.addEventListener('click', () => {
+    loescheApiSchluessel()
+    announceAgentStatus('Schlüssel gelöscht.')
+    aktualisiereNachAenderung()
+  })
+
+  // Anleitung (aufklappbar)
+  const anleitung = createNode('details', 'ki-anleitung')
+  anleitung.append(createNode('summary', null, 'So richtest du den KI-Anschluss ein'))
+  const schritte = createNode('ol', 'ki-anleitung-schritte')
+  const schritt1 = createNode('li', null, 'Ein Konto anlegen auf ')
+  const link = createNode('button', 'ki-link', 'console.anthropic.com')
+  link.type = 'button'
+  link.addEventListener('click', () => openSecureExternal(KI_KONSOLE_URL))
+  schritt1.append(link, document.createTextNode('.'))
+  const schritt3 = createNode('li', null, 'Im Anbieter-Konto ein Ausgabenlimit setzen ')
+  schritt3.append(createNode('strong', 'ki-pflicht', '(Pflichtschritt — schützt vor unerwarteten Kosten).'))
+  schritte.append(
+    schritt1,
+    createNode('li', null, 'Dort einen API-Schlüssel erzeugen (Bereich „API Keys“).'),
+    schritt3,
+    createNode('li', null, 'Den Schlüssel oben eintragen und speichern.'),
+  )
+  anleitung.append(schritte)
+  body.append(anleitung)
+
+  // Verbrauch (settings.usage — vom Verteiler nach jedem Lauf verbucht)
+  const verbrauch = createNode('section', 'ki-verbrauch')
+  body.append(verbrauch)
+  renderKiVerbrauch(verbrauch)
+  const abmelden = beiAgentStatus(() => {
+    if (!verbrauch.isConnected) { abmelden(); return }
+    renderKiVerbrauch(verbrauch)
+  })
+}
+
+function formatTokenZahl(wert) {
+  return (Number.isFinite(+wert) ? +wert : 0).toLocaleString('de-DE')
+}
+
+function renderKiVerbrauch(container) {
+  container.replaceChildren()
+  container.append(createNode('span', 'onda-eyebrow', 'Verbrauch'))
+  const usage = ctx?.state?.settings?.usage
+  if (!usage || (!usage.inputTokens && !usage.outputTokens)) {
+    container.append(createNode('p', 'ki-verbrauch-leer', 'Diesen Monat noch keine Läufe.'))
+    return
+  }
+  let monatsName = usage.monat
+  try {
+    monatsName = new Date(usage.monat + '-01T00:00:00').toLocaleDateString('de-DE', { month: 'long', year: 'numeric' })
+  } catch {}
+  container.append(
+    createNode('p', null, `${monatsName}: ${formatTokenZahl(usage.inputTokens)} Tokens hinein · ${formatTokenZahl(usage.outputTokens)} Tokens heraus`),
+    createNode('p', null, `Aus dem Zwischenspeicher gelesen: ${formatTokenZahl(usage.cacheReadTokens)} · hineingeschrieben: ${formatTokenZahl(usage.cacheWriteTokens)}`),
+    createNode('p', 'ki-verbrauch-kosten',
+      `Geschätzte Kosten: ${((usage.kostenCents || 0) / 100).toLocaleString('de-DE', { style: 'currency', currency: 'USD' })}`
+      + ' — Schätzung nach Preisstand 07/2026; verbindlich ist die Abrechnung im Anthropic-Konto.'),
+  )
 }
 
 function syncThemeToggle() {
@@ -2155,6 +2311,7 @@ export function initWorkspace(context) {
   listen(document.getElementById('materialSources'), 'click', event => openProjectSourcesModal(event.currentTarget))
   listen(document.getElementById('themeToggle'), 'click', toggleTheme)
   listen(document.getElementById('accentToggle'), 'click', event => openAccentMenu(event.currentTarget))
+  listen(document.getElementById('kiSettings'), 'click', event => openKiSettingsDialog(event.currentTarget))
   listenEditor('selectionUpdate', onSelectionUpdate)
   listenEditor('update', onEditorUpdate)
 
