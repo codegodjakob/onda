@@ -2898,3 +2898,16 @@ button.onda-aura:focus-visible {
 .ki-verbrauch p { margin: 0; color: var(--text-secondary); font: var(--fw-regular) var(--text-sm)/1.5 var(--font-sans); }
 .ki-verbrauch-kosten { color: var(--text-primary); }
 .ki-verbrauch-leer { color: var(--text-tertiary); }
+
+/* Ruhige Statuszeile im Agenten-Panel (Bereich U) */
+.agent-statusline {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  color: var(--text-secondary);
+  font: var(--fw-regular) var(--text-sm)/1.45 var(--font-sans);
+}
+.agent-statusline[hidden] { display: none; }
+.agent-statusline-text { min-width: 0; }
+.agent-statusline .onda-btn { flex: none; margin-left: auto; }

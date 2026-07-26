@@ -17,7 +17,7 @@ import { Plugin, PluginKey } from '@tiptap/pm/state'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import { applySettings } from './ui.js'
 import { hatSchluessel, setzeSchluessel, loescheSchluessel } from './agent-gateway.mjs'
-import { beiAgentStatus } from './agent-status.mjs'
+import { aktuellerAgentStatus, beiAgentStatus, setzeAgentStatus, statuszeileFuer } from './agent-status.mjs'
 
 const BLOCK_TYPES = [
   ['paragraph', 'Freier Absatz'],
@@ -644,11 +644,13 @@ function buildKiSettingsBody(body) {
     if (!(await speichereApiSchluessel(input.value))) return
     input.value = ''
     announceAgentStatus('Schlüssel gespeichert.')
+    pruefeAgentVerbindung()
     hatSchluessel().then(zeigeStatus).catch(() => zeigeStatus(false))
   })
   loeschen.addEventListener('click', async () => {
     await loescheApiSchluessel()
     announceAgentStatus('Schlüssel gelöscht.')
+    pruefeAgentVerbindung()
     hatSchluessel().then(zeigeStatus).catch(() => zeigeStatus(false))
   })
 
@@ -1658,6 +1660,42 @@ function applyAuraState() {
   )
 }
 
+// Prueft die Schluessel-Lage und setzt den ruhigen Grundzustand des Agenten.
+// Laufende Tasks werden nie ueberschrieben (Bereich W setzt 'laeuft'/'fehler').
+async function pruefeAgentVerbindung() {
+  let vorhanden = false
+  try {
+    vorhanden = await hatSchluessel()
+  } catch {
+    vorhanden = false
+  }
+  if (aktuellerAgentStatus().zustand === 'laeuft') return
+  setzeAgentStatus(vorhanden ? { zustand: 'bereit' } : { zustand: 'offline' })
+}
+
+// Ruhige Statuszeile im Agenten-Panel: offline / Lauf aktiv / Fehler.
+// Ersetzt nur die Kinder des Containers — nie Modals, nie Fokusraub.
+function renderAgentStatuszeile() {
+  const host = document.getElementById('agentStatusline')
+  if (!host) return
+  const zeile = statuszeileFuer(aktuellerAgentStatus())
+  host.replaceChildren()
+  host.hidden = !zeile
+  if (!zeile) return
+  if (zeile.aura) {
+    const orb = createNode('span', 'onda-aura onda-aura--xs is-thinking')
+    orb.setAttribute('aria-hidden', 'true')
+    host.append(orb)
+  }
+  host.append(createNode('span', 'agent-statusline-text', zeile.text))
+  if (zeile.knopf === 'einstellungen') {
+    const oeffnen = createNode('button', 'onda-btn onda-btn--ghost onda-btn--sm', 'Einstellungen öffnen')
+    oeffnen.type = 'button'
+    oeffnen.addEventListener('click', event => openKiSettingsDialog(event.currentTarget))
+    host.append(oeffnen)
+  }
+}
+
 function activeAgentMessage(workspace) {
   const messages = workspace.agent.messages
   const selected = messages.find(message => message.id === workspace.agent.activeMessageId)
@@ -1728,6 +1766,12 @@ function renderAgentWidget() {
   close.addEventListener('click', () => closeAgentWidget())
   header.append(close)
   ui.agentWidget.append(header)
+
+  const statusline = createNode('div', 'agent-statusline')
+  statusline.id = 'agentStatusline'
+  statusline.hidden = true
+  ui.agentWidget.append(statusline)
+  renderAgentStatuszeile()
 
   const unplaced = renderUnplacedFindingList()
   if (unplaced) ui.agentWidget.append(unplaced)
@@ -2305,6 +2349,13 @@ export function initWorkspace(context) {
   listen(document.getElementById('kiSettings'), 'click', event => openKiSettingsDialog(event.currentTarget))
   listenEditor('selectionUpdate', onSelectionUpdate)
   listenEditor('update', onEditorUpdate)
+
+  // Status-Abo: Statuszeile und Aura folgen dem echten Agenten-Zustand.
+  cleanups.push(beiAgentStatus(() => {
+    renderAgentStatuszeile()
+    applyAuraState()
+  }))
+  pruefeAgentVerbindung()
 
   instance.destroy = () => {
     if (instance.destroyed) return
