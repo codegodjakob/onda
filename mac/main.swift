@@ -557,11 +557,20 @@ extension AppDelegate {
                 let (bytes, response) = try await AppDelegate.llmSession.bytes(for: request)
                 let status = (response as? HTTPURLResponse)?.statusCode ?? 0
                 if status != 200 {
+                    // Status ist bekannt, sobald die Antwort-Kopfzeilen da sind — der
+                    // Fehlertyp steht damit fest, EGAL ob der Diagnose-Körper danach
+                    // noch vollständig gelesen werden kann. Eigenes do/catch, damit ein
+                    // Abbruch beim Körper-Lesen NICHT in den äußeren offline-catch fällt
+                    // und einen z. B. echten 401 fälschlich als vorübergehend meldet.
+                    let typ = AppDelegate.fehlerTyp(fuerStatus: status)
                     var koerper = Data()
-                    for try await b in bytes { koerper.append(b); if koerper.count > 4096 { break } }
+                    do {
+                        for try await b in bytes { koerper.append(b); if koerper.count > 4096 { break } }
+                    } catch {
+                        // Körper unvollständig/nicht lesbar — Status-Typ gilt trotzdem.
+                    }
                     let text = String(data: koerper, encoding: .utf8) ?? ""
-                    fehler(AppDelegate.fehlerTyp(fuerStatus: status),
-                           "HTTP \(status): \(String(text.prefix(300)))")
+                    fehler(typ, "HTTP \(status): \(String(text.prefix(300)))")
                     return
                 }
                 var zeile = Data()
