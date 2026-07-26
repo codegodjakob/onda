@@ -325,6 +325,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
             // Antwort enthält NIE den Schlüssel — nur ja/nein.
             llmRueckruf(["id": id, "typ": "schluesselstatus",
                          "status": ["vorhanden": Keychain.vorhanden()]])
+        case "llm":
+            guard let obj = message.body as? [String: Any] else { return }
+            handleLlm(obj)
         case "probe":
             if let p = probePath, let s = message.body as? String {
                 try? s.write(toFile: p, atomically: true, encoding: .utf8)
@@ -444,6 +447,141 @@ func buildMenus(_ delegate: AppDelegate) {
     editItem.submenu = editMenu
 
     NSApp.mainMenu = main
+}
+
+// MARK: - LLM-Brücke (Handler 'llm')
+//
+// Entscheidung (verbindlich für Bereich T): Swift parst weder die JSON-Antwort
+// noch den SSE-Strom. stream=false → der rohe Antwort-Körper geht als `text`
+// im 'fertig'-Rückruf an JS; stream=true → jede SSE-Rohzeile (inkl. '\n',
+// ohne '\r') geht als 'delta' an JS, dort arbeitet parseSseZeilen aus
+// agent-transport.mjs. Ein Parser, eine Wahrheit — kein Duplikat in Swift.
+
+extension AppDelegate {
+    /// Großzügige Fristen: Opus-5-Läufe mit adaptivem Denken dürfen lange dauern.
+    static let llmSession: URLSession = {
+        let cfg = URLSessionConfiguration.ephemeral
+        cfg.timeoutIntervalForRequest = 600   // 10 Minuten je Anfrage
+        cfg.timeoutIntervalForResource = 1200
+        return URLSession(configuration: cfg)
+    }()
+
+    /// HTTP-Status → Fehler-Vokabular des Verteilers (agent-gateway.mjs).
+    static func fehlerTyp(fuerStatus status: Int) -> String {
+        switch status {
+        case 401, 403: return "kein-schluessel"
+        case 429: return "ratenlimit"
+        case 529: return "ueberlastet"
+        case 500...599: return "ueberlastet"
+        default: return "schema" // fehlerhafte Anfrage (z. B. 400) — nicht wiederholbar
+        }
+    }
+
+    func handleLlm(_ obj: [String: Any]) {
+        guard let id = obj["id"] as? String else { return }
+        func fehler(_ typ: String, _ nachricht: String) {
+            llmRueckruf(["id": id, "typ": "fehler",
+                         "fehler": ["typ": typ, "nachricht": nachricht]])
+        }
+        guard let urlString = obj["url"] as? String,
+              let url = URL(string: urlString),
+              url.scheme == "https", url.host == "api.anthropic.com" else {
+            fehler("schema", "Unzulässige Ziel-Adresse — die Brücke spricht nur mit api.anthropic.com.")
+            return
+        }
+        guard let key = Keychain.lesen() else {
+            fehler("kein-schluessel", "Kein API-Schlüssel im Schlüsselbund hinterlegt.")
+            return
+        }
+        guard let body = obj["body"], JSONSerialization.isValidJSONObject(body),
+              let bodyData = try? JSONSerialization.data(withJSONObject: body) else {
+            fehler("schema", "Anfrage-Körper ließ sich nicht serialisieren.")
+            return
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.httpBody = bodyData
+        request.timeoutInterval = 600
+        request.setValue("application/json", forHTTPHeaderField: "content-type")
+        let gesperrt = ["x-api-key", "anthropic-dangerous-direct-browser-access"]
+        for (k, v) in (obj["headers"] as? [String: String]) ?? [:]
+            where !gesperrt.contains(k.lowercased()) {
+            request.setValue(v, forHTTPHeaderField: k)
+        }
+        request.setValue(key, forHTTPHeaderField: "x-api-key") // NUR hier, nie aus JS
+
+        if (obj["stream"] as? Bool) == true {
+            streamLlm(id: id, request: request)
+        } else {
+            fetchLlm(id: id, request: request)
+        }
+    }
+
+    /// stream=false: komplette Antwort abholen, roher Body als `text` an JS.
+    private func fetchLlm(id: String, request: URLRequest) {
+        AppDelegate.llmSession.dataTask(with: request) { [weak self] data, response, error in
+            guard let self = self else { return }
+            func fehler(_ typ: String, _ nachricht: String) {
+                self.llmRueckruf(["id": id, "typ": "fehler",
+                                  "fehler": ["typ": typ, "nachricht": nachricht]])
+            }
+            if let error = error {
+                fehler("offline", "Netzfehler: \(error.localizedDescription)")
+                return
+            }
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            let text = data.flatMap { String(data: $0, encoding: .utf8) } ?? ""
+            guard status == 200 else {
+                fehler(AppDelegate.fehlerTyp(fuerStatus: status),
+                       "HTTP \(status): \(String(text.prefix(300)))")
+                return
+            }
+            self.llmRueckruf(["id": id, "typ": "fertig", "text": text])
+        }.resume()
+    }
+
+    /// stream=true: SSE Zeile für Zeile, jede Rohzeile als 'delta' an JS.
+    private func streamLlm(id: String, request: URLRequest) {
+        Task { [weak self] in
+            guard let self = self else { return }
+            func fehler(_ typ: String, _ nachricht: String) {
+                self.llmRueckruf(["id": id, "typ": "fehler",
+                                  "fehler": ["typ": typ, "nachricht": nachricht]])
+            }
+            func alsZeile(_ d: Data) -> String {
+                var s = String(data: d, encoding: .utf8) ?? ""
+                if s.hasSuffix("\r") { s.removeLast() }
+                return s
+            }
+            do {
+                let (bytes, response) = try await AppDelegate.llmSession.bytes(for: request)
+                let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+                if status != 200 {
+                    var koerper = Data()
+                    for try await b in bytes { koerper.append(b); if koerper.count > 4096 { break } }
+                    let text = String(data: koerper, encoding: .utf8) ?? ""
+                    fehler(AppDelegate.fehlerTyp(fuerStatus: status),
+                           "HTTP \(status): \(String(text.prefix(300)))")
+                    return
+                }
+                var zeile = Data()
+                for try await b in bytes {
+                    if b == 0x0A {
+                        self.llmRueckruf(["id": id, "typ": "delta", "text": alsZeile(zeile) + "\n"])
+                        zeile.removeAll(keepingCapacity: true)
+                    } else {
+                        zeile.append(b)
+                    }
+                }
+                if !zeile.isEmpty {
+                    self.llmRueckruf(["id": id, "typ": "delta", "text": alsZeile(zeile) + "\n"])
+                }
+                self.llmRueckruf(["id": id, "typ": "fertig"])
+            } catch {
+                fehler("offline", "Netzfehler: \(error.localizedDescription)")
+            }
+        }
+    }
 }
 
 // MARK: - Start
