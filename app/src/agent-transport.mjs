@@ -34,3 +34,189 @@ export function parseSseZeilen(pufferObjekt, chunkText) {
   }
   return events
 }
+
+// ---------- Gemeinsame pure Bausteine ----------
+export function mapHttpStatus(status) {
+  if (status === 401 || status === 403) return { typ: 'kein-schluessel', nachricht: 'Der Schlüssel wurde nicht akzeptiert (HTTP ' + status + ').' }
+  if (status === 429) return { typ: 'ratenlimit', nachricht: 'Zu viele Anfragen (HTTP 429).' }
+  if (status === 529 || status >= 500) return { typ: 'ueberlastet', nachricht: 'Der Dienst ist gerade überlastet (HTTP ' + status + ').' }
+  // Sonstige 4xx (z. B. 400 bei fehlerhafter Anfrage): kein Wiederholungsversuch,
+  // Lauf wird wie Schema-Müll verworfen und protokolliert (Spec §7).
+  return { typ: 'schema', nachricht: 'Die Anfrage wurde abgelehnt (HTTP ' + status + ').' }
+}
+
+function leereUsage() {
+  return { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }
+}
+
+// Anthropic-Streaming liefert kumulative Zähler (message_start: input/cache,
+// message_delta: output) — darum gewinnt je Feld der zuletzt gemeldete Wert.
+export function mischeUsage(bisher, neu) {
+  const u = Object.assign(leereUsage(), bisher)
+  if (!neu) return u
+  for (const k of Object.keys(u)) if (typeof neu[k] === 'number') u[k] = neu[k]
+  return u
+}
+
+export function ergebnisAusAntwortJson(json) {
+  const block = Array.isArray(json && json.content) ? json.content.find(b => b && b.type === 'text') : null
+  return {
+    text: block ? block.text : '',
+    usage: mischeUsage(null, json && json.usage),
+    stopReason: (json && json.stop_reason) || null,
+  }
+}
+
+function lesSchluessel() {
+  try { return (localStorage.getItem(API_KEY_STORAGE) || '').trim() } catch (e) { return '' }
+}
+
+// ---------- Direktweg (Browser: Entwickler-/Rückfallpfad) ----------
+export const direktTransport = {
+  art: 'direkt',
+  async hatSchluessel() { return !!lesSchluessel() },
+  async setzeSchluessel(schluessel) { localStorage.setItem(API_KEY_STORAGE, (schluessel || '').trim()) },
+  async loescheSchluessel() { localStorage.removeItem(API_KEY_STORAGE) },
+  async sende(anfrage, handlers) {
+    const schluessel = lesSchluessel()
+    if (!schluessel) { handlers.onFehler({ typ: 'kein-schluessel', nachricht: 'Kein API-Schlüssel hinterlegt.' }); return }
+    const headers = Object.assign({}, anfrage.headers, {
+      'x-api-key': schluessel,
+      'anthropic-dangerous-direct-browser-access': 'true',
+    })
+    let res
+    try {
+      res = await fetch(anfrage.url, { method: 'POST', headers, body: JSON.stringify(anfrage.body) })
+    } catch (e) {
+      handlers.onFehler({ typ: 'offline', nachricht: 'Keine Verbindung zum Dienst.' }); return
+    }
+    if (!res.ok) { handlers.onFehler(mapHttpStatus(res.status)); return }
+    if (!anfrage.stream) {
+      let json
+      try { json = await res.json() } catch (e) { handlers.onFehler({ typ: 'schema', nachricht: 'Die Antwort war kein JSON.' }); return }
+      handlers.onFertig(ergebnisAusAntwortJson(json)); return
+    }
+    const puffer = { rest: '' }
+    const decoder = new TextDecoder('utf-8')
+    const reader = res.body.getReader()
+    let text = ''; let usage = mischeUsage(null, null); let stopReason = null
+    const verarbeite = events => {
+      for (const ev of events) {
+        if (ev.typ === 'delta') { text += ev.text; if (handlers.onDelta) handlers.onDelta(ev.text) }
+        else if (ev.typ === 'usage') usage = mischeUsage(usage, ev.usage)
+        else if (ev.typ === 'stop') stopReason = ev.stopReason
+      }
+    }
+    try {
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done) break
+        verarbeite(parseSseZeilen(puffer, decoder.decode(value, { stream: true })))
+      }
+      verarbeite(parseSseZeilen(puffer, decoder.decode()))
+      if (puffer.rest) verarbeite(parseSseZeilen(puffer, '\n'))
+    } catch (e) {
+      handlers.onFehler({ typ: 'offline', nachricht: 'Die Verbindung ist während des Streamens abgerissen.' }); return
+    }
+    handlers.onFertig({ text, usage, stopReason })
+  },
+}
+
+// ---------- Brücke (Mac-App: Handler 'llm'/'llmkey', Schlüssel in der Keychain) ----------
+// Registry offener Anfragen nach id; Swift antwortet über window.AIWT.llmRueckruf.
+const offen = new Map()
+let naechsteId = 1
+function neueId(praefix) { return praefix + '-' + Date.now().toString(36) + '-' + (naechsteId++) }
+
+function llmRueckruf(nachricht) {
+  const eintrag = offen.get(nachricht.id)
+  if (!eintrag) return
+  if (nachricht.typ === 'schluesselstatus') {
+    offen.delete(nachricht.id)
+    eintrag.aufloesen(nachricht)
+    return
+  }
+  if (nachricht.typ === 'delta') {
+    // Swift reicht rohe SSE-Zeilen durch — derselbe Parser wie im Direktweg.
+    for (const ev of parseSseZeilen(eintrag.puffer, nachricht.text || '')) {
+      if (ev.typ === 'delta') { eintrag.text += ev.text; if (eintrag.handlers.onDelta) eintrag.handlers.onDelta(ev.text) }
+      else if (ev.typ === 'usage') eintrag.usage = mischeUsage(eintrag.usage, ev.usage)
+      else if (ev.typ === 'stop') eintrag.stopReason = ev.stopReason
+    }
+    return
+  }
+  if (nachricht.typ === 'fertig') {
+    offen.delete(nachricht.id)
+    if (eintrag.stream) {
+      eintrag.handlers.onFertig({ text: eintrag.text, usage: eintrag.usage, stopReason: eintrag.stopReason })
+    } else {
+      let json
+      try { json = JSON.parse(nachricht.text || '') } catch (e) {
+        eintrag.handlers.onFehler({ typ: 'schema', nachricht: 'Die Antwort war kein JSON.' }); return
+      }
+      eintrag.handlers.onFertig(ergebnisAusAntwortJson(json))
+    }
+    return
+  }
+  if (nachricht.typ === 'fehler') {
+    offen.delete(nachricht.id)
+    if (typeof nachricht.status === 'number' && nachricht.status > 0) eintrag.handlers.onFehler(mapHttpStatus(nachricht.status))
+    else eintrag.handlers.onFehler({ typ: 'offline', nachricht: nachricht.fehler || 'Keine Verbindung zum Dienst.' })
+  }
+}
+
+// Idempotent und bei jedem Aufruf erneut geprüft: das esbuild-Bundle weist
+// window.AIWT erst NACH der Modul-Auswertung zu (--global-name=AIWT), darum
+// wird der Rückruf lazy beim ersten Gebrauch angehängt, nie beim Import.
+function registriereRueckruf() {
+  if (typeof window === 'undefined') return
+  if (!window.AIWT || window.AIWT.llmRueckruf !== llmRueckruf) {
+    window.AIWT = window.AIWT || {}
+    window.AIWT.llmRueckruf = llmRueckruf
+  }
+}
+
+function sendeLlmKey(aktion, schluessel) {
+  registriereRueckruf()
+  return new Promise(resolve => {
+    const id = neueId('key')
+    offen.set(id, { aufloesen: resolve })
+    const nachricht = { id, aktion }
+    if (schluessel != null) nachricht.schluessel = schluessel
+    window.webkit.messageHandlers.llmkey.postMessage(nachricht)
+  })
+}
+
+export const brueckenTransport = {
+  art: 'bruecke',
+  async hatSchluessel() {
+    const antwort = await sendeLlmKey('status')
+    return !!(antwort && antwort.status)
+  },
+  async setzeSchluessel(schluessel) { await sendeLlmKey('setzen', schluessel) },
+  async loescheSchluessel() { await sendeLlmKey('loeschen') },
+  sende(anfrage, handlers) {
+    registriereRueckruf()
+    const id = neueId('llm')
+    offen.set(id, {
+      handlers, stream: !!anfrage.stream, puffer: { rest: '' },
+      text: '', usage: mischeUsage(null, null), stopReason: null,
+    })
+    try {
+      // headers OHNE Schlüssel — Swift setzt x-api-key aus der Keychain ein.
+      window.webkit.messageHandlers.llm.postMessage({
+        id, url: anfrage.url, headers: anfrage.headers, body: anfrage.body, stream: !!anfrage.stream,
+      })
+    } catch (e) {
+      offen.delete(id)
+      handlers.onFehler({ typ: 'offline', nachricht: 'Die Brücke zur Mac-App antwortet nicht.' })
+    }
+  },
+}
+
+export function waehleTransport() {
+  if (typeof window !== 'undefined' && window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.llm) {
+    return brueckenTransport
+  }
+  return direktTransport
+}
