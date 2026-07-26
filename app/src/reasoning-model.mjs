@@ -27,8 +27,95 @@ export function ensureProjectUnderstanding(project) {
   current.audience = cleanList(current.audience)
   current.protectedIntentions = cleanList(current.protectedIntentions)
   current.openQuestions = cleanList(current.openQuestions)
+  current.geschuetzt = cleanList(current.geschuetzt)
   project.understanding = current
   return current
+}
+
+const GESCHUETZT_FELDER = Object.freeze([
+  'task', 'audience', 'desiredEffect', 'evidenceStandard', 'protectedIntentions', 'openQuestions',
+])
+
+function textOderLeer(value) {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+export function istInterviewOffen(understanding) {
+  if (!understanding || typeof understanding !== 'object') return true
+  const task = textOderLeer(understanding.task)
+  const effect = textOderLeer(understanding.desiredEffect)
+  const audience = cleanList(understanding.audience)
+  return !(task && effect && audience.length)
+}
+
+export function markiereGeschuetzt(understanding, feld) {
+  if (!understanding || typeof understanding !== 'object') return understanding
+  if (!GESCHUETZT_FELDER.includes(feld)) return understanding
+  if (!Array.isArray(understanding.geschuetzt)) understanding.geschuetzt = []
+  if (!understanding.geschuetzt.includes(feld)) understanding.geschuetzt.push(feld)
+  return understanding
+}
+
+// Pur: mischt eine KI-Antwort (VERSTAENDNIS_SCHEMA) in ein bestehendes Understanding.
+// Nur nicht-leere Felder überschreiben; geschützte Felder (Nutzer-Korrektionen) nie.
+// Ausnahme openQuestions: die Lückenliste der KI ersetzt die alte auch durch leer,
+// damit beantwortete Lücken verschwinden. protectedIntentions werden vereinigt.
+export function mergeVerstaendnis(alt, neu, geschuetzt = [], jetzt = Date.now()) {
+  const basis = alt && typeof alt === 'object' ? alt : {}
+  const eingehend = neu && typeof neu === 'object' ? neu : {}
+  const gesperrt = new Set(cleanList(geschuetzt))
+
+  const ergebnis = {
+    ...basis,
+    task: textOderLeer(basis.task),
+    audience: cleanList(basis.audience),
+    desiredEffect: textOderLeer(basis.desiredEffect),
+    evidenceStandard: textOderLeer(basis.evidenceStandard),
+    protectedIntentions: cleanList(basis.protectedIntentions),
+    openQuestions: cleanList(basis.openQuestions),
+    geschuetzt: cleanList(basis.geschuetzt),
+    updatedAt: Number.isFinite(basis.updatedAt) ? basis.updatedAt : null,
+  }
+  delete ergebnis.antwortText
+  let geaendert = false
+
+  const uebernimmText = feld => {
+    if (gesperrt.has(feld)) return
+    const wert = textOderLeer(eingehend[feld])
+    if (wert && wert !== ergebnis[feld]) { ergebnis[feld] = wert; geaendert = true }
+  }
+  uebernimmText('task')
+  uebernimmText('desiredEffect')
+  uebernimmText('evidenceStandard')
+
+  if (!gesperrt.has('audience')) {
+    const roh = eingehend.audience
+    const liste = Array.isArray(roh) ? cleanList(roh) : cleanList(String(roh || '').split(','))
+    if (liste.length && JSON.stringify(liste) !== JSON.stringify(ergebnis.audience)) {
+      ergebnis.audience = liste
+      geaendert = true
+    }
+  }
+
+  if (!gesperrt.has('protectedIntentions')) {
+    const zugaenge = cleanList(eingehend.protectedIntentions)
+      .filter(eintrag => !ergebnis.protectedIntentions.includes(eintrag))
+    if (zugaenge.length) {
+      ergebnis.protectedIntentions = [...ergebnis.protectedIntentions, ...zugaenge]
+      geaendert = true
+    }
+  }
+
+  if (!gesperrt.has('openQuestions') && Array.isArray(eingehend.openQuestions)) {
+    const liste = cleanList(eingehend.openQuestions)
+    if (JSON.stringify(liste) !== JSON.stringify(ergebnis.openQuestions)) {
+      ergebnis.openQuestions = liste
+      geaendert = true
+    }
+  }
+
+  if (geaendert) ergebnis.updatedAt = jetzt
+  return ergebnis
 }
 
 function legacyStatus(status) {
