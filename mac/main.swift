@@ -153,6 +153,19 @@ func runSelfTest() -> Never {
     }
     check("50x-schnell-speichern", ok && Store.load().contains("t49"))
 
+    // 8) Schlüsselbund-Helfer (eigener Selbsttest-Eintrag — der echte bleibt unberührt)
+    let tService = "Schreibwerkzeug-Selbsttest"
+    _ = Keychain.loeschen(service: tService)
+    check("keychain-anfangs-leer", Keychain.vorhanden(service: tService) == false)
+    check("keychain-setzen", Keychain.setzen("test-schluessel-123", service: tService))
+    check("keychain-lesen", Keychain.lesen(service: tService) == "test-schluessel-123")
+    check("keychain-ueberschreiben",
+          Keychain.setzen("test-schluessel-456", service: tService)
+          && Keychain.lesen(service: tService) == "test-schluessel-456")
+    check("keychain-loeschen",
+          Keychain.loeschen(service: tService) && Keychain.vorhanden(service: tService) == false)
+    check("keychain-leer-abgelehnt", Keychain.setzen("", service: tService) == false)
+
     try? FileManager.default.removeItem(at: Store.dir)
     print(fails == 0 ? "SELFTEST OK" : "SELFTEST FAILED (\(fails))")
     exit(fails == 0 ? 0 : 1)
@@ -232,6 +245,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         webView = WKWebView(frame: .zero, configuration: cfg)
         webView.allowsMagnification = true
         webView.uiDelegate = self
+
+        // Entwickler-Smoke: Web-Inspektor nur bei AIWT_DEBUG=1 (Safari → Entwickler).
+        if ProcessInfo.processInfo.environment["AIWT_DEBUG"] == "1" {
+            if #available(macOS 13.3, *) { webView.isInspectable = true }
+        }
 
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1150, height: 760),
                           styleMask: [.titled, .closable, .miniaturizable, .resizable],
