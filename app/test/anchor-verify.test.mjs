@@ -21,11 +21,11 @@ test('findeAnker: kollabiertes Whitespace wird normalisiert gefunden, Index zeig
 })
 
 test('findeAnker: typografische und gerade Anfuehrungszeichen gelten als gleich', () => {
-  const doc = 'Sie nannte es „ein stilles Werkzeug" und blieb dabei.'
+  const doc = 'Sie nannte es „ein stilles Werkzeug“ und blieb dabei.'
   const gerade = findeAnker(doc, '"ein stilles Werkzeug"')
   assert.equal(gerade.gefunden, true)
   assert.equal(gerade.normalisiert, true)
-  const einfach = findeAnker('Er sagte ‚ja’ und ging.', "'ja'")
+  const einfach = findeAnker('Er sagte ‚ja‘ und ging.', "'ja'")
   assert.equal(einfach.gefunden, true)
   assert.equal(einfach.normalisiert, true)
 })
