@@ -1,5 +1,6 @@
 import Cocoa
 import WebKit
+import Security
 
 // MARK: - Speicher (echte Datei mit Backup + Reparatur)
 
@@ -50,6 +51,54 @@ enum Store {
         }
         guard let d = s.data(using: .utf8) else { return false }
         do { try d.write(to: dataURL, options: .atomic); return true } catch { return false }
+    }
+}
+
+// MARK: - Schlüsselbund (API-Schlüssel verlässt nie den nativen Prozess)
+
+enum Keychain {
+    static let service = "Schreibwerkzeug"
+    static let account = "anthropic-api-key"
+
+    private static func basisAbfrage(service: String, account: String) -> [String: Any] {
+        [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+        ]
+    }
+
+    /// Legt den Schlüssel ab (ersetzt einen vorhandenen Eintrag).
+    @discardableResult
+    static func setzen(_ schluessel: String, service: String = Keychain.service, account: String = Keychain.account) -> Bool {
+        guard !schluessel.isEmpty, let data = schluessel.data(using: .utf8) else { return false }
+        let query = basisAbfrage(service: service, account: account)
+        SecItemDelete(query as CFDictionary)
+        var add = query
+        add[kSecValueData as String] = data
+        add[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlocked
+        return SecItemAdd(add as CFDictionary, nil) == errSecSuccess
+    }
+
+    /// Liest den Schlüssel — nur für den nativen 'llm'-Handler, nie für JS.
+    static func lesen(service: String = Keychain.service, account: String = Keychain.account) -> String? {
+        var query = basisAbfrage(service: service, account: account)
+        query[kSecReturnData as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
+        var out: CFTypeRef?
+        guard SecItemCopyMatching(query as CFDictionary, &out) == errSecSuccess,
+              let d = out as? Data, let s = String(data: d, encoding: .utf8), !s.isEmpty else { return nil }
+        return s
+    }
+
+    @discardableResult
+    static func loeschen(service: String = Keychain.service, account: String = Keychain.account) -> Bool {
+        let status = SecItemDelete(basisAbfrage(service: service, account: account) as CFDictionary)
+        return status == errSecSuccess || status == errSecItemNotFound
+    }
+
+    static func vorhanden(service: String = Keychain.service, account: String = Keychain.account) -> Bool {
+        lesen(service: service, account: account) != nil
     }
 }
 
@@ -170,6 +219,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         ucc.add(self, name: "saveimg")
         ucc.add(self, name: "printreq")
         ucc.add(self, name: "openurl")
+        ucc.add(self, name: "llmkey")
+        ucc.add(self, name: "llm")
 
         let data = Store.load()
         let js = "window.__NATIVE_DATA__ = \(data); window.__PROBE__ = \(probePath != nil ? "true" : "false");"
@@ -257,12 +308,47 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
                ["http", "https"].contains(url.scheme ?? "") {
                 NSWorkspace.shared.open(url)
             }
+        case "llmkey":
+            guard let obj = message.body as? [String: Any],
+                  let id = obj["id"] as? String,
+                  let aktion = obj["aktion"] as? String else { return }
+            switch aktion {
+            case "setzen":
+                let roh = (obj["schluessel"] as? String ?? "")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                if !roh.isEmpty { Keychain.setzen(roh) }
+            case "loeschen":
+                Keychain.loeschen()
+            default:
+                break // "status" fragt nur ab
+            }
+            // Antwort enthält NIE den Schlüssel — nur ja/nein.
+            llmRueckruf(["id": id, "typ": "schluesselstatus",
+                         "status": ["vorhanden": Keychain.vorhanden()]])
         case "probe":
             if let p = probePath, let s = message.body as? String {
                 try? s.write(toFile: p, atomically: true, encoding: .utf8)
                 exit(0)
             }
         default: break
+        }
+    }
+
+    /// Einziger Rückkanal der LLM-Brücke: window.AIWT.llmRueckruf(payload).
+    /// JSON-Serialisierung übernimmt jedes Escaping (Anführungszeichen, Zeilen-
+    /// umbrüche in SSE-Rohzeilen); der Guard macht Aufrufe vor der JS-Registrierung
+    /// zu No-ops. Reihenfolge ist trotzdem sicher: Swift ruft llmRueckruf nur als
+    /// Antwort auf ein postMessage aus dem JS — zu dem Zeitpunkt ist
+    /// agent-transport.mjs (Bereich T) längst geladen und window.AIWT registriert.
+    func llmRueckruf(_ payload: [String: Any]) {
+        guard let data = try? JSONSerialization.data(withJSONObject: payload),
+              var json = String(data: data, encoding: .utf8) else { return }
+        // U+2028/U+2029 sind gültiges JSON, aber Zeilenumbrüche im JS-Quelltext.
+        json = json.replacingOccurrences(of: "\u{2028}", with: "\\u2028")
+                   .replacingOccurrences(of: "\u{2029}", with: "\\u2029")
+        let js = "window.AIWT && window.AIWT.llmRueckruf && window.AIWT.llmRueckruf(\(json));"
+        DispatchQueue.main.async { [weak self] in
+            self?.webView?.evaluateJavaScript(js, completionHandler: nil)
         }
     }
 
