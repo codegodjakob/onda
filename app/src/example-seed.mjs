@@ -12,11 +12,26 @@ export function seedBodySignature(body) {
   return `fnv1a-${(hash >>> 0).toString(16).padStart(8, '0')}-${value.length}`
 }
 
+// Signatures of every "Calm Technology" example body the app shipped BEFORE the
+// exampleSeed marker fields existed. Such a doc carries no exampleSeed* markers,
+// so once the hardcoded example drifts, matching only against the CURRENT body
+// no longer recognises it — and it gets duplicated instead of replaced on a
+// version bump. Matching these historical signatures too lets an old, pristine,
+// content-drifted seed be replaced in place. This is a closed set: every doc
+// created since the marker system carries markers, so no new unmarked example
+// bodies can ever appear. (Signatures computed from git history of
+// buildExampleBody; earlier versions rendered the title as a leading <h1>.)
+export const LEGACY_SEED_SIGNATURES = new Set([
+  'fnv1a-a75d3829-894', // pre-Onda baseline: <h1> title + full body
+  'fnv1a-1501da66-422', // earlier: <h1> title + shorter body
+  'fnv1a-b4667bd3-290', // earliest stored example
+])
+
 function isLegacySeed(doc, legacyBody) {
-  return doc?.projectId === EXAMPLE_PROJECT_ID
-    && doc?.title === 'Calm Technology'
-    && typeof legacyBody === 'string'
-    && seedBodySignature(doc?.body) === seedBodySignature(legacyBody)
+  if (doc?.projectId !== EXAMPLE_PROJECT_ID || doc?.title !== 'Calm Technology') return false
+  const signature = seedBodySignature(doc?.body)
+  if (typeof legacyBody === 'string' && signature === seedBodySignature(legacyBody)) return true
+  return LEGACY_SEED_SIGNATURES.has(signature)
 }
 
 function isMarkedSeed(doc) {
