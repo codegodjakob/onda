@@ -36,10 +36,10 @@ export function statuszeileFuer(s) {
       return { text: 'Agent ist offline — dein Text ist davon unberührt.', knopf: 'einstellungen', aura: false }
     }
     if (s.fehlerTyp === 'ratenlimit') {
-      return { text: 'Gerade viele Anfragen — der Agent versucht es automatisch noch einmal.', knopf: null, aura: false }
+      return { text: 'Dein Text bleibt erhalten — gerade sind viele Anfragen unterwegs, der Agent versucht es automatisch noch einmal.', knopf: null, aura: false }
     }
     if (s.fehlerTyp === 'ueberlastet') {
-      return { text: 'Der Dienst ist gerade überlastet — der Agent versucht es automatisch noch einmal.', knopf: null, aura: false }
+      return { text: 'Dein Text bleibt erhalten — der Dienst ist gerade überlastet, der Agent versucht es automatisch noch einmal.', knopf: null, aura: false }
     }
     if (s.fehlerTyp === 'schema' || s.fehlerTyp === 'abgelehnt' || s.fehlerTyp === 'abgebrochen') {
       return null // leise: das Lauf-Protokoll haelt es fest, der naechste Ausloeser versucht es neu
