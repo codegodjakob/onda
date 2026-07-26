@@ -216,3 +216,87 @@ test('waehleTransport: Brücke nur wenn der llm-Handler existiert', () => {
   try { assert.equal(waehleTransport(), brueckenTransport) } finally { welt.weg() }
   assert.equal(waehleTransport(), direktTransport)
 })
+
+// ---------- S-3: Reihenfolge-Garantie der Rückruf-Registrierung ----------
+// window.AIWT.llmRueckruf wird lazy registriert (nicht auf Modul-Ebene, siehe
+// Kommentar über registriereRueckruf in agent-transport.mjs): das esbuild-
+// Bundle weist window.AIWT erst NACH der Modul-Auswertung zu (--global-name
+// =AIWT), eine Registrierung auf Modul-Ebene würde also von dieser Zuweisung
+// wieder überschrieben. Diese Tests nageln die tatsächliche Garantie fest:
+// registriereRueckruf läuft synchron vor JEDEM postMessage (sende() UND
+// sendeLlmKey()), ist idempotent und lässt fremde window.AIWT-Felder (wie sie
+// boot() vor dem ersten Transport-Aufruf gesetzt hätte) unangetastet.
+
+function brueckenWeltMitVorbesetztemAIWT(vorbesetzt) {
+  const llm = []; const key = []
+  globalThis.window = {
+    webkit: { messageHandlers: {
+      llm: { postMessage(m) { llm.push(m) } },
+      llmkey: { postMessage(m) { key.push(m) } },
+    } },
+    AIWT: { ...vorbesetzt },
+  }
+  return { llm, key, weg() { delete globalThis.window } }
+}
+
+test('bruecke: llmRueckruf existiert bereits nach dem ersten sende(), bevor Swift antworten kann', async () => {
+  const welt = brueckenWelt()
+  try {
+    assert.equal(globalThis.window.AIWT, undefined)
+    const p = sendePromise(brueckenTransport, BASIS_ANFRAGE)
+    // postMessage ist synchron oben schon abgesetzt (welt.llm.length === 1) —
+    // die Registrierung muss VOR dieser Stelle passiert sein, denn Swift kann
+    // frühestens jetzt (asynchron) zurückrufen.
+    assert.equal(welt.llm.length, 1)
+    assert.equal(typeof globalThis.window.AIWT.llmRueckruf, 'function')
+    globalThis.window.AIWT.llmRueckruf({
+      id: welt.llm[0].id, typ: 'fertig',
+      text: JSON.stringify({ content: [{ type: 'text', text: 'ok' }], usage: {}, stop_reason: 'end_turn' }),
+    })
+    await p
+  } finally { welt.weg() }
+})
+
+test('bruecke: llmRueckruf existiert bereits nach dem ersten sendeLlmKey() (Panel-Schlüsselstatus beim Start)', async () => {
+  const welt = brueckenWelt()
+  try {
+    assert.equal(globalThis.window.AIWT, undefined)
+    const p = brueckenTransport.hatSchluessel()
+    assert.equal(welt.key.length, 1)
+    assert.equal(typeof globalThis.window.AIWT.llmRueckruf, 'function')
+    globalThis.window.AIWT.llmRueckruf({ id: welt.key[0].id, typ: 'schluesselstatus', status: false })
+    await p
+  } finally { welt.weg() }
+})
+
+test('bruecke: registriereRueckruf ist idempotent und lässt fremde window.AIWT-Felder unangetastet', async () => {
+  const fremdesBoot = () => 'boot-ergebnis'
+  const welt = brueckenWeltMitVorbesetztemAIWT({ boot: fremdesBoot, fremdesFeld: 42 })
+  try {
+    // Vor jedem Transport-Aufruf: window.AIWT existiert (von "boot()" gesetzt),
+    // aber ohne llmRueckruf.
+    assert.equal(globalThis.window.AIWT.llmRueckruf, undefined)
+
+    const p1 = sendePromise(brueckenTransport, BASIS_ANFRAGE)
+    const ersteRueckrufFn = globalThis.window.AIWT.llmRueckruf
+    assert.equal(typeof ersteRueckrufFn, 'function')
+    assert.equal(globalThis.window.AIWT.boot, fremdesBoot)
+    assert.equal(globalThis.window.AIWT.fremdesFeld, 42)
+    globalThis.window.AIWT.llmRueckruf({
+      id: welt.llm[0].id, typ: 'fertig',
+      text: JSON.stringify({ content: [{ type: 'text', text: 'ok' }], usage: {}, stop_reason: 'end_turn' }),
+    })
+    await p1
+
+    // Zweiter Aufruf über den anderen Kanal (sendeLlmKey) registriert erneut —
+    // muss dieselbe Funktionsreferenz stehen lassen, keine Neuzuweisung, keine
+    // Duplikate, und die fremden Felder bleiben weiter unverändert.
+    const p2 = brueckenTransport.hatSchluessel()
+    assert.equal(globalThis.window.AIWT.llmRueckruf, ersteRueckrufFn)
+    assert.equal(globalThis.window.AIWT.boot, fremdesBoot)
+    assert.equal(globalThis.window.AIWT.fremdesFeld, 42)
+    globalThis.window.AIWT.llmRueckruf({ id: welt.key[0].id, typ: 'schluesselstatus', status: false })
+    await p2
+    assert.equal(globalThis.window.AIWT.llmRueckruf, ersteRueckrufFn)
+  } finally { welt.weg() }
+})
