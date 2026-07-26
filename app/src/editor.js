@@ -16,6 +16,7 @@ import { DEFAULT_SETTINGS, normalizeSettings } from './settings-model.mjs'
 import { BlockIdentity, ensureTopLevelBlockIds, getActiveBlockId, getEditorBlocks, insertSemanticBlock, replaceFindingTarget } from './block-identity.js'
 import { buildExampleStructure, buildExampleNarrative, buildExampleCoach, buildExampleLane, buildExampleBody, buildExampleMaterial, buildExampleUnderstanding, buildExampleAgentMessages } from './example.js'
 import { EXAMPLE_PROJECT_ID, migrateExampleSeed } from './example-seed.mjs'
+import { initGateway, runTask, hatSchluessel, setzeSchluessel, loescheSchluessel } from './agent-gateway.mjs'
 
 // ---------- Sanfte Markierung (Peripherie): eine flüchtige Dekoration ----------
 // Zeigt eine Passage kurz an, OHNE das Dokument zu ändern — sie wird nicht
@@ -475,10 +476,15 @@ export function boot() {
 
   ensureTopLevelBlockIds(state.editor)
 
+  // KI-Verteiler: liest settings für die Verbrauchszählung, speichert über persist.
+  // Der Transport wird je Aufruf gewählt (Mac-Brücke, sonst Browser-Direktweg).
+  initGateway({ getSettings: () => state.settings, persist })
+
   const ctx = {
     editor: state.editor, state,
     ops: { newDoc, openDoc, duplicateDoc, trashDoc, restoreDoc, deleteForever, newProject, renameProject, openProject },
     persist, scheduleSave, flushSave, exportMd, docTitle, activeDoc, autoGrowTitle, activeProjectObj, showHomeView,
+    gateway: { runTask, hatSchluessel, setzeSchluessel, loescheSchluessel },
   }
   initUI(ctx)
   initWorkspace(ctx)
