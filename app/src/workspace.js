@@ -1649,10 +1649,12 @@ function applyAuraState() {
   const orb = elements().agentPresence
   if (!orb) return
   const workspace = activeWorkspace()
-  const active = Boolean(workspace?.agent.open)
+  // Quelle echt: Die Aura atmet nur, wenn wirklich ein Gateway-Task laeuft —
+  // nicht mehr bloss, weil das Panel offen ist (die Attrappen-Quelle ist weg).
+  const laeuft = aktuellerAgentStatus().zustand === 'laeuft'
   const unseen = hasUnseenInitiative(workspace)
-  orb.classList.toggle('is-thinking', active)
-  orb.classList.toggle('is-quiet', !active)
+  orb.classList.toggle('is-thinking', laeuft)
+  orb.classList.toggle('is-quiet', !laeuft)
   orb.classList.toggle('has-unseen', unseen)
   orb.setAttribute(
     'aria-label',
