@@ -1,5 +1,5 @@
 import { getActiveBlockId, getEditorBlocks, insertSemanticBlock, replaceFindingTarget } from './block-identity.js'
-import { decideFinding, ensureProjectUnderstanding, getFindingQueue, isIntegrityCategory } from './reasoning-model.mjs'
+import { decideFinding, ensureProjectUnderstanding, getFindingQueue, isIntegrityCategory, istInterviewOffen, mergeVerstaendnis } from './reasoning-model.mjs'
 import {
   appendThreadMessage,
   completeEditingFinding,
@@ -16,8 +16,9 @@ import {
 import { Plugin, PluginKey } from '@tiptap/pm/state'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import { applySettings } from './ui.js'
-import { hatSchluessel, setzeSchluessel, loescheSchluessel } from './agent-gateway.mjs'
+import { hatSchluessel, setzeSchluessel, loescheSchluessel, runTask } from './agent-gateway.mjs'
 import { aktuellerAgentStatus, beiAgentStatus, setzeAgentStatus, statuszeileFuer } from './agent-status.mjs'
+import { EXAMPLE_PROJECT_ID } from './example-seed.mjs'
 
 const BLOCK_TYPES = [
   ['paragraph', 'Freier Absatz'],
@@ -64,6 +65,10 @@ let evidenceReturnFindingId = null
 let riskConfirmationFocusRequest = false
 let ondaDialog = null
 let accentMenu = null
+// Verständnis-Interview: einmal je Projekt+Dokument prüfen, genau ein Lauf gleichzeitig.
+let interviewPruefKey = null
+let interviewLaufAktiv = false
+let interviewStatus = null // null | 'laeuft' | ruhiger Fehlertext für die Statuszeile
 const ONDA_ACCENTS = ['sky', 'sage', 'blue', 'clay', 'lavender', 'sand']
 const ONDA_ACCENT_LABELS = { sky: 'Himmel', sage: 'Salbei', blue: 'Blau', clay: 'Ton', lavender: 'Lavendel', sand: 'Sand' }
 
@@ -823,6 +828,158 @@ function openProjectUnderstandingModal(opener) {
     understandingField(body, 'Geschützte Absicht', u.protectedIntentions.join('\n'), value => { u.protectedIntentions = splitList(value, true); commit() }, { line: true })
     understandingField(body, 'Offene Frage', u.openQuestions.join('\n'), value => { u.openQuestions = splitList(value, true); commit() }, { line: true })
   }})
+}
+
+// ---------- Verständnis-Interview (Etappe A, Fähigkeit 1) ----------
+// Neues Projekt: der Agent eröffnet mit genau EINER gebündelten offenen Frage
+// (fester Text, kein API-Aufruf). Existiert schon Text (> 200 Zeichen), leitet
+// er stattdessen per runTask('verstaendnis') einen Entwurf aus dem Text ab.
+// Das Beispielprojekt bleibt Demo: dort startet nie ein Interview.
+const INTERVIEW_EROEFFNUNG = 'Bevor ich beim Schreiben helfen kann, würde ich das Projekt gern verstehen: Worum soll es in diesem Text gehen — und für wen schreibst du ihn?'
+const INTERVIEW_ENTWURF_MIN_ZEICHEN = 200
+const INTERVIEW_OFFLINE_TEXT = 'Agent ist offline — dein Text ist davon unberührt.'
+
+function istBeispielProjekt(project) {
+  return Boolean(project && (project.id === EXAMPLE_PROJECT_ID || project.example === true))
+}
+
+function interviewMessageId(project) {
+  return `interview-${project.id}`
+}
+
+function docPlainText() {
+  return getEditorBlocks(ctx.editor)
+    .map(block => String(block.text || '').trim())
+    .filter(Boolean)
+    .join('\n\n')
+}
+
+export function istInterviewAktiv() {
+  const project = ctx?.activeProjectObj()
+  if (!project || istBeispielProjekt(project)) return false
+  return istInterviewOffen(ensureProjectUnderstanding(project))
+}
+
+function ensureInterviewMessage(workspace, project) {
+  const id = interviewMessageId(project)
+  let message = workspace.agent.messages.find(candidate => candidate.id === id)
+  if (!message) {
+    message = { id, status: 'new', earliestAt: 0, text: '', thread: [] }
+    workspace.agent.messages.push(message)
+  }
+  return message
+}
+
+function verstaendnisEingabe(modus, nutzerText = '') {
+  const project = ctx.activeProjectObj()
+  const u = ensureProjectUnderstanding(project)
+  const workspace = activeWorkspace()
+  const message = workspace?.agent.messages.find(candidate => candidate.id === interviewMessageId(project)) || null
+  return {
+    modus,
+    verstaendnis: {
+      task: u.task,
+      audience: u.audience,
+      desiredEffect: u.desiredEffect,
+      evidenceStandard: u.evidenceStandard,
+      protectedIntentions: u.protectedIntentions,
+      openQuestions: u.openQuestions,
+    },
+    geschuetzt: [...(u.geschuetzt || [])],
+    docText: docPlainText(),
+    nutzerText,
+    interviewVerlauf: (message?.thread || []).map(entry => ({ role: entry.role, text: entry.text })),
+  }
+}
+
+function interviewFehlerText(fehler) {
+  const typ = fehler?.typ
+  if (typ === 'kein-schluessel' || typ === 'offline') return INTERVIEW_OFFLINE_TEXT
+  if (typ === 'ratenlimit' || typ === 'ueberlastet') return 'Der Agent ist gerade überlastet — er meldet sich, sobald es wieder geht.'
+  if (typ === 'abgelehnt') return 'Der Agent hat auf diese Anfrage keine Antwort gegeben.'
+  return 'Die Antwort des Agenten ist verloren gegangen. Deine Angaben sind gespeichert — versuch es gleich noch einmal.'
+}
+
+// Merged eine KI-Antwort in das Understanding, OHNE die Objekt-Identität zu
+// brechen (offene Modal-Closures schreiben weiter in dasselbe Objekt).
+function uebernimmVerstaendnis(project, daten) {
+  const u = ensureProjectUnderstanding(project)
+  Object.assign(u, mergeVerstaendnis(u, daten, u.geschuetzt))
+  return u
+}
+
+function refreshProjectUnderstandingModal() {
+  if (!ondaDialog || ondaDialog.panel?.id !== 'pvModal') return
+  // Tippt der Nutzer gerade im Modal, nicht neu aufbauen — seine Eingabe ist bindend.
+  if (ondaDialog.panel.contains(document.activeElement)) return
+  openProjectUnderstandingModal(ondaDialog.opener)
+}
+
+function pruefeVerstaendnisInterview() {
+  const doc = ctx?.activeDoc()
+  const project = ctx?.activeProjectObj()
+  const workspace = activeWorkspace()
+  if (!doc || !project || !workspace) return
+  const pruefKey = `${project.id}:${doc.id}`
+  if (interviewPruefKey === pruefKey) return
+  interviewPruefKey = pruefKey
+  if (istBeispielProjekt(project)) return
+  if (!istInterviewOffen(ensureProjectUnderstanding(project))) return
+  if (workspace.agent.messages.some(message => message.id === interviewMessageId(project))) return
+
+  if (docPlainText().length > INTERVIEW_ENTWURF_MIN_ZEICHEN) {
+    starteVerstaendnisEntwurf(project.id, doc.id)
+    return
+  }
+  const message = ensureInterviewMessage(workspace, project)
+  message.text = INTERVIEW_EROEFFNUNG
+  persistWorkspace()
+}
+
+async function starteVerstaendnisEntwurf(projectId, docId) {
+  if (interviewLaufAktiv) return
+  interviewLaufAktiv = true
+  interviewStatus = 'laeuft'
+  try {
+    const schluesselDa = await hatSchluessel()
+    if (!ctx || ctx.activeDoc()?.id !== docId) { interviewStatus = null; return }
+    const project = ctx.state.projects.find(candidate => candidate.id === projectId)
+    const workspace = activeWorkspace()
+    if (!project || !workspace) { interviewStatus = null; return }
+    if (!schluesselDa) {
+      // Offline-Würde: kein Entwurf möglich — die feste Eröffnungsfrage steht
+      // trotzdem bereit; die Antwort darauf scheitert später ruhig per Statuszeile.
+      interviewStatus = null
+      const message = ensureInterviewMessage(workspace, project)
+      if (!message.text) message.text = INTERVIEW_EROEFFNUNG
+      persistWorkspace()
+      return
+    }
+    // Bereich W (Aura/Statuszeile) atmet ausschliesslich am echten Gateway-Zustand
+    // (applyAuraState liest aktuellerAgentStatus().zustand === 'laeuft') — dieser
+    // Aufruf ist der erste echte runTask-Aufruf im Panel, darum wird er hier gesetzt.
+    setzeAgentStatus({ zustand: 'laeuft' })
+    const { daten } = await runTask('verstaendnis', verstaendnisEingabe('entwurf'))
+    setzeAgentStatus({ zustand: 'bereit' })
+    if (!ctx) return
+    uebernimmVerstaendnis(project, daten)
+    interviewStatus = null
+    const antwort = String(daten.antwortText || '').trim()
+    if (antwort && ctx.activeDoc()?.id === docId) {
+      const message = ensureInterviewMessage(activeWorkspace(), project)
+      message.text = antwort
+      appendThreadMessage(message.thread, 'agent', antwort, Date.now())
+      announceAgentStatus(antwort)
+    }
+    ctx.persist()
+    refreshProjectUnderstandingModal()
+  } catch (fehler) {
+    interviewStatus = interviewFehlerText(fehler)
+    setzeAgentStatus({ zustand: 'fehler', fehlerTyp: fehler?.typ })
+  } finally {
+    interviewLaufAktiv = false
+    if (ctx) refreshWorkspace()
+  }
 }
 
 function scheduleTriggerRender() {
@@ -1818,7 +1975,15 @@ function renderAgentWidget() {
     ctx.persist()
     refreshWorkspace()
   })
-  ui.agentWidget.append(messages, form)
+  ui.agentWidget.append(messages)
+  if (interviewStatus) {
+    ui.agentWidget.append(createNode(
+      'p',
+      'agent-widget-status',
+      interviewStatus === 'laeuft' ? 'Agent denkt nach …' : interviewStatus,
+    ))
+  }
+  ui.agentWidget.append(form)
   restoreInputState(input, inputState)
   scrollThreadToLatest(messages)
 }
@@ -2145,6 +2310,7 @@ export function refreshWorkspace({ reconcileEditing = false } = {}) {
     ctx.editor.view.dispatch(ctx.editor.state.tr.setMeta(activeBlockKey, activeBlockId))
   }
 
+  pruefeVerstaendnisInterview()
   renderStructureNav()
   renderProjectUnderstandingCard()
   renderMaterialEntry()
@@ -2409,6 +2575,9 @@ export function initWorkspace(context) {
     pendingParagraphBoundaryDocId = null
     agentLiveFrame = null
     agentPresenceFocusRequest = false
+    interviewPruefKey = null
+    interviewLaufAktiv = false
+    interviewStatus = null
   }
 
   window.__workspaceCloseTopLayer = closeTopLayer

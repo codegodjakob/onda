@@ -2122,6 +2122,13 @@ body.zen #minimap, body.zen #lane { display: none; }
   font: 13px/1.5 var(--sans);
 }
 
+.agent-widget-status {
+  margin: 0;
+  padding: 0 16px 12px;
+  color: var(--text-tertiary);
+  font: italic 12px/1.5 var(--sans);
+}
+
 .evidence-context {
   display: grid;
   gap: 5px;
