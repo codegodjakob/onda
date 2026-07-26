@@ -16,7 +16,7 @@ import {
 import { Plugin, PluginKey } from '@tiptap/pm/state'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import { applySettings } from './ui.js'
-import { hatSchluessel } from './agent-gateway.mjs'
+import { hatSchluessel, setzeSchluessel, loescheSchluessel } from './agent-gateway.mjs'
 import { beiAgentStatus } from './agent-status.mjs'
 
 const BLOCK_TYPES = [
@@ -563,33 +563,30 @@ function openProjectSourcesModal(opener) {
 }
 
 // ---------- Einstellungen: KI-Anschluss (Bereich U) ----------
-// Der Schluessel wird IMMER vom Nutzer selbst eingetragen. Mac: Keychain via
-// Handler 'llmkey' (der Schluessel kommt nie an JS zurueck). Browser: Dev-Weg
-// in localStorage 'aiwt.apikey' (separat von aiwt.v2, taucht in keinem Export auf).
+// Der Schluessel wird IMMER vom Nutzer selbst eingetragen. Setzen/Loeschen laeuft
+// ausschliesslich ueber die echten, getesteten Gateway-Funktionen (agent-gateway.mjs
+// -> agent-transport.mjs) — kein lokaler Nachbau des Bruecken-Protokolls hier.
+// Mac: Keychain via Handler 'llm'/'llmkey' (der Schluessel kommt nie an JS zurueck).
+// Browser: Dev-Weg in localStorage 'aiwt.apikey' (separat von aiwt.v2, taucht in
+// keinem Export auf) — das schreibt bereits direktTransport.setzeSchluessel selbst.
 
 const KI_KONSOLE_URL = 'https://console.anthropic.com'
 
+// Bewusst dasselbe Kriterium wie waehleTransport() (agent-transport.mjs) — EINE
+// Quelle der Wahrheit, welcher Transport (und damit welcher Schluessel-Speicher) greift.
 function schluesselOrtIstKeychain() {
-  return Boolean(window.webkit?.messageHandlers?.llmkey)
+  return Boolean(window.webkit?.messageHandlers?.llm)
 }
 
-function sendeLlmkey(aktion, schluessel) {
-  const nachricht = { id: 'key-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8), aktion }
-  if (schluessel !== undefined) nachricht.schluessel = schluessel
-  window.webkit.messageHandlers.llmkey.postMessage(nachricht)
-}
-
-function speichereApiSchluessel(wert) {
+async function speichereApiSchluessel(wert) {
   const schluessel = String(wert || '').trim()
   if (!schluessel) return false
-  if (schluesselOrtIstKeychain()) sendeLlmkey('setzen', schluessel)
-  else localStorage.setItem('aiwt.apikey', schluessel)
+  await setzeSchluessel(schluessel)
   return true
 }
 
-function loescheApiSchluessel() {
-  if (schluesselOrtIstKeychain()) sendeLlmkey('loeschen')
-  else localStorage.removeItem('aiwt.apikey')
+async function loescheApiSchluessel() {
+  await loescheSchluessel()
 }
 
 function openKiSettingsDialog(opener) {
@@ -642,23 +639,17 @@ function buildKiSettingsBody(body) {
   }
   hatSchluessel().then(zeigeStatus).catch(() => zeigeStatus(false))
 
-  const aktualisiereNachAenderung = () => {
-    // Der Schluesselbund antwortet asynchron — kurz warten, dann Status neu lesen.
-    setTimeout(() => {
-      hatSchluessel().then(zeigeStatus).catch(() => zeigeStatus(false))
-    }, 250)
-  }
-  form.addEventListener('submit', event => {
+  form.addEventListener('submit', async event => {
     event.preventDefault()
-    if (!speichereApiSchluessel(input.value)) return
+    if (!(await speichereApiSchluessel(input.value))) return
     input.value = ''
     announceAgentStatus('Schlüssel gespeichert.')
-    aktualisiereNachAenderung()
+    hatSchluessel().then(zeigeStatus).catch(() => zeigeStatus(false))
   })
-  loeschen.addEventListener('click', () => {
-    loescheApiSchluessel()
+  loeschen.addEventListener('click', async () => {
+    await loescheApiSchluessel()
     announceAgentStatus('Schlüssel gelöscht.')
-    aktualisiereNachAenderung()
+    hatSchluessel().then(zeigeStatus).catch(() => zeigeStatus(false))
   })
 
   // Anleitung (aufklappbar)
