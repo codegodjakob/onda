@@ -57,13 +57,27 @@ export function markiereGeschuetzt(understanding, feld) {
 }
 
 // Pur: mischt eine KI-Antwort (VERSTAENDNIS_SCHEMA) in ein bestehendes Understanding.
-// Nur nicht-leere Felder überschreiben; geschützte Felder (Nutzer-Korrektionen) nie.
+// Nur nicht-leere Felder überschreiben; geschützte Felder (Nutzer-Korrekturen) nie.
 // Ausnahme openQuestions: die Lückenliste der KI ersetzt die alte auch durch leer,
 // damit beantwortete Lücken verschwinden. protectedIntentions werden vereinigt.
 export function mergeVerstaendnis(alt, neu, geschuetzt = [], jetzt = Date.now()) {
   const basis = alt && typeof alt === 'object' ? alt : {}
   const eingehend = neu && typeof neu === 'object' ? neu : {}
-  const gesperrt = new Set(cleanList(geschuetzt))
+
+  // Defensive Behandlung von geschuetzt: Array, Set erlaubt; kaputte Werte führen zu fail-closed.
+  let gesperrt
+  if (geschuetzt === null || geschuetzt === undefined) {
+    gesperrt = new Set() // nichts geschützt — legitimer Normalfall
+  } else if (Array.isArray(geschuetzt)) {
+    gesperrt = new Set(cleanList(geschuetzt))
+  } else if (geschuetzt instanceof Set) {
+    // Set ist gültig — Werte übernehmen, aber tolerant normalisieren
+    gesperrt = new Set(Array.from(geschuetzt).map(v => String(v).trim()).filter(Boolean))
+  } else {
+    // Kaputter Wert (String, Objekt, Zahl, etc.): fail-closed.
+    // Im Zweifel schützt das System die Nutzer-Korrekturen, statt sie zu verlieren.
+    gesperrt = new Set(GESCHUETZT_FELDER)
+  }
 
   const ergebnis = {
     ...basis,

@@ -64,6 +64,87 @@ test('mergeVerstaendnis überschreibt geschützte Felder nie', () => {
   assert.equal(ergebnis.desiredEffect, 'Anders')
 })
 
+test('mergeVerstaendnis schützt ALLE sechs Felder wenn markiert', () => {
+  const alt = basisVerstaendnis()
+  const neu = {
+    task: 'Neu',
+    audience: 'Neue',
+    desiredEffect: 'Neue Wirkung',
+    evidenceStandard: 'Neue Evidenz',
+    protectedIntentions: ['Neue Intention'],
+    openQuestions: ['Neue Frage'],
+  }
+  const ergebnis = mergeVerstaendnis(
+    alt,
+    neu,
+    ['task', 'audience', 'desiredEffect', 'evidenceStandard', 'protectedIntentions', 'openQuestions'],
+    200,
+  )
+  assert.equal(ergebnis.task, alt.task)
+  assert.deepEqual(ergebnis.audience, alt.audience)
+  assert.equal(ergebnis.desiredEffect, alt.desiredEffect)
+  assert.equal(ergebnis.evidenceStandard, alt.evidenceStandard)
+  assert.deepEqual(ergebnis.protectedIntentions, alt.protectedIntentions)
+  assert.deepEqual(ergebnis.openQuestions, alt.openQuestions)
+})
+
+test('mergeVerstaendnis akzeptiert geschuetzt auch als Set', () => {
+  const gesperrtSet = new Set(['task', 'audience'])
+  const ergebnis = mergeVerstaendnis(
+    basisVerstaendnis(),
+    { task: 'Neu', audience: 'Alle', desiredEffect: 'Neu' },
+    gesperrtSet,
+    200,
+  )
+  assert.equal(ergebnis.task, 'Essay über Calm Technology')
+  assert.deepEqual(ergebnis.audience, ['Designerinnen'])
+  assert.equal(ergebnis.desiredEffect, 'Neu')
+})
+
+test('mergeVerstaendnis wird fail-closed bei kaputtem geschuetzt-Wert (String)', () => {
+  const ergebnis = mergeVerstaendnis(
+    basisVerstaendnis(),
+    { task: 'Neu', desiredEffect: 'Neu' },
+    'kaputt',
+    200,
+  )
+  // Bei kaputtem Wert: alle Felder geschützt, nichts übernommen
+  assert.equal(ergebnis.task, 'Essay über Calm Technology')
+  assert.equal(ergebnis.desiredEffect, 'Prinzip verstehen')
+  assert.deepEqual(ergebnis.audience, ['Designerinnen'])
+})
+
+test('mergeVerstaendnis wird fail-closed bei kaputtem geschuetzt-Wert (Objekt)', () => {
+  const ergebnis = mergeVerstaendnis(
+    basisVerstaendnis(),
+    { task: 'Neu', desiredEffect: 'Neu' },
+    { task: true },
+    200,
+  )
+  // Bei kaputtem Wert: alle Felder geschützt, nichts übernommen
+  assert.equal(ergebnis.task, 'Essay über Calm Technology')
+  assert.equal(ergebnis.desiredEffect, 'Prinzip verstehen')
+})
+
+test('mergeVerstaendnis mit null/undefined geschuetzt verhält sich wie nichts geschützt', () => {
+  const ergebnisNull = mergeVerstaendnis(
+    basisVerstaendnis(),
+    { task: 'Neu', desiredEffect: 'Neu' },
+    null,
+    200,
+  )
+  const ergebnisUndefined = mergeVerstaendnis(
+    basisVerstaendnis(),
+    { task: 'Neu', desiredEffect: 'Neu' },
+    undefined,
+    200,
+  )
+  assert.equal(ergebnisNull.task, 'Neu')
+  assert.equal(ergebnisNull.desiredEffect, 'Neu')
+  assert.equal(ergebnisUndefined.task, 'Neu')
+  assert.equal(ergebnisUndefined.desiredEffect, 'Neu')
+})
+
 test('mergeVerstaendnis vereinigt protectedIntentions ohne Duplikate', () => {
   const ergebnis = mergeVerstaendnis(
     basisVerstaendnis(),
