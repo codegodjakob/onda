@@ -1,7 +1,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { initGateway, runTask, zaehleUsage, pruefePflichtfelder } from '../src/agent-gateway.mjs'
-import { TASK_TABLE } from '../src/agent-tasks.mjs'
+import { initGateway, runTask, pruefePflichtfelder } from '../src/agent-gateway.mjs'
+import { TASK_TABLE, schaetzeKostenCents } from '../src/agent-tasks.mjs'
+import { verbucheUsage, aktuellerMonat } from '../src/settings-model.mjs'
 
 const USAGE = Object.freeze({ input_tokens: 10, output_tokens: 20, cache_read_input_tokens: 5, cache_creation_input_tokens: 2 })
 
@@ -120,10 +121,11 @@ test('chat: onDelta wird durchgereicht, daten ist der Volltext', async () => {
   assert.equal(daten, 'Hallo')
 })
 
-test('zaehleUsage: Monatswechsel setzt den Zähler zurück', () => {
+test('verbucheUsage: Monatswechsel setzt den Zähler zurück', () => {
   const settings = { usage: { monat: '2020-01', inputTokens: 999, outputTokens: 999, cacheReadTokens: 9, cacheWriteTokens: 9, kostenCents: 100 } }
-  zaehleUsage(settings, { ...USAGE }, 'claude-haiku-4-5')
-  assert.equal(settings.usage.monat, new Date().toISOString().slice(0, 7))
+  const kostenCents = schaetzeKostenCents({ ...USAGE }, 'claude-haiku-4-5')
+  verbucheUsage(settings, { ...USAGE }, kostenCents)
+  assert.equal(settings.usage.monat, aktuellerMonat())
   assert.equal(settings.usage.inputTokens, 10)
   assert.equal(settings.usage.outputTokens, 20)
 })
@@ -134,4 +136,23 @@ test('pruefePflichtfelder: fehlende und vorhandene Felder, auch in Array-Items',
   assert.equal(pruefePflichtfelder({ hinweise: [{ kategorie: 'fakt' }] }, schema), false)
   assert.equal(pruefePflichtfelder({}, schema), false)
   assert.equal(pruefePflichtfelder('kein Objekt', schema), false)
+})
+
+test('chat-Vertrag: letzte Message ist immer user, nie assistant', async () => {
+  let gesendetAnfrage
+  const t = mockTransport([(a, h) => {
+    gesendetAnfrage = a
+    h.onFertig({ text: 'Antwort', usage: { ...USAGE }, stopReason: 'end_turn' })
+  }])
+  frisch(t)
+  await runTask('chat', {
+    anfrage: 'neue Frage',
+    verlauf: [
+      { role: 'user', content: 'alte Frage' },
+      { role: 'assistant', content: 'alte Antwort' },
+    ],
+  })
+  const letzteMsg = gesendetAnfrage.body.messages.at(-1)
+  assert.equal(letzteMsg.role, 'user')
+  assert.equal(letzteMsg.content, 'neue Frage')
 })

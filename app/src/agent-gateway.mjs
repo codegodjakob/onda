@@ -4,6 +4,7 @@
 // Verbrauch monatsweise in settings.usage (additiv, tolerant — kein Schema-Bump).
 import { MODELLE, TASK_TABLE, baueAnfrage, schaetzeKostenCents } from './agent-tasks.mjs'
 import { waehleTransport } from './agent-transport.mjs'
+import { verbucheUsage } from './settings-model.mjs'
 
 const STANDARD_HOOKS = { getSettings: null, persist: null, transport: null, retryWartezeitMs: 2000 }
 let hooks = { ...STANDARD_HOOKS }
@@ -29,21 +30,8 @@ function sendeEinmal(anfrage, onDelta) {
   })
 }
 
-// Monats-Zählung (Muster wie accent in settings-model.mjs: additiv und tolerant).
-export function zaehleUsage(settings, usage, modellId) {
-  if (!settings || !usage) return
-  const monat = new Date().toISOString().slice(0, 7) // 'JJJJ-MM'
-  let u = settings.usage
-  if (!u || typeof u !== 'object' || u.monat !== monat) {
-    u = { monat, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, kostenCents: 0 }
-    settings.usage = u
-  }
-  u.inputTokens += usage.input_tokens || 0
-  u.outputTokens += usage.output_tokens || 0
-  u.cacheReadTokens += usage.cache_read_input_tokens || 0
-  u.cacheWriteTokens += usage.cache_creation_input_tokens || 0
-  u.kostenCents += schaetzeKostenCents(usage, modellId)
-}
+// Verbrauchszählung nutzt verbucheUsage aus settings-model.mjs —
+// das kümmert sich um Zeitzone/lokalen Monat und fehlertoleranz.
 
 // Pflichtfelder aus dem JSON-Schema prüfen (Objekte rekursiv, Array-Items) —
 // bewusst schlank: fehlende Pflichtfelder sind der realistische „Müll trotz
@@ -71,6 +59,9 @@ export async function runTask(taskName, eingabe, optionen = {}) {
   const eintrag = TASK_TABLE[taskName]
   if (!eintrag) throw new Error('Unbekannter Task: ' + taskName)
   const kontext = { ...eingabe }
+  // Fallback: baueAnfrage wirft 'Anfrage ohne Inhalt', wenn weder verstaendnis,
+  // docText noch volatiles vorhanden sind. Die vorgeschriebenen Tests rufen
+  // runTask mit leerem kontext auf und müssen den Mock erreichen.
   if (!kontext.verstaendnis && typeof kontext.docText !== 'string' && (!kontext.volatiles || !kontext.volatiles.length)) {
     kontext.docText = ''
   }
@@ -88,7 +79,10 @@ export async function runTask(taskName, eingabe, optionen = {}) {
 
   // Verbrauch IMMER zählen — auch bei refusal/max_tokens wurden Tokens verbraucht.
   const settings = hooks.getSettings ? hooks.getSettings() : null
-  zaehleUsage(settings, ergebnis.usage, MODELLE[eintrag.modell])
+  if (settings) {
+    const kostenCents = schaetzeKostenCents(ergebnis.usage, MODELLE[eintrag.modell])
+    verbucheUsage(settings, ergebnis.usage, kostenCents)
+  }
   if (hooks.persist) hooks.persist()
 
   // stop_reason VOR dem Inhalt prüfen (Vertrag).
