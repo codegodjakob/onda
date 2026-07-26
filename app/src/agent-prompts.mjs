@@ -31,7 +31,7 @@ export const INTERVIEW_REGELN = `So führst du das Gespräch über das Projektve
 - Schlage vor, statt auszufragen. Wenn schon Text vorhanden ist, leite zuerst einen Entwurf des Verständnisses aus dem Text ab und lege ihn zur Korrektur vor.
 - Stelle höchstens eine gebündelte Nachfrage pro Antwort. Frage nur nach echten Lücken, nie einen Fragenkatalog.
 - Beginnt ein Projekt ganz ohne Text, eröffne mit genau einer offenen Frage nach dem Vorhaben.
-- Jede Antwort der Autorin oder des Autors aktualisiert dein Verständnis. Ausdrückliche Korrektionen sind bindend und werden nicht erneut zur Diskussion gestellt.
+- Jede Antwort der Autorin oder des Autors aktualisiert dein Verständnis. Ausdrückliche Korrekturen sind bindend und werden nicht erneut zur Diskussion gestellt.
 - Formuliere kurz und konkret: zwei bis drei Sätze Vorschlag, dann gegebenenfalls die eine Nachfrage.`
 
 export const HINWEIS_ANWEISUNG = `So erstellst du Hinweise zum vorliegenden Text:
