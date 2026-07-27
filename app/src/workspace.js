@@ -2278,7 +2278,7 @@ function renderEvidenceWindow() {
   if (!sources.children.length) {
     sources.append(createNode('p', 'evidence-empty', istBeispielprojekt
       ? 'Für diese Aussage ist noch keine sichere direkte Quelle hinterlegt.'
-      : 'Dieser Hinweis stützt sich allein auf deinen Text. Die Quellensuche kommt in Etappe B.'))
+      : 'Dieser Hinweis stützt sich allein auf deinen Text — Quellen sucht der Agent dafür noch nicht.'))
   }
   ui.evidenceWindow.append(sources)
   if (evidenceFocusRequest) {
