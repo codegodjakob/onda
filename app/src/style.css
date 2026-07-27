@@ -2796,6 +2796,9 @@ button.onda-aura:focus-visible {
 @media (prefers-reduced-motion: reduce) { .onda-dialog-scrim, .onda-dialog { animation: none; } }
 
 .onda-pv-field { display: flex; flex-direction: column; gap: var(--space-1); }
+/* Trägt Label + optionales .onda-tag (V-4: bindende Nutzer-Korrektur) nebeneinander —
+   derselbe ruhige Tag-Baustein wie bei Material-Kind-Chips, keine Warnfarbe. */
+.onda-pv-label-row { display: flex; align-items: center; gap: var(--space-2); }
 .onda-pv-label {
   color: var(--text-tertiary);
   font: var(--fw-semibold) 11px/1.2 var(--font-sans);

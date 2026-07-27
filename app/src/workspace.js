@@ -1,5 +1,5 @@
 import { getActiveBlockId, getEditorBlocks, insertSemanticBlock, replaceFindingTarget } from './block-identity.js'
-import { decideFinding, ensureProjectUnderstanding, getFindingQueue, isIntegrityCategory, istEntwurfVersucht, istInterviewOffen, markiereEntwurfVersucht, mergeVerstaendnis } from './reasoning-model.mjs'
+import { decideFinding, ensureProjectUnderstanding, getFindingQueue, isIntegrityCategory, istEntwurfVersucht, istInterviewOffen, markiereEntwurfVersucht, markiereGeschuetzt, mergeVerstaendnis } from './reasoning-model.mjs'
 import {
   appendThreadMessage,
   completeEditingFinding,
@@ -804,13 +804,19 @@ function splitList(value, byLine) {
   return String(value || '').split(byLine ? /\r?\n/ : ',').map(part => part.trim()).filter(Boolean)
 }
 
-function understandingField(body, label, value, onCommit, { line = false } = {}) {
+// geschuetzt: dezenter Hinweis, dass dieses Feld eine bindende Nutzer-Korrektur trägt
+// (siehe openProjectUnderstandingModal) — ruhiger Onda-Ton, keine Warnfarbe, kein
+// Ausrufezeichen; nur ein zusätzliches, kleines Tag neben dem Feldlabel.
+function understandingField(body, label, value, onCommit, { line = false, geschuetzt = false } = {}) {
   const row = createNode('div', 'onda-pv-field')
-  row.append(createNode('span', 'onda-pv-label', label))
+  const labelRow = createNode('div', 'onda-pv-label-row')
+  labelRow.append(createNode('span', 'onda-pv-label', label))
+  if (geschuetzt) labelRow.append(createNode('span', 'onda-tag', 'bindend'))
+  row.append(labelRow)
   const field = createNode('textarea', 'onda-pv-input')
   field.rows = line ? 3 : 2
   field.value = value
-  field.setAttribute('aria-label', label)
+  field.setAttribute('aria-label', geschuetzt ? `${label}, bindend` : label)
   field.addEventListener('input', () => onCommit(field.value))
   row.append(field)
   body.append(row)
@@ -820,14 +826,22 @@ function openProjectUnderstandingModal(opener) {
   const project = ctx.activeProjectObj()
   if (!project) return
   const u = ensureProjectUnderstanding(project)
-  const commit = () => { ctx.scheduleSave(); renderProjectUnderstandingCard() }
+  // Jede Nutzer-Korrektur im Modal ist bindend: der geschuetzt-Merker sorgt dafür,
+  // dass die KI dieses Feld in Folge-Läufen nie mehr überschreibt (mergeVerstaendnis
+  // liest ihn; verstaendnisEingabe gibt ihn über baueVerstaendnisKontext mit).
+  const commit = feld => {
+    markiereGeschuetzt(u, feld)
+    ctx.scheduleSave()
+    renderProjectUnderstandingCard()
+  }
+  const istGeschuetzt = feld => u.geschuetzt.includes(feld)
   openOndaDialog({ id: 'pvModal', title: 'Projektverständnis', opener, build: body => {
-    understandingField(body, 'Aufgabe', u.task, value => { u.task = value; commit() })
-    understandingField(body, 'Zielgruppe', u.audience.join(', '), value => { u.audience = splitList(value, false); commit() })
-    understandingField(body, 'Beabsichtigte Wirkung', u.desiredEffect, value => { u.desiredEffect = value; commit() })
-    understandingField(body, 'Belegstandard', u.evidenceStandard, value => { u.evidenceStandard = value; commit() })
-    understandingField(body, 'Geschützte Absicht', u.protectedIntentions.join('\n'), value => { u.protectedIntentions = splitList(value, true); commit() }, { line: true })
-    understandingField(body, 'Offene Frage', u.openQuestions.join('\n'), value => { u.openQuestions = splitList(value, true); commit() }, { line: true })
+    understandingField(body, 'Aufgabe', u.task, value => { u.task = value; commit('task') }, { geschuetzt: istGeschuetzt('task') })
+    understandingField(body, 'Zielgruppe', u.audience.join(', '), value => { u.audience = splitList(value, false); commit('audience') }, { geschuetzt: istGeschuetzt('audience') })
+    understandingField(body, 'Beabsichtigte Wirkung', u.desiredEffect, value => { u.desiredEffect = value; commit('desiredEffect') }, { geschuetzt: istGeschuetzt('desiredEffect') })
+    understandingField(body, 'Belegstandard', u.evidenceStandard, value => { u.evidenceStandard = value; commit('evidenceStandard') }, { geschuetzt: istGeschuetzt('evidenceStandard') })
+    understandingField(body, 'Geschützte Absicht', u.protectedIntentions.join('\n'), value => { u.protectedIntentions = splitList(value, true); commit('protectedIntentions') }, { line: true, geschuetzt: istGeschuetzt('protectedIntentions') })
+    understandingField(body, 'Offene Frage', u.openQuestions.join('\n'), value => { u.openQuestions = splitList(value, true); commit('openQuestions') }, { line: true, geschuetzt: istGeschuetzt('openQuestions') })
   }})
 }
 

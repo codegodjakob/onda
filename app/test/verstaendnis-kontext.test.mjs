@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { baueVerstaendnisKontext } from '../src/verstaendnis-kontext.mjs'
 import { baueAnfrage } from '../src/agent-tasks.mjs'
 import { INTERVIEW_REGELN } from '../src/agent-prompts.mjs'
+import { ensureProjectUnderstanding, markiereGeschuetzt } from '../src/reasoning-model.mjs'
 
 // Fix-Runde 1, Finding 1 (Critical): baueAnfrage konsumiert nur
 // {verstaendnis, docText, volatiles, verlauf, anfrage}. Das alte Kontext-Objekt aus
@@ -105,6 +106,34 @@ test('geschuetzte Felder erscheinen als klare Anweisung im Body, nicht als still
     bodyJson.includes('nicht überschreiben') || bodyJson.includes('selbst gesetzt'),
     'Hinweistext zu geschuetzten Feldern fehlt',
   )
+})
+
+test('V-4: Modal-Korrektur -> markiereGeschuetzt -> baueVerstaendnisKontext -> baueAnfrage — genau das korrigierte Feld erreicht den Request-Body als bindende Anweisung, kein weiteres', () => {
+  // Simuliert den tatsaechlichen Weg aus workspace.js: openProjectUnderstandingModal
+  // ruft bei jeder Nutzer-Korrektur markiereGeschuetzt(u, feld) auf (V-4); die naechste
+  // verstaendnisEingabe reicht u.geschuetzt unveraendert an baueVerstaendnisKontext weiter
+  // (geschuetzt: [...(u.geschuetzt || [])]). Ein gestubbter fetch waere hier keine
+  // Verifikation (V-3-Lehre) — dieser Test geht bis in den tatsaechlichen Request-Body,
+  // ausgehend von echtem markiereGeschuetzt-Output statt einem hart codierten Array.
+  const projekt = { understanding: {} }
+  const u = ensureProjectUnderstanding(projekt)
+  markiereGeschuetzt(u, 'task') // Nutzer korrigiert nur "Aufgabe" im PV-Modal
+
+  const kontext = baueVerstaendnisKontext({
+    modus: 'antwort',
+    verstaendnis: VERSTAENDNIS,
+    geschuetzt: [...u.geschuetzt],
+    docText: '',
+    nutzerText: 'Antwort',
+    interviewVerlauf: [],
+  })
+  const anfrage = baueAnfrage('verstaendnis', kontext)
+  const content = anfrage.body.messages[0].content
+  const hinweisBlock = content.find(block => block.text.includes('selbst gesetzt'))
+
+  assert.ok(hinweisBlock, 'Bindend-Hinweis fehlt im Request-Body')
+  assert.ok(hinweisBlock.text.includes('task'), 'per markiereGeschuetzt gesetztes Feld "task" fehlt im Hinweis')
+  assert.ok(!hinweisBlock.text.includes('audience'), 'nicht korrigierte Felder duerfen nicht als bindend erscheinen')
 })
 
 test('ohne geschuetzte Felder kein leerer dritter Hinweis-Block', () => {
