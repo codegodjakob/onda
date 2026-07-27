@@ -23,6 +23,12 @@ import { EXAMPLE_PROJECT_ID, seedBodySignature } from './example-seed.mjs'
 import { baueVerstaendnisKontext } from './verstaendnis-kontext.mjs'
 import { baueDocText } from './agent-findings.mjs'
 import { pruefePausenAusloeser, versucheHinweislauf } from './hinweislauf-model.mjs'
+import {
+  baueChatKontext,
+  chatFehlerText,
+  erkenneHinweisBitte,
+  planVerlaufVerdichtung,
+} from './chat-kontext.mjs'
 
 const BLOCK_TYPES = [
   ['paragraph', 'Freier Absatz'],
@@ -77,11 +83,15 @@ let accentMenu = null
 let interviewPruefKey = null
 let interviewLaufAktiv = false
 let interviewStatus = null // null | 'laeuft' | ruhiger Fehlertext für die Statuszeile
+// Echter Chat (Etappe A, Bereich C): genau ein Lauf gleichzeitig, app-weit (Panel und,
+// ab Task C-3, auch die Randkarten-Gespraeche teilen sich dieses Feld ueber fuehreChatLauf).
+let laufenderChatLauf = null
 const ONDA_ACCENTS = ['sky', 'sage', 'blue', 'clay', 'lavender', 'sand']
 const ONDA_ACCENT_LABELS = { sky: 'Himmel', sage: 'Salbei', blue: 'Blau', clay: 'Ton', lavender: 'Lavendel', sand: 'Sand' }
 
 const AGENT_IDLE_MS = 3000
 const AGENT_BOUNDARY_IDLE_MS = 300
+const CHAT_UI_DROSSEL_MS = 50
 const MAX_LOCAL_FEEDBACK_SPACING = 440
 const MAX_LOCAL_SUGGESTION_SPACING = 640
 
@@ -2000,6 +2010,134 @@ function renderUnplacedFindingList() {
   return section
 }
 
+// Gleicher Text wie fuer das Verstaendnis-Interview (docPlainText, siehe dort) — nur unter
+// dem Namen, den der Chat-Kontext und (modulintern, Task C-3) die Randkarten-Gespraeche
+// erwarten. Bewusst KEIN zweiter Weg, den Dokumenttext zu lesen.
+function dokumentText() {
+  return docPlainText()
+}
+
+function chatNachrichtenTextKnoten(messageId) {
+  const selectorId = escapedSelectorValue(messageId)
+  return document.querySelector(`.agent-message[data-message-id="${selectorId}"] .agent-message-text`)
+}
+
+// Streamt EINE Agenten-Antwort in den übergebenen Thread: die Nachricht entsteht beim
+// ersten Delta (per refreshWorkspace, damit der DOM-Knoten überhaupt existiert), wächst
+// danach gedrosselt (~50 ms) per direktem Text-Update — nie per Voll-Rerender, damit der
+// Fokus im Eingabefeld unangetastet bleibt und der Editor bedienbar bleibt. Modulintern
+// auch für Task C-3 (Randkarten-Gespräch) gedacht — deshalb der doppelte Container-Selektor
+// in scrollThreadToLatest weiter unten.
+async function fuehreChatLauf(thread, kontext) {
+  const lauf = { agentMessage: null, puffer: '', flushTimer: null }
+  laufenderChatLauf = lauf
+  const flush = () => {
+    lauf.flushTimer = null
+    if (!lauf.agentMessage) return
+    lauf.agentMessage.text = lauf.puffer
+    const node = chatNachrichtenTextKnoten(lauf.agentMessage.id)
+    if (!node) return
+    node.textContent = lauf.puffer
+    scrollThreadToLatest(node.closest('.agent-widget-messages, .local-dialogue-messages'))
+  }
+  try {
+    const { daten } = await runTask('chat', kontext, {
+      onDelta: text => {
+        lauf.puffer += String(text || '')
+        if (!lauf.agentMessage) {
+          lauf.agentMessage = appendThreadMessage(thread, 'agent', lauf.puffer)
+          refreshWorkspace()
+          return
+        }
+        if (!lauf.flushTimer) lauf.flushTimer = setTimeout(flush, CHAT_UI_DROSSEL_MS)
+      },
+    })
+    if (lauf.flushTimer) clearTimeout(lauf.flushTimer)
+    const antwort = typeof daten === 'string' && daten.trim() ? daten : lauf.puffer
+    if (!antwort.trim()) return
+    if (lauf.agentMessage) lauf.agentMessage.text = antwort
+    else appendThreadMessage(thread, 'agent', antwort)
+    announceAgentStatus(antwort)
+  } catch (fehler) {
+    if (lauf.flushTimer) clearTimeout(lauf.flushTimer)
+    if (fehler?.typ === 'abgebrochen') return
+    const meldung = chatFehlerText(fehler)
+    if (lauf.agentMessage) lauf.agentMessage.text = meldung
+    else appendThreadMessage(thread, 'agent', meldung)
+    announceAgentStatus(meldung)
+  } finally {
+    laufenderChatLauf = null
+    ctx?.persist()
+    refreshWorkspace()
+  }
+}
+
+// Baut den Chat-Kontext aus dem Live-Zustand und startet fuehreChatLauf. Der Chat selbst
+// ist ueberall echt, auch im Beispielprojekt (Spec) — istBeispielProjekt sperrt hier NUR
+// den automatischen Hinweislauf, den eine Chat-Bitte sonst ausloesen wuerde (der Seed bleibt
+// unveraenderte Demo); starteHinweislauf/versucheHinweislauf sperren das Beispielprojekt
+// ohnehin zusaetzlich autoritativ (istBeispielprojekt-Gate dort), diese Prüfung hier
+// vermeidet nur den unnoetigen Zusatzsatz in der Antwort.
+async function sendeAgentenChat(message, anfrage) {
+  const doc = ctx.activeDoc()
+  const project = ctx.activeProjectObj()
+  if (!doc || !project) return
+
+  const hinweisBitte = !istBeispielProjekt(project) && erkenneHinweisBitte(anfrage)
+  if (hinweisBitte) starteHinweislauf({ grund: 'chat' })
+
+  const plan = planVerlaufVerdichtung(message.thread, message.verlaufsNotiz || null)
+  if (plan) {
+    try {
+      const { daten } = await runTask('zusammenfassung', { anfrage: plan.verdichtungsEingabe })
+      if (typeof daten === 'string' && daten.trim()) {
+        message.verlaufsNotiz = { text: daten.trim(), bisMessageId: plan.bisMessageId, erstelltAt: Date.now() }
+        ctx.persist()
+      }
+    } catch {
+      // Die Verdichtung ist Komfort: scheitert sie, läuft der Chat mit vollem Verlauf weiter.
+    }
+  }
+
+  const kontext = baueChatKontext({
+    verstaendnis: ensureProjectUnderstanding(project),
+    docText: dokumentText(),
+    findings: doc.findings,
+    doc,
+    thread: message.thread.slice(0, -1), // der aktuelle Nutzer-Turn geht separat als `anfrage` mit
+    verlaufsNotiz: message.verlaufsNotiz || null,
+    anfrage,
+    zusatzAnweisung: hinweisBitte
+      ? 'Der Nutzer hat um eine Durchsicht gebeten. Ein Hinweislauf über den Text wurde soeben gestartet — erwähne kurz, dass du den Text jetzt durchgehst und dass Hinweise am Rand erscheinen, sobald etwas Belastbares dabei ist.'
+      : null,
+  })
+  await fuehreChatLauf(message.thread, kontext)
+}
+
+// Echte Initiative-Quelle, additiv zum bestehenden Aura-/Pausen-Mechanismus: eine Nachricht
+// in dieser Form haelt hasUnseenInitiative (Aura-Punkt) und scheduleAgentInitiative
+// (Pausen-/Dismiss-Regeln, kein Fokus-Raub) unveraendert; nur die Quelle ist echt.
+// Hinweis: Bereich H hat fuer denselben Zweck (echter Hinweislauf findet Grundursache oder
+// Integritaetsthema) bereits eine eigene, gleichwertige interne Loesung (ergaenzeEchteInitiative
+// in fuehreHinweislaufAus) — die war noetig, bevor dieser Hook hier existierte, und bleibt hier
+// unangetastet (ausserhalb des Datei-Scopes von Task C-2). Dieser Export ist additiv fuer
+// zukuenftige Aufrufer außerhalb dieses Moduls bzw. eine spaetere Konsolidierung.
+export function meldeAgentInitiative(text, { earliestAt = Date.now() } = {}) {
+  const workspace = activeWorkspace()
+  if (!workspace || typeof text !== 'string' || !text.trim()) return null
+  const message = {
+    id: `initiative-${Date.now()}-${workspace.agent.messages.length}`,
+    text: text.trim(),
+    status: 'new',
+    earliestAt,
+    thread: [],
+  }
+  workspace.agent.messages.push(message)
+  persistWorkspace()
+  refreshWorkspace()
+  return message
+}
+
 function renderAgentWidget() {
   const ui = elements()
   const workspace = activeWorkspace()
@@ -2058,32 +2196,24 @@ function renderAgentWidget() {
   send.type = 'submit'
   send.title = 'Senden'
   send.setAttribute('aria-label', 'Nachricht senden')
+  send.disabled = Boolean(laufenderChatLauf)
   form.append(input, send)
   form.addEventListener('submit', event => {
     event.preventDefault()
     const text = input.value.trim()
-    if (!text) return
+    if (!text || laufenderChatLauf) return
     if (istInterviewAktiv()) {
       if (interviewLaufAktiv) return // ein Lauf zur Zeit; die Eingabe bleibt stehen
       input.value = ''
       sendeInterviewAntwort(message, text)
       return
     }
-    // Kulissen-Zweig (Demo-Chat): wird in Bereich C durch den echten,
-    // gestreamten Chat ersetzt. Bis dahin bleibt das bisherige Verhalten.
-    const at = Date.now()
-    appendThreadMessage(message.thread, 'user', text, at)
-    const reply = 'Beispielreaktion: Dann behandle ich Aufmerksamkeit im weiteren Text als gestaltete Bedingung und prüfe, wo die Formulierung noch beim Individuum bleibt.'
-    appendThreadMessage(
-      message.thread,
-      'agent',
-      reply,
-      at + 1,
-    )
+    // Echter, gestreamter Chat (Bereich C) — die Kulisse ist weg.
     input.value = ''
-    announceAgentStatus(reply)
+    appendThreadMessage(message.thread, 'user', text, Date.now())
     ctx.persist()
     refreshWorkspace()
+    sendeAgentenChat(message, text)
   })
   ui.agentWidget.append(messages)
   if (interviewStatus) {
@@ -2820,6 +2950,8 @@ export function initWorkspace(context) {
 
     clearTimeout(hoverTimer)
     clearTimeout(typingTimer)
+    if (laufenderChatLauf?.flushTimer) clearTimeout(laufenderChatLauf.flushTimer)
+    laufenderChatLauf = null
     if (triggerFrame) cancelAnimationFrame(triggerFrame)
     if (localPositionFrame) cancelAnimationFrame(localPositionFrame)
     if (agentLiveFrame) cancelAnimationFrame(agentLiveFrame)
