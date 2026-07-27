@@ -1,5 +1,5 @@
 import { getActiveBlockId, getEditorBlocks, insertSemanticBlock, replaceFindingTarget } from './block-identity.js'
-import { decideFinding, ensureProjectUnderstanding, getFindingQueue, isIntegrityCategory, istEntwurfVersucht, istInterviewOffen, markiereEntwurfVersucht, markiereGeschuetzt, mergeVerstaendnis } from './reasoning-model.mjs'
+import { decideFinding, ensureProjectUnderstanding, ensureReasoningModel, getFindingQueue, isIntegrityCategory, istEntwurfVersucht, istInterviewOffen, markiereEntwurfVersucht, markiereGeschuetzt, mergeVerstaendnis } from './reasoning-model.mjs'
 import {
   appendThreadMessage,
   completeEditingFinding,
@@ -18,8 +18,11 @@ import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import { applySettings } from './ui.js'
 import { hatSchluessel, setzeSchluessel, loescheSchluessel, runTask } from './agent-gateway.mjs'
 import { aktuellerAgentStatus, beiAgentStatus, setzeAgentStatus, statuszeileFuer } from './agent-status.mjs'
-import { EXAMPLE_PROJECT_ID } from './example-seed.mjs'
+import { EXAMPLE_PROJECT_ID, seedBodySignature } from './example-seed.mjs'
 import { baueVerstaendnisKontext } from './verstaendnis-kontext.mjs'
+import { baueDocText, fasseEntscheidungenZusammen, fasseOffeneHinweiseZusammen } from './agent-findings.mjs'
+import { baueHinweisKontext } from './hinweis-kontext.mjs'
+import { pruefeHinweislaufGate, verarbeiteHinweisantwort } from './hinweislauf-model.mjs'
 
 const BLOCK_TYPES = [
   ['paragraph', 'Freier Absatz'],
@@ -58,6 +61,10 @@ let localFeedbackError = null
 let localPositionFrame = null
 let localSummaryFocusRequest = null
 let agentInitiativeTimer = null
+// Echter Hinweislauf (Etappe A, Spec §5): genau ein Lauf gleichzeitig; hinweislaufTimer ist
+// der Zeitgeber-Griff fuer die Ausloeser-Verkabelung (H-3) -- hier nur deklariert.
+let hinweislaufAktiv = false
+let hinweislaufTimer = null
 let agentLiveFrame = null
 let agentPresenceFocusRequest = false
 let pendingParagraphBoundaryDocId = null
@@ -2269,6 +2276,135 @@ function renderEvidenceWindow() {
     evidenceFocusRequest = false
     requestAnimationFrame(() => close.focus({ preventScroll: true }))
   }
+}
+
+// ---- Echte Hinweis-Läufe (Etappe A, Spec §5) -------------------------------
+// Gate-Logik (pruefeHinweislaufGate) und Modellantwort-Verarbeitung
+// (verarbeiteHinweisantwort) sind reine, node-getestete Funktionen in
+// hinweislauf-model.mjs. Diese Funktionen hier sind die duenne ctx/DOM-Klammer:
+// Dokument/Editor lesen, die reinen Funktionen aufrufen, runTask ausloesen,
+// Ergebnis in doc.findings + workspace.hinweislauf uebernehmen, Panel aktualisieren.
+
+function istBeispielDokument(doc) {
+  return doc?.projectId === EXAMPLE_PROJECT_ID
+}
+
+function hinweislaufProtokoll(workspace) {
+  if (!workspace.hinweislauf || typeof workspace.hinweislauf !== 'object') {
+    workspace.hinweislauf = {
+      signatur: null,
+      beendetAt: null,
+      gestartet: 0,
+      verworfen: 0,
+      uebernommen: 0,
+      fehler: null,
+    }
+  }
+  return workspace.hinweislauf
+}
+
+// Echte Initiative-Quelle: nach einem Lauf mit Grundursache oder Integritätsthema
+// entsteht eine Agenten-Nachricht. Anzeige-Gates (shouldOpenAgentWidget,
+// hasUnseenInitiative, Dismiss-Regeln) bleiben unverändert die bestehenden — nur
+// die Quelle wird echt (Spec §6: "die Quelle wird echt").
+function ergaenzeEchteInitiative(workspace, finding, jetzt) {
+  const offenVorhanden = workspace.agent.messages.some(message => (
+    message.status === 'new' && !workspace.agent.dismissedIds.includes(message.id)
+  ))
+  if (offenVorhanden) return
+  const text = finding.istGrundursache
+    ? `Beim Lesen ist mir etwas Grundsätzliches aufgefallen: ${finding.short}`
+    : `Ein Hinweis betrifft die Verlässlichkeit deines Textes: ${finding.short}`
+  workspace.agent.messages.push({
+    id: `initiative-${jetzt.toString(36)}`,
+    status: 'new',
+    earliestAt: jetzt,
+    text,
+    thread: [],
+  })
+}
+
+// fuehreHinweislaufAus ist modulintern (H-3 verkabelt die eigentlichen Ausloeser: Pause,
+// Dokument-oeffnen, siehe Spec §5). starteHinweislauf ist bereits der Chat-Bitte-Hook.
+async function fuehreHinweislaufAus({ grund = 'pause' } = {}) {
+  const doc = ctx?.activeDoc()
+  const workspace = activeWorkspace()
+  const blocks = doc ? getEditorBlocks(ctx.editor) : []
+  const docText = doc ? baueDocText(blocks) : ''
+  const protokoll = workspace ? hinweislaufProtokoll(workspace) : null
+  const signatur = seedBodySignature(docText)
+
+  const gate = pruefeHinweislaufGate({
+    hatDokument: Boolean(doc && workspace),
+    istBeispielprojekt: istBeispielDokument(doc),
+    laeuftBereits: hinweislaufAktiv,
+    docText,
+    signatur,
+    letzteSignatur: protokoll?.signatur ?? null,
+  })
+  if (!gate.erlaubt) return { gestartet: false, grund: gate.grund }
+  // hatSchluessel() ist async (Keychain/Netz) -- bewusst erst NACH der reinen Gate-Pruefung,
+  // damit ein blockierter oder unveraenderter Lauf sie nie unnoetig aufruft.
+  if (!(await hatSchluessel())) return { gestartet: false, grund: 'kein-schluessel' }
+
+  hinweislaufAktiv = true
+  try {
+    ensureReasoningModel(doc) // Selbstheilung wie decideFinding: doc.findings/decisions sicher als Arrays
+    const project = ctx.activeProjectObj()
+    const kontext = baueHinweisKontext({
+      verstaendnis: project ? ensureProjectUnderstanding(project) : null,
+      docText,
+      entscheidungen: fasseEntscheidungenZusammen(doc.findings, doc.decisions),
+      offeneHinweise: fasseOffeneHinweiseZusammen(doc.findings),
+    })
+    // Bereich W (Aura/Statuszeile) atmet ausschliesslich am echten Gateway-Zustand
+    // (applyAuraState liest aktuellerAgentStatus().zustand === 'laeuft') — wie in
+    // starteVerstaendnisEntwurf/sendeInterviewAntwort muss jeder echte runTask-Aufruf ihn setzen.
+    setzeAgentStatus({ zustand: 'laeuft' })
+    const { daten } = await runTask('hinweise', kontext)
+    setzeAgentStatus({ zustand: 'bereit' })
+    const jetzt = Date.now()
+    const { uebernommen, verworfen, gestartet, grundursache } = verarbeiteHinweisantwort({
+      geliefert: daten?.hinweise,
+      docText,
+      blocks,
+      findings: doc.findings,
+      decisions: doc.decisions,
+      jetzt,
+    })
+    uebernommen.forEach(finding => doc.findings.push(finding))
+    Object.assign(protokoll, {
+      signatur,
+      beendetAt: jetzt,
+      gestartet,
+      verworfen,
+      uebernommen: uebernommen.length,
+      fehler: null,
+    })
+    const initiativeAnlass = grundursache
+      || uebernommen.find(finding => isIntegrityCategory(finding.category))
+    if (initiativeAnlass) ergaenzeEchteInitiative(workspace, initiativeAnlass, jetzt)
+    ctx.scheduleSave()
+    refreshWorkspace()
+    return { gestartet: true, uebernommen: uebernommen.length, verworfen }
+  } catch (fehler) {
+    // Spec §7: Schema-Muell/Abbruch -> Lauf verwerfen, still protokollieren, beim naechsten
+    // Ausloeser neu. signatur bleibt unveraendert -> derselbe Text darf erneut versucht werden.
+    // setzeAgentStatus traegt den ruhigen Fehlerzustand in die Panel-Statuszeile (Spec §7:
+    // "sichtbarer, unaufgeregter Fehlerhinweis") -- ohne das bliebe ein Fehlschlag unsichtbar
+    // (V-2-Lehre: kein stiller, unerklaerter Leerzustand).
+    Object.assign(protokoll, { beendetAt: Date.now(), fehler: fehler?.typ || 'unbekannt' })
+    setzeAgentStatus({ zustand: 'fehler', fehlerTyp: fehler?.typ })
+    ctx?.scheduleSave()
+    return { gestartet: true, fehler: fehler?.typ || 'unbekannt' }
+  } finally {
+    hinweislaufAktiv = false
+  }
+}
+
+// Chat-Bitte-Hook („schau nochmal drüber") — Bereich C ruft diese Funktion.
+export function starteHinweislauf(optionen = {}) {
+  return fuehreHinweislaufAus({ grund: optionen.grund || 'chat' })
 }
 
 function nextAgentInitiative(workspace) {
