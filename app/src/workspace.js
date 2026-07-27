@@ -1008,6 +1008,50 @@ async function starteVerstaendnisEntwurf(projectId, docId) {
   }
 }
 
+// Composer-Routing: solange istInterviewAktiv() wahr ist, gehört jede Eingabe im
+// Agenten-Panel dem Interview (siehe Submit-Handler in renderAgentWidget). Anders als
+// starteVerstaendnisEntwurf ist das hier KEIN automatischer, kostenpflichtiger Lauf,
+// den entwurfVersuchtAm bremsen dürfte — der Nutzer hat aktiv geantwortet, das zählt
+// nicht als der bezahlte Automatik-Entwurf und bleibt vom Merker unberührt.
+async function sendeInterviewAntwort(message, text) {
+  const project = ctx?.activeProjectObj()
+  if (!project || interviewLaufAktiv) return
+  appendThreadMessage(message.thread, 'user', text, Date.now())
+  interviewLaufAktiv = true
+  interviewStatus = 'laeuft'
+  announceAgentStatus('Agent denkt nach …')
+  persistWorkspace()
+  refreshWorkspace()
+  try {
+    // Bereich W (Aura/Statuszeile) atmet ausschliesslich am echten Gateway-Zustand
+    // (applyAuraState liest aktuellerAgentStatus().zustand === 'laeuft') — wie in
+    // starteVerstaendnisEntwurf muss jeder echte runTask-Aufruf ihn setzen (U-5-Aura).
+    setzeAgentStatus({ zustand: 'laeuft' })
+    const { daten } = await runTask('verstaendnis', verstaendnisEingabe('antwort', text))
+    setzeAgentStatus({ zustand: 'bereit' })
+    if (!ctx) return
+    uebernimmVerstaendnis(project, daten)
+    interviewStatus = null
+    const antwort = String(daten.antwortText || '').trim()
+    if (antwort) {
+      appendThreadMessage(message.thread, 'agent', antwort, Date.now())
+      message.text = antwort
+      announceAgentStatus(antwort)
+    }
+    // Sind task + audience + desiredEffect jetzt gefüllt, ist das Interview
+    // abgeschlossen — der nächste Composer-Beitrag geht in den normalen Chat.
+    ctx.persist()
+    refreshProjectUnderstandingModal()
+  } catch (fehler) {
+    interviewStatus = interviewFehlerText(fehler)
+    setzeAgentStatus({ zustand: 'fehler', fehlerTyp: fehler?.typ })
+    announceAgentStatus(interviewStatus)
+  } finally {
+    interviewLaufAktiv = false
+    if (ctx) refreshWorkspace()
+  }
+}
+
 function scheduleTriggerRender() {
   if (triggerFrame) cancelAnimationFrame(triggerFrame)
   triggerFrame = requestAnimationFrame(() => {
@@ -1987,6 +2031,14 @@ function renderAgentWidget() {
     event.preventDefault()
     const text = input.value.trim()
     if (!text) return
+    if (istInterviewAktiv()) {
+      if (interviewLaufAktiv) return // ein Lauf zur Zeit; die Eingabe bleibt stehen
+      input.value = ''
+      sendeInterviewAntwort(message, text)
+      return
+    }
+    // Kulissen-Zweig (Demo-Chat): wird in Bereich C durch den echten,
+    // gestreamten Chat ersetzt. Bis dahin bleibt das bisherige Verhalten.
     const at = Date.now()
     appendThreadMessage(message.thread, 'user', text, at)
     const reply = 'Beispielreaktion: Dann behandle ich Aufmerksamkeit im weiteren Text als gestaltete Bedingung und prüfe, wo die Formulierung noch beim Individuum bleibt.'
