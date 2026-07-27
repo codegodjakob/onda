@@ -12,6 +12,7 @@ import {
   hasUnseenInitiative,
   normalizeThread,
   reconcileEditingFinding,
+  resolveEvidenceSources,
   resolveFindingBlock,
   resolveFindingPlacement,
   shouldOpenAgentWidget,
@@ -474,4 +475,41 @@ test('structureHintMap: evidence dot beats style dot per block', () => {
   assert.equal(map.get('b-1'), 'evidence') // evidence wins over the later style finding
   assert.equal(map.get('b-2'), 'style')
   assert.equal(map.has('b-3'), false)
+})
+
+// Belegfenster-Guard (H-4): Demo-Quellen (verificationStatus 'demo') gehoeren
+// exklusiv zum Beispielprojekt. Echte Findings haben ohnehin sources: [] (H-1) --
+// diese Funktion sichert zusaetzlich jeden anderen Weg ins Belegfenster ab.
+test('resolveEvidenceSources keeps every source inside the example project, demo or not', () => {
+  const sources = [
+    { label: 'Demo-Quelle', verificationStatus: 'demo' },
+    { label: 'Gepruefte Quelle', verificationStatus: 'verified' },
+  ]
+  assert.deepEqual(resolveEvidenceSources(sources, true), sources)
+})
+
+test('resolveEvidenceSources filters demo sources out of real projects', () => {
+  const verified = { label: 'Gepruefte Quelle', verificationStatus: 'verified' }
+  const sources = [
+    { label: 'Demo-Quelle A', verificationStatus: 'demo' },
+    verified,
+    { label: 'Demo-Quelle B', verificationStatus: 'demo' },
+  ]
+  assert.deepEqual(resolveEvidenceSources(sources, false), [verified])
+})
+
+test('resolveEvidenceSources keeps sources without an explicit verification status in real projects', () => {
+  const legacy = { label: 'Quelle ohne Statusfeld' }
+  assert.deepEqual(resolveEvidenceSources([legacy], false), [legacy])
+})
+
+test('resolveEvidenceSources treats a missing or malformed source list as empty', () => {
+  assert.deepEqual(resolveEvidenceSources(undefined, false), [])
+  assert.deepEqual(resolveEvidenceSources(null, true), [])
+  assert.deepEqual(resolveEvidenceSources('kaputt', false), [])
+})
+
+test('resolveEvidenceSources never throws on a malformed entry inside an otherwise real list', () => {
+  const malformed = [null, undefined, 'x']
+  assert.deepEqual(resolveEvidenceSources(malformed, false), malformed)
 })

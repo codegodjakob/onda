@@ -8,6 +8,7 @@ import {
   ensureWorkspaceState,
   hasUnseenInitiative,
   reconcileEditingFinding,
+  resolveEvidenceSources,
   resolveFindingBlock,
   resolveFindingPlacement,
   shouldOpenAgentWidget,
@@ -2210,7 +2211,13 @@ function renderEvidenceWindow() {
   ui.evidenceWindow.append(claimSection)
 
   const sources = createNode('div', 'evidence-sources')
-  ;(finding.sources || []).forEach(source => {
+  // Etappe-A-Guard (H-4): In echten Projekten zeigt das Belegfenster nur den
+  // Hinweis-Kontext -- Demo-Quellen bleiben exklusiv im Beispielprojekt. Welche
+  // Quellen sichtbar sind, entscheidet die reine, node-getestete Funktion
+  // resolveEvidenceSources (workspace-model.mjs, siehe workspace-model.test.mjs).
+  const istBeispielprojekt = istBeispielDokument(doc)
+  const sichtbareQuellen = resolveEvidenceSources(finding.sources, istBeispielprojekt)
+  sichtbareQuellen.forEach(source => {
     const sourceUrl = safeHttpsUrl(source.url)
     const verificationStatus = ['demo', 'unverified', 'verified'].includes(source.verificationStatus)
       ? source.verificationStatus
@@ -2269,7 +2276,9 @@ function renderEvidenceWindow() {
     sources.append(item)
   })
   if (!sources.children.length) {
-    sources.append(createNode('p', 'evidence-empty', 'Für diese Aussage ist noch keine sichere direkte Quelle hinterlegt.'))
+    sources.append(createNode('p', 'evidence-empty', istBeispielprojekt
+      ? 'Für diese Aussage ist noch keine sichere direkte Quelle hinterlegt.'
+      : 'Dieser Hinweis stützt sich allein auf deinen Text. Die Quellensuche kommt in Etappe B.'))
   }
   ui.evidenceWindow.append(sources)
   if (evidenceFocusRequest) {

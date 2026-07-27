@@ -177,6 +177,18 @@ export function structureHintMap(doc, blocks) {
   return map
 }
 
+// Belegfenster-Guard (Etappe A, H-4): Demo-Quellen (verificationStatus 'demo')
+// gehoeren exklusiv zum Beispielprojekt -- alles andere waere eine Falschbehauptung
+// gegenueber der Autorin/dem Autor. Echte Findings haben ohnehin sources: [] (H-1,
+// die Quellensuche kommt erst in Etappe B); diese reine Funktion sichert zusaetzlich
+// jeden anderen Weg ins Belegfenster ab, falls doch einmal eine Demo-Quelle an einem
+// echten Finding haengen bliebe.
+export function resolveEvidenceSources(sources, istBeispielprojekt) {
+  const list = Array.isArray(sources) ? sources : []
+  if (istBeispielprojekt) return list
+  return list.filter(source => source?.verificationStatus !== 'demo')
+}
+
 export function createEditingFindingState(finding, block, startedAt = Date.now()) {
   if (!finding?.id || !finding.blockId || finding.blockId !== block?.id) return null
   const beforeText = String(block.text || '')
