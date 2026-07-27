@@ -6,6 +6,11 @@ const UNDERSTANDING_DEFAULTS = Object.freeze({
   protectedIntentions: [],
   openQuestions: [],
   updatedAt: null,
+  // Kein Verständnisfeld, kein Merge-Ziel — reine Kostenbremse (Fix-Runde 1,
+  // Finding 2): sobald gesetzt, startet kein weiterer bezahlter Entwurf-Lauf
+  // fürs selbe Projekt. Additiv: alte Projekte ohne dieses Feld gelten als
+  // „noch nicht versucht" (null).
+  entwurfVersuchtAm: null,
 })
 
 const PRIORITY_RANK = Object.freeze({ critical: 0, high: 1, normal: 2, low: 3 })
@@ -53,6 +58,21 @@ export function markiereGeschuetzt(understanding, feld) {
   if (!GESCHUETZT_FELDER.includes(feld)) return understanding
   if (!Array.isArray(understanding.geschuetzt)) understanding.geschuetzt = []
   if (!understanding.geschuetzt.includes(feld)) understanding.geschuetzt.push(feld)
+  return understanding
+}
+
+// Projektweite Kostenbremse für den bezahlten Entwurf-Lauf (nicht für die kostenlose
+// feste Eröffnungsfrage — die darf weiterhin pro Dokument erscheinen). Kein
+// Verständnisfeld: beeinflusst istInterviewOffen nicht und ist kein Merge-Ziel in
+// mergeVerstaendnis (siehe dort — es lebt außerhalb der sechs Kernfelder und wird per
+// Objekt-Spread einfach durchgereicht).
+export function istEntwurfVersucht(understanding) {
+  return Boolean(understanding && understanding.entwurfVersuchtAm)
+}
+
+export function markiereEntwurfVersucht(understanding, jetzt = Date.now()) {
+  if (!understanding || typeof understanding !== 'object') return understanding
+  understanding.entwurfVersuchtAm = jetzt
   return understanding
 }
 

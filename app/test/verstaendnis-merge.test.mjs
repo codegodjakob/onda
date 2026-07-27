@@ -3,7 +3,9 @@ import assert from 'node:assert/strict'
 
 import {
   ensureProjectUnderstanding,
+  istEntwurfVersucht,
   istInterviewOffen,
+  markiereEntwurfVersucht,
   markiereGeschuetzt,
   mergeVerstaendnis,
 } from '../src/reasoning-model.mjs'
@@ -194,4 +196,48 @@ test('ensureProjectUnderstanding normalisiert geschuetzt tolerant', () => {
 
   const projekt2 = { understanding: { geschuetzt: [' task ', ''] } }
   assert.deepEqual(ensureProjectUnderstanding(projekt2).geschuetzt, ['task'])
+})
+
+// ---------- Projektweite Sperre für den bezahlten Entwurf-Lauf (Fix-Runde 1, Finding 2) ----------
+
+test('ensureProjectUnderstanding ergänzt entwurfVersuchtAm additiv als null (alte Projekte ohne Feld)', () => {
+  const projekt = { understanding: { task: 'Essay' } }
+  const u = ensureProjectUnderstanding(projekt)
+  assert.equal(u.entwurfVersuchtAm, null)
+})
+
+test('istEntwurfVersucht erkennt fehlenden oder leeren Merker als „noch nicht versucht"', () => {
+  assert.equal(istEntwurfVersucht(null), false)
+  assert.equal(istEntwurfVersucht(undefined), false)
+  assert.equal(istEntwurfVersucht({}), false)
+  assert.equal(istEntwurfVersucht({ entwurfVersuchtAm: null }), false)
+})
+
+test('markiereEntwurfVersucht setzt den Zeitstempel, istEntwurfVersucht erkennt ihn danach', () => {
+  const u = {}
+  markiereEntwurfVersucht(u, 12345)
+  assert.equal(u.entwurfVersuchtAm, 12345)
+  assert.equal(istEntwurfVersucht(u), true)
+})
+
+test('markiereEntwurfVersucht ist defensiv bei kaputter Eingabe', () => {
+  assert.equal(markiereEntwurfVersucht(null), null)
+  assert.equal(markiereEntwurfVersucht('kaputt'), 'kaputt')
+})
+
+test('mergeVerstaendnis lässt entwurfVersuchtAm unangetastet — kein Verständnisfeld, wird nie überschrieben oder gelöscht', () => {
+  const alt = { ...basisVerstaendnis(), entwurfVersuchtAm: 555 }
+  const neu = { task: 'Neu', entwurfVersuchtAm: 999999 } // eine KI-Antwort enthält dieses Feld nie, aber sicherheitshalber geprüft
+  const ergebnis = mergeVerstaendnis(alt, neu, [], 200)
+  assert.equal(ergebnis.entwurfVersuchtAm, 555)
+})
+
+test('istInterviewOffen bleibt von entwurfVersuchtAm unbeeinflusst — Merker ist kein Kernfeld', () => {
+  // Versucht, aber Kernfelder weiterhin leer: Interview bleibt offen.
+  assert.equal(istInterviewOffen({ entwurfVersuchtAm: Date.now() }), true)
+  // Versucht UND Kernfelder vollständig: Interview gilt als geschlossen — wie ohne Merker.
+  assert.equal(
+    istInterviewOffen({ task: 'Essay', audience: ['Leser'], desiredEffect: 'Wirken', entwurfVersuchtAm: Date.now() }),
+    false,
+  )
 })

@@ -1,5 +1,5 @@
 import { getActiveBlockId, getEditorBlocks, insertSemanticBlock, replaceFindingTarget } from './block-identity.js'
-import { decideFinding, ensureProjectUnderstanding, getFindingQueue, isIntegrityCategory, istInterviewOffen, mergeVerstaendnis } from './reasoning-model.mjs'
+import { decideFinding, ensureProjectUnderstanding, getFindingQueue, isIntegrityCategory, istEntwurfVersucht, istInterviewOffen, markiereEntwurfVersucht, mergeVerstaendnis } from './reasoning-model.mjs'
 import {
   appendThreadMessage,
   completeEditingFinding,
@@ -924,10 +924,15 @@ function pruefeVerstaendnisInterview() {
   if (interviewPruefKey === pruefKey) return
   interviewPruefKey = pruefKey
   if (istBeispielProjekt(project)) return
-  if (!istInterviewOffen(ensureProjectUnderstanding(project))) return
+  const understanding = ensureProjectUnderstanding(project)
+  if (!istInterviewOffen(understanding)) return
   if (workspace.agent.messages.some(message => message.id === interviewMessageId(project))) return
 
-  if (docPlainText().length > INTERVIEW_ENTWURF_MIN_ZEICHEN) {
+  // Der bezahlte Entwurf-Lauf ist projektweit gesperrt, sobald er einmal versucht
+  // wurde (auch bei Fehlschlag — kein Wiederholungs-Sturm über mehrere Dokumente
+  // desselben Projekts). Die kostenlose feste Eröffnungsfrage bleibt frei — sie
+  // darf in jedem Dokument erscheinen, sie kostet nichts.
+  if (docPlainText().length > INTERVIEW_ENTWURF_MIN_ZEICHEN && !istEntwurfVersucht(understanding)) {
     starteVerstaendnisEntwurf(project.id, doc.id)
     return
   }
@@ -940,10 +945,14 @@ async function starteVerstaendnisEntwurf(projectId, docId) {
   if (interviewLaufAktiv) return
   interviewLaufAktiv = true
   interviewStatus = 'laeuft'
+  // Ausserhalb des try deklariert, damit der catch-Zweig bei einem fehlgeschlagenen
+  // Lauf noch weiss, fuer welches Projekt/welche Nachricht der Fehlertext sichtbar
+  // gemacht werden muss (Fix-Runde 1, Finding 1).
+  let project = null
   try {
     const schluesselDa = await hatSchluessel()
     if (!ctx || ctx.activeDoc()?.id !== docId) { interviewStatus = null; return }
-    const project = ctx.state.projects.find(candidate => candidate.id === projectId)
+    project = ctx.state.projects.find(candidate => candidate.id === projectId)
     const workspace = activeWorkspace()
     if (!project || !workspace) { interviewStatus = null; return }
     if (!schluesselDa) {
@@ -955,6 +964,11 @@ async function starteVerstaendnisEntwurf(projectId, docId) {
       persistWorkspace()
       return
     }
+    // Projektweite Kostenbremse (Fix-Runde 1, Finding 2): VOR dem bezahlten Aufruf
+    // setzen und sofort persistieren, damit sie auch bei einem Fehlschlag gilt —
+    // kein zweiter bezahlter Versuch über weitere Dokumente desselben Projekts.
+    markiereEntwurfVersucht(ensureProjectUnderstanding(project))
+    persistWorkspace()
     // Bereich W (Aura/Statuszeile) atmet ausschliesslich am echten Gateway-Zustand
     // (applyAuraState liest aktuellerAgentStatus().zustand === 'laeuft') — dieser
     // Aufruf ist der erste echte runTask-Aufruf im Panel, darum wird er hier gesetzt.
@@ -976,6 +990,18 @@ async function starteVerstaendnisEntwurf(projectId, docId) {
   } catch (fehler) {
     interviewStatus = interviewFehlerText(fehler)
     setzeAgentStatus({ zustand: 'fehler', fehlerTyp: fehler?.typ })
+    // Sichtbarkeit erzwingen (Fix-Runde 1, Finding 1): ohne eine existierende
+    // Nachricht kehrt renderAgentWidget vor dem interviewStatus-Absatz zurück, und
+    // der Fehlertext bliebe unsichtbar — bei bereits gesetztem Prüf-Gate ohne jede
+    // Wiederholmöglichkeit. Der Nutzer bekommt so den ruhigen Fehlertext UND das
+    // Eingabefeld; kein automatischer Retry, kein Kosten-Risiko.
+    if (ctx && project && ctx.activeDoc()?.id === docId) {
+      const workspace = activeWorkspace()
+      if (workspace) {
+        ensureInterviewMessage(workspace, project)
+        persistWorkspace()
+      }
+    }
   } finally {
     interviewLaufAktiv = false
     if (ctx) refreshWorkspace()
