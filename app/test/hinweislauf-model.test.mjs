@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { pruefeHinweislaufGate, verarbeiteHinweisantwort, versucheHinweislauf } from '../src/hinweislauf-model.mjs'
+import { pruefeHinweislaufGate, pruefePausenAusloeser, verarbeiteHinweisantwort, versucheHinweislauf } from '../src/hinweislauf-model.mjs'
 import { baueDocText } from '../src/agent-findings.mjs'
 
 // ---- pruefeHinweislaufGate ---------------------------------------------------
@@ -62,6 +62,118 @@ test('Gate: allererste Pruefung (letzteSignatur null, noch nie gelaufen) ist erl
     docText: 'Text', signatur: 'irgendeine-signatur', letzteSignatur: null,
   })
   assert.deepEqual(gate, { erlaubt: true })
+})
+
+// ---- pruefePausenAusloeser (H-3: Auslöser (a) Schreibpause) ------------------
+// Reine Vor-Entscheidung, OB und nach wie viel ms ein Hinweislauf-Versuch fuer die
+// Schreibpause geplant werden soll. Die autoritative Gate-Pruefung (Beispielprojekt/
+// Schluessel/aktiv/Signatur) bleibt zusaetzlich in pruefeHinweislaufGate/versucheHinweislauf
+// zum Zeitpunkt des tatsaechlichen Starts -- diese Funktion vermeidet nur unnoetige
+// Zeitgeber. leseSignatur() liest den (teuren) Dokumenttext erst, wenn alle guenstigen
+// Vorbedingungen bereits erfuellt sind (kein Editor-Durchlauf waehrend Komposition oder
+// laufendem Hinweislauf bei jedem Tastendruck).
+
+function basisAusloeser(extra = {}) {
+  return {
+    hatDokument: true,
+    istBeispielprojekt: false,
+    laeuftBereits: false,
+    hatEingabeStatus: true,
+    lastInputAt: 1000,
+    editorSichtbar: true,
+    isComposing: false,
+    leseSignatur: () => 'neue-signatur',
+    letzteSignatur: 'alte-signatur',
+    idleMs: 3000,
+    jetzt: 1000,
+    ...extra,
+  }
+}
+
+test('Pausen-Ausloeser: kein Dokument -> kein-dokument, Signatur wird nicht gelesen', () => {
+  let aufrufe = 0
+  const ergebnis = pruefePausenAusloeser(basisAusloeser({
+    hatDokument: false,
+    leseSignatur: () => { aufrufe += 1; return 'irrelevant' },
+  }))
+  assert.deepEqual(ergebnis, { planen: false, grund: 'kein-dokument' })
+  assert.equal(aufrufe, 0, 'Signatur darf nicht gelesen werden, wenn schon vorher klar ist, dass nichts zu tun ist')
+})
+
+test('Pausen-Ausloeser: Beispielprojekt blockiert immer, auch bei gueltiger Eingabe', () => {
+  const ergebnis = pruefePausenAusloeser(basisAusloeser({ istBeispielprojekt: true }))
+  assert.deepEqual(ergebnis, { planen: false, grund: 'beispielprojekt' })
+})
+
+test('Pausen-Ausloeser: bereits laufender Hinweislauf blockiert einen zweiten Plan', () => {
+  const ergebnis = pruefePausenAusloeser(basisAusloeser({ laeuftBereits: true }))
+  assert.deepEqual(ergebnis, { planen: false, grund: 'lauf-aktiv' })
+})
+
+test('Pausen-Ausloeser: kein Eingabe-Status (Dokument noch nie aktiviert) -> keine-eingabe', () => {
+  const ergebnis = pruefePausenAusloeser(basisAusloeser({ hatEingabeStatus: false }))
+  assert.deepEqual(ergebnis, { planen: false, grund: 'keine-eingabe' })
+})
+
+test('Pausen-Ausloeser: lastInputAt nicht endlich (noch keine echte Eingabe) -> keine-eingabe', () => {
+  const ergebnis = pruefePausenAusloeser(basisAusloeser({ lastInputAt: Number.NaN }))
+  assert.deepEqual(ergebnis, { planen: false, grund: 'keine-eingabe' })
+})
+
+test('Pausen-Ausloeser: Editor nicht sichtbar (anderes Dokument/anderer Tab) -> editor-nicht-sichtbar', () => {
+  const ergebnis = pruefePausenAusloeser(basisAusloeser({ editorSichtbar: false }))
+  assert.deepEqual(ergebnis, { planen: false, grund: 'editor-nicht-sichtbar' })
+})
+
+test('Pausen-Ausloeser: IME-Komposition aktiv -> komposition, Signatur wird nicht gelesen', () => {
+  let aufrufe = 0
+  const ergebnis = pruefePausenAusloeser(basisAusloeser({
+    isComposing: true,
+    leseSignatur: () => { aufrufe += 1; return 'irrelevant' },
+  }))
+  assert.deepEqual(ergebnis, { planen: false, grund: 'komposition' })
+  assert.equal(aufrufe, 0, 'Signatur darf waehrend Komposition nicht gelesen werden')
+})
+
+test('Pausen-Ausloeser: unveraenderter Text (gleiche Signatur wie beim letzten Lauf) -> unveraendert', () => {
+  let aufrufe = 0
+  const ergebnis = pruefePausenAusloeser(basisAusloeser({
+    leseSignatur: () => { aufrufe += 1; return 'gleiche-signatur' },
+    letzteSignatur: 'gleiche-signatur',
+  }))
+  assert.deepEqual(ergebnis, { planen: false, grund: 'unveraendert' })
+  assert.equal(aufrufe, 1, 'die Signatur muss fuer den Vergleich genau einmal gelesen werden')
+})
+
+test('Pausen-Ausloeser: alle Vorbedingungen erfuellt und Text neu -> planen mit Rest-Idle-Zeit als Verzoegerung', () => {
+  let aufrufe = 0
+  const ergebnis = pruefePausenAusloeser(basisAusloeser({
+    leseSignatur: () => { aufrufe += 1; return 'neue-signatur' },
+    letzteSignatur: 'alte-signatur',
+    lastInputAt: 1000,
+    jetzt: 1000,
+    idleMs: 3000,
+  }))
+  assert.deepEqual(ergebnis, { planen: true, verzoegerungMs: 3000 })
+  assert.equal(aufrufe, 1, 'die Signatur darf fuer einen geplanten Lauf nur einmal gelesen werden')
+})
+
+test('Pausen-Ausloeser: Idle-Zeit teilweise verstrichen -> Verzoegerung ist die verbleibende Restzeit', () => {
+  const ergebnis = pruefePausenAusloeser(basisAusloeser({
+    lastInputAt: 1000,
+    jetzt: 1800, // 800ms seit der letzten Eingabe vergangen
+    idleMs: 3000,
+  }))
+  assert.deepEqual(ergebnis, { planen: true, verzoegerungMs: 2200 })
+})
+
+test('Pausen-Ausloeser: Idle-Zeit bereits ueberschritten -> Verzoegerung faellt nie unter 24ms', () => {
+  const ergebnis = pruefePausenAusloeser(basisAusloeser({
+    lastInputAt: 1000,
+    jetzt: 10000, // laengst ueber der Idle-Schwelle
+    idleMs: 3000,
+  }))
+  assert.deepEqual(ergebnis, { planen: true, verzoegerungMs: 24 })
 })
 
 // ---- verarbeiteHinweisantwort ------------------------------------------------

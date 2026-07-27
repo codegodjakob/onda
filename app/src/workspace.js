@@ -21,7 +21,7 @@ import { aktuellerAgentStatus, beiAgentStatus, setzeAgentStatus, statuszeileFuer
 import { EXAMPLE_PROJECT_ID, seedBodySignature } from './example-seed.mjs'
 import { baueVerstaendnisKontext } from './verstaendnis-kontext.mjs'
 import { baueDocText } from './agent-findings.mjs'
-import { versucheHinweislauf } from './hinweislauf-model.mjs'
+import { pruefePausenAusloeser, versucheHinweislauf } from './hinweislauf-model.mjs'
 
 const BLOCK_TYPES = [
   ['paragraph', 'Freier Absatz'],
@@ -61,7 +61,7 @@ let localPositionFrame = null
 let localSummaryFocusRequest = null
 let agentInitiativeTimer = null
 // Echter Hinweislauf (Etappe A, Spec §5): genau ein Lauf gleichzeitig; hinweislaufTimer ist
-// der Zeitgeber-Griff fuer die Ausloeser-Verkabelung (H-3) -- hier nur deklariert.
+// der Zeitgeber-Griff fuer den Pausen-Ausloeser (planeHinweislauf/clearHinweislaufTimer, H-3).
 let hinweislaufAktiv = false
 let hinweislaufTimer = null
 let agentLiveFrame = null
@@ -1181,6 +1181,7 @@ function clearAgentInitiativeTimer() {
 
 function invalidateAgentInitiative({ requireNewInput = false } = {}) {
   clearAgentInitiativeTimer()
+  clearHinweislaufTimer()
   pendingParagraphBoundaryDocId = null
   const state = initiativeInputState()
   if (!state) return
@@ -2323,8 +2324,9 @@ function ergaenzeEchteInitiative(workspace, finding, jetzt) {
   })
 }
 
-// fuehreHinweislaufAus ist modulintern (H-3 verkabelt die eigentlichen Ausloeser: Pause,
-// Dokument-oeffnen, siehe Spec §5). starteHinweislauf ist bereits der Chat-Bitte-Hook.
+// fuehreHinweislaufAus ist modulintern. Die drei Ausloeser aus Spec §5 rufen sie auf:
+// Schreibpause ueber planeHinweislauf, Dokument-oeffnen ueber onViewChange/initWorkspace
+// (H-3), und die Chat-Bitte ueber den bereits exportierten Hook starteHinweislauf.
 //
 // Die gesamte Ablauflogik (Gate, Sperre-vor-jedem-await, Kontext, runTask, Antwort-
 // Verarbeitung) steckt in versucheHinweislauf (hinweislauf-model.mjs, node-getestet, u.a.
@@ -2439,10 +2441,53 @@ function activateInitiativeDocument(documentId) {
   }
 }
 
+function clearHinweislaufTimer() {
+  if (hinweislaufTimer) clearTimeout(hinweislaufTimer)
+  hinweislaufTimer = null
+}
+
+// Auslöser (a): dieselbe Pausen-Erkennung, die bisher nur die Attrappen-Anzeige fuetterte,
+// stoesst jetzt den echten Lauf an. Die Entscheidung (ob + nach wie viel ms) liegt PUR und
+// node-getestet in pruefePausenAusloeser (hinweislauf-model.mjs); hier werden nur die
+// ctx/DOM-gebundenen Werte eingesammelt (Muster wie fuehreHinweislaufAus). Die autoritative
+// Gate-Pruefung (inkl. Signatur, Beispielprojekt, Schluessel) bleibt zusaetzlich beim
+// tatsaechlichen Start in fuehreHinweislaufAus/versucheHinweislauf -- diese Funktion vermeidet
+// nur unnoetige Zeitgeber.
+function planeHinweislauf() {
+  clearHinweislaufTimer()
+  const doc = ctx?.activeDoc()
+  const docId = doc?.id || null
+  const inputState = initiativeInputState(docId)
+  const workspace = activeWorkspace()
+  const entscheidung = pruefePausenAusloeser({
+    hatDokument: Boolean(doc && workspace),
+    istBeispielprojekt: istBeispielDokument(doc),
+    laeuftBereits: hinweislaufAktiv,
+    hatEingabeStatus: Boolean(inputState),
+    lastInputAt: inputState?.lastInputAt,
+    editorSichtbar: editorViewIsVisibleFor(docId),
+    isComposing,
+    leseSignatur: () => seedBodySignature(baueDocText(getEditorBlocks(ctx.editor))),
+    letzteSignatur: workspace ? hinweislaufProtokoll(workspace).signatur : null,
+    idleMs: AGENT_IDLE_MS,
+  })
+  if (!entscheidung.planen) return
+
+  const scheduledGeneration = inputState.generation
+  hinweislaufTimer = setTimeout(() => {
+    hinweislaufTimer = null
+    const currentInputState = initiativeInputState(docId)
+    if (!currentInputState || currentInputState.generation !== scheduledGeneration) return
+    if (!editorViewIsVisibleFor(docId) || isComposing) return
+    fuehreHinweislaufAus({ grund: 'pause' })
+  }, entscheidung.verzoegerungMs)
+}
+
 function scheduleAgentInitiative() {
   clearAgentInitiativeTimer()
   const docId = ctx?.activeDoc()?.id || null
   activateInitiativeDocument(docId)
+  planeHinweislauf()
   const workspace = activeWorkspace()
   const message = workspace ? nextAgentInitiative(workspace) : null
   const inputState = initiativeInputState(docId)
@@ -2695,6 +2740,7 @@ export function initWorkspace(context) {
     }
     activateInitiativeDocument(ctx.activeDoc()?.id || null)
     scheduleAgentInitiative()
+    fuehreHinweislaufAus({ grund: 'oeffnen' })
   }
   const onVisibilityChange = () => {
     if (document.visibilityState !== 'visible') {
@@ -2757,6 +2803,7 @@ export function initWorkspace(context) {
     if (instance.destroyed) return
     instance.destroyed = true
     clearAgentInitiativeTimer()
+    clearHinweislaufTimer()
     closeInsertMenu({ restoreFocus: false })
     closeOndaDialog({ restoreFocus: false })
     closeAccentMenu({ restoreFocus: false })
@@ -2810,6 +2857,10 @@ export function initWorkspace(context) {
 
   window.__workspaceCloseTopLayer = closeTopLayer
   refreshWorkspace({ reconcileEditing: true })
+  // Auslöser (b) beim Workspace-Aufbau selbst (z.B. Neuladen der App mitten im Dokument):
+  // onViewChange greift nur bei einem ECHTEN 'aiwt:viewchange'-Ereignis (openDoc & Co.), nicht
+  // beim initialen Aufbau der bereits aktiven Ansicht.
+  if (editorViewIsVisibleFor(ctx.activeDoc()?.id)) fuehreHinweislaufAus({ grund: 'oeffnen' })
   return instance
 }
 

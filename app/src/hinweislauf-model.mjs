@@ -64,6 +64,40 @@ export function verarbeiteHinweisantwort({
   return { uebernommen, verworfen, gestartet: geliefertListe.length, grundursache }
 }
 
+// Reine Ausloeser-Entscheidung fuer Auslöser (a) Schreibpause (H-3, Spec §5): entscheidet nur,
+// OB und nach wie viel ms ein Hinweislauf-Versuch geplant werden soll. Die autoritative
+// Gate-Pruefung (Beispielprojekt/Schluessel/aktiv/Signatur) bleibt zusaetzlich bei
+// pruefeHinweislaufGate/versucheHinweislauf zum Zeitpunkt des tatsaechlichen Starts -- diese
+// Funktion vermeidet nur unnoetige Zeitgeber, wenn schon vorher feststeht, dass nichts zu tun
+// ist. leseSignatur() ist bewusst ein Callback (wie hatSchluessel/runTask in versucheHinweislauf):
+// er liest den aktuellen Dokumenttext erst, wenn alle guenstigen Vorbedingungen bereits
+// erfuellt sind, damit waehrend einer IME-Komposition oder eines laufenden Hinweislaufs nicht
+// bei jedem Tastendruck unnoetig der komplette Editor-Inhalt gehasht wird.
+export function pruefePausenAusloeser({
+  hatDokument,
+  istBeispielprojekt,
+  laeuftBereits,
+  hatEingabeStatus,
+  lastInputAt,
+  editorSichtbar,
+  isComposing,
+  leseSignatur,
+  letzteSignatur,
+  idleMs,
+  jetzt = Date.now(),
+}) {
+  if (!hatDokument) return { planen: false, grund: 'kein-dokument' }
+  if (istBeispielprojekt) return { planen: false, grund: 'beispielprojekt' }
+  if (laeuftBereits) return { planen: false, grund: 'lauf-aktiv' }
+  if (!hatEingabeStatus || !Number.isFinite(lastInputAt)) return { planen: false, grund: 'keine-eingabe' }
+  if (!editorSichtbar) return { planen: false, grund: 'editor-nicht-sichtbar' }
+  if (isComposing) return { planen: false, grund: 'komposition' }
+  if (leseSignatur() === letzteSignatur) return { planen: false, grund: 'unveraendert' }
+
+  const restzeit = idleMs - (jetzt - lastInputAt)
+  return { planen: true, verzoegerungMs: Math.max(24, restzeit) }
+}
+
 // Fuehrt EINEN vollstaendigen Versuch aus (Fix-Runde 1): Gate -> Sperre SYNCHRON setzen,
 // bevor irgendein await beginnt -> hatSchluessel() -> Konsistenzpruefung NACH dem await ->
 // Kontext -> runTask -> Antwort verarbeiten. Alle IO-Abhaengigkeiten sind Parameter, damit
