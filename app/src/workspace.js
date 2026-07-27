@@ -19,6 +19,7 @@ import { applySettings } from './ui.js'
 import { hatSchluessel, setzeSchluessel, loescheSchluessel, runTask } from './agent-gateway.mjs'
 import { aktuellerAgentStatus, beiAgentStatus, setzeAgentStatus, statuszeileFuer } from './agent-status.mjs'
 import { EXAMPLE_PROJECT_ID } from './example-seed.mjs'
+import { baueVerstaendnisKontext } from './verstaendnis-kontext.mjs'
 
 const BLOCK_TYPES = [
   ['paragraph', 'Freier Absatz'],
@@ -875,7 +876,16 @@ function verstaendnisEingabe(modus, nutzerText = '') {
   const u = ensureProjectUnderstanding(project)
   const workspace = activeWorkspace()
   const message = workspace?.agent.messages.find(candidate => candidate.id === interviewMessageId(project)) || null
-  return {
+  const thread = message?.thread || []
+  const text = String(nutzerText || '').trim()
+  // sendeInterviewAntwort haengt die aktuelle Antwort VOR diesem Aufruf bereits an
+  // message.thread an (siehe dort) — hier abschneiden, sonst stuende sie doppelt im
+  // Kontext: einmal als letzter Verlauf-Eintrag, einmal als eigenstaendige `anfrage`
+  // (baueVerstaendnisKontext erwartet interviewVerlauf als reine Vorgeschichte).
+  const bisherigerVerlauf = text && thread.length && thread[thread.length - 1]?.role === 'user'
+    ? thread.slice(0, -1)
+    : thread
+  return baueVerstaendnisKontext({
     modus,
     verstaendnis: {
       task: u.task,
@@ -888,8 +898,8 @@ function verstaendnisEingabe(modus, nutzerText = '') {
     geschuetzt: [...(u.geschuetzt || [])],
     docText: docPlainText(),
     nutzerText,
-    interviewVerlauf: (message?.thread || []).map(entry => ({ role: entry.role, text: entry.text })),
-  }
+    interviewVerlauf: bisherigerVerlauf.map(entry => ({ role: entry.role, text: entry.text })),
+  })
 }
 
 function interviewFehlerText(fehler) {
