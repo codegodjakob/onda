@@ -73,6 +73,7 @@ export function hinweisZuFinding(hinweis, ankerErgebnis, blockId, jetzt = Date.n
     action,
     variants: vorschlagAnwendbar ? [action] : [],
     category,
+    kategorie: String(hinweis.kategorie || ''),
     kiKategorie: String(hinweis.kategorie || ''),
     istGrundursache: hinweis.istGrundursache === true,
     priority: hinweis.istGrundursache === true ? 'high' : 'normal',

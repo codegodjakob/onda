@@ -9,6 +9,7 @@ import {
   hinweisZuFinding,
 } from '../src/agent-findings.mjs'
 import { decideFinding, ensureReasoningModel, getFindingQueue, isIntegrityCategory } from '../src/reasoning-model.mjs'
+import { dedupeHinweise } from '../src/anchor-verify.mjs'
 
 const ankerGefunden = { gefunden: true, index: 0, normalisiert: false }
 
@@ -143,4 +144,35 @@ test('fasseEntscheidungenZusammen und fasseOffeneHinweiseZusammen trennen entsch
     kategorie: 'struktur',
     kurz: 'Die These ist absolut formuliert.',
   }])
+})
+
+test('Dedupe-Regressionstest: Wiederholungs-Sperre greift für alle 8 Kategorien', () => {
+  // Szenario 1: Integritäts-Kategorie (quelle) — bereits entschieden, darf nicht wieder vorgeschlagen werden
+  const entschiedenerQuellen = hinweisZuFinding(beispielHinweis({ kategorie: 'quelle' }), ankerGefunden, 'b-eins', 1000)
+  const doc1 = ensureReasoningModel({ findings: [entschiedenerQuellen], decisions: [] })
+  decideFinding(doc1, entschiedenerQuellen.id, { kind: 'reject', reason: 'Quelle folgt später.' }, 2000)
+
+  // Frischer Hinweis mit gleichem Anker + Kategorie → sollte gefiltert werden
+  const frischerQuellen = beispielHinweis({ kategorie: 'quelle' })
+  const dedupiert1 = dedupeHinweise([frischerQuellen], doc1.findings, doc1.decisions)
+  assert.equal(dedupiert1.length, 0, 'Wiederholung quelle sollte gefiltert werden')
+
+  // Szenario 2: Nicht-Integritäts-Kategorie (wirkung) — bereits entschieden, darf nicht wieder vorgeschlagen werden
+  const entschiedenerWirkung = hinweisZuFinding(beispielHinweis({ kategorie: 'wirkung', anker: 'Anderer Anker', integritaet: false }), ankerGefunden, 'b-zwei', 1000)
+  const doc2 = ensureReasoningModel({ findings: [entschiedenerWirkung], decisions: [] })
+  decideFinding(doc2, entschiedenerWirkung.id, { kind: 'accept', reason: '' }, 2000)
+
+  const frischerWirkung = beispielHinweis({ kategorie: 'wirkung', anker: 'Anderer Anker', integritaet: false })
+  const dedupiert2 = dedupeHinweise([frischerWirkung], doc2.findings, doc2.decisions)
+  assert.equal(dedupiert2.length, 0, 'Wiederholung wirkung sollte gefiltert werden')
+
+  // Szenario 3: Anderer Anker — sollte NICHT gefiltert werden (unterschiedlicher Anker)
+  const frischerAndererAnker = beispielHinweis({ kategorie: 'quelle', anker: 'völlig neuer Anker' })
+  const dedupiert3 = dedupeHinweise([frischerAndererAnker], doc1.findings, doc1.decisions)
+  assert.equal(dedupiert3.length, 1, 'Neuer Anker sollte NICHT gefiltert werden')
+
+  // Szenario 4: Andere Kategorie — sollte NICHT gefiltert werden (unterschiedliche Kategorie)
+  const frischerAndereKategorie = beispielHinweis({ kategorie: 'methode' })
+  const dedupiert4 = dedupeHinweise([frischerAndereKategorie], doc1.findings, doc1.decisions)
+  assert.equal(dedupiert4.length, 1, 'Andere Kategorie sollte NICHT gefiltert werden')
 })
