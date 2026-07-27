@@ -2,7 +2,8 @@
 // PUR, node-testbar, kein DOM, kein ctx. workspace.js (fuehreHinweislaufAus) orchestriert nur
 // noch: Dokument/Editor lesen, diese Funktionen aufrufen, runTask + Persistenz auslösen.
 import { dedupeHinweise, findeAnker } from './anchor-verify.mjs'
-import { blockFuerAnkerIndex, hinweisZuFinding } from './agent-findings.mjs'
+import { blockFuerAnkerIndex, fasseEntscheidungenZusammen, fasseOffeneHinweiseZusammen, hinweisZuFinding } from './agent-findings.mjs'
+import { baueHinweisKontext } from './hinweis-kontext.mjs'
 
 // Reihenfolge bewusst: kein Dokument -> Beispielprojekt -> Lauf schon aktiv -> leerer Text ->
 // unveränderter Text seit dem letzten Lauf. Der Schlüssel-Check (hatSchluessel) bleibt bewusst
@@ -61,4 +62,76 @@ export function verarbeiteHinweisantwort({
   }
 
   return { uebernommen, verworfen, gestartet: geliefertListe.length, grundursache }
+}
+
+// Fuehrt EINEN vollstaendigen Versuch aus (Fix-Runde 1): Gate -> Sperre SYNCHRON setzen,
+// bevor irgendein await beginnt -> hatSchluessel() -> Konsistenzpruefung NACH dem await ->
+// Kontext -> runTask -> Antwort verarbeiten. Alle IO-Abhaengigkeiten sind Parameter, damit
+// Kollisionen zweier kurz aufeinanderfolgender Ausloeser und Kontext-Drift ueber den
+// Schluessel-Check hinweg mit gefaketen, verzoegerbaren Collaborators testbar sind, ohne
+// DOM/ctx zu brauchen.
+//
+// Finding 1 (Critical): hinweislaufAktiv wurde bislang erst NACH `await hatSchluessel()`
+// gesetzt. Zwei kurz aufeinanderfolgende Ausloeser (Schreibpause + Chat-Bitte) lesen dann
+// BEIDE noch `false`, haengen beide im selben await und starten beide einen teuren
+// runTask-Aufruf. Fix: sperreSetzen(true) laeuft synchron, sofort nach der reinen
+// Gate-Pruefung, VOR dem ersten await -- exakt das Muster aus starteVerstaendnisEntwurf
+// (workspace.js), das interviewLaufAktiv ebenso vor jedem await setzt.
+//
+// Finding 2 (Important): Projekt/Dokument koennen sich waehrend `await hatSchluessel()`
+// aendern. `verstaendnis` muss deshalb VOM AUFRUFER bereits ueber die stabile, vor dem
+// await erfasste Dokument-Zugehoerigkeit (doc.projectId) aufgeloest sein -- nie ueber einen
+// "aktuell aktiven Zeiger", der sich waehrenddessen verschieben kann. Zusaetzlich prueft
+// `istNochDasselbeDokument()` NACH dem await, ob das Dokument noch dasselbe ist; bei
+// Drift wird still abgebrochen, BEVOR ueberhaupt ein Kontext gebaut oder runTask gerufen wird
+// -- so koennen Dokumenttext und Verstaendnis niemals aus zwei verschiedenen Projekten stammen.
+export async function versucheHinweislauf({
+  hatDokument,
+  istBeispielprojekt,
+  laeuftBereits,
+  docText,
+  signatur,
+  letzteSignatur,
+  sperreSetzen,
+  hatSchluessel,
+  istNochDasselbeDokument,
+  verstaendnis,
+  blocks,
+  findings,
+  decisions,
+  runTask,
+  setzeAgentStatus,
+}) {
+  const gate = pruefeHinweislaufGate({ hatDokument, istBeispielprojekt, laeuftBereits, docText, signatur, letzteSignatur })
+  if (!gate.erlaubt) return { gestartet: false, grund: gate.grund }
+
+  sperreSetzen(true)
+  try {
+    if (!(await hatSchluessel())) return { gestartet: false, grund: 'kein-schluessel' }
+    if (!istNochDasselbeDokument()) return { gestartet: false, grund: 'dokument-gewechselt' }
+
+    const kontext = baueHinweisKontext({
+      verstaendnis,
+      docText,
+      entscheidungen: fasseEntscheidungenZusammen(findings, decisions),
+      offeneHinweise: fasseOffeneHinweiseZusammen(findings),
+    })
+    // Bereich W (Aura/Statuszeile) atmet ausschliesslich am echten Gateway-Zustand -- wie in
+    // starteVerstaendnisEntwurf/sendeInterviewAntwort muss jeder echte runTask-Aufruf ihn setzen.
+    setzeAgentStatus({ zustand: 'laeuft' })
+    const { daten } = await runTask('hinweise', kontext)
+    setzeAgentStatus({ zustand: 'bereit' })
+    const jetzt = Date.now()
+    const { uebernommen, verworfen, gestartet, grundursache } = verarbeiteHinweisantwort({
+      geliefert: daten?.hinweise, docText, blocks, findings, decisions, jetzt,
+    })
+    return { gestartet: true, erfolg: true, uebernommen, verworfen, geliefertAnzahl: gestartet, grundursache, zeit: jetzt }
+  } catch (fehler) {
+    // Spec §7: sichtbarer, unaufgeregter Fehlerhinweis im Panel (V-2-Lehre: kein stiller,
+    // unerklaerter Leerzustand) statt eines Alarms.
+    setzeAgentStatus({ zustand: 'fehler', fehlerTyp: fehler?.typ })
+    return { gestartet: true, erfolg: false, fehler: fehler?.typ || 'unbekannt' }
+  } finally {
+    sperreSetzen(false)
+  }
 }
