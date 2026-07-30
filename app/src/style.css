@@ -2589,6 +2589,10 @@ button.onda-aura:focus-visible {
   outline: none;
   box-shadow: var(--shadow-glow), var(--shadow-focus);
 }
+/* #ondaAura sets box-shadow:none (ID specificity) which silently wins over
+   the class rule above and swallows the focus ring — restate it here at
+   ID level so keyboard focus stays visible. */
+#ondaAura:focus-visible { outline: none; box-shadow: var(--shadow-glow), var(--shadow-focus); }
 
 /* states: quiet (still) vs. thinking (calm breathe on --ease-spring, no bounce) */
 .onda-aura.is-quiet { animation: none; }
