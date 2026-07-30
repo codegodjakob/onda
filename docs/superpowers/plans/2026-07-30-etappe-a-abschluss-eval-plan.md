@@ -245,3 +245,31 @@ In einem frischen Lauf:
 9. Originale Etappe-A-Kriterien und zugeordnete V2-Evals einzeln gegen Evidenz vergleichen
 
 Erst danach darf Etappe A als abgeschlossen gelten.
+
+## Ausfuehrungsstand — 30. Juli 2026
+
+Die Aufgaben 1 bis 8 wurden in fuenf Eval-Schleifen ausgefuehrt. Der maschinenlesbare Stand liegt in `app/evals/results/etappe-a-latest.json`; der Katalog-Validator meldet 77 vollstaendige Statuswerte, 19 bestandene Etappe-A-Evals, 52 bewusst spaeteren Etappen zugeordnete Evals und 6 unverfaelschte externe Live-Gates. Der gewichtete Etappen-Score ist 4,69/5; keine Dimension liegt unter 4,5.
+
+```mermaid
+flowchart LR
+  L1["Loop 1 · echter Chat, Browser, Mac"] --> F1["Streaming-Referenz bei Refresh repariert"]
+  F1 --> L2["Loop 2 · Kosten und Budget"]
+  L2 --> F2["Automatik stoppt; eine Freigabe gilt genau einmal"]
+  F2 --> L3["Loop 3 · Reihenfolge und Evidenz"]
+  L3 --> F3["Verstehen vor Hinweisen; 4 Entscheidungsarten; Performanceprobe"]
+  F3 --> L4["Loop 4 · Recovery"]
+  L4 --> F4["Budgetpausiertes Verständnis bewusst fortsetzbar"]
+  F4 --> L5["Loop 5 · Tastaturfokus"]
+  L5 --> F5["Aura-Fokusring auf ID-Spezifität abgesichert"]
+  F5 --> X["Etappen-A-Exit · Score 4,69"]
+  X -. "extern offen" .-> E["Offline-Mac, Keychain-Live, Browser/Mac-Providervergleich"]
+```
+
+Frische Kernbelege:
+
+- `npm test`: 249/249 bestanden.
+- `node test/v2-smoke.mjs`: vollstaendiger Browser-Smoke bestanden.
+- `node test/etappe-a-smoke.mjs`: WORK-01/02, Ankergrenze, Nutzung und unveraenderter Text bestanden.
+- `node test/decision-log-smoke.mjs`: vier Entscheidungsarten samt Reload bestanden.
+- `node test/performance-smoke.mjs`: 14 Eingabeproben, p95 8,8 ms, kein Long Task.
+- Native Huelle: warnungsfreier Compile, 17 Selftests und Startprobe bestanden.
