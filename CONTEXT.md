@@ -86,7 +86,7 @@ Der erste interaktive V2-Bauabschnitt ist eine fokussierte Schreiboberflaeche au
 
 ### Architektur
 
-- `app/src/editor.js` migriert Dokumente auf Schema 9, initialisiert das inhaltlich reduzierte Tiptap-Schema und verbindet Bibliothek, Persistenz, Projektgedaechtnis und Workspace.
+- `app/src/editor.js` migriert Dokumente auf Schema 10, initialisiert das inhaltlich reduzierte Tiptap-Schema und verbindet Bibliothek, Persistenz, Projektgedaechtnis, Argumentationsmodell und Workspace.
 - `app/src/example-seed.mjs` besitzt die konservative Beispielmigration. Seed-Texte tragen stabile Marker und eine normalisierte Body-Signatur.
 - `app/src/workspace-model.mjs` besitzt die reinen Workspace-Zustaende, Block-Snapshots, Finding-Zielaufloesung, Threads und Regeln fuer Agenteninitiativen.
 - `app/src/block-identity.js` vergibt stabile IDs an semantische Tiptap-Bloecke und kapselt Einfuegen, aktive Blockauswahl und bewusste Textuebernahmen.
@@ -104,6 +104,9 @@ Der erste interaktive V2-Bauabschnitt ist eine fokussierte Schreiboberflaeche au
 - `app/src/memory-model.mjs` besitzt das unveraenderliche Ereignisjournal und genau vier Gedaechtnisebenen. `app/src/memory-dossier.mjs` verdichtet Projektzustaende deterministisch, erhaelt die vollstaendige Herkunft und speichert Korrekturen als neue Ereignisse.
 - `app/src/memory-retrieval.mjs` erzwingt Projektgrenzen, begruendete Auswahl, ausdrueckliche Freigaben und die Trennung von Projekt- und Autorenstimme. `app/src/memory-portability.mjs` besitzt lesbaren Export, Geheimnisredaktion und gezieltes Loeschen ohne Primaerdatenverlust.
 - `app/src/memory-ui.mjs` bildet das ruhige Projektdossier hinter dem Projektverstaendnis: Korrektur, Freigabe/Ablehnung, Export, zweistufiges Loeschen und bewusster Wiederaufbau.
+- `app/src/argument-model.mjs` und `app/src/claim-ledger.mjs` besitzen atomare, exakt verankerte Aussagen mit Beleglage, Unsicherheit, Gültigkeit, Herkunft und bindend korrigierbaren Beziehungen.
+- `app/src/argument-projection.mjs` leitet nur bei eindeutigen semantischen Rollen vorsichtige Stütz-, Gegen- und Definitionsbeziehungen ab. `app/src/argument-graph.mjs` besitzt gerichtete Abhängigkeiten, Grundursachen, Zyklen, begrenzte Auswirkungsanalyse und fingerprint-gebundene Regression.
+- `app/src/argument-deliberation.mjs` wählt ausschließlich belegte faire Gegenargumente, enthält sich bei fehlendem Material, erzeugt substanziell verschiedene Argumentationswege und erhält Kritik, Autorenantwort und Revision getrennt. `app/src/argument-ui.mjs` projiziert diese Zustände als ruhiges, korrigierbares Dossier hinter dem Projektverstaendnis.
 - `app/src/ui.js` besitzt Bibliothek, Titel, Auswahl-Bubble, Slash-Menue und globale Tastaturregeln. Die alten Rails und Panel-Initialisierungen sind nicht mehr Teil des erreichbaren Oberflaechenpfads.
 - `app/src/example.js` liefert den aktuellen Beispieldatensatz. Seine Agentenantworten und Rechercheangaben sind Demo-Fixtures, keine Ergebnisse produktiver Agentenlaeufe.
 
@@ -138,6 +141,9 @@ Die alten Module `app/src/panels.js` und `app/src/structure.js` duerfen vorerst 
 - Das Projektgedaechtnis entsteht automatisch aus bestaetigten Zustaenden. Aktualisierte Entitaeten erscheinen einmal mit vollstaendiger Historie; Nutzerkorrekturen bleiben sichtbar und veraendern weder Projektverstaendnis noch Quellen, Belege oder Text.
 - Text-, Projekt-, Themen- und persoenliche Erinnerung bleiben getrennt. Ein projektuebergreifender Vorschlag enthaelt bei sensiblen Inhalten vor Zustimmung keinen Vorschautext; Freigabe und Ablehnung werden explizit gespeichert und gelten nur fuer das Zielprojekt.
 - Export liefert ein versioniertes, lesbares und geheimnisbereinigtes Paket. Projektloeschung entfernt Dossier, Ereignisse, abgeleitete Eintraege und offene Freigaben, laesst Texte und Quellen bestehen und baut das Gedaechtnis nicht still neu auf.
+- Das Argumentationsdossier zerlegt vollständige Aussagen konservativ, zeigt exakte Textanker, Beleglage und Unsicherheit und rät bei mehrdeutigen Beziehungen nicht. Jede Schlussbrücke bleibt sichtbar und bindend korrigierbar; der Ursprung wird nicht überschrieben.
+- Grundursachen stehen vor abhängigen Lücken, Zirkelschlüsse erscheinen als vollständiger Pfad und Änderungen markieren nur gerichtete Abhängigkeiten zur erneuten Prüfung. Gelöste Befunde öffnen sich nur bei nachweislich neuer Grundlage.
+- Der stärkste Einwand stammt wortgleich aus direkt belegtem Gegenmaterial samt Grenzen und Auswirkung. Alternative Wege unterscheiden sich in Prämisse, Schlussbrücke, Perspektive und Belegstrategie; Kritik, Autorenantwort und mögliche Revision bleiben getrennt und verändern den Text nicht.
 - Der Live-Editor besitzt keine Schriftgroessen-, Farb-, Highlight-, Ausrichtungs-, Unterstreichungs-, Bild- oder grafischen Anmerkungsbefehle. Links bleiben als inhaltliche Referenzen, Listen und Ueberschriften als Struktur erhalten.
 - Agenten- und Belegfenster liegen mobil mit 12 Pixel Abstand im Viewport und belegen hoechstens 70 Prozent der Hoehe.
 - Zwischen 761 und 1199 Pixel reservieren Agenten- und Belegfenster einen kollisionsfreien rechten Layouttrack; ab 1200 Pixel bleibt derselbe Abstand erhalten.
@@ -157,11 +163,13 @@ node test/etappe-a-smoke.mjs
 node test/etappe-b1-smoke.mjs
 node test/etappe-b2-smoke.mjs
 node test/etappe-c1-smoke.mjs
+node test/etappe-c2-smoke.mjs
 node test/decision-log-smoke.mjs
 node test/performance-smoke.mjs
 npm run eval:b1-quality
 npm run eval:b2-quality
-node evals/run-v2-evals.mjs --result evals/results/etappe-c1-latest.json
+npm run eval:c2-quality
+node evals/run-v2-evals.mjs --result evals/results/etappe-c2-latest.json
 ```
 
 Der Haupt-Smoke prueft die Zustaende `base`, `shelf`, `finding`, `suggestion`, `local-dialogue`, `agent` und `evidence` bei Desktop, Mobile und relevanten Zwischenbreiten. Er deckt Seed-Erhalt, Klartext-Patches, expliziten Own-Version-Abschluss, Integritaetsbestaetigung, stale/mehrdeutige Anker, Fokus, Escape-Kaskade, Reduced Motion, ARIA-Beziehungen, horizontalen Overflow, Streaming und die lokale Monatsgrenze ab.
@@ -172,7 +180,9 @@ Die B2-Eval beweist Plan-vor-Werkzeug, zustandsabhaengige Fehlwegdeduplizierung,
 
 Die C1-Eval beweist unveraenderliche Ereigniswahrheit, genau vier Gedaechtnisebenen, ein automatisch aufgebautes und korrigierbares Projektdossier, projektisoliertes Retrieval, explizite Freigabe/Ablehnung, getrennte Stimmen sowie vollstaendigen Export und kontrolliertes Loeschen ohne Primaerdatenverlust. Statuswechsel von Quellen und Belegen bleiben als eigene Ereignisse sichtbar; sensible Transfers enthalten vor Zustimmung keinen Inhalt.
 
-Der frische Gesamtlauf umfasst 327 bestandene Tests, den Produktionsbuild, alle bisherigen Browser-Smokes und 17 native Selbsttests. Die Performanceprobe misst waehrend eines langsamen Agentenlaufs 14 Eingaben mit einer p95-Zeit bis zum naechsten Frame von 8,2 ms und ohne Long Task. `app/evals/results/etappe-c1-latest.json` fuehrt alle 77 Ziel-Evals: 42 bestanden, 29 ehrlich spaeteren Etappen zugeordnet und 6 externe Live-Gates offen. Der gewichtete C1-Exitwert betraegt 4,87 von 5,0.
+Die C2-Eval beweist atomare Claims, fünf explizite Relationstypen, bindende Claim- und Beziehungskorrekturen, Grundursachen, Zyklen, begrenzte Auswirkungsanalyse, ehrliche Regressionen, faire belegte Gegenargumente, substanziell verschiedene Wege und getrennte Prüfrunden. Quellenrücknahmen und Nutzerentscheidungen markieren nur echte gerichtete Abhängigkeiten; Gegenkanten lösen keine falsche Kaskade aus. Dokument-, Projekt-, Evidenz- und ID-Grenzen scheitern geschlossen. ARG-04 und ARG-07 erreichen in festen Mehrgenre-Rubriken jeweils 5,0; das belegtreue Gegenargument schlägt den Strohmann mit 5 zu 0.
+
+Der frische Gesamtlauf umfasst 369 bestandene Tests, den Produktionsbuild, den vollständigen V2-Lauf, alle Etappen-Smokes und 17 native Selbsttests. Der C2-Browserfluss besteht zusätzlich in Chromium, Firefox und WebKit. Der WCAG-orientierte Browseraudit belegt Dialogsemantik, Tastaturbedienung, Fokuswiederherstellung, Zielgrößen, Metadatenkontrast, mobile Geometrie und 200-Prozent-Reflow. Die Performanceprobe misst während eines langsamen Agentenlaufs 14 Eingaben mit einer p95-Zeit bis zum nächsten Frame von 8,1 ms und ohne Long Task. `app/evals/results/etappe-c2-latest.json` führt alle 77 Ziel-Evals: 49 bestanden, 22 ehrlich späteren Etappen zugeordnet und 6 externe Live-Gates offen. Der gewichtete C2-Exitwert beträgt 4,98 von 5,0.
 
 Vom Repository-Wurzelverzeichnis muss ausserdem `git diff --check` ohne Ausgabe enden. Der lokale Prototyp ist unter `http://127.0.0.1:4173/` erreichbar, solange der vorhandene statische Server laeuft.
 
@@ -185,6 +195,6 @@ Noch nicht produktiv verbunden sind:
 - ein produktiver Live-Rechercheadapter fuer echte Web-, Bibliotheks- oder Datenbankanbieter sowie automatische Volltextextraktion;
 - Multi-Agent-, Debatten- oder stochastischer Consensus;
 - redaktionelle Literaturverzeichnisbearbeitung und das vollstaendige Schlussaudit trotz bereits deterministisch vorhandener Zitationspruefungen;
-- Argumentgraph, deutsche Sprach- und Wirkungsdiagnostik sowie vollstaendiger Export.
+- deutsche Sprach- und Wirkungsdiagnostik, Schlussaudit sowie vollstaendiger Export.
 
-Echte Chat- und Hinweislauf-Antworten sind keine Fixtures, aber auch keine automatisch verifizierten Forschungsergebnisse. Quellen und Rechercheangaben im Beispiel bleiben Demo. Quellen-, Evidenz-, Recherche- und Gedaechtnisvertraege sind mit B1/B2/C1 gebaut; die reale Providerabnahme bleibt extern, waehrend Argumentations-, Sprach-, Wirkungs- und Auditverhalten in C2 bis D2 gegen den festgeschriebenen Eval-Katalog folgen.
+Echte Chat- und Hinweislauf-Antworten sind keine Fixtures, aber auch keine automatisch verifizierten Forschungsergebnisse. Quellen und Rechercheangaben im Beispiel bleiben Demo. Quellen-, Evidenz-, Recherche-, Gedaechtnis- und Argumentationsvertraege sind mit B1/B2/C1/C2 gebaut; die reale Providerabnahme bleibt extern, waehrend Sprach-, Wirkungs- und Auditverhalten in D1 bis D2 gegen den festgeschriebenen Eval-Katalog folgen.
