@@ -265,6 +265,8 @@ export function decideFinding(doc, findingId, decision, at = Date.now()) {
   }
   finding.status = outcome
   finding.decidedAt = at
+  const appliedText = String(decision.appliedText || '')
+  const resultingText = appliedText || (decision.kind === 'reject' ? String(finding.target || '') : '')
 
   doc.decisions.push({
     id: `decision-${finding.id}-${at}`,
@@ -272,7 +274,11 @@ export function decideFinding(doc, findingId, decision, at = Date.now()) {
     kind: decision.kind,
     outcome,
     reason: decision.reason || '',
-    appliedText: decision.appliedText || '',
+    appliedText,
+    // Betroffene Passage zum Entscheidungszeitpunkt. Dadurch bleibt im Verlauf
+    // sichtbar, welcher Wortlaut aus Übernahme, eigener Fassung oder Verwerfen
+    // tatsächlich resultierte, auch wenn sich der Text später weiterentwickelt.
+    resultingText,
     at,
   })
   return finding

@@ -85,16 +85,18 @@ test('entscheidungsEintraege ordnet neueste zuerst und benennt die Entscheidungs
   assert.equal(eintraege[0].kurztext, 'Unscharfe Formulierung')
   assert.equal(eintraege[0].datumText, 'vor 1 Minute')
   assert.equal(eintraege[0].begruendung, '')
+  assert.equal(eintraege[0].resultierenderWortlaut, 'Neu B')
   assert.equal(eintraege[1].art, 'risiko')
   assert.equal(eintraege[1].label, 'Risiko bewusst angenommen')
   assert.equal(eintraege[1].begruendung, 'Quelle folgt nächste Woche')
+  assert.equal(eintraege[1].resultierenderWortlaut, '')
   assert.equal(eintraege[1].datumText, 'gestern')
 })
 
 test('entscheidungsEintraege erkennt eigene Fassung, Verwerfen und fehlende Findings', () => {
   const now = 1_000_000
   const doc = {
-    findings: [{ id: 'f-1', short: 'Hinweis', action: 'KI-Vorschlag' }],
+    findings: [{ id: 'f-1', short: 'Hinweis', action: 'KI-Vorschlag', target: 'Ursprünglicher Wortlaut' }],
     decisions: [
       { id: 'd-1', findingId: 'f-1', kind: 'accept', outcome: 'resolved', appliedText: 'Eigene Formulierung', at: now - 1 },
       { id: 'd-2', findingId: 'f-1', kind: 'reject', outcome: 'dismissed', appliedText: '', at: now - 2 },
@@ -105,6 +107,7 @@ test('entscheidungsEintraege erkennt eigene Fassung, Verwerfen und fehlende Find
   assert.equal(eintraege[0].art, 'eigene')
   assert.equal(eintraege[0].label, 'Eigene Fassung übernommen')
   assert.equal(eintraege[1].art, 'verworfen')
+  assert.equal(eintraege[1].resultierenderWortlaut, 'Ursprünglicher Wortlaut')
   assert.equal(eintraege[2].kurztext, 'Hinweis nicht mehr vorhanden')
   assert.equal(kurzformEntscheidungen(doc, now)[0], 'Eigene Fassung übernommen: Hinweis')
 })

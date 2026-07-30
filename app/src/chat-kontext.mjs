@@ -74,6 +74,12 @@ export function entscheidungsEintraege(doc, now = Date.now()) {
         && finding?.action
         && decision.appliedText !== finding.action
       ) art = 'eigene'
+      const resultierenderWortlaut = String(
+        decision.resultingText
+        || decision.appliedText
+        || (decision.kind === 'reject' ? finding?.target : '')
+        || '',
+      )
       return {
         id: decision.id,
         art,
@@ -81,6 +87,7 @@ export function entscheidungsEintraege(doc, now = Date.now()) {
         datumText: formatiereRelativeZeit(decision.at, now),
         kurztext: finding?.short || 'Hinweis nicht mehr vorhanden',
         begruendung: art === 'risiko' ? String(decision.reason || '') : '',
+        resultierenderWortlaut,
       }
     })
 }

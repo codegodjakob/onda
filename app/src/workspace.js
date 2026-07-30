@@ -2387,6 +2387,9 @@ function renderEntscheidungsverlauf(workspace) {
         createNode('span', 'agent-decision-date', eintrag.datumText),
       )
       item.append(meta, createNode('p', 'agent-decision-short', eintrag.kurztext))
+      if (eintrag.resultierenderWortlaut) {
+        item.append(createNode('p', 'agent-decision-result', `Resultierender Wortlaut: ${eintrag.resultierenderWortlaut}`))
+      }
       if (eintrag.begruendung) {
         item.append(createNode('p', 'agent-decision-reason', `Begründung: ${eintrag.begruendung}`))
       }
@@ -2749,10 +2752,12 @@ async function fuehreHinweislaufAus({ grund = 'pause' } = {}) {
   // -- der zeigt auf das GERADE aktive Projekt und koennte waehrend hatSchluessel() bereits
   // auf ein anderes Projekt wechseln (Fix-Runde 1, Finding 2).
   const project = doc?.projectId ? ctx.state.projects.find(candidate => candidate.id === doc.projectId) : null
+  const verstaendnis = project ? ensureProjectUnderstanding(project) : null
 
   const ergebnis = await versucheHinweislauf({
     hatDokument: Boolean(doc && workspace),
     istBeispielprojekt: istBeispielDokument(doc),
+    verstaendnisOffen: verstaendnis ? istInterviewOffen(verstaendnis) : false,
     laeuftBereits: hinweislaufAktiv,
     docText,
     signatur,
@@ -2763,7 +2768,7 @@ async function fuehreHinweislaufAus({ grund = 'pause' } = {}) {
     beansprucheKostenfreigabe: grund === 'chat'
       ? null
       : () => beansprucheAutomatikKosten('hinweis', { docId, grund }),
-    verstaendnis: project ? ensureProjectUnderstanding(project) : null,
+    verstaendnis,
     blocks,
     findings: doc?.findings,
     decisions: doc?.decisions,

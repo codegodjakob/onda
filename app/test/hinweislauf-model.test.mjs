@@ -24,6 +24,19 @@ test('Gate: Beispielprojekt blockiert immer, auch bei geaendertem Text', () => {
   assert.deepEqual(gate, { erlaubt: false, grund: 'beispielprojekt' })
 })
 
+test('WORK-02: offenes Projektverstaendnis blockiert Hinweise, bis der Entwurf steht', () => {
+  const gate = pruefeHinweislaufGate({
+    hatDokument: true,
+    istBeispielprojekt: false,
+    verstaendnisOffen: true,
+    laeuftBereits: false,
+    docText: 'Vorhandener Text',
+    signatur: 'neu',
+    letzteSignatur: null,
+  })
+  assert.deepEqual(gate, { erlaubt: false, grund: 'verstaendnis-offen' })
+})
+
 test('Gate: bereits laufender Lauf blockiert einen zweiten', () => {
   const gate = pruefeHinweislaufGate({
     hatDokument: true, istBeispielprojekt: false, laeuftBereits: true,
@@ -284,6 +297,7 @@ function basisVersuch(extra = {}) {
   return {
     hatDokument: true,
     istBeispielprojekt: false,
+    verstaendnisOffen: false,
     laeuftBereits: false,
     docText: 'Neuer Text',
     signatur: 'neu',

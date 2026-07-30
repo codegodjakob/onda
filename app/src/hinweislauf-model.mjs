@@ -12,6 +12,7 @@ import { baueHinweisKontext } from './hinweis-kontext.mjs'
 export function pruefeHinweislaufGate({
   hatDokument,
   istBeispielprojekt,
+  verstaendnisOffen,
   laeuftBereits,
   docText,
   signatur,
@@ -19,6 +20,7 @@ export function pruefeHinweislaufGate({
 }) {
   if (!hatDokument) return { erlaubt: false, grund: 'kein-dokument' }
   if (istBeispielprojekt) return { erlaubt: false, grund: 'beispielprojekt' }
+  if (verstaendnisOffen) return { erlaubt: false, grund: 'verstaendnis-offen' }
   if (laeuftBereits) return { erlaubt: false, grund: 'lauf-aktiv' }
   if (!String(docText || '').trim()) return { erlaubt: false, grund: 'leer' }
   if (signatur === letzteSignatur) return { erlaubt: false, grund: 'unveraendert' }
@@ -122,6 +124,7 @@ export function pruefePausenAusloeser({
 export async function versucheHinweislauf({
   hatDokument,
   istBeispielprojekt,
+  verstaendnisOffen,
   laeuftBereits,
   docText,
   signatur,
@@ -137,7 +140,15 @@ export async function versucheHinweislauf({
   runTask,
   setzeAgentStatus,
 }) {
-  const gate = pruefeHinweislaufGate({ hatDokument, istBeispielprojekt, laeuftBereits, docText, signatur, letzteSignatur })
+  const gate = pruefeHinweislaufGate({
+    hatDokument,
+    istBeispielprojekt,
+    verstaendnisOffen,
+    laeuftBereits,
+    docText,
+    signatur,
+    letzteSignatur,
+  })
   if (!gate.erlaubt) return { gestartet: false, grund: gate.grund }
 
   sperreSetzen(true)
