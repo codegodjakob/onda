@@ -78,7 +78,7 @@ Der erste interaktive V2-Bauabschnitt ist eine fokussierte Schreiboberflaeche au
 
 ### Architektur
 
-- `app/src/editor.js` migriert Dokumente auf Schema 7, initialisiert das inhaltlich reduzierte Tiptap-Schema und verbindet Bibliothek, Persistenz und Workspace.
+- `app/src/editor.js` migriert Dokumente auf Schema 8, initialisiert das inhaltlich reduzierte Tiptap-Schema und verbindet Bibliothek, Persistenz und Workspace.
 - `app/src/example-seed.mjs` besitzt die konservative Beispielmigration. Seed-Texte tragen stabile Marker und eine normalisierte Body-Signatur.
 - `app/src/workspace-model.mjs` besitzt die reinen Workspace-Zustaende, Block-Snapshots, Finding-Zielaufloesung, Threads und Regeln fuer Agenteninitiativen.
 - `app/src/block-identity.js` vergibt stabile IDs an semantische Tiptap-Bloecke und kapselt Einfuegen, aktive Blockauswahl und bewusste Textuebernahmen.
@@ -90,6 +90,9 @@ Der erste interaktive V2-Bauabschnitt ist eine fokussierte Schreiboberflaeche au
 - `app/src/locator-model.mjs` und `app/src/evidence-bundle.mjs` bilden exakte Seiten-, Abschnitts-, Text- und Zeitanker sowie claim-spezifische Belegbuendel mit Gegenbelegen, Grenzen, Reichweite, Unsicherheit und erlaubter Formulierungsstaerke.
 - `app/src/citation-audit.mjs` prueft direkte Zitate, Paraphrasen, bibliografische Identitaet und Verzeichniskonsistenz. `app/src/provenance-model.mjs` trennt Nutzertext, Agenteneinordnung, Recherchematerial, Fundstellen, belegtes Wissen und Evidenzentwuerfe.
 - `app/src/source-library-ui.mjs` besitzt die Projektquellenbibliothek und den Fundstellenreader; `workspace.js` bleibt deren duenne Orchestrierung.
+- `app/src/research-run.mjs` besitzt Recherchefrage, Claim-Bezug, Suchwege, Budget, Stopbedingungen und den persistierbaren Zustandsautomaten. `app/src/research-orchestrator.mjs` fuehrt nur vorab geplante, noch nicht erledigte Wege aus und haelt Pause, Fortsetzung und Fehler atomar.
+- `app/src/research-adapter.mjs` kapselt austauschbare Recherchewerkzeuge, legale Alternativwege, zustandsabhaengige Fehlwegdeduplizierung und ein normalisiertes, geheimnisfreies Werkzeugprotokoll.
+- `app/src/research-synthesis.mjs` trennt Metadaten, Abstracts und Originalfundstellen, erhaelt Widersprueche und uebergibt nur erneut am B1-Original verifizierte Kandidaten an das belegte Projektwissen. `app/src/research-ui.mjs` bildet den ruhigen Bedienfluss in den Projektquellen.
 - `app/src/ui.js` besitzt Bibliothek, Titel, Auswahl-Bubble, Slash-Menue und globale Tastaturregeln. Die alten Rails und Panel-Initialisierungen sind nicht mehr Teil des erreichbaren Oberflaechenpfads.
 - `app/src/example.js` liefert den aktuellen Beispieldatensatz. Seine Agentenantworten und Rechercheangaben sind Demo-Fixtures, keine Ergebnisse produktiver Agentenlaeufe.
 
@@ -118,6 +121,9 @@ Die alten Module `app/src/panels.js` und `app/src/structure.js` duerfen vorerst 
 - Projektquellen werden als PDF, Web, DOI, Text, Audio oder Video mit unveraenderlicher Referenz und Pruefsumme aufgenommen. Ihr Zustand bleibt sichtbar; eine Ruecknahme loescht weder Quelle noch Historie und setzt abhaengige Belegbuendel auf erneute Pruefung.
 - Fundstellen zeigen die konkrete Aussage, Quelle, Seiten-, Abschnitts-, Text- oder Zeitanker und den gegen das Original verifizierten Ausschnitt. Belegbuendel zeigen Grenzen, Reichweite, Unsicherheit, erlaubte Formulierungsstaerke und ausdruecklich nicht gestuetzte Aussagen.
 - Bestehende Belege tragen einen sichtbaren Status `demo`, `unverified` oder `verified`. Demo-Angaben werden beim Kopieren ausdruecklich als ungeprueft bezeichnet; unverifizierte Angaben sind nicht kopierbar.
+- Recherche beginnt mit einer pruefbaren Frage, einer genauen Aussage, drei sichtbaren Suchrichtungen und einem begrenzten Werkzeugbudget. Der Plan wird gespeichert, bevor ein Adapter aufgerufen wird.
+- Ein Lauf kann pausiert, fortgesetzt und abgebrochen werden. Widersprechende Befunde und methodische Grenzen stehen in der Sichtung vor stuetzenden Funden; das vollstaendige, bereinigte Werkzeugprotokoll bleibt eingeklappt erreichbar.
+- Ohne verbundenen Rechercheadapter bleibt der Plan lokal erhalten und die Oberflaeche simuliert keine Ergebnisse. Die bewusste Uebernahme prueft Original, Fundstelle und Belegbuendel erneut und veraendert keinen Nutzertext.
 - Der Live-Editor besitzt keine Schriftgroessen-, Farb-, Highlight-, Ausrichtungs-, Unterstreichungs-, Bild- oder grafischen Anmerkungsbefehle. Links bleiben als inhaltliche Referenzen, Listen und Ueberschriften als Struktur erhalten.
 - Agenten- und Belegfenster liegen mobil mit 12 Pixel Abstand im Viewport und belegen hoechstens 70 Prozent der Hoehe.
 - Zwischen 761 und 1199 Pixel reservieren Agenten- und Belegfenster einen kollisionsfreien rechten Layouttrack; ab 1200 Pixel bleibt derselbe Abstand erhalten.
@@ -135,17 +141,21 @@ npm run build
 node test/v2-smoke.mjs
 node test/etappe-a-smoke.mjs
 node test/etappe-b1-smoke.mjs
+node test/etappe-b2-smoke.mjs
 node test/decision-log-smoke.mjs
 node test/performance-smoke.mjs
 npm run eval:b1-quality
-node evals/run-v2-evals.mjs --result evals/results/etappe-b1-latest.json
+npm run eval:b2-quality
+node evals/run-v2-evals.mjs --result evals/results/etappe-b2-latest.json
 ```
 
 Der Haupt-Smoke prueft die Zustaende `base`, `shelf`, `finding`, `suggestion`, `local-dialogue`, `agent` und `evidence` bei Desktop, Mobile und relevanten Zwischenbreiten. Er deckt Seed-Erhalt, Klartext-Patches, expliziten Own-Version-Abschluss, Integritaetsbestaetigung, stale/mehrdeutige Anker, Fokus, Escape-Kaskade, Reduced Motion, ARIA-Beziehungen, horizontalen Overflow, Streaming und die lokale Monatsgrenze ab.
 
 Die fokussierte Etappen-A-Eval beweist ausserdem: genau eine gebuendelte Einstiegsfrage im leeren Projekt, Verstehen vor Hinweisen, Verwurf eines erfundenen Modellankers, sichtbare Nutzung und bytegleicher Editorinhalt ohne Uebernahme. Die B1-Eval beweist den typisierten Quellenimport, exakte Fundstellen, Reload, Ruecknahmepropagation und die Trennung von Nutzertext, Agenteneinordnung, Recherchematerial und belegtem Wissen. Der kontrastive Qualitaetslauf fuer EVID-04 erreicht 5,0 von 5,0.
 
-Der frische Gesamtlauf umfasst 271 bestandene Tests, den Produktionsbuild, alle bisherigen Browser-Smokes und 17 native Selbsttests. Die Performanceprobe misst waehrend eines langsamen Agentenlaufs 14 Eingaben mit einer p95-Zeit bis zum naechsten Frame von 7,7 ms und ohne Long Task. `app/evals/results/etappe-b1-latest.json` fuehrt alle 77 Ziel-Evals: 29 bestanden, 42 ehrlich spaeteren Etappen zugeordnet und 6 externe Live-Gates offen. Der gewichtete B1-Exitwert betraegt 4,8 von 5,0.
+Die B2-Eval beweist Plan-vor-Werkzeug, zustandsabhaengige Fehlwegdeduplizierung, Secret-Redaktion, Pause und Fortsetzung, atomare Uebernahme, Gegenbeleg- und Grenzensuche sowie Reload. RESEARCH-05 erreicht 5,0 von 5,0; bei unzureichender Evidenz schlaegt die ehrliche Enthaltung die plausible Erfindung im festen Kontrast mit 5 zu 0.
+
+Der frische Gesamtlauf umfasst 293 bestandene Tests, den Produktionsbuild, alle bisherigen Browser-Smokes und 17 native Selbsttests. Die Performanceprobe misst waehrend eines langsamen Agentenlaufs 15 Eingaben mit einer p95-Zeit bis zum naechsten Frame von 9,9 ms und ohne Long Task. `app/evals/results/etappe-b2-latest.json` fuehrt alle 77 Ziel-Evals: 35 bestanden, 36 ehrlich spaeteren Etappen zugeordnet und 6 externe Live-Gates offen. Der gewichtete B2-Exitwert betraegt 4,84 von 5,0.
 
 Vom Repository-Wurzelverzeichnis muss ausserdem `git diff --check` ohne Ausgabe enden. Der lokale Prototyp ist unter `http://127.0.0.1:4173/` erreichbar, solange der vorhandene statische Server laeuft.
 
@@ -155,10 +165,10 @@ Projektverstaendnis, automatische verankerte Hinweise sowie lokaler und globaler
 
 Noch nicht produktiv verbunden sind:
 
-- autonome Recherche mit echten Web-, Bibliotheks- oder Datenbankanbietern sowie automatische Volltextextraktion;
+- ein produktiver Live-Rechercheadapter fuer echte Web-, Bibliotheks- oder Datenbankanbieter sowie automatische Volltextextraktion;
 - echtes Langzeitgedaechtnis und projektuebergreifendes Memory;
 - Multi-Agent-, Debatten- oder stochastischer Consensus;
 - redaktionelle Literaturverzeichnisbearbeitung und das vollstaendige Schlussaudit trotz bereits deterministisch vorhandener Zitationspruefungen;
-- die agentische Verdichtung von Recherchematerial zu belastbaren Exzerpten und belegtem Projektwissen.
+- Argumentgraph, deutsche Sprach- und Wirkungsdiagnostik sowie vollstaendiger Export.
 
-Echte Chat- und Hinweislauf-Antworten sind keine Fixtures, aber auch keine automatisch verifizierten Forschungsergebnisse. Quellen und Rechercheangaben im Beispiel bleiben Demo. Der belastbare Quellen- und Evidenzkern ist mit B1 gebaut; Recherche-, Gedaechtnis-, Sprach- und Auditverhalten folgen in B2 bis D2 gegen den festgeschriebenen Eval-Katalog.
+Echte Chat- und Hinweislauf-Antworten sind keine Fixtures, aber auch keine automatisch verifizierten Forschungsergebnisse. Quellen und Rechercheangaben im Beispiel bleiben Demo. Quellen-, Evidenz- und Recherchevertraege sind mit B1/B2 gebaut; die reale Providerabnahme bleibt extern, waehrend Gedaechtnis-, Argumentations-, Sprach- und Auditverhalten in C1 bis D2 gegen den festgeschriebenen Eval-Katalog folgen.

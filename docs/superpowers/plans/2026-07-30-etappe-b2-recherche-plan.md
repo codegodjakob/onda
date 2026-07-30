@@ -134,3 +134,32 @@ flowchart LR
 8. Eval-Katalog und B2-Ergebnis;
 9. rekursive Secret- und Projekt-Canary-Suche;
 10. native Build-/Startprobe und `git diff --check`.
+
+## Ausfuehrungsstand — 30. Juli 2026
+
+Alle sieben Aufgaben wurden in drei begrenzten Qualitaetsschleifen abgeschlossen. Die neun Abnahmekriterien und der Eval-Katalog blieben unveraendert.
+
+```mermaid
+flowchart LR
+  L1["Loop 1<br/>21 kontrastive Domänentests<br/>Plan · Adapter · Synthese · Atomizität"] --> L2A["Loop 2<br/>vollständiger Browserfluss"]
+  L2A --> F2["Befund<br/>Methodengrenze gespeichert,<br/>aber in der Sichtung unsichtbar"]
+  F2 --> L2B["Grenze sichtbar gemacht<br/>Browserflow grün"]
+  L2B --> L3["Loop 3<br/>Desktop + 390 px visuell geprüft<br/>Fehlertexte und Kandidaten gehärtet"]
+  L3 --> X{"lokale B2-Gates grün<br/>Gesamtwert 4,84 / 5?"}
+  X -- "ja" --> DONE["B2 abgeschlossen<br/>Realquellen-Live-Gates offen"]
+```
+
+### Frische Exit-Evidenz
+
+- 293 Unit- und Integrationstests bestanden, 0 fehlgeschlagen.
+- Produktionsbuild erfolgreich; Bundle 517,6 KB.
+- Etappen-A-, B1-, B2-, Entscheidungsverlauf- und vollständiger V2-Browser-Smoke bestanden.
+- RESEARCH-05 erreicht in allen fünf Dimensionen 5,0 von 5,0.
+- INV-08 bewertet ehrliche Enthaltung mit 5 und plausible Erfindung ohne Originalfundstelle mit 0.
+- 15 Performanceeingaben: p95 bis zum nächsten Frame 9,9 ms, kein Long Task.
+- Native Mac-App: Build erfolgreich, 17 Selbsttests bestanden und Start-/Persistenzprobe grün.
+- Evalkatalog und B2-Ergebnis validiert: 77 vollständig erfasste Evals, davon 35 bestanden, 36 späteren Etappen zugeordnet und 6 echte externe Live-Gates offen.
+- Desktop- und Mobile-Screenshots zeigen Widerspruch und Grenzen vor Stützung sowie keinen horizontalen Überlauf.
+- `git diff --check` ohne Befund.
+
+Damit sind `INV-08`, `RESEARCH-01` und `RESEARCH-04` bis `RESEARCH-07` reproduzierbar geschlossen. `RESEARCH-02` und `RESEARCH-03` besitzen grüne lokale Verträge, bleiben für reale Provider, Originalquellen und Rechtsprüfung aber ausdrücklich `external-open`.
