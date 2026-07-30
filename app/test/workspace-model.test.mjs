@@ -110,6 +110,39 @@ test('workspace migration normalizes global and finding threads without losing v
   assert.equal(first.agent.activeMessageId, null)
 })
 
+test('Thread-Identität bleibt bei Normalisierung stabil, damit laufende Streams nicht in verwaiste Arrays schreiben', () => {
+  const globalThread = [{ id: 'global-1', role: 'agent', text: 'Beginn', at: 1 }]
+  const localThread = [{ id: 'local-1', role: 'agent', text: 'Beginn lokal', at: 1 }]
+  const globalMessage = globalThread[0]
+  const localMessage = localThread[0]
+  const doc = {
+    findings: [{ id: 'f-1', thread: localThread }],
+    workspace: {
+      agent: {
+        messages: [{ id: 'm-1', text: 'Frage', thread: globalThread }],
+        dismissedIds: [],
+      },
+    },
+  }
+
+  ensureWorkspaceState(doc)
+  assert.equal(doc.workspace.agent.messages[0].thread, globalThread)
+  assert.equal(doc.findings[0].thread, localThread)
+  assert.equal(globalThread[0], globalMessage)
+  assert.equal(localThread[0], localMessage)
+
+  appendThreadMessage(globalThread, 'user', 'Antwort global', 2)
+  appendThreadMessage(localThread, 'user', 'Antwort lokal', 2)
+  ensureWorkspaceState(doc)
+
+  assert.equal(doc.workspace.agent.messages[0].thread, globalThread)
+  assert.equal(doc.findings[0].thread, localThread)
+  assert.equal(globalThread[0], globalMessage)
+  assert.equal(localThread[0], localMessage)
+  assert.equal(globalThread.at(-1).text, 'Antwort global')
+  assert.equal(localThread.at(-1).text, 'Antwort lokal')
+})
+
 test('array workspace is replaced with state that survives a JSON roundtrip', () => {
   const doc = { workspace: [] }
   const migrated = ensureWorkspaceState(doc)

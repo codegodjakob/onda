@@ -79,6 +79,7 @@ export const __blockIdentityTestBridge = {
 }
 
 export { __workspaceTestBridge }
+export { setzeTransportFuerTests } from './agent-gateway.mjs'
 
 function uid() { return 'd' + Math.random().toString(36).slice(2, 9) + Date.now().toString(36) }
 function now() { return Date.now() }

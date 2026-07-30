@@ -53,6 +53,60 @@ async function openExample(page, clear = true) {
   await page.locator('#doclist .doc').first().click()
 }
 
+async function installiereTransportMock(page) {
+  await page.evaluate(() => {
+    window.__llmMock = {
+      aufrufe: [],
+      usage: {
+        input_tokens: 1200,
+        output_tokens: 500,
+        cache_read_input_tokens: 0,
+        cache_creation_input_tokens: 900,
+      },
+    }
+    window.AIWT.setzeTransportFuerTests({
+      async hatSchluessel() { return true },
+      async setzeSchluessel() {},
+      async loescheSchluessel() {},
+      sende(anfrage, handlers) {
+        window.__llmMock.aufrufe.push(anfrage)
+        const schema = anfrage?.body?.output_config?.format?.schema
+        let text
+        if (schema?.properties?.hinweise) {
+          text = JSON.stringify({ hinweise: [] })
+        } else if (schema?.properties?.antwortText) {
+          text = JSON.stringify({
+            task: 'Essay schärfen',
+            audience: 'interessierte Fachleser',
+            desiredEffect: 'ruhig überzeugen',
+            evidenceStandard: 'Primärquellen für Tatsachenbehauptungen',
+            protectedIntentions: [],
+            openQuestions: [],
+            antwortText: 'EVAL-Verständnisreaktion',
+          })
+        } else if (anfrage?.body?.stream === true) {
+          const aktuelleFrage = anfrage.body.messages.at(-1)?.content || ''
+          text = `EVAL-Agentenreaktion: ${aktuelleFrage}`
+        } else {
+          text = 'EVAL-Zusammenfassung'
+        }
+        setTimeout(() => {
+          if (anfrage?.body?.stream === true && handlers.onDelta) {
+            const mitte = Math.ceil(text.length / 2)
+            handlers.onDelta(text.slice(0, mitte))
+            handlers.onDelta(text.slice(mitte))
+          }
+          handlers.onFertig({
+            text,
+            usage: { ...window.__llmMock.usage },
+            stopReason: 'end_turn',
+          })
+        }, 0)
+      },
+    })
+  })
+}
+
 async function expectVisible(locator) {
   assert.equal(await locator.isVisible(), true)
 }
@@ -263,7 +317,7 @@ async function runDesktop(browser) {
   const persisted = await page.evaluate(() => JSON.parse(localStorage.getItem('aiwt.v2')))
   const exampleDoc = persisted.docs.find(doc => doc.projectId === 'p-example')
   assert.equal(exampleDoc.workspace.activeBlockId, activeBlockId)
-  assert.equal(await page.locator(`[data-block-id="${activeBlockId}"]`).evaluate(node => node.classList.contains('is-active-block')), true)
+  assert.equal(await page.locator(`#editor .ProseMirror > [data-block-id="${activeBlockId}"]`).evaluate(node => node.classList.contains('is-active-block')), true)
 
   await page.screenshot({ path: `${screenshotDir}/aiwt-v2-desktop.png`, fullPage: true })
   assert.deepEqual(errors, [])
@@ -1420,6 +1474,7 @@ async function runTask5MobileFeedback(browser) {
   })
   const page = await context.newPage()
   await openExample(page)
+  await page.locator('#sidebarCollapse').click()
 
   const local = page.locator('#localAgentLayer [data-finding-id]')
   await expectVisible(local)
@@ -1616,6 +1671,7 @@ async function runTask6DialogueAndEvidence(browser) {
   })
   page.on('pageerror', error => errors.push(error.message))
   await openExample(page)
+  await installiereTransportMock(page)
 
   assert.equal(await page.evaluate(() => window.AIWT.state.settings.exampleVersion), 9)
   assert.equal(await page.locator('#agentWidget').isHidden(), true)
@@ -1651,12 +1707,13 @@ async function runTask6DialogueAndEvidence(browser) {
       rightInset: innerWidth - rect.right,
       viewportHeight: innerHeight,
       radius: getComputedStyle(node).borderRadius,
+      radiusToken: getComputedStyle(document.documentElement).getPropertyValue('--radius-panel').trim(),
     }
   })
   assert.ok(widgetGeometry.width >= 360 && widgetGeometry.width <= 400)
   assert.ok(widgetGeometry.height < widgetGeometry.viewportHeight - 100)
   assert.ok(widgetGeometry.rightInset >= 16)
-  assert.equal(widgetGeometry.radius, '8px')
+  assert.equal(widgetGeometry.radius, widgetGeometry.radiusToken)
 
   const globalForm = widget.locator('form')
   const globalInput = globalForm.locator('input')
@@ -1664,18 +1721,37 @@ async function runTask6DialogueAndEvidence(browser) {
   await globalInput.fill('Die gestaltete Bedingung.')
   await globalInput.press('Enter')
   assert.match(await widget.textContent(), /Die gestaltete Bedingung\./)
+  try {
+    await widget.getByText(/EVAL-Agentenreaktion/).waitFor({ timeout: 5000 })
+  } catch {
+    const diagnose = await page.evaluate(() => {
+      const doc = window.AIWT.state.docs.find(candidate => candidate.id === window.AIWT.state.active)
+      const message = doc?.workspace?.agent?.messages
+        ?.find(candidate => candidate.id === doc.workspace.agent.activeMessageId)
+      return {
+        activeProject: window.AIWT.state.activeProject,
+        mockAufrufe: window.__llmMock?.aufrufe?.length ?? null,
+        mockStreams: window.__llmMock?.aufrufe?.map(anfrage => anfrage?.body?.stream === true) ?? [],
+        thread: message?.thread ?? null,
+        liveStatus: document.getElementById('agentLiveStatus')?.textContent || '',
+        widgetText: document.getElementById('agentWidget')?.textContent || '',
+      }
+    })
+    assert.fail(`EVAL-Agentenreaktion fehlt: ${JSON.stringify(diagnose)}`)
+  }
   assert.ok((await widget.locator('.agent-message').count()) >= 3)
   assert.equal(await widget.locator('input').evaluate(node => document.activeElement === node), true)
   assert.equal(await widget.locator('input').inputValue(), '')
   assert.equal(await widget.locator('.agent-widget-messages').getAttribute('aria-live'), null)
-  await page.waitForFunction(() => /Beispielreaktion/.test(document.getElementById('agentLiveStatus')?.textContent || ''))
-  assert.match(await page.locator('#agentLiveStatus').textContent(), /Beispielreaktion/)
+  await page.waitForFunction(() => /EVAL-Agentenreaktion/.test(document.getElementById('agentLiveStatus')?.textContent || ''))
+  assert.match(await page.locator('#agentLiveStatus').textContent(), /EVAL-Agentenreaktion/)
   await page.keyboard.press('Escape')
   assert.equal(await widget.isHidden(), true)
   assert.equal(await page.locator('#ondaAura').evaluate(node => document.activeElement === node), true)
   await page.evaluate(() => window.AIWT.flushSave())
   await page.reload({ waitUntil: 'networkidle' })
   await openExample(page, false)
+  await installiereTransportMock(page)
   await page.waitForTimeout(3300)
   assert.equal(await page.locator('#agentWidget').isHidden(), true)
   const persistedGlobal = await page.evaluate(() => {
@@ -1711,7 +1787,8 @@ async function runTask6DialogueAndEvidence(browser) {
   await localDialogue.locator('input').focus()
   await localDialogue.locator('input').fill('Als gestaltete Bedingung.')
   await localDialogue.locator('input').press('Enter')
-  assert.match(await localDialogue.textContent(), /Beispielreaktion/i)
+  await localDialogue.getByText(/EVAL-Agentenreaktion/i).waitFor()
+  assert.match(await localDialogue.textContent(), /EVAL-Agentenreaktion/i)
   assert.match(await localDialogue.textContent(), /Als gestaltete Bedingung\./)
   assert.equal(await localDialogue.locator('input').evaluate(node => document.activeElement === node), true)
   assert.equal(await localDialogue.locator('input').inputValue(), '')
@@ -1727,6 +1804,7 @@ async function runTask6DialogueAndEvidence(browser) {
   await page.evaluate(() => window.AIWT.flushSave())
   await page.reload({ waitUntil: 'networkidle' })
   await openExample(page, false)
+  await installiereTransportMock(page)
   local = page.locator(`#localAgentLayer [data-finding-id="${fixture.findingId}"]`)
   await expectVisible(local.locator('.local-dialogue'))
   const persistedLocal = await page.evaluate(id => {
@@ -1863,6 +1941,7 @@ async function runTask6Mobile(browser) {
   await page.waitForTimeout(260)
   await page.screenshot({ path: `${screenshotDir}/aiwt-v2-task6-mobile-widget.png`, fullPage: true })
   await widget.locator('[data-close-agent]').tap()
+  await page.locator('#sidebarCollapse').tap()
 
   const fixture = await injectTask6PassageFinding(page, false)
   const local = page.locator(`#localAgentLayer [data-finding-id="${fixture.findingId}"]`)
@@ -2232,11 +2311,11 @@ async function assertTask7MobileHitboxes(page, name) {
   const required = {
     base: ['#sidebarBack', '#ondaAura', '#blockInsertTrigger'],
     shelf: ['#sidebarBack', '#ondaAura', '#structureNav .block-preview'],
-    finding: ['#sidebarBack', '#ondaAura', '#blockInsertTrigger'],
-    suggestion: ['#sidebarBack', '#ondaAura', '.suggestion-action'],
-    'local-dialogue': ['#sidebarBack', '#ondaAura', '.local-dialogue .agent-chat-send'],
-    agent: ['#sidebarBack', '#ondaAura', '#agentWidget .surface-close', '#agentWidget .agent-chat-send'],
-    evidence: ['#sidebarBack', '#ondaAura', '#evidenceWindow .surface-close'],
+    finding: ['#sidebarReopen', '#ondaAura', '#blockInsertTrigger'],
+    suggestion: ['#sidebarReopen', '#ondaAura', '.suggestion-action'],
+    'local-dialogue': ['#sidebarReopen', '#ondaAura', '.local-dialogue .agent-chat-send'],
+    agent: ['#sidebarReopen', '#ondaAura', '#agentWidget .surface-close', '#agentWidget .agent-chat-send'],
+    evidence: ['#sidebarReopen', '#ondaAura', '#evidenceWindow .surface-close'],
   }[name] || []
 
   for (const selector of required) {
@@ -2289,6 +2368,10 @@ async function assertTask7CommonLayout(page, name, mobile) {
     )]
       .filter(node => {
         const style = getComputedStyle(node)
+        if (
+          node.closest('#ondaSidebar')
+          && document.getElementById('editorView')?.classList.contains('is-sidebar-collapsed')
+        ) return false
         return !node.hidden && style.display !== 'none' && style.visibility !== 'hidden'
       })
       .map(node => ({
@@ -2449,6 +2532,9 @@ async function runTask7Scenarios(browser, mobile) {
     })
     page.on('pageerror', error => errors.push(error.message))
     await openExample(page)
+    if (mobile && !['base', 'shelf'].includes(name)) {
+      await page.locator('#sidebarCollapse').tap()
+    }
     await prepareTask7Scenario(page, name)
     await assertTask7CommonLayout(page, name, mobile)
     await page.mouse.move(0, 0)
@@ -2525,6 +2611,7 @@ async function runTask7KeyboardAndMotion(browser) {
   await page.locator('#sidebarCollapse').click()
   await assertReducedTransition(page, '#ondaSidebar')
   await page.locator('#sidebarReopen').click()
+  await page.locator('#sidebarCollapse').click()
 
   const finding = page.locator('#localAgentLayer [data-finding-id]')
   await finding.locator('.local-finding-summary').click()
@@ -2550,6 +2637,7 @@ async function runTask7KeyboardAndMotion(browser) {
   await page.keyboard.press('Escape')
   assert.equal(await page.locator('#agentWidget').isHidden(), true)
 
+  await page.locator('#sidebarReopen').click()
   await page.locator('#pvCard').click()
   await expectVisible(page.locator('#pvModal[role="dialog"]'))
   await page.keyboard.press('Escape')

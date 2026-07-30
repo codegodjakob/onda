@@ -54,6 +54,32 @@ export function normalizeThread(value) {
   return normalized
 }
 
+// Render-/Persistenz-Normalisierung muss Referenzen erhalten: laufende Streams
+// halten sowohl das Thread-Array als auch die gerade wachsende Nachricht fest.
+// Ein Austausch durch strukturgleiche Kopien würde weitere Deltas und den
+// finalen Text in verwaiste Objekte schreiben.
+function normalizeThreadInPlace(value) {
+  if (!Array.isArray(value)) return []
+  const normalized = []
+  const usedIds = new Set()
+
+  value.forEach(candidate => {
+    if (!isPlainObject(candidate)) return
+    if (!THREAD_ROLES.has(candidate.role)) return
+    if (typeof candidate.text !== 'string' || !candidate.text.trim()) return
+    if (!Number.isFinite(candidate.at)) return
+
+    const preferredId = typeof candidate.id === 'string' && candidate.id.trim()
+      ? candidate.id.trim()
+      : `message-${candidate.at}-${normalized.length}`
+    candidate.id = uniqueMessageId(preferredId, usedIds)
+    normalized.push(candidate)
+  })
+
+  value.splice(0, value.length, ...normalized)
+  return value
+}
+
 function normalizeAgentMessages(value) {
   if (!Array.isArray(value)) return []
   const normalized = []
@@ -66,7 +92,7 @@ function normalizeAgentMessages(value) {
       : `agent-message-${index}`
     const message = candidate
     message.id = uniqueMessageId(preferredId, usedIds)
-    message.thread = normalizeThread(candidate.thread)
+    message.thread = normalizeThreadInPlace(candidate.thread)
     if (typeof message.text !== 'string') message.text = ''
     normalized.push(message)
   })
@@ -102,7 +128,7 @@ export function ensureWorkspaceState(doc) {
   if (Array.isArray(doc.findings)) {
     doc.findings.forEach(finding => {
       if (!isPlainObject(finding) || !Object.hasOwn(finding, 'thread')) return
-      finding.thread = normalizeThread(finding.thread)
+      finding.thread = normalizeThreadInPlace(finding.thread)
     })
   }
 

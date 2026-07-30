@@ -8,13 +8,23 @@ import { verbucheUsage } from './settings-model.mjs'
 
 const STANDARD_HOOKS = { getSettings: null, persist: null, transport: null, retryWartezeitMs: 2000 }
 let hooks = { ...STANDARD_HOOKS }
+let testTransport = null
 
 export function initGateway(konfiguration) {
   hooks = Object.assign({ ...STANDARD_HOOKS }, konfiguration)
+  testTransport = null
 }
 
 // Lazy je Aufruf: die Brücke kann erst nach dem App-Start verfügbar sein.
-function aktiverTransport() { return hooks.transport || waehleTransport() }
+function aktiverTransport() { return testTransport || hooks.transport || waehleTransport() }
+
+// Browser-Eval-Brücke: ersetzt ausschließlich den Netztransport. Requestbau,
+// Verifikation, Usage, Persistenz und UI bleiben der echte Produktpfad.
+// null stellt die durch initGateway konfigurierte beziehungsweise automatisch
+// gewählte Transportauswahl wieder her.
+export function setzeTransportFuerTests(transport) {
+  testTransport = transport || null
+}
 
 export function hatSchluessel() { return aktiverTransport().hatSchluessel() }
 export function setzeSchluessel(schluessel) { return aktiverTransport().setzeSchluessel(schluessel) }

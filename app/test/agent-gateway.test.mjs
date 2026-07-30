@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { initGateway, runTask, pruefePflichtfelder } from '../src/agent-gateway.mjs'
+import { initGateway, runTask, pruefePflichtfelder, setzeTransportFuerTests } from '../src/agent-gateway.mjs'
 import { TASK_TABLE, schaetzeKostenCents } from '../src/agent-tasks.mjs'
 import { verbucheUsage, aktuellerMonat } from '../src/settings-model.mjs'
 
@@ -155,4 +155,24 @@ test('chat-Vertrag: letzte Message ist immer user, nie assistant', async () => {
   const letzteMsg = gesendetAnfrage.body.messages.at(-1)
   assert.equal(letzteMsg.role, 'user')
   assert.equal(letzteMsg.content, 'neue Frage')
+})
+
+test('setzeTransportFuerTests ersetzt nur den Transport und null stellt die konfigurierte Auswahl wieder her', async () => {
+  const konfiguriert = mockTransport([
+    (a, h) => h.onFertig({ text: 'Konfiguriert', usage: { ...USAGE }, stopReason: 'end_turn' }),
+  ])
+  const testTransport = mockTransport([
+    (a, h) => h.onFertig({ text: 'Testtransport', usage: { ...USAGE }, stopReason: 'end_turn' }),
+  ])
+  const welt = frisch(konfiguriert)
+
+  setzeTransportFuerTests(testTransport)
+  assert.equal((await runTask('titel', {})).daten, 'Testtransport')
+  assert.equal(testTransport.aufrufe.length, 1)
+  assert.equal(konfiguriert.aufrufe.length, 0)
+
+  setzeTransportFuerTests(null)
+  assert.equal((await runTask('titel', {})).daten, 'Konfiguriert')
+  assert.equal(konfiguriert.aufrufe.length, 1)
+  assert.equal(welt.persistCount(), 2, 'bestehende Persist- und Usage-Hooks bleiben erhalten')
 })
