@@ -149,6 +149,45 @@ export function chatFehlerText(fehler) {
   return 'Das hat gerade nicht geklappt. Dein Text ist davon unberührt — versuch es einfach noch einmal.'
 }
 
+// Reine Ablaufsteuerung fuer EINEN Chat-Vorgang (optionale Verdichtung + eigentlicher
+// Chat-Lauf) -- Vorbild: versucheHinweislauf (hinweislauf-model.mjs, Fix-Runde 1, Finding 1).
+// Setzt die Sperre SYNCHRON, BEVOR irgendein await beginnt: genau das verhindert, dass zwei
+// kurz aufeinanderfolgende Submits (Doppelklick, schnelles zweites Enter) denselben teuren
+// Chat-Lauf zweimal anstossen. Der zweite Aufruf liest laeuftBereits() bereits als true, weil
+// der erste sperreSetzen(true) synchron gesetzt hat, lange bevor sein erster await (die
+// Verdichtung, falls noetig) ueberhaupt zurueckkehrt.
+//
+// verdichte/chatte sind Callbacks statt einzelner IO-Parameter (anders als bei
+// versucheHinweislauf): ihr Inhalt (baueChatKontext, ensureProjectUnderstanding,
+// starteHinweislauf, runTask) ist bereits an anderer Stelle getestet (chat-kontext.test.mjs,
+// hinweislauf-model.test.mjs) -- hier zaehlt nur, WIE OFT und in WELCHER REIHENFOLGE relativ
+// zur Sperre sie laufen.
+//
+// Status-Vertrag: setzeStatus('laeuft') laeuft IMMER vor dem Vorgang. Bei Erfolg setzt diese
+// Funktion NIE selbst 'bereit' -- das bleibt chatte() ueberlassen (in workspace.js:
+// fuehreChatLauf, das nach dem echten runTask('chat', …)-Ergebnis 'bereit' ODER 'fehler'
+// setzt). Wuerde diese Funktion nach einem erfolgreich RUECKGEKEHRTEN chatte() zusaetzlich
+// 'bereit' setzen, wuerde sie einen von chatte bereits korrekt gesetzten 'fehler'-Zustand
+// wieder ueberschreiben (chatte/fuehreChatLauf faengt Chat-Fehler intern ab und kehrt normal
+// zurueck, wirft also nicht). 'fehler' setzt diese Funktion nur als Sicherheitsnetz fuer einen
+// Fehler, der aus verdichte()/chatte() SELBST herauspropagiert (z.B. ein Bug vor dem
+// eigentlichen runTask-Aufruf) -- der normale Chat-Fehlerpfad laeuft nie hier durch.
+export async function fuehreChatVorgangAus({ laeuftBereits, sperreSetzen, setzeStatus, verdichte, chatte }) {
+  if (laeuftBereits()) return { gestartet: false }
+  sperreSetzen(true)
+  setzeStatus({ zustand: 'laeuft' })
+  try {
+    await verdichte()
+    await chatte()
+    return { gestartet: true }
+  } catch (fehler) {
+    setzeStatus({ zustand: 'fehler', fehlerTyp: fehler?.typ })
+    return { gestartet: true, erfolg: false }
+  } finally {
+    sperreSetzen(false)
+  }
+}
+
 function volatilerBlock(label, eintraege) {
   const liste = Array.isArray(eintraege) ? eintraege : []
   if (!liste.length) return null

@@ -27,6 +27,7 @@ import {
   baueChatKontext,
   chatFehlerText,
   erkenneHinweisBitte,
+  fuehreChatVorgangAus,
   planVerlaufVerdichtung,
 } from './chat-kontext.mjs'
 
@@ -2028,8 +2029,20 @@ function chatNachrichtenTextKnoten(messageId) {
 // Fokus im Eingabefeld unangetastet bleibt und der Editor bedienbar bleibt. Modulintern
 // auch für Task C-3 (Randkarten-Gespräch) gedacht — deshalb der doppelte Container-Selektor
 // in scrollThreadToLatest weiter unten.
+// Fix-Runde 1, Finding 2 (Important): jeder echte runTask-Aufruf muss setzeAgentStatus
+// setzen (Bereich W/Aura atmet ausschliesslich am echten Gateway-Zustand) — Vorbild:
+// starteVerstaendnisEntwurf/sendeInterviewAntwort (dieselbe Datei), versucheHinweislauf
+// (hinweislauf-model.mjs). fuehreChatLauf setzt 'laeuft'/'bereit'/'fehler' hier vollstaendig
+// SELBST, weil es auch direkt (ohne sendeAgentenChat/fuehreChatVorgangAus) aufgerufen wird —
+// modulintern fuer Task C-3 (Randkarten-Gespräch, keine Verdichtung dort).
+//
+// Fix-Runde 1, Finding 1 (Critical): erzeugt KEIN eigenes Sperr-Objekt mehr, sondern
+// uebernimmt ein von sendeAgentenChat bereits gesetztes (laufenderChatLauf ist zu diesem
+// Zeitpunkt schon non-null, siehe dort) — bei einem direkten Aufruf (C-3) erzeugt es weiterhin
+// selbst eins. Zwei verschiedene Sperr-Objekte fuer denselben Lauf waren die Ueberschreib-
+// Luecke, durch die ein dritter Submit moeglich wurde.
 async function fuehreChatLauf(thread, kontext) {
-  const lauf = { agentMessage: null, puffer: '', flushTimer: null }
+  const lauf = laufenderChatLauf || { agentMessage: null, puffer: '', flushTimer: null }
   laufenderChatLauf = lauf
   const flush = () => {
     lauf.flushTimer = null
@@ -2041,6 +2054,7 @@ async function fuehreChatLauf(thread, kontext) {
     scrollThreadToLatest(node.closest('.agent-widget-messages, .local-dialogue-messages'))
   }
   try {
+    setzeAgentStatus({ zustand: 'laeuft' })
     const { daten } = await runTask('chat', kontext, {
       onDelta: text => {
         lauf.puffer += String(text || '')
@@ -2052,6 +2066,7 @@ async function fuehreChatLauf(thread, kontext) {
         if (!lauf.flushTimer) lauf.flushTimer = setTimeout(flush, CHAT_UI_DROSSEL_MS)
       },
     })
+    setzeAgentStatus({ zustand: 'bereit' })
     if (lauf.flushTimer) clearTimeout(lauf.flushTimer)
     const antwort = typeof daten === 'string' && daten.trim() ? daten : lauf.puffer
     if (!antwort.trim()) return
@@ -2060,6 +2075,7 @@ async function fuehreChatLauf(thread, kontext) {
     announceAgentStatus(antwort)
   } catch (fehler) {
     if (lauf.flushTimer) clearTimeout(lauf.flushTimer)
+    setzeAgentStatus({ zustand: 'fehler', fehlerTyp: fehler?.typ })
     if (fehler?.typ === 'abgebrochen') return
     const meldung = chatFehlerText(fehler)
     if (lauf.agentMessage) lauf.agentMessage.text = meldung
@@ -2072,46 +2088,62 @@ async function fuehreChatLauf(thread, kontext) {
   }
 }
 
-// Baut den Chat-Kontext aus dem Live-Zustand und startet fuehreChatLauf. Der Chat selbst
-// ist ueberall echt, auch im Beispielprojekt (Spec) — istBeispielProjekt sperrt hier NUR
-// den automatischen Hinweislauf, den eine Chat-Bitte sonst ausloesen wuerde (der Seed bleibt
-// unveraenderte Demo); starteHinweislauf/versucheHinweislauf sperren das Beispielprojekt
-// ohnehin zusaetzlich autoritativ (istBeispielprojekt-Gate dort), diese Prüfung hier
-// vermeidet nur den unnoetigen Zusatzsatz in der Antwort.
+// Baut den Chat-Kontext aus dem Live-Zustand und startet fuehreChatLauf — orchestriert ueber
+// fuehreChatVorgangAus (chat-kontext.mjs, Fix-Runde 1), das die Sperre SYNCHRON vor jedem
+// await setzt (Finding 1) und den ganzen Vorgang inklusive Verdichtung als 'laeuft' meldet
+// (Finding 2). doc/project werden VOR der Sperre gelesen (reiner, synchroner Zugriff ohne
+// Risiko) und in den Callbacks weiterverwendet, damit chatte() IMMER fuehreChatLauf erreicht
+// — kein frueher Return mehr, der die Sperre/den Status haengen lassen koennte.
+//
+// Der Chat selbst ist ueberall echt, auch im Beispielprojekt (Spec) — istBeispielProjekt
+// sperrt hier NUR den automatischen Hinweislauf, den eine Chat-Bitte sonst ausloesen wuerde
+// (der Seed bleibt unveraenderte Demo); starteHinweislauf/versucheHinweislauf sperren das
+// Beispielprojekt ohnehin zusaetzlich autoritativ (istBeispielprojekt-Gate dort), diese
+// Pruefung hier vermeidet nur den unnoetigen Zusatzsatz in der Antwort.
 async function sendeAgentenChat(message, anfrage) {
   const doc = ctx.activeDoc()
   const project = ctx.activeProjectObj()
   if (!doc || !project) return
 
-  const hinweisBitte = !istBeispielProjekt(project) && erkenneHinweisBitte(anfrage)
-  if (hinweisBitte) starteHinweislauf({ grund: 'chat' })
-
-  const plan = planVerlaufVerdichtung(message.thread, message.verlaufsNotiz || null)
-  if (plan) {
-    try {
-      const { daten } = await runTask('zusammenfassung', { anfrage: plan.verdichtungsEingabe })
-      if (typeof daten === 'string' && daten.trim()) {
-        message.verlaufsNotiz = { text: daten.trim(), bisMessageId: plan.bisMessageId, erstelltAt: Date.now() }
-        ctx.persist()
+  await fuehreChatVorgangAus({
+    laeuftBereits: () => Boolean(laufenderChatLauf),
+    sperreSetzen: wert => {
+      laufenderChatLauf = wert ? (laufenderChatLauf || { agentMessage: null, puffer: '', flushTimer: null }) : null
+      refreshWorkspace() // Senden-Knopf sofort sichtbar deaktivieren (schliesst die Luecke aus Finding 1)
+    },
+    setzeStatus: setzeAgentStatus,
+    verdichte: async () => {
+      const plan = planVerlaufVerdichtung(message.thread, message.verlaufsNotiz || null)
+      if (!plan) return
+      try {
+        const { daten } = await runTask('zusammenfassung', { anfrage: plan.verdichtungsEingabe })
+        if (typeof daten === 'string' && daten.trim()) {
+          message.verlaufsNotiz = { text: daten.trim(), bisMessageId: plan.bisMessageId, erstelltAt: Date.now() }
+          ctx?.persist()
+        }
+      } catch {
+        // Die Verdichtung ist Komfort: scheitert sie, läuft der Chat mit vollem Verlauf weiter.
       }
-    } catch {
-      // Die Verdichtung ist Komfort: scheitert sie, läuft der Chat mit vollem Verlauf weiter.
-    }
-  }
+    },
+    chatte: async () => {
+      const hinweisBitte = !istBeispielProjekt(project) && erkenneHinweisBitte(anfrage)
+      if (hinweisBitte) starteHinweislauf({ grund: 'chat' })
 
-  const kontext = baueChatKontext({
-    verstaendnis: ensureProjectUnderstanding(project),
-    docText: dokumentText(),
-    findings: doc.findings,
-    doc,
-    thread: message.thread.slice(0, -1), // der aktuelle Nutzer-Turn geht separat als `anfrage` mit
-    verlaufsNotiz: message.verlaufsNotiz || null,
-    anfrage,
-    zusatzAnweisung: hinweisBitte
-      ? 'Der Nutzer hat um eine Durchsicht gebeten. Ein Hinweislauf über den Text wurde soeben gestartet — erwähne kurz, dass du den Text jetzt durchgehst und dass Hinweise am Rand erscheinen, sobald etwas Belastbares dabei ist.'
-      : null,
+      const kontext = baueChatKontext({
+        verstaendnis: ensureProjectUnderstanding(project),
+        docText: dokumentText(),
+        findings: doc.findings,
+        doc,
+        thread: message.thread.slice(0, -1), // der aktuelle Nutzer-Turn geht separat als `anfrage` mit
+        verlaufsNotiz: message.verlaufsNotiz || null,
+        anfrage,
+        zusatzAnweisung: hinweisBitte
+          ? 'Der Nutzer hat um eine Durchsicht gebeten. Ein Hinweislauf über den Text wurde soeben gestartet — erwähne kurz, dass du den Text jetzt durchgehst und dass Hinweise am Rand erscheinen, sobald etwas Belastbares dabei ist.'
+          : null,
+      })
+      await fuehreChatLauf(message.thread, kontext)
+    },
   })
-  await fuehreChatLauf(message.thread, kontext)
 }
 
 // Echte Initiative-Quelle, additiv zum bestehenden Aura-/Pausen-Mechanismus: eine Nachricht

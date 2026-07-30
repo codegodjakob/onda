@@ -6,6 +6,7 @@ import {
   entscheidungsEintraege,
   erkenneHinweisBitte,
   formatiereRelativeZeit,
+  fuehreChatVorgangAus,
   kurzformEntscheidungen,
   kurzformHinweise,
   planVerlaufVerdichtung,
@@ -348,4 +349,118 @@ test('baueChatKontext ist pur: gleicher Input ergibt byte-gleiches JSON', () => 
   const a = JSON.stringify(baueChatKontext(eingabe))
   const b = JSON.stringify(baueChatKontext(eingabe))
   assert.equal(a, b)
+})
+
+// Fix-Runde 1, Finding 1 (Critical) + Finding 2 (Important): dieselbe Kollision, die
+// versucheHinweislauf (hinweislauf-model.mjs, Fix-Runde 1) bereits fuer den Hinweislauf loest,
+// trat hier fuer den Chat auf -- die Sperre wurde erst tief in fuehreChatLauf gesetzt, NACH
+// dem await der Verdichtung. Zwei kurz aufeinanderfolgende Submits konnten dadurch zwei
+// parallele, bezahlte runTask('chat', …)-Laeufe ausloesen. fuehreChatVorgangAus setzt die
+// Sperre jetzt SYNCHRON vor jedem await -- Vorbild und Testmuster: exakt wie bei
+// versucheHinweislauf.
+
+function chatVorgangEingabe(extra = {}) {
+  return {
+    laeuftBereits: () => false,
+    sperreSetzen: () => {},
+    setzeStatus: () => {},
+    verdichte: async () => {},
+    chatte: async () => {},
+    ...extra,
+  }
+}
+
+test('fuehreChatVorgangAus: Sperre wird synchron VOR dem ersten await gesetzt', async () => {
+  const reihenfolge = []
+  let sperreGesetztVorAwait = false
+  const versprechen = fuehreChatVorgangAus(chatVorgangEingabe({
+    sperreSetzen: wert => { reihenfolge.push(['sperre', wert]); sperreGesetztVorAwait = wert === true },
+    verdichte: async () => { reihenfolge.push(['verdichte']) },
+    chatte: async () => { reihenfolge.push(['chatte']) },
+  }))
+  // Direkt nach dem Aufruf (noch VOR dem ersten await-Tick) muss die Sperre bereits stehen --
+  // das ist exakt die Eigenschaft, die einen doppelten teuren Chat-Lauf verhindert.
+  assert.equal(sperreGesetztVorAwait, true, 'sperreSetzen(true) muss synchron laufen, bevor irgendein await beginnt')
+  await versprechen
+  assert.deepEqual(reihenfolge[0], ['sperre', true], 'Sperre muss vor verdichte()/chatte() gesetzt sein')
+})
+
+test('fuehreChatVorgangAus: zwei kollidierende Submits -> chatte (der teure Chat-Lauf) laeuft nur einmal', async () => {
+  let sperre = false
+  let chatteAufrufe = 0
+  let verdichteFreigeben
+  const verdichteWartet = new Promise(resolve => { verdichteFreigeben = resolve })
+
+  const eingabe = () => chatVorgangEingabe({
+    laeuftBereits: () => sperre, // wird bei jedem Aufruf FRISCH gelesen -- wie laufenderChatLauf in workspace.js
+    sperreSetzen: wert => { sperre = wert },
+    verdichte: () => verdichteWartet, // haengt wie ein echter runTask('zusammenfassung')-Aufruf
+    chatte: async () => { chatteAufrufe += 1 },
+  })
+
+  // Zwei Submits kurz hintereinander: der erste laeuft synchron bis zu seinem eigenen await
+  // (die Verdichtung) und setzt dabei die Sperre bereits.
+  const ersterVersuch = fuehreChatVorgangAus(eingabe())
+  const zweiterVersuch = fuehreChatVorgangAus(eingabe())
+  verdichteFreigeben()
+  const [ergebnis1, ergebnis2] = await Promise.all([ersterVersuch, zweiterVersuch])
+
+  assert.equal(chatteAufrufe, 1, 'chatte (runTask(\'chat\', …)) darf bei Kollision nur einmal laufen -- sonst doppelte Kosten')
+  const gestartete = [ergebnis1, ergebnis2].filter(e => e.gestartet)
+  const geblockte = [ergebnis1, ergebnis2].filter(e => !e.gestartet)
+  assert.equal(gestartete.length, 1, 'genau ein Submit darf durchlaufen')
+  assert.equal(geblockte.length, 1, 'der andere muss sofort mit gestartet:false zurueckkommen')
+  assert.deepEqual(geblockte[0], { gestartet: false })
+})
+
+test('fuehreChatVorgangAus: Sperre wird in JEDEM Pfad zurueckgesetzt (Erfolg, Fehler in chatte, Fehler in verdichte)', async () => {
+  const sperrenVerlauf = []
+  const sperreSetzen = wert => sperrenVerlauf.push(wert)
+
+  await fuehreChatVorgangAus(chatVorgangEingabe({ sperreSetzen }))
+  await fuehreChatVorgangAus(chatVorgangEingabe({ sperreSetzen, chatte: async () => { throw { typ: 'ueberlastet' } } }))
+  await fuehreChatVorgangAus(chatVorgangEingabe({ sperreSetzen, verdichte: async () => { throw new Error('kaputt') } }))
+
+  assert.deepEqual(sperrenVerlauf, [true, false, true, false, true, false], 'jeder Vorgang muss die Sperre setzen und wieder loesen')
+})
+
+test('fuehreChatVorgangAus: bereits laufender Vorgang blockiert sofort, ohne Sperre/Status/Callbacks anzufassen', async () => {
+  let sperreAufrufe = 0
+  let statusAufrufe = 0
+  let verdichteAufrufe = 0
+  let chatteAufrufe = 0
+  const ergebnis = await fuehreChatVorgangAus({
+    laeuftBereits: () => true,
+    sperreSetzen: () => { sperreAufrufe += 1 },
+    setzeStatus: () => { statusAufrufe += 1 },
+    verdichte: async () => { verdichteAufrufe += 1 },
+    chatte: async () => { chatteAufrufe += 1 },
+  })
+  assert.deepEqual(ergebnis, { gestartet: false })
+  assert.equal(sperreAufrufe, 0, 'ein bereits blockierter Vorgang darf die Sperre nicht anfassen')
+  assert.equal(statusAufrufe, 0)
+  assert.equal(verdichteAufrufe, 0)
+  assert.equal(chatteAufrufe, 0)
+})
+
+test('fuehreChatVorgangAus: setzt "laeuft" vor dem Vorgang, ueberlaesst "bereit" bewusst chatte selbst', async () => {
+  const statusVerlauf = []
+  await fuehreChatVorgangAus(chatVorgangEingabe({
+    setzeStatus: s => statusVerlauf.push(s.zustand),
+  }))
+  // KEIN 'bereit' hier: chatte() (in workspace.js: fuehreChatLauf) setzt es nach dem echten
+  // runTask('chat', …)-Ergebnis selbst. Wuerde fuehreChatVorgangAus zusaetzlich 'bereit'
+  // setzen, wuerde es einen von chatte bereits korrekt gesetzten 'fehler'-Zustand
+  // ueberschreiben (chatte faengt Chat-Fehler intern ab und kehrt normal zurueck).
+  assert.deepEqual(statusVerlauf, ['laeuft'])
+})
+
+test('fuehreChatVorgangAus: setzt Status fehler, wenn chatte/verdichte selbst wirft (Sicherheitsnetz)', async () => {
+  const statusVerlauf = []
+  const ergebnis = await fuehreChatVorgangAus(chatVorgangEingabe({
+    setzeStatus: s => statusVerlauf.push([s.zustand, s.fehlerTyp]),
+    chatte: async () => { throw { typ: 'ueberlastet' } },
+  }))
+  assert.deepEqual(statusVerlauf, [['laeuft', undefined], ['fehler', 'ueberlastet']])
+  assert.deepEqual(ergebnis, { gestartet: true, erfolg: false })
 })
