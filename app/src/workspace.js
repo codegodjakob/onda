@@ -37,6 +37,7 @@ import {
   budgetStand,
   gibNaechstenAutomatiklaufFrei,
 } from './settings-model.mjs'
+import { createSourceLibraryUi } from './source-library-ui.mjs'
 
 const BLOCK_TYPES = [
   ['paragraph', 'Freier Absatz'],
@@ -565,7 +566,7 @@ function renderMaterialEntry() {
   const button = document.getElementById('materialSources')
   if (!button) return
   const project = ctx.activeProjectObj()
-  const count = Array.isArray(project?.material) ? project.material.length : 0
+  const count = Array.isArray(project?.sources) ? project.sources.length : 0
   button.setAttribute('aria-haspopup', 'dialog')
   button.replaceChildren(
     createNode('span', 'onda-material-label', 'Quellen im Projekt'),
@@ -575,22 +576,15 @@ function renderMaterialEntry() {
 
 function openProjectSourcesModal(opener) {
   const project = ctx.activeProjectObj()
-  const material = Array.isArray(project?.material) ? project.material : []
+  const sourceLibrary = createSourceLibraryUi({
+    context: ctx,
+    createNode,
+    onCountChange: renderMaterialEntry,
+    safeHttpsUrl,
+    openSecureExternal,
+  })
   openOndaDialog({ id: 'materialModal', title: 'Quellen im Projekt', opener, build: body => {
-    if (!material.length) {
-      body.append(createNode('p', 'onda-material-empty', 'Noch kein Material im Projekt.'))
-      return
-    }
-    const list = createNode('div', 'onda-material-list')
-    material.forEach(item => {
-      const entry = createNode('article', 'onda-material-item')
-      entry.append(
-        createNode('span', 'onda-tag onda-material-kind', item.kind || 'Material'),
-        createNode('p', 'onda-material-text', item.text || ''),
-      )
-      list.append(entry)
-    })
-    body.append(list)
+    sourceLibrary.renderProjectSourceLibrary(body, project)
   }})
 }
 
@@ -2652,14 +2646,21 @@ function renderEvidenceWindow() {
     if (typeof source.citation === 'string' && source.citation.trim()) {
       const citation = createNode('div', 'evidence-citation')
       citation.append(createNode('p', 'evidence-source-citation', source.citation))
-      const copy = createNode('button', 'evidence-copy', verificationStatus === 'demo' ? 'Demo-Angabe kopieren' : 'Angabe kopieren')
+      const copyLabel = verificationStatus === 'demo'
+        ? 'Demo-Angabe kopieren'
+        : verificationStatus === 'verified'
+          ? 'Angabe kopieren'
+          : 'Angabe erst nach Prüfung kopierbar'
+      const copy = createNode('button', 'evidence-copy', copyLabel)
       copy.type = 'button'
       copy.dataset.copyCitation = ''
-      copy.disabled = !exactClaim
-      if (exactClaim) {
+      copy.disabled = !exactClaim || verificationStatus === 'unverified'
+      if (exactClaim && verificationStatus !== 'unverified') {
         copy.addEventListener('click', () => copyCitation(source.citation, verificationStatus))
       } else {
-        copy.title = 'Erst verfügbar, wenn die zu belegende Aussage erfasst ist'
+        copy.title = !exactClaim
+          ? 'Erst verfügbar, wenn die zu belegende Aussage erfasst ist'
+          : 'Erst nach Prüfung am Original verfügbar'
       }
       citation.append(copy)
       item.append(citation)

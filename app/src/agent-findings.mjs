@@ -78,6 +78,7 @@ export function hinweisZuFinding(hinweis, ankerErgebnis, blockId, jetzt = Date.n
     istGrundursache: hinweis.istGrundursache === true,
     priority: hinweis.istGrundursache === true ? 'high' : 'normal',
     createdAt: jetzt,
+    provenance: { actor: 'agent', action: 'hinweise', createdAt: jetzt },
     blockId: blockId || null,
     sources: [],
     thread: [],

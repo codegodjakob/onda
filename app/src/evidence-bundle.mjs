@@ -99,6 +99,9 @@ export function buildEvidenceBundle(input, { sources = [], locators = [] } = {})
     allowedStrength: values.allowedStrength,
     notSupported,
     qualityAssessments: Array.isArray(input.qualityAssessments) ? clone(input.qualityAssessments) : [],
+    provenance: isObject(input.provenance)
+      ? clone(input.provenance)
+      : { actor: 'user', action: 'evidence-assemble' },
     status,
     missingFields: [...new Set(missingFields)],
     createdAt: Number.isFinite(input.createdAt) ? input.createdAt : null,

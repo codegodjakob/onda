@@ -47,6 +47,7 @@ test('EVID-03: vollständiges Belegbündel ist claim-spezifisch und macht Grenze
   assert.match(bundle.uncertainty, /offen/)
   assert.match(bundle.allowedStrength, /keine allgemeine Kausalwirkung/)
   assert.deepEqual(bundle.notSupported, ['Keine Aussage über langfristige Aufmerksamkeit.'])
+  assert.deepEqual(bundle.provenance, { actor: 'user', action: 'evidence-assemble' })
 })
 
 test('EVID-03: unvollständige oder nicht verifizierte Beleglage wird nie supported', () => {
@@ -63,6 +64,15 @@ test('EVID-03: unvollständige oder nicht verifizierte Beleglage wird nie suppor
   })
   assert.equal(stale.status, 'review-required')
   assert.equal(stale.support[0].usable, false)
+})
+
+test('INV-04: projektfremde Quellen und Fundstellen können ein Bündel nicht stützen', () => {
+  const isolated = buildEvidenceBundle(completeInput(), {
+    sources: [{ ...sourceActive, projectId: 'p-b' }, sourceCounter],
+    locators: [{ ...locSupport, projectId: 'p-b' }, locCounter],
+  })
+  assert.equal(isolated.status, 'review-required')
+  assert.equal(isolated.support[0].usable, false)
 })
 
 test('EVID-04: Quellenqualität wird pro Claim begründet und enthält keinen globalen Wahrheitswert', () => {

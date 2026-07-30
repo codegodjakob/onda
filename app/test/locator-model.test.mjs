@@ -48,6 +48,7 @@ test('EVID-02: Seiten-, Abschnitts-, Text- und Zeitfundstellen lösen den exakte
     assert.equal(resolved.excerpt, excerpt)
     assert.equal(resolved.claimId, 'claim-1')
     assert.deepEqual(resolved.address, address)
+    assert.deepEqual(locator.provenance, { actor: 'user', action: 'locator-create' })
   }
 })
 

@@ -3,7 +3,8 @@
   "private": true,
   "scripts": {
     "build": "esbuild src/editor.js --bundle --minify --format=iife --global-name=AIWT --outfile=dist/editor.bundle.js",
-    "test": "node --test test/*.test.mjs"
+    "test": "node --test test/*.test.mjs",
+    "eval:b1-quality": "node evals/run-b1-quality.mjs"
   },
   "dependencies": {
     "@tiptap/core": "2.x",

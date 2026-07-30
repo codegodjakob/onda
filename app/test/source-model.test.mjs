@@ -6,6 +6,7 @@ import {
   importSource,
   recordSourceEvent,
   sourcePayload,
+  verifySourceIntegrity,
 } from '../src/source-model.mjs'
 
 const sha256 = async value => createHash('sha256').update(value).digest('hex')
@@ -86,6 +87,16 @@ test('EVID-01: Import scheitert geschlossen bei fehlender Referenz, Prüfsumme, 
   await assert.rejects(importSource({ ...valid, type: 'spreadsheet' }, { sha256 }), /type/i)
   await assert.rejects(importSource({ ...valid, origin: { kind: 'pasted-text' } }, { sha256 }), /immutable/i)
   await assert.rejects(importSource(valid, {}), /sha-?256/i)
+  await assert.rejects(importSource({
+    ...valid,
+    type: 'web',
+    origin: { kind: 'url', immutableRef: 'http://example.org/insecure' },
+  }, { sha256 }), /https/i)
+  await assert.rejects(importSource({
+    ...valid,
+    type: 'doi',
+    origin: { kind: 'pasted-text', immutableRef: 'https://doi.org/10.1000/example' },
+  }, { sha256 }), /origin/i)
 })
 
 test('Projektmigration ergänzt Evidence-Listen additiv und repariert beschädigte Werte', () => {
@@ -135,4 +146,22 @@ test('EVID-08: Quellenereignisse erzeugen Historie, Status und neue Version ohne
 
   assert.throws(() => recordSourceEvent(source, { kind: 'retracted', at: 40 }), /id/i)
   assert.throws(() => recordSourceEvent(source, { id: 'bad', kind: 'unknown', at: 40 }), /kind/i)
+})
+
+test('EVID-01: nachträglich verändertes Original verletzt die gespeicherte Prüfsumme', async () => {
+  const source = await importSource({
+    projectId: 'p-a',
+    type: 'text',
+    origin: { kind: 'pasted-text', immutableRef: 'text://original/integrity' },
+    original: { text: 'Unverändertes Original' },
+    importedAt: 50,
+  }, { sha256, idFactory: () => 'src-integrity' })
+  assert.deepEqual(await verifySourceIntegrity(source, { sha256 }), { valid: true, reason: null })
+
+  const manipulated = JSON.parse(JSON.stringify(source))
+  manipulated.original.text = 'Still verändertes Original'
+  assert.deepEqual(await verifySourceIntegrity(manipulated, { sha256 }), {
+    valid: false,
+    reason: 'source-checksum-mismatch',
+  })
 })

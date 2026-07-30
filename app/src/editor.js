@@ -17,6 +17,7 @@ import { BlockIdentity, ensureTopLevelBlockIds, getActiveBlockId, getEditorBlock
 import { buildExampleStructure, buildExampleNarrative, buildExampleCoach, buildExampleLane, buildExampleBody, buildExampleMaterial, buildExampleUnderstanding, buildExampleAgentMessages } from './example.js'
 import { EXAMPLE_PROJECT_ID, migrateExampleSeed } from './example-seed.mjs'
 import { initGateway, runTask, hatSchluessel, setzeSchluessel, loescheSchluessel } from './agent-gateway.mjs'
+import { ensureProjectEvidenceShape } from './source-model.mjs'
 
 // ---------- Sanfte Markierung (Peripherie): eine flüchtige Dekoration ----------
 // Zeigt eine Passage kurz an, OHNE das Dokument zu ändern — sie wird nicht
@@ -54,7 +55,7 @@ const Cue = Extension.create({
 const NATIVE = !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.store)
 const DEFAULTS = DEFAULT_SETTINGS
 const TRASH_DAYS = 30
-const SCHEMA = 6
+const SCHEMA = 7
 const EX_VERSION = 9
 
 // Schmaler Rückkanal der nativen saveimg-Brücke. Der frühere Bildeditor ist
@@ -106,6 +107,9 @@ function ensureDocShape(d) {
   if (!Array.isArray(d.coach)) d.coach = []
   if (!Array.isArray(d.lane)) d.lane = []
   if (!d.panels || typeof d.panels !== 'object') d.panels = { struct: false, coach: false, lane: false }
+  if (!d.provenance || typeof d.provenance !== 'object' || Array.isArray(d.provenance)) {
+    d.provenance = { actor: 'user', action: 'document-create', createdAt: Number.isFinite(d.updated) ? d.updated : now() }
+  }
   // Jeder Erzählfaden hat eine feste Farbe (Index in der Faden-Palette).
   d.narrative.forEach((t, i) => { if (t.color == null) t.color = i })
   // Alt-Notizen ohne Anker: den Baustein aus dem Titel „… (Baustein)" erkennen
@@ -132,6 +136,7 @@ function findBlockByTitle(list, title) {
 // Ein Projekt trägt sein Material (Canvas) — geteilt über alle Texte des Projekts.
 function ensureProjectShape(p) {
   if (!Array.isArray(p.material)) p.material = []
+  ensureProjectEvidenceShape(p)
   ensureProjectUnderstanding(p)
   return p
 }
@@ -144,7 +149,7 @@ function newDocRaw() {
 
 // ---------- Projekt-Operationen ----------
 export function newProject(name) {
-  const p = { id: 'p' + Math.random().toString(36).slice(2, 8), name: name || 'Neues Projekt', created: now() }
+  const p = ensureProjectShape({ id: 'p' + Math.random().toString(36).slice(2, 8), name: name || 'Neues Projekt', created: now() })
   state.projects.push(p)
   state.activeProject = p.id
   persist()
@@ -233,6 +238,7 @@ function buildExampleDocumentSeed() {
     id: uid(), title: 'Calm Technology', body: buildExampleBody(), updated: now(), projectId: EXAMPLE_PROJECT_ID,
     structure: struct, narrative: buildExampleNarrative(struct),
     coach: buildExampleCoach(), lane: buildExampleLane(),
+    provenance: { actor: 'demo', action: 'example-seed', createdAt: now() },
     workspace: { agent: { messages: buildExampleAgentMessages() } },
   })
 }

@@ -55,6 +55,7 @@ test('hinweisZuFinding liefert ein Finding in exakt der bestehenden Passage-Form
   assert.equal(finding.form, 'note')
   assert.equal(finding.blockId, 'b-eins')
   assert.equal(finding.createdAt, 1000)
+  assert.deepEqual(finding.provenance, { actor: 'agent', action: 'hinweise', createdAt: 1000 })
   assert.deepEqual(finding.sources, [])
   assert.deepEqual(finding.variants, [])
   assert.equal(finding.action, '')

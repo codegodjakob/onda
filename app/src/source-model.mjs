@@ -11,6 +11,14 @@ const EVENT_STATUS = Object.freeze({
   'new-version': 'superseded',
   'alternate-primary': 'corrected',
 })
+const ORIGIN_KINDS = Object.freeze({
+  pdf: new Set(['file', 'url']),
+  web: new Set(['url']),
+  doi: new Set(['doi']),
+  text: new Set(['pasted-text']),
+  audio: new Set(['file', 'url']),
+  video: new Set(['file', 'url']),
+})
 
 function isObject(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
@@ -75,6 +83,13 @@ export async function importSource(input, { sha256, idFactory = null } = {}) {
   if (!SOURCE_TYPE_SET.has(type)) throw new TypeError(`Unsupported source type: ${type}`)
   if (!isObject(input.origin)) throw new TypeError('Source origin is required')
   const immutableRef = requiredText(input.origin.immutableRef, 'Immutable reference')
+  const originKind = requiredText(input.origin.kind, 'Source origin kind')
+  if (!ORIGIN_KINDS[type].has(originKind)) throw new TypeError(`Invalid origin kind for ${type}`)
+  if (type === 'web' || type === 'doi' || originKind === 'url') {
+    let parsed
+    try { parsed = new URL(immutableRef) } catch { throw new TypeError('Source origin requires a valid HTTPS URL') }
+    if (parsed.protocol !== 'https:') throw new TypeError('Source origin requires HTTPS')
+  }
   if (typeof sha256 !== 'function') throw new TypeError('SHA-256 function is required')
   if (!isObject(input.original)) throw new TypeError('Original source content is required')
   if (!Number.isFinite(input.importedAt)) throw new TypeError('Import time is required')
@@ -108,6 +123,20 @@ export async function importSource(input, { sha256, idFactory = null } = {}) {
     locators: [],
     history: [],
   }
+}
+
+export async function verifySourceIntegrity(source, { sha256 } = {}) {
+  if (!isObject(source) || !isObject(source.origin) || !isObject(source.original)) {
+    return { valid: false, reason: 'source-original-missing' }
+  }
+  if (typeof sha256 !== 'function') return { valid: false, reason: 'checksum-unavailable' }
+  if (typeof source.checksumSha256 !== 'string' || !/^[a-f0-9]{64}$/i.test(source.checksumSha256)) {
+    return { valid: false, reason: 'source-checksum-missing' }
+  }
+  const current = await sha256(sourcePayload(source.origin, source.original))
+  return String(current).toLowerCase() === source.checksumSha256.toLowerCase()
+    ? { valid: true, reason: null }
+    : { valid: false, reason: 'source-checksum-mismatch' }
 }
 
 export function recordSourceEvent(source, event) {

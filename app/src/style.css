@@ -2368,6 +2368,10 @@ body.zen #minimap, body.zen #lane { display: none; }
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+.evidence-copy:disabled {
+  cursor: not-allowed;
+  opacity: .62;
+}
 
 .evidence-source-link {
   width: fit-content;
@@ -2956,6 +2960,226 @@ button.onda-aura:focus-visible {
 .onda-material-kind { align-self: flex-start; }
 .onda-material-text { margin: 0; color: var(--text-primary); font: var(--fw-regular) var(--text-sm)/1.5 var(--font-sans); }
 .onda-material-empty { margin: 0; color: var(--text-tertiary); font: var(--fw-regular) var(--text-sm)/1.5 var(--font-sans); }
+
+/* B1 · echte Quellenbibliothek, Import und Fundstellenreader */
+.source-library,
+.source-import-form,
+.source-reader {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.source-section-title,
+.source-reader-title {
+  margin: 0;
+  color: var(--text-primary);
+  font: var(--fw-semibold) var(--text-base)/1.35 var(--font-sans);
+}
+.source-library-list { display: flex; flex-direction: column; gap: var(--space-3); }
+.source-library-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  background: var(--surface-2);
+}
+.source-library-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.source-library-identity { min-width: 0; display: flex; flex-direction: column; gap: var(--space-1); }
+.source-library-title {
+  color: var(--text-primary);
+  font: var(--fw-medium) var(--text-sm)/1.45 var(--font-sans);
+  overflow-wrap: anywhere;
+}
+.source-library-type { align-self: flex-start; }
+.source-library-status,
+.source-reader-verification {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--success-tint);
+  color: var(--success);
+  font: var(--fw-medium) 11px/1.35 var(--font-sans);
+}
+.source-library-status.is-retracted,
+.source-library-status.is-corrected,
+.source-library-status.is-superseded,
+.source-reader-verification.is-unverified {
+  background: var(--warning-tint);
+  color: var(--warning);
+}
+.source-library-checksum {
+  color: var(--text-tertiary);
+  font: var(--fw-regular) 10.5px/1.4 var(--font-mono);
+}
+.source-bundle-status,
+.source-reader-bundle-status {
+  align-self: flex-start;
+  display: inline-flex;
+  padding: 3px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--success-tint);
+  color: var(--success);
+  font: var(--fw-medium) 11px/1.35 var(--font-sans);
+}
+.source-bundle-status.is-insufficient,
+.source-bundle-status.is-review-required,
+.source-reader-bundle-status.is-insufficient,
+.source-reader-bundle-status.is-review-required {
+  background: var(--warning-tint);
+  color: var(--warning);
+}
+.source-library-locators { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.source-locator-open,
+.source-reader-back,
+.source-retract,
+.source-import-submit {
+  width: fit-content;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-secondary);
+  padding: 6px 10px;
+  cursor: pointer;
+  font: var(--fw-medium) var(--text-sm)/1.35 var(--font-sans);
+}
+.source-import-submit {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+.source-locator-open:hover,
+.source-reader-back:hover,
+.source-retract:hover { border-color: var(--border-strong); color: var(--text-primary); background: var(--bg-hover); }
+.source-retract { color: var(--warning); }
+.source-locator-open:focus-visible,
+.source-reader-back:focus-visible,
+.source-retract:focus-visible,
+.source-import-submit:focus-visible,
+.source-form-control:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+.source-import-submit:disabled { opacity: .55; cursor: wait; }
+.source-import-form {
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border-subtle);
+}
+.source-form-field { display: flex; flex-direction: column; gap: var(--space-1); }
+.source-form-label,
+.source-reader-kicker {
+  color: var(--text-tertiary);
+  font: var(--fw-semibold) 11px/1.2 var(--font-sans);
+  letter-spacing: var(--tracking-wider);
+  text-transform: uppercase;
+}
+.source-form-control {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-control);
+  background: var(--bg-app);
+  color: var(--text-primary);
+  font: var(--fw-regular) var(--text-base)/1.45 var(--font-sans);
+}
+.source-form-text { resize: vertical; }
+.source-import-status {
+  min-height: 1.4em;
+  margin: 0;
+  color: var(--text-secondary);
+  font: var(--fw-regular) var(--text-sm)/1.4 var(--font-sans);
+}
+.source-evidence-details {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  background: var(--surface-2);
+}
+.source-evidence-details summary {
+  padding: var(--space-3);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font: var(--fw-medium) var(--text-sm)/1.4 var(--font-sans);
+}
+.source-evidence-fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: 0 var(--space-3) var(--space-3);
+}
+.source-legacy-material {
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  font: var(--fw-medium) var(--text-sm)/1.4 var(--font-sans);
+}
+.source-legacy-material summary { cursor: pointer; }
+.source-legacy-material .onda-material-list { margin-top: var(--space-3); }
+.source-reader {
+  padding: var(--space-1) 0;
+}
+.source-reader-claim {
+  margin: calc(-1 * var(--space-1)) 0 var(--space-2);
+  padding: var(--space-3);
+  border-left: 3px solid var(--accent);
+  border-radius: 0 var(--radius-control) var(--radius-control) 0;
+  background: var(--accent-tint);
+  color: var(--text-primary);
+  font: var(--fw-regular) var(--text-base)/1.5 var(--font-sans);
+}
+.source-reader-locator {
+  color: var(--text-secondary);
+  font: var(--fw-medium) var(--text-sm)/1.4 var(--font-sans);
+}
+.source-reader-verification { align-self: flex-start; }
+.source-reader-excerpt {
+  margin: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  background: var(--surface-inset);
+  color: var(--text-primary);
+  font: var(--fw-regular) var(--text-base)/1.6 "Literata", Georgia, serif;
+}
+.source-reader-warning {
+  margin: 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-control);
+  background: var(--warning-tint);
+  color: var(--warning);
+  font: var(--fw-regular) var(--text-sm)/1.5 var(--font-sans);
+}
+.source-reader-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border-subtle);
+}
+.source-reader-detail-label {
+  color: var(--text-tertiary);
+  font: var(--fw-semibold) 11px/1.3 var(--font-sans);
+  letter-spacing: var(--tracking-wide);
+}
+.source-reader-detail-text {
+  margin: 0;
+  color: var(--text-primary);
+  font: var(--fw-regular) var(--text-sm)/1.5 var(--font-sans);
+}
+.source-reader-link {
+  width: fit-content;
+  color: var(--text-link);
+  font: var(--fw-medium) var(--text-sm)/1.4 var(--font-sans);
+  text-decoration: none;
+}
+.source-reader-link:hover { text-decoration: underline; }
 
 /* Akzent-Auswahl (Popover) */
 .onda-accent-menu {

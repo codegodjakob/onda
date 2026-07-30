@@ -1,3 +1,5 @@
+import { verifySourceIntegrity } from './source-model.mjs'
+
 export const LOCATOR_KINDS = Object.freeze(['page', 'section', 'text', 'time'])
 
 const KIND_SET = new Set(LOCATOR_KINDS)
@@ -88,10 +90,14 @@ export async function createLocator(input, { sha256 } = {}) {
     projectId,
     sourceId,
     claimId,
+    claimText: typeof input.claimText === 'string' ? input.claimText.trim() : '',
     kind,
     address: clone(input.address),
     excerpt,
     excerptChecksum: excerptChecksum.toLowerCase(),
+    provenance: input.provenance && typeof input.provenance === 'object'
+      ? clone(input.provenance)
+      : { actor: 'user', action: 'locator-create' },
     verification: { status: 'unverified', reason: 'not-resolved' },
   }
 }
@@ -102,6 +108,10 @@ export async function resolveLocator({ projectId, source, locator, sha256 }) {
   if (source.id !== locator.sourceId) return unresolved(locator, 'source-mismatch')
   if (source.status !== 'active') return unresolved(locator, 'source-not-active')
   if (typeof sha256 !== 'function') return unresolved(locator, 'checksum-unavailable')
+  if (source.checksumSha256) {
+    const integrity = await verifySourceIntegrity(source, { sha256 })
+    if (!integrity.valid) return unresolved(locator, integrity.reason)
+  }
 
   const currentChecksum = await sha256(String(locator.excerpt || ''))
   if (currentChecksum.toLowerCase() !== String(locator.excerptChecksum || '').toLowerCase()) {

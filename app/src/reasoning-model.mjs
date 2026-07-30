@@ -180,6 +180,13 @@ function normalizeFinding(finding, placement, index) {
   )
   normalized.priority = normalized.priority || (normalized.tone === 'warn' ? 'high' : 'normal')
   normalized.createdAt = Number.isFinite(normalized.createdAt) ? normalized.createdAt : index
+  if (!normalized.provenance || typeof normalized.provenance !== 'object' || Array.isArray(normalized.provenance)) {
+    normalized.provenance = {
+      actor: String(normalized.id).startsWith('ki-') ? 'agent' : 'unknown',
+      action: String(normalized.id).startsWith('ki-') ? 'hinweise' : 'legacy-assessment',
+      createdAt: normalized.createdAt,
+    }
+  }
   normalized.short = normalized.short || normalized.text || 'Hinweis'
   if (typeof normalized.claim === 'string' && normalized.claim.trim()) {
     normalized.claim = normalized.claim.trim()
