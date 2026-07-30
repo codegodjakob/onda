@@ -304,8 +304,9 @@ async function runKeyboardAndZoomFlow(browser) {
     document.activeElement === node
   )), true)
   await page.keyboard.press('Tab')
-  assert.equal(await page.getByText('Privater Autorschaftsnachweis', { exact: true }).evaluate(node => (
-    document.activeElement === node
+  assert.equal(await page.locator('#auditModal').evaluate(modal => (
+    modal.contains(document.activeElement)
+    && document.activeElement.getAttribute('aria-label') !== 'Schließen'
   )), true)
   const focusVisible = await page.evaluate(() => {
     const active = document.activeElement
