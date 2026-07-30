@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   baueChatKontext,
+  baueFindingZusatzAnweisung,
   chatFehlerText,
   entscheidungsEintraege,
   erkenneHinweisBitte,
@@ -119,6 +120,43 @@ test('kurzformHinweise liefert nur offene Hinweise mit Kategorie und Anker', () 
     '[logik] Sprung in der Argumentation — Anker: »daraus folgt zwingend«',
     '[hinweis] Ohne Kategorie und Anker',
   ])
+})
+
+// Task C-3: der lokale Dialog an der Randkarte muss sich auf GENAU dieses Finding beziehen
+// (Kategorie, Beobachtung, wörtlicher Anker, Relevanz) statt auf das Dokument allgemein.
+// Pure, node-testbar -- Vorbild kurzformHinweise/kurzformEntscheidungen in dieser Datei.
+test('baueFindingZusatzAnweisung nennt Kategorie, Beobachtung, Anker und Relevanz', () => {
+  const text = baueFindingZusatzAnweisung({
+    category: 'logic',
+    short: 'Sprung in der Argumentation',
+    target: 'daraus folgt zwingend',
+    why: 'Der Schluss ist nicht durch die vorherigen Sätze gedeckt',
+  })
+  assert.ok(text.includes('logic'), 'Kategorie fehlt')
+  assert.ok(text.includes('Sprung in der Argumentation'), 'Beobachtung (Kurztext) fehlt')
+  assert.ok(text.includes('daraus folgt zwingend'), 'Anker fehlt')
+  assert.ok(text.includes('Der Schluss ist nicht durch die vorherigen Sätze gedeckt'), 'Relevanz fehlt')
+  assert.ok(text.includes('Bleib bei dieser Stelle'), 'Weisung, beim Finding zu bleiben, fehlt')
+})
+
+test('baueFindingZusatzAnweisung kommt ohne Kategorie/Anker/Relevanz aus, ohne leere Zeilen', () => {
+  const text = baueFindingZusatzAnweisung({ short: 'Nur eine Beobachtung' })
+  assert.ok(text.includes('Nur eine Beobachtung'))
+  assert.ok(text.includes('hinweis'), 'Kategorie fällt auf den generischen Begriff zurück')
+  assert.ok(!text.includes('Anker'), 'ohne target darf keine Anker-Zeile erscheinen')
+  assert.ok(!text.includes('Relevanz'), 'ohne why darf keine Relevanz-Zeile erscheinen')
+  assert.ok(!/\n[ \t]*\n/.test(text), 'keine leeren Zeilen durch gefilterte Felder')
+})
+
+test('baueFindingZusatzAnweisung liefert leeren Text ohne Finding', () => {
+  assert.equal(baueFindingZusatzAnweisung(null), '')
+  assert.equal(baueFindingZusatzAnweisung(undefined), '')
+})
+
+test('baueFindingZusatzAnweisung bleibt im Onda-Ton: keine Ausrufezeichen, keine Emoji', () => {
+  const text = baueFindingZusatzAnweisung({ category: 'fakt', short: 'x', target: 'y', why: 'z' })
+  assert.ok(!text.includes('!'))
+  assert.ok(!/\p{Emoji_Presentation}/u.test(text))
 })
 
 test('verlaufFuerPrompt spiegelt ohne Notiz den bereinigten Thread', () => {
@@ -264,6 +302,41 @@ test('baueChatKontext -> baueAnfrage("chat"): aktuelle Frage, älterer Verlauf, 
   ])
   const letzte = messages[messages.length - 1]
   assert.equal(letzte.role, 'user', 'letzte Message muss user sein (kein Prefill)')
+})
+
+// Marker-Test für Task C-3 (lokaler Dialog an der Randkarte): derselbe Beleg-Anspruch wie
+// oben, aber für den Finding-Bezug. baueFindingZusatzAnweisung(finding) geht unverändert als
+// zusatzAnweisung in baueChatKontext -- Anker und Kurztext des Findings UND die aktuelle Frage
+// müssen beide im echten Request-Body ankommen, sonst redet der lokale Dialog am Finding vorbei.
+test('baueFindingZusatzAnweisung + baueChatKontext -> baueAnfrage("chat"): Finding-Anker, Finding-Kurztext und aktuelle Frage erreichen den echten Request-Body', () => {
+  const finding = {
+    id: 'f-lokal',
+    category: 'logic',
+    short: 'MARKANTE-BEOBACHTUNG-4b2a',
+    target: 'MARKANTER-ANKER-7c3d',
+    why: 'MARKANTE-RELEVANZ-9e1f',
+    thread: [
+      turn('m-1', 'agent', 'Ich würde diese Stelle gern genauer verstehen: MARKANTE-BEOBACHTUNG-4b2a', 1),
+      turn('m-2', 'user', 'MARKANTE-AKTUELLE-FRAGE-6f5e', 2),
+    ],
+  }
+  const doc = { findings: [], decisions: [] }
+  const kontext = baueChatKontext({
+    verstaendnis: { task: 'Essay' },
+    docText: 'MARKANTER-DOKTEXT-2a1b',
+    findings: doc.findings,
+    doc,
+    thread: finding.thread.slice(0, -1), // der aktuelle Nutzer-Turn geht separat als `anfrage` mit -- exakt wie in workspace.js
+    anfrage: 'MARKANTE-AKTUELLE-FRAGE-6f5e',
+    zusatzAnweisung: baueFindingZusatzAnweisung(finding),
+    now: 1_000,
+  })
+  const anfrage = baueAnfrage('chat', kontext)
+  const bodyJson = JSON.stringify(anfrage.body)
+
+  assert.ok(bodyJson.includes('MARKANTER-ANKER-7c3d'), 'Finding-Anker fehlt im Request-Body')
+  assert.ok(bodyJson.includes('MARKANTE-BEOBACHTUNG-4b2a'), 'Finding-Kurztext (Beobachtung) fehlt im Request-Body')
+  assert.ok(bodyJson.includes('MARKANTE-AKTUELLE-FRAGE-6f5e'), 'aktuelle Frage fehlt im Request-Body')
 })
 
 test('Cache-Präfix bleibt stabil: verstaendnis+dokument zuerst mit cache_control, Volatiles danach ohne', () => {

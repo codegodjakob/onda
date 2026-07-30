@@ -101,6 +101,24 @@ export function kurzformHinweise(findings) {
     })
 }
 
+// Baut die Zusatzanweisung für ein Gespräch an EINER Randkarte (Task C-3): der lokale Dialog
+// neben dem Text bezieht sich auf GENAU dieses Finding — Kategorie, Beobachtung, wörtlicher
+// Anker und Relevanz — statt allgemein auf das Dokument. workspace.js reicht das Ergebnis
+// unverändert als zusatzAnweisung an baueChatKontext weiter (siehe dort: zusatzAnweisung landet
+// als eigener volatiler Block im Request-Body, ohne cache_control, weil sie sich mit jedem
+// Finding ändert und den Cache-Präfix sonst ungültig machen würde).
+export function baueFindingZusatzAnweisung(finding) {
+  if (!finding) return ''
+  return [
+    'Dieses Gespräch dreht sich um eine konkrete Textstelle mit folgendem Hinweis:',
+    `Kategorie: ${finding.category || 'hinweis'}`,
+    `Beobachtung: ${finding.short || ''}`,
+    finding.target ? `Anker (wörtlich im Text): »${finding.target}«` : '',
+    finding.why ? `Relevanz: ${finding.why}` : '',
+    'Bleib bei dieser Stelle. Du änderst nie selbst den Text und erfindest keine Quellen.',
+  ].filter(Boolean).join('\n')
+}
+
 export function verlaufFuerPrompt(thread, verlaufsNotiz = null) {
   const turns = gueltigeTurns(thread)
   const notizText = typeof verlaufsNotiz?.text === 'string' ? verlaufsNotiz.text.trim() : ''

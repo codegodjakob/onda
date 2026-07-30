@@ -25,6 +25,7 @@ import { baueDocText } from './agent-findings.mjs'
 import { pruefePausenAusloeser, versucheHinweislauf } from './hinweislauf-model.mjs'
 import {
   baueChatKontext,
+  baueFindingZusatzAnweisung,
   chatFehlerText,
   erkenneHinweisBitte,
   fuehreChatVorgangAus,
@@ -1368,24 +1369,18 @@ function renderLocalDialogue(finding) {
   send.type = 'submit'
   send.title = 'Senden'
   send.setAttribute('aria-label', 'Nachricht senden')
+  send.disabled = Boolean(laufenderChatLauf)
   form.append(input, send)
   form.addEventListener('submit', event => {
     event.preventDefault()
     const text = input.value.trim()
-    if (!text) return
-    const at = Date.now()
-    appendThreadMessage(finding.thread, 'user', text, at)
-    const reply = 'Beispielreaktion: Verstanden. Dann würde ich die Passage als gestaltete Bedingung lesen und die Verantwortung des Werkzeugs deutlicher machen.'
-    appendThreadMessage(
-      finding.thread,
-      'agent',
-      reply,
-      at + 1,
-    )
+    if (!text || laufenderChatLauf) return
+    // Echter, gestreamter Chat mit Finding-Kontext (Bereich C, Task C-3) — die Kulisse ist weg.
     input.value = ''
-    announceAgentStatus(reply)
+    appendThreadMessage(finding.thread, 'user', text, Date.now())
     ctx.persist()
     refreshWorkspace()
+    sendeLocalChat(finding, text)
   })
 
   dialogue.append(messages, form)
@@ -2142,6 +2137,43 @@ async function sendeAgentenChat(message, anfrage) {
           : null,
       })
       await fuehreChatLauf(message.thread, kontext)
+    },
+  })
+}
+
+// Startet den echten Chat-Lauf FÜR EIN FINDING an der Randkarte (Task C-3) — dieselbe
+// Sperr-/Status-Disziplin wie sendeAgentenChat: fuehreChatVorgangAus setzt die Sperre SYNCHRON
+// vor jedem await (kein zweiter, ungesicherter Pfad, kein doppelter bezahlter Lauf — siehe
+// Fix-Runde 1 zu C-2, chat-kontext.mjs). laufenderChatLauf ist app-weit EIN Feld (siehe
+// Deklaration oben) — ein laufendes Panel-Gespräch blockiert ein Randkarten-Gespräch und
+// umgekehrt. Anders als sendeAgentenChat: keine Verlaufs-Verdichtung (Randkarten-Gespräche
+// bleiben kurz, Findings kennen kein verlaufsNotiz-Feld) und keine Hinweisbitte-Erkennung —
+// das Gespräch soll bei GENAU dieser Stelle bleiben (baueFindingZusatzAnweisung weist das
+// Modell entsprechend an).
+async function sendeLocalChat(finding, anfrage) {
+  const doc = ctx.activeDoc()
+  const project = ctx.activeProjectObj()
+  if (!doc || !project) return
+
+  await fuehreChatVorgangAus({
+    laeuftBereits: () => Boolean(laufenderChatLauf),
+    sperreSetzen: wert => {
+      laufenderChatLauf = wert ? (laufenderChatLauf || { agentMessage: null, puffer: '', flushTimer: null }) : null
+      refreshWorkspace() // Senden-Knopf an der Randkarte sofort sichtbar deaktivieren
+    },
+    setzeStatus: setzeAgentStatus,
+    verdichte: async () => {},
+    chatte: async () => {
+      const kontext = baueChatKontext({
+        verstaendnis: ensureProjectUnderstanding(project),
+        docText: dokumentText(),
+        findings: doc.findings,
+        doc,
+        thread: finding.thread.slice(0, -1), // der aktuelle Nutzer-Turn geht separat als `anfrage` mit
+        anfrage,
+        zusatzAnweisung: baueFindingZusatzAnweisung(finding),
+      })
+      await fuehreChatLauf(finding.thread, kontext)
     },
   })
 }
