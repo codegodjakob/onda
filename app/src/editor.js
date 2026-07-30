@@ -25,6 +25,7 @@ import { ensureArgumentModel } from './argument-model.mjs'
 import { ensureLanguageProfile } from './language-profile.mjs'
 import { ensureLanguageReportStore } from './language-report.mjs'
 import { ensureFinalAuditStore } from './final-audit.mjs'
+import { emptyLocalState } from './data-control.mjs'
 
 // ---------- Sanfte Markierung (Peripherie): eine flüchtige Dekoration ----------
 // Zeigt eine Passage kurz an, OHNE das Dokument zu ändern — sie wird nicht
@@ -273,6 +274,7 @@ function buildExampleDocumentSeed() {
 }
 
 let ackPending = false
+let replacingPersistedState = false
 function synchronizeAllProjectMemory() {
   state.projects.forEach(project => {
     const result = synchronizeProjectMemory({
@@ -490,6 +492,53 @@ export function exportMd() {
   setTimeout(() => URL.revokeObjectURL(a.href), 1000)
 }
 
+export function downloadFile(filename, content, mime = 'text/plain;charset=utf-8') {
+  const safeFilename = String(filename || 'export.txt').replace(/[\/\\\0]/g, '-')
+  const safeContent = String(content ?? '')
+  if (NATIVE && window.webkit.messageHandlers.exportmd) {
+    window.webkit.messageHandlers.exportmd.postMessage(JSON.stringify({
+      filename: safeFilename,
+      content: safeContent,
+      mime,
+    }))
+    return
+  }
+  const blob = new Blob([safeContent], { type: mime })
+  const anchor = document.createElement('a')
+  anchor.href = URL.createObjectURL(blob)
+  anchor.download = safeFilename
+  document.body.appendChild(anchor)
+  anchor.click()
+  document.body.removeChild(anchor)
+  setTimeout(() => URL.revokeObjectURL(anchor.href), 1000)
+}
+
+function replacePersistedState(nextState) {
+  replacingPersistedState = true
+  const payload = JSON.stringify(nextState)
+  if (NATIVE) {
+    window.webkit.messageHandlers.store.postMessage(payload)
+    window.__NATIVE_DATA__ = nextState
+  } else {
+    localStorage.setItem('aiwt.v2', payload)
+  }
+  setTimeout(() => window.location.reload(), NATIVE ? 250 : 0)
+}
+
+export async function importLocalState(nextState) {
+  replacePersistedState(nextState)
+}
+
+export async function deleteAllLocalData() {
+  await loescheSchluessel()
+  if (!NATIVE) {
+    localStorage.removeItem('aiwt.v2')
+    localStorage.removeItem('aiwt.docs.v1')
+    localStorage.removeItem('aiwt.active.v1')
+  }
+  replacePersistedState(emptyLocalState())
+}
+
 // ---------- Start ----------
 export function boot() {
   load()
@@ -545,7 +594,8 @@ export function boot() {
   const ctx = {
     editor: state.editor, state,
     ops: { newDoc, openDoc, duplicateDoc, trashDoc, restoreDoc, deleteForever, newProject, renameProject, openProject },
-    persist, scheduleSave, flushSave, exportMd, docTitle, activeDoc, autoGrowTitle, activeProjectObj, showHomeView,
+    persist, scheduleSave, flushSave, exportMd, downloadFile, importLocalState, deleteAllLocalData,
+    docTitle, activeDoc, autoGrowTitle, activeProjectObj, showHomeView,
     gateway: { runTask, hatSchluessel, setzeSchluessel, loescheSchluessel },
   }
   initUI(ctx)
@@ -564,8 +614,10 @@ export function boot() {
   window.__exportFromMenu__ = exportMd
 
   if (!NATIVE) {
-    window.addEventListener('beforeunload', flushSave)
-    document.addEventListener('visibilitychange', () => { if (document.hidden) flushSave() })
+    window.addEventListener('beforeunload', () => { if (!replacingPersistedState) flushSave() })
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden && !replacingPersistedState) flushSave()
+    })
   }
 
   // Selbsttest-Modus der Mac-App

@@ -42,6 +42,7 @@ import { createMemoryUi } from './memory-ui.mjs'
 import { createArgumentUi } from './argument-ui.mjs'
 import { createLanguageUi } from './language-ui.mjs'
 import { analyzeArgumentImpact } from './argument-graph.mjs'
+import { createAuditUi } from './audit-ui.mjs'
 
 const BLOCK_TYPES = [
   ['paragraph', 'Freier Absatz'],
@@ -983,6 +984,15 @@ function openProjectUnderstandingModal(opener) {
     getBlocks: () => getEditorBlocks(ctx.editor),
     applyCorrections: corrections => replaceAnchoredTexts(ctx.editor, corrections),
   })
+  const auditUi = createAuditUi({
+    context: ctx,
+    createNode,
+    openDialog: openOndaDialog,
+    getEditorJson: () => ctx.editor.getJSON(),
+    download: ctx.downloadFile,
+    importLocalState: ctx.importLocalState,
+    deleteAllLocalData: ctx.deleteAllLocalData,
+  })
   openOndaDialog({ id: 'pvModal', title: 'Projektverständnis', opener, build: body => {
     understandingField(body, 'Aufgabe', u.task, value => { u.task = value; commit('task') }, { geschuetzt: istGeschuetzt('task') })
     understandingField(body, 'Zielgruppe', u.audience.join(', '), value => { u.audience = splitList(value, false); commit('audience') }, { geschuetzt: istGeschuetzt('audience') })
@@ -1003,7 +1013,11 @@ function openProjectUnderstandingModal(opener) {
     language.id = 'languageOpen'
     language.type = 'button'
     language.addEventListener('click', () => languageUi.open(project, document.getElementById('pvCard')))
-    tools.append(memory, argument, language)
+    const audit = createNode('button', 'onda-pv-audit', 'Schlussaudit und Export öffnen')
+    audit.id = 'auditOpen'
+    audit.type = 'button'
+    audit.addEventListener('click', () => auditUi.open(project, document.getElementById('pvCard')))
+    tools.append(memory, argument, language, audit)
     body.append(tools)
   }})
 }
