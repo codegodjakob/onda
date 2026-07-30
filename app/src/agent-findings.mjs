@@ -48,10 +48,26 @@ export function blockFuerAnkerIndex(blocks, index) {
   return null
 }
 
-export function hinweisZuFinding(hinweis, ankerErgebnis, blockId, jetzt = Date.now()) {
+// Fix-Runde 2, Finding 3 (Important): target (und claim) sind jetzt der ECHTE Wortlaut aus dem
+// Dokument (docText.slice(index, index+laenge)), nicht mehr die Modell-Schreibweise (anker).
+// Bei einem normalisierten Treffer koennen sich beide unterscheiden (typografische vs. gerade
+// Anfuehrungszeichen, kollabiertes Whitespace) -- mit der Modell-Schreibweise als target
+// scheiterten spaeter "annehmen"/"eigene Fassung" und die Markierung rendert nicht, weil target
+// nicht wortwoertlich im Dokument vorkommt. Fail-closed: ist die Laenge nicht ermittelbar (oder
+// der Index ungueltig), wird der Hinweis verworfen statt geraten -- passt zum bestehenden
+// Vertrag dieser Funktion (gibt bei nicht verwertbaren Eingaben bereits null zurueck).
+// bisher/neu/action bleiben bewusst auf anker bezogen: der Vorschlag des Modells zitiert sich
+// selbst (bisher ist per Vertrag ein Teilstring von anker), ein Wechsel auf target koennte den
+// Abgleich allein durch die Anfuehrungszeichen-Normalisierung unnoetig scheitern lassen.
+export function hinweisZuFinding(hinweis, ankerErgebnis, blockId, docText, jetzt = Date.now()) {
   if (!hinweis || ankerErgebnis?.gefunden !== true) return null
   const anker = String(hinweis.anker || '')
   if (!anker) return null
+
+  const { index, laenge } = ankerErgebnis
+  if (!Number.isInteger(index) || index < 0 || !Number.isInteger(laenge) || laenge <= 0) return null
+  const target = String(docText || '').slice(index, index + laenge)
+  if (!target) return null
 
   const category = KATEGORIE_ZU_CATEGORY[hinweis.kategorie] || 'content'
   const vorschlag = hinweis.vorschlag && typeof hinweis.vorschlag === 'object' ? hinweis.vorschlag : null
@@ -66,7 +82,7 @@ export function hinweisZuFinding(hinweis, ankerErgebnis, blockId, jetzt = Date.n
     form: vorschlagAnwendbar ? 'mark' : 'note',
     status: 'open',
     placement: 'passage',
-    target: anker,
+    target,
     short: String(hinweis.beobachtung || ''),
     why: String(hinweis.relevanz || ''),
     folge: String(hinweis.folge || ''),
@@ -83,7 +99,7 @@ export function hinweisZuFinding(hinweis, ankerErgebnis, blockId, jetzt = Date.n
     thread: [],
   }
   if (hinweis.integritaet === true || INTEGRITAETS_KATEGORIEN.has(hinweis.kategorie)) {
-    finding.claim = anker
+    finding.claim = target
   }
   return finding
 }

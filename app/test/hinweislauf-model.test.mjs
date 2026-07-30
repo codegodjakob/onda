@@ -222,6 +222,25 @@ test('gefundener Anker wird zu Finding, landet in uebernommen, wird dem richtige
   assert.equal(ergebnis.uebernommen[0].target, 'jede Unterbrechung schadet dem Denken')
 })
 
+// Fix-Runde 2, Finding 3 (Important): End-zu-Ende-Beleg fuer den Fix ueber verarbeiteHinweisantwort
+// (Gate -> findeAnker -> hinweisZuFinding, der echte Produktionspfad). Das Modell zitiert oft mit
+// geraden Anfuehrungszeichen, das Dokument traegt aber typografische ("smart quotes"). Vor dem Fix
+// landete hier die Modell-Schreibweise als target -- "annehmen"/"eigene Fassung" und die
+// Markierung im Editor scheiterten, weil target nicht wortwoertlich im Dokument vorkam.
+test('typografische vs. gerade Anfuehrungszeichen: target im uebernommenen Finding ist der echte Dokument-Wortlaut', () => {
+  const blocks = [{ id: 'b1', text: 'Sie nannte es „ein stilles Werkzeug“ in ihrem Aufsatz.' }]
+  const docText = baueDocText(blocks)
+  const hinweis = beispielHinweis({ anker: '"ein stilles Werkzeug"', kategorie: 'wirkung', integritaet: false })
+  const ergebnis = verarbeiteHinweisantwort({
+    geliefert: [hinweis], docText, blocks, findings: [], decisions: [], jetzt: 1000,
+  })
+  assert.equal(ergebnis.uebernommen.length, 1)
+  assert.equal(ergebnis.verworfen, 0)
+  assert.equal(ergebnis.uebernommen[0].target, '„ein stilles Werkzeug“')
+  assert.notEqual(ergebnis.uebernommen[0].target, hinweis.anker)
+  assert.ok(docText.includes(ergebnis.uebernommen[0].target), 'target muss woertlich im Dokument vorkommen')
+})
+
 test('Anker nicht im Dokument gefunden -> still verworfen (Zaehler), kein Finding, nie geraten', () => {
   const ergebnis = verarbeiteHinweisantwort({
     geliefert: [beispielHinweis({ anker: 'kommt im Text so nicht vor' })],

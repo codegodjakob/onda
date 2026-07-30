@@ -71,6 +71,14 @@ function lesSchluessel() {
   try { return (localStorage.getItem(API_KEY_STORAGE) || '').trim() } catch (e) { return '' }
 }
 
+// Fix-Runde 2, Finding 4: still protokollieren statt werfen — beide Transportwege rufen das
+// hier auf, wenn handlers.onDelta selbst einen Fehler wirft (z. B. ein DOM-Bug in der
+// UI-Verarbeitung). Der Lauf selbst (Streaming, spaeteres onFertig/onFehler) laeuft normal
+// weiter; ein einzelnes onDelta ist nie ein Grund, den ganzen Lauf als kaputt zu melden.
+function meldeOnDeltaFehler(fehler) {
+  try { console.error('[agent-transport] onDelta-Fehler (ignoriert, kein Netzfehler):', fehler) } catch (e) {}
+}
+
 // ---------- Direktweg (Browser: Entwickler-/Rückfallpfad) ----------
 export const direktTransport = {
   art: 'direkt',
@@ -102,7 +110,15 @@ export const direktTransport = {
     let text = ''; let usage = mischeUsage(null, null); let stopReason = null
     const verarbeite = events => {
       for (const ev of events) {
-        if (ev.typ === 'delta') { text += ev.text; if (handlers.onDelta) handlers.onDelta(ev.text) }
+        if (ev.typ === 'delta') {
+          text += ev.text
+          // Fix-Runde 2, Finding 4 (Important): ein Fehler in der UI-Verarbeitung (onDelta)
+          // darf NIE als Netzfehler gelten — sonst faengt der aeussere try/catch (unten) das
+          // hier als 'offline' auf, und agent-gateway wiederholt den bereits bezahlten Lauf.
+          if (handlers.onDelta) {
+            try { handlers.onDelta(ev.text) } catch (fehler) { meldeOnDeltaFehler(fehler) }
+          }
+        }
         else if (ev.typ === 'usage') usage = mischeUsage(usage, ev.usage)
         else if (ev.typ === 'stop') stopReason = ev.stopReason
       }
@@ -139,7 +155,15 @@ function llmRueckruf(nachricht) {
   if (nachricht.typ === 'delta') {
     // Swift reicht rohe SSE-Zeilen durch — derselbe Parser wie im Direktweg.
     for (const ev of parseSseZeilen(eintrag.puffer, nachricht.text || '')) {
-      if (ev.typ === 'delta') { eintrag.text += ev.text; if (eintrag.handlers.onDelta) eintrag.handlers.onDelta(ev.text) }
+      if (ev.typ === 'delta') {
+        eintrag.text += ev.text
+        // Fix-Runde 2, Finding 4: ohne dieses try/catch entkommt ein Fehler aus onDelta hier
+        // direkt aus llmRueckruf (dem Aufruf aus Swift) — das Streaming faellt dann still aus,
+        // ohne dass je onFertig/onFehler laeuft. Still protokollieren, Lauf normal weiter.
+        if (eintrag.handlers.onDelta) {
+          try { eintrag.handlers.onDelta(ev.text) } catch (fehler) { meldeOnDeltaFehler(fehler) }
+        }
+      }
       else if (ev.typ === 'usage') eintrag.usage = mischeUsage(eintrag.usage, ev.usage)
       else if (ev.typ === 'stop') eintrag.stopReason = ev.stopReason
     }
@@ -189,9 +213,16 @@ function sendeLlmKey(aktion, schluessel) {
 
 export const brueckenTransport = {
   art: 'bruecke',
+  // Fix-Runde 2, Finding 1 (Critical): Swift antwortet mit status:{vorhanden:boolean} — ein
+  // OBJEKT, also unter !! immer truthy, egal ob vorhanden true oder false ist. Die Mac-App
+  // meldete dadurch dauerhaft "Schlüssel vorhanden": die Offline-Statuszeile erschien nie, der
+  // Löschen-Knopf wirkte wirkungslos, echte Läufe starteten und scheiterten erst danach.
+  // Abwärtskompatibel: kommt irgendwo (noch) ein roher Boolean an, gilt der unverändert.
   async hatSchluessel() {
     const antwort = await sendeLlmKey('status')
-    return !!(antwort && antwort.status)
+    const status = antwort && antwort.status
+    if (typeof status === 'boolean') return status
+    return status?.vorhanden === true
   },
   async setzeSchluessel(schluessel) { await sendeLlmKey('setzen', schluessel) },
   async loescheSchluessel() { await sendeLlmKey('loeschen') },
