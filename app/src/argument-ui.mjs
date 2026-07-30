@@ -1,4 +1,9 @@
-import { analyzeArgumentGraph, reconcileArgumentRegression } from './argument-graph.mjs'
+import {
+  analyzeArgumentImpact,
+  analyzeArgumentGraph,
+  mergeArgumentFindings,
+  resolveArgumentFinding,
+} from './argument-graph.mjs'
 import {
   appendDeliberationRound,
   createDeliberationRound,
@@ -7,9 +12,15 @@ import {
 } from './argument-deliberation.mjs'
 import {
   ARGUMENT_CONFIDENCE,
+  ARGUMENT_CENTRALITY,
+  ARGUMENT_CLAIM_KINDS,
   ARGUMENT_RELATION_TYPES,
+  ARGUMENT_VALIDITY,
+  correctArgumentClaim,
   correctArgumentRelation,
   createArgumentRelation,
+  validateArgumentEvidenceRefs,
+  validateArgumentModelIntegrity,
 } from './argument-model.mjs'
 import { deriveSafeBlockRelations } from './argument-projection.mjs'
 import { synchronizeClaimLedger } from './claim-ledger.mjs'
@@ -26,6 +37,13 @@ const CLAIM_KIND_LABELS = Object.freeze({
   definition: 'Definition',
   value: 'Wertung',
   inference: 'Schlussfolgerung',
+})
+const CENTRALITY_LABELS = Object.freeze({ central: 'Kernbehauptung', supporting: 'Stützend' })
+const VALIDITY_LABELS = Object.freeze({
+  asserted: 'behauptet',
+  qualified: 'qualifiziert',
+  contested: 'bestritten',
+  withdrawn: 'zurückgezogen',
 })
 const EVIDENCE_LABELS = Object.freeze({
   supported: 'belegt',
@@ -74,25 +92,10 @@ function textareaField(className, label, value = '', rows = 3) {
   return field
 }
 
-function activeClaims(model) {
-  return model.claims.filter(claim => claim.status !== 'stale')
-}
-
-function mergeFindings(previous, analyzed, projectId, at) {
-  return analyzed.map(finding => {
-    const existing = previous.find(candidate => candidate.id === finding.id)
-    if (!existing) return finding
-    if (existing.basisFingerprint === finding.basisFingerprint) {
-      return { ...finding, ...existing, basisFingerprint: finding.basisFingerprint }
-    }
-    return reconcileArgumentRegression({
-      finding: existing,
-      projectId,
-      basisFingerprint: finding.basisFingerprint,
-      reason: 'Die argumentative Grundlage dieses Befunds hat sich geändert.',
-      at,
-    })
-  })
+function activeClaims(model, textId = null) {
+  return model.claims.filter(claim => (
+    claim.status !== 'stale' && (!textId || claim.textId === textId)
+  ))
 }
 
 export function createArgumentUi({ context, createNode, openDialog, getBlocks }) {
@@ -103,6 +106,10 @@ export function createArgumentUi({ context, createNode, openDialog, getBlocks })
     if (!doc || doc.projectId !== project.id) throw new TypeError('Der aktive Text gehört nicht zu diesem Projekt.')
     const at = Date.now()
     const blocks = getBlocks()
+    validateArgumentModelIntegrity({
+      model: project.argumentModel,
+      projectId: project.id,
+    })
     let model = synchronizeClaimLedger({
       projectId: project.id,
       model: project.argumentModel,
@@ -120,8 +127,19 @@ export function createArgumentUi({ context, createNode, openDialog, getBlocks })
       blocks,
       at,
     })
+    validateArgumentEvidenceRefs({
+      model,
+      projectId: project.id,
+      sources: project.sources || [],
+      evidenceBundles: project.evidenceBundles || [],
+    })
     const analysis = analyzeArgumentGraph(model, { projectId: project.id, at })
-    model.findings = mergeFindings(model.findings, analysis.findings, project.id, at)
+    model.findings = mergeArgumentFindings({
+      previous: model.findings,
+      analyzed: analysis.findings,
+      projectId: project.id,
+      at,
+    })
     project.argumentModel = model
     return { model, blocks, cycles: analysis.cycles }
   }
@@ -151,23 +169,99 @@ export function createArgumentUi({ context, createNode, openDialog, getBlocks })
     return node
   }
 
-  function renderClaimLedger(parent, claims) {
+  function renderClaimCorrection(card, body, project, claim, render) {
+    const form = createNode('form', 'argument-form argument-claim-correction')
+    const kind = selectField(
+      'argument-select',
+      'Aussageart',
+      ARGUMENT_CLAIM_KINDS.map(value => [value, CLAIM_KIND_LABELS[value]]),
+      claim.kind,
+    )
+    const centrality = selectField(
+      'argument-select',
+      'Zentralität',
+      ARGUMENT_CENTRALITY.map(value => [value, CENTRALITY_LABELS[value]]),
+      claim.centrality,
+    )
+    const validity = selectField(
+      'argument-select',
+      'Gültigkeit',
+      ARGUMENT_VALIDITY.map(value => [value, VALIDITY_LABELS[value]]),
+      claim.validity,
+    )
+    const save = createNode('button', 'argument-primary', 'Claim-Korrektur speichern')
+    save.type = 'submit'
+    const cancel = createNode('button', 'argument-action', 'Abbrechen')
+    cancel.type = 'button'
+    cancel.addEventListener('click', () => render(body, project))
+    form.append(
+      createNode('p', 'argument-claim-text', claim.text),
+      kind,
+      centrality,
+      validity,
+      save,
+      cancel,
+    )
+    form.addEventListener('submit', event => {
+      event.preventDefault()
+      try {
+        project.argumentModel = correctArgumentClaim({
+          model: project.argumentModel,
+          claimId: claim.id,
+          projectId: project.id,
+          kind: kind.value,
+          centrality: centrality.value,
+          validity: validity.value,
+          at: Date.now(),
+        })
+        const impactAt = Date.now()
+        const impact = analyzeArgumentImpact({
+          model: project.argumentModel,
+          projectId: project.id,
+          change: {
+            kind: kind.value === 'definition' || claim.origin?.kind === 'definition' ? 'definition' : 'claim',
+            entityId: claim.id,
+            fingerprint: [
+              claim.id,
+              kind.value,
+              centrality.value,
+              validity.value,
+              impactAt,
+            ].join(':'),
+            reason: 'Die Einordnung dieser Aussage wurde vom Nutzer korrigiert.',
+          },
+          at: impactAt,
+        })
+        project.argumentModel = impact.model
+        persist(project)
+        render(body, project, 'Aussage korrigiert. Textanker und ursprüngliche Einordnung bleiben erhalten.')
+      } catch (error) {
+        render(body, project, error?.message || 'Die Aussagekorrektur konnte nicht gespeichert werden.')
+      }
+    })
+    card.replaceChildren(form)
+    requestAnimationFrame(() => kind.focus({ preventScroll: true }))
+  }
+
+  function renderClaimLedger(parent, body, project, claims, staleClaims, render) {
+    const allClaims = [...claims, ...staleClaims]
     const area = section(
       parent,
-      `Aussagen · ${claims.length}`,
+      `Aussagen · ${allClaims.length}${staleClaims.length ? ` · ${staleClaims.length} zu prüfen` : ''}`,
       'Jede Aussage bleibt an ihrer exakten Passage verankert. „Unbelegt“ heißt nur, dass noch keine geprüfte Quelle zugeordnet ist.',
     )
-    if (!claims.length) {
+    if (!allClaims.length) {
       area.append(createNode('p', 'argument-empty', 'In diesem Text wurde noch keine vollständige Aussage erkannt.'))
       return
     }
     const list = createNode('div', 'argument-claim-list')
-    claims.forEach(claim => {
-      const card = createNode('article', `argument-claim is-${claim.centrality}`)
+    allClaims.forEach(claim => {
+      const stale = claim.status === 'stale'
+      const card = createNode('article', `argument-claim is-${claim.centrality}${stale ? ' is-stale' : ''}`)
       const meta = createNode('div', 'argument-meta')
       meta.append(
         createNode('span', 'argument-tag', claim.centrality === 'central' ? 'Kernbehauptung' : CLAIM_KIND_LABELS[claim.kind]),
-        createNode('span', `argument-tag is-evidence-${claim.evidenceStatus}`, EVIDENCE_LABELS[claim.evidenceStatus]),
+        createNode('span', `argument-tag is-evidence-${claim.evidenceStatus}`, stale ? 'Textanker veraltet' : EVIDENCE_LABELS[claim.evidenceStatus]),
         createNode('span', 'argument-tag', `Unsicherheit: ${claim.uncertainty}`),
       )
       card.append(
@@ -175,6 +269,15 @@ export function createArgumentUi({ context, createNode, openDialog, getBlocks })
         createNode('p', 'argument-claim-text', claim.text),
         createNode('span', 'argument-origin', `Passage ${claim.anchor.blockId} · Zeichen ${claim.anchor.start + 1}–${claim.anchor.end}`),
       )
+      if (claim.corrections?.length) card.append(createNode('span', 'argument-origin', 'Nutzerkorrektur aktiv · Textanker unverändert'))
+      if (stale) {
+        card.append(createNode('p', 'argument-finding-copy', 'Die ursprüngliche Passage ist nicht mehr vorhanden. Die frühere Einordnung bleibt im Prüfpfad erhalten.'))
+      } else {
+        const correct = createNode('button', 'argument-action', 'Aussage einordnen')
+        correct.type = 'button'
+        correct.addEventListener('click', () => renderClaimCorrection(card, body, project, claim, render))
+        card.append(correct)
+      }
       list.append(card)
     })
     area.append(list)
@@ -217,6 +320,25 @@ export function createArgumentUi({ context, createNode, openDialog, getBlocks })
           confidence: confidence.value,
           at: Date.now(),
         })
+        const impactAt = Date.now()
+        const impact = analyzeArgumentImpact({
+          model: project.argumentModel,
+          projectId: project.id,
+          change: {
+            kind: 'relation',
+            entityId: relation.id,
+            fingerprint: [
+              relation.id,
+              type.value,
+              confidence.value,
+              warrant.value,
+              impactAt,
+            ].join(':'),
+            reason: 'Die Schlussbeziehung wurde vom Nutzer korrigiert.',
+          },
+          at: impactAt,
+        })
+        project.argumentModel = impact.model
         persist(project)
         render(body, project, 'Beziehung korrigiert. Der ursprüngliche Vorschlag bleibt in der Herkunft erhalten.')
       } catch (error) {
@@ -309,8 +431,45 @@ export function createArgumentUi({ context, createNode, openDialog, getBlocks })
     renderRelationComposer(area, body, project, claims, render)
   }
 
-  function renderFindings(parent, model, cycles) {
-    const findings = model.findings.filter(finding => finding.status !== 'resolved')
+  function renderFindingResolution(card, body, project, finding, render) {
+    const form = createNode('form', 'argument-form argument-finding-resolution')
+    const resolution = textareaField('argument-input', 'Klärung dokumentieren', '', 2)
+    const save = createNode('button', 'argument-primary', 'Als geklärt speichern')
+    save.type = 'submit'
+    const cancel = createNode('button', 'argument-action', 'Abbrechen')
+    cancel.type = 'button'
+    cancel.addEventListener('click', () => render(body, project))
+    form.append(resolution, save, cancel)
+    form.addEventListener('submit', event => {
+      event.preventDefault()
+      try {
+        project.argumentModel = resolveArgumentFinding({
+          model: project.argumentModel,
+          projectId: project.id,
+          findingId: finding.id,
+          resolution: resolution.value,
+          at: Date.now(),
+        })
+        persist(project)
+        render(body, project, 'Befund als geklärt dokumentiert. Die Grundlage bleibt für spätere Regressionen erhalten.')
+      } catch (error) {
+        render(body, project, error?.message || 'Der Befund konnte nicht abgeschlossen werden.')
+      }
+    })
+    card.replaceChildren(form)
+    requestAnimationFrame(() => resolution.focus({ preventScroll: true }))
+  }
+
+  function renderFindings(parent, body, project, model, claims, cycles, render) {
+    const claimIds = new Set(claims.map(claim => claim.id))
+    const findings = model.findings.filter(finding => (
+      finding.status !== 'resolved'
+      && (
+        claimIds.has(finding.claimId)
+        || claimIds.has(finding.rootCauseClaimId)
+        || (finding.claimIds || []).some(id => claimIds.has(id))
+      )
+    ))
     const area = section(
       parent,
       `Strukturprüfung · ${findings.length}`,
@@ -331,6 +490,12 @@ export function createArgumentUi({ context, createNode, openDialog, getBlocks })
       }
       if (finding.kind === 'cycle') {
         card.append(createNode('p', 'argument-finding-copy', finding.cycle.join(' → ')))
+      }
+      if (finding.status === 'open') {
+        const resolve = createNode('button', 'argument-action', 'Als geklärt markieren')
+        resolve.type = 'button'
+        resolve.addEventListener('click', () => renderFindingResolution(card, body, project, finding, render))
+        card.append(resolve)
       }
       area.append(card)
     })
@@ -413,19 +578,22 @@ export function createArgumentUi({ context, createNode, openDialog, getBlocks })
     area.append(list)
   }
 
-  function renderDeliberation(parent, body, project, central, render) {
+  function renderDeliberation(parent, body, project, claims, central, render) {
     const area = section(
       parent,
-      'Prüfrunden',
-      'Kritik, Autorenantwort und mögliche Revision bleiben als drei getrennte Beiträge erhalten. Der Text wird dabei nicht verändert.',
+      'Prüfrunden und Ereignisse',
+      'Frühere Runden und die Herkunft aller Änderungen bleiben eingeklappt erreichbar. Der Text wird dabei nicht verändert.',
     )
     if (!central) {
       area.append(createNode('p', 'argument-empty', 'Noch keine Kernbehauptung vorhanden.'))
       return
     }
-    project.argumentModel.deliberations
-      .filter(round => round.claimId === central.id)
-      .forEach(round => {
+    const rounds = project.argumentModel.deliberations.filter(round => round.claimId === central.id)
+    if (rounds.length) {
+      const details = createNode('details', 'argument-audit-details')
+      const summary = document.createElement('summary')
+      summary.textContent = `${rounds.length} frühere Prüfrunde${rounds.length === 1 ? '' : 'n'}`
+      rounds.forEach(round => {
         const card = createNode('article', 'argument-round')
         round.entries.forEach(entry => {
           card.append(
@@ -437,8 +605,33 @@ export function createArgumentUi({ context, createNode, openDialog, getBlocks })
             createNode('p', 'argument-round-text', entry.text),
           )
         })
-        area.append(card)
+        details.append(card)
       })
+      details.prepend(summary)
+      area.append(details)
+    }
+    const scopeIds = new Set([
+      ...claims.map(claim => claim.id),
+      ...project.argumentModel.relations
+        .filter(relation => claims.some(claim => claim.id === relation.fromClaimId || claim.id === relation.toClaimId))
+        .map(relation => relation.id),
+      ...rounds.map(round => round.id),
+    ])
+    const events = project.argumentModel.events.filter(event => (
+      event.projectId === project.id
+      && (scopeIds.has(event.entityId) || event.kind === 'impact-analyzed' || event.kind === 'finding-resolved')
+    ))
+    if (events.length) {
+      const details = createNode('details', 'argument-audit-details argument-event-details')
+      const summary = document.createElement('summary')
+      summary.textContent = `${events.length} Herkunftsereignis${events.length === 1 ? '' : 'se'}`
+      const list = createNode('ol', 'argument-event-list')
+      events.forEach(event => {
+        list.append(createNode('li', 'argument-event', `${event.kind} · ${new Date(event.at).toLocaleString('de-DE')}`))
+      })
+      details.append(summary, list)
+      area.append(details)
+    }
     const form = createNode('form', 'argument-form argument-deliberation-form')
     const critique = textareaField('argument-input', 'Kritik oder Einwand', '', 2)
     const response = textareaField('argument-input', 'Autorenantwort', '', 2)
@@ -473,18 +666,24 @@ export function createArgumentUi({ context, createNode, openDialog, getBlocks })
     body.replaceChildren()
     try {
       const { model, cycles } = synchronize(project)
-      const claims = activeClaims(model)
+      const activeTextId = context.activeDoc()?.id || null
+      const claims = activeClaims(model, activeTextId)
+      const staleClaims = model.claims.filter(claim => (
+        claim.status === 'stale' && claim.textId === activeTextId
+      ))
       const centralClaims = claims.filter(claim => claim.centrality === 'central')
       const central = selectedCentral(project, claims)
+      let status = null
       if (message) {
-        const status = createNode('p', 'argument-status', message)
+        status = createNode('p', 'argument-status', message)
         status.setAttribute('role', 'status')
+        status.tabIndex = -1
         body.append(status)
       }
       const intro = createNode('section', 'argument-intro')
       const introCopy = createNode('div', 'argument-intro-copy')
       introCopy.append(
-        createNode('span', 'argument-kicker', 'Textnah · begründet · korrigierbar'),
+        createNode('span', 'argument-kicker', `Textnah · begründet · korrigierbar · Stand ${new Date(model.lastAnalysis?.at || Date.now()).toLocaleString('de-DE')}`),
         createNode('p', '', 'Dieses Dossier zeigt Aussagen, Schlussbrücken und Prüflücken. Es schreibt nichts automatisch in deinen Text.'),
       )
       const refresh = createNode('button', 'argument-action', 'Neu prüfen')
@@ -511,18 +710,21 @@ export function createArgumentUi({ context, createNode, openDialog, getBlocks })
         chooser.append(select)
         body.append(chooser)
       }
-      renderClaimLedger(body, claims)
-      renderRelations(body, body, project, claims, render)
-      renderFindings(body, model, cycles)
+      renderClaimLedger(body, body, project, claims, staleClaims, render)
       const counterargument = renderCounterargument(body, project, central)
+      renderRelations(body, body, project, claims, render)
+      renderFindings(body, body, project, model, claims, cycles, render)
       renderPaths(body, project, central, counterargument)
-      renderDeliberation(body, body, project, central, render)
+      renderDeliberation(body, body, project, claims, central, render)
       persist(project)
       body.scrollTop = message ? scrollTop : 0
+      if (status) requestAnimationFrame(() => status.focus({ preventScroll: true }))
     } catch (error) {
       const status = createNode('p', 'argument-status is-error', error?.message || 'Das Argumentationsdossier konnte nicht geöffnet werden.')
       status.setAttribute('role', 'alert')
+      status.tabIndex = -1
       body.append(status)
+      requestAnimationFrame(() => status.focus({ preventScroll: true }))
     }
   }
 

@@ -4,7 +4,10 @@ import {
   splitAtomicClaims,
   synchronizeClaimLedger,
 } from '../src/claim-ledger.mjs'
-import { ensureArgumentModel } from '../src/argument-model.mjs'
+import {
+  correctArgumentClaim,
+  ensureArgumentModel,
+} from '../src/argument-model.mjs'
 
 function emptyModel() {
   return ensureArgumentModel({ id: 'p-a' }).argumentModel
@@ -66,6 +69,25 @@ test('Clause-Splitter trennt Semikolon und echte koordinierte Teilsätze, nicht 
   assert.equal(clauses.every(item => item.start >= 0 && item.end > item.start), true)
 })
 
+test('Clause-Splitter bewahrt unvollständige aber-Ergänzungen und überspringt Listenblöcke', () => {
+  assert.deepEqual(
+    splitAtomicClaims('Das Verfahren ist schnell, aber nicht billig.').map(item => item.text),
+    ['Das Verfahren ist schnell, aber nicht billig.'],
+  )
+  assert.deepEqual(splitAtomicClaims('- Die Methode ist schnell.'), [])
+  const result = synchronizeClaimLedger({
+    projectId: 'p-a',
+    model: emptyModel(),
+    texts: textFixture([
+      { id: 'list', type: 'bulletList', role: 'paragraph', text: 'Die Methode ist schnell.' },
+      { id: 'claim', type: 'paragraph', role: 'claim', text: 'Die Methode ist reproduzierbar.' },
+    ]),
+    evidenceBundles: [],
+    at: 100,
+  })
+  assert.deepEqual(result.claims.map(claim => claim.text), ['Die Methode ist reproduzierbar.'])
+})
+
 test('Semantische Rollen bestimmen Zentralität und Claim-Art ohne Projekttext zu mutieren', () => {
   const texts = textFixture([
     { id: 'claim', role: 'claim', text: 'Calm Technology bedeutet Technik am Rand der Aufmerksamkeit.' },
@@ -97,6 +119,30 @@ test('Gleicher Quellzustand ist idempotent und erzeugt keine doppelten Claims od
   const second = synchronizeClaimLedger({ ...input, model: first, at: 200 })
   assert.deepEqual(second.claims, first.claims)
   assert.deepEqual(second.events, first.events)
+})
+
+test('aktive Claims übernehmen eine geänderte Beleglage ohne Duplikat', () => {
+  const claimText = 'Die Fehlerrate sank.'
+  const texts = textFixture([{ id: 'block-1', role: 'claim', text: claimText }])
+  const first = synchronizeClaimLedger({
+    projectId: 'p-a',
+    model: emptyModel(),
+    texts,
+    evidenceBundles: [bundle('effect', claimText, 'supported')],
+    at: 100,
+  })
+  const second = synchronizeClaimLedger({
+    projectId: 'p-a',
+    model: first,
+    texts,
+    evidenceBundles: [bundle('effect', claimText, 'review-required')],
+    at: 200,
+  })
+  assert.equal(second.claims.length, 1)
+  assert.equal(second.claims[0].status, 'active')
+  assert.equal(second.claims[0].evidenceStatus, 'review-required')
+  assert.equal(second.claims[0].uncertainty, 'medium')
+  assert.deepEqual(second.claims[0].evidenceRefs, first.claims[0].evidenceRefs)
 })
 
 test('Geänderter oder verschwundener Block macht nur abgeleitete Altclaims sichtbar stale', () => {
@@ -167,6 +213,38 @@ test('Manuelle oder korrigierte Claims bleiben bei Rebuild erhalten', () => {
     at: 100,
   })
   assert.equal(result.claims[0].status, 'active')
+})
+
+test('korrigierte abgeleitete Claims bleiben im Audit, werden bei verschwundenem Anker aber prüfpflichtig', () => {
+  const first = synchronizeClaimLedger({
+    projectId: 'p-a',
+    model: emptyModel(),
+    texts: textFixture([{ id: 'derived', role: 'claim', text: 'Die Fehlerrate sank.' }]),
+    evidenceBundles: [],
+    at: 100,
+  })
+  const corrected = correctArgumentClaim({
+    model: first,
+    projectId: 'p-a',
+    claimId: first.claims[0].id,
+    kind: 'inference',
+    centrality: 'central',
+    validity: 'qualified',
+    at: 110,
+  })
+  const rebuilt = synchronizeClaimLedger({
+    projectId: 'p-a',
+    model: corrected,
+    texts: textFixture([]),
+    evidenceBundles: [],
+    at: 120,
+  })
+  assert.equal(rebuilt.claims.length, 1)
+  assert.equal(rebuilt.claims[0].status, 'stale')
+  assert.equal(rebuilt.claims[0].evidenceStatus, 'review-required')
+  assert.equal(rebuilt.claims[0].kind, 'inference')
+  assert.equal(rebuilt.claims[0].corrections.length, 1)
+  assert.equal(rebuilt.events.some(event => event.kind === 'claim-stale'), true)
 })
 
 test('INV-05: projektfremde Texte werden abgewiesen und fremde Belege nie zugeordnet', () => {

@@ -23,7 +23,7 @@ function claim(id, text, blockId, overrides = {}) {
   })
 }
 
-test('eindeutige Rollen erzeugen vorsichtige Stütz-, Gegen- und Definitionsbeziehungen', () => {
+test('eindeutige Rollen erzeugen nur vorsichtige Stütz- und Gegenbeziehungen', () => {
   const central = claim('central', 'Die Maßnahme wirkt allgemein.', 'b-central', { centrality: 'central' })
   const support = claim('support', 'Die Fehlerrate sank im Versuch.', 'b-support')
   const counter = claim('counter', 'Die Replikation fand keinen Unterschied.', 'b-counter', { validity: 'contested' })
@@ -40,12 +40,12 @@ test('eindeutige Rollen erzeugen vorsichtige Stütz-, Gegen- und Definitionsbezi
     ],
     at: 100,
   })
-  assert.deepEqual(next.relations.map(relation => relation.type), ['supports', 'counters', 'depends-on'])
+  assert.deepEqual(next.relations.map(relation => relation.type), ['supports', 'counters'])
   assert.deepEqual(next.relations.map(relation => [relation.fromClaimId, relation.toClaimId]), [
     ['support', 'central'],
     ['counter', 'central'],
-    ['central', 'definition'],
   ])
+  assert.equal(next.relations.some(relation => relation.fromClaimId === central.id && relation.toClaimId === definition.id), false)
   assert.equal(next.relations.every(relation => relation.warrant.trim().length > 20), true)
   assert.equal(next.relations.every(relation => relation.provenance.actor === 'agent'), true)
 })

@@ -49,6 +49,11 @@ function hasPredicate(value) {
   })
 }
 
+function hasClause(value) {
+  const tokens = words(value)
+  return tokens.length >= 3 && hasPredicate(value)
+}
+
 function splitAtDelimiters(source, range) {
   const value = source.slice(range.start, range.end)
   const strong = /;\s*|,\s+(?:und|aber|doch|während)\s+/giu
@@ -57,7 +62,9 @@ function splitAtDelimiters(source, range) {
     const delimiterStart = range.start + match.index
     const left = trimRange(source, range.start, delimiterStart)
     const right = trimRange(source, delimiterStart + match[0].length, range.end)
-    return [...splitAtDelimiters(source, left), ...splitAtDelimiters(source, right)]
+    if (hasClause(source.slice(left.start, left.end)) && hasClause(source.slice(right.start, right.end))) {
+      return [...splitAtDelimiters(source, left), ...splitAtDelimiters(source, right)]
+    }
   }
 
   const conjunction = /\s+und\s+/giu
@@ -83,7 +90,13 @@ export function splitAtomicClaims(value) {
   }
   return ranges.reduce((result, range) => {
     const exact = source.slice(range.start, range.end)
-    if (!exact || exact.endsWith('?') || words(exact).length < 3 || !hasPredicate(exact)) return result
+    if (
+      !exact
+      || /^(?:[-*•]|\d+[.)])\s+/u.test(exact)
+      || exact.endsWith('?')
+      || words(exact).length < 3
+      || !hasPredicate(exact)
+    ) return result
     result.push({ text: exact, start: range.start, end: range.end })
     return result
   }, [])
@@ -166,7 +179,11 @@ export function synchronizeClaimLedger({
     const textId = text(textState.textId)
     if (!textId) throw new TypeError('Claim ledger text id is required')
     ;(Array.isArray(textState.blocks) ? textState.blocks : []).forEach(block => {
-      if (!block?.id || !CLAIM_ROLES.has(block.role || 'paragraph')) return
+      if (
+        !block?.id
+        || ['bulletList', 'orderedList', 'taskList'].includes(block.type)
+        || !CLAIM_ROLES.has(block.role || 'paragraph')
+      ) return
       splitAtomicClaims(block.text).forEach(span => {
         const fingerprint = stableHash([
           projectId,
@@ -180,11 +197,11 @@ export function synchronizeClaimLedger({
         const evidence = evidenceForClaim(span.text, safeBundles, projectId)
         const existing = next.claims.find(claim => claim?.fingerprint === fingerprint)
         if (existing) {
+          existing.evidenceStatus = evidence.evidenceStatus
+          existing.uncertainty = evidence.uncertainty
+          existing.evidenceRefs = evidence.evidenceRefs
           if (existing.status === 'stale') {
             existing.status = 'active'
-            existing.evidenceStatus = evidence.evidenceStatus
-            existing.uncertainty = evidence.uncertainty
-            existing.evidenceRefs = evidence.evidenceRefs
             appendEventIfMissing(next, {
               id: `argument-event:claim-reactivated:${existing.id}:${at}`,
               projectId,
@@ -241,7 +258,6 @@ export function synchronizeClaimLedger({
       || !suppliedTextIds.has(claim.textId)
       || activeFingerprints.has(claim.fingerprint)
       || !derivedClaim(claim)
-      || claim.corrections?.length
       || claim.status === 'stale'
     ) return
     claim.status = 'stale'

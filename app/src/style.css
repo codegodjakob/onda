@@ -3620,7 +3620,11 @@ button.onda-aura:focus-visible {
 }
 
 /* C2 · Argumentationsdossier */
-#argumentModal { width: min(880px, 100%); }
+#argumentModal {
+  width: min(880px, 100%);
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
 .onda-pv-tools {
   display: flex;
   flex-wrap: wrap;
@@ -3660,8 +3664,8 @@ button.onda-aura:focus-visible {
   font: var(--fw-regular) var(--text-sm)/1.55 var(--font-sans);
 }
 .argument-kicker {
-  color: var(--text-tertiary);
-  font: var(--fw-semibold) 11px/1.3 var(--font-sans);
+  color: var(--text-secondary);
+  font: var(--fw-semibold) 12px/1.35 var(--font-sans);
   letter-spacing: var(--tracking-wider);
   text-transform: uppercase;
 }
@@ -3707,6 +3711,7 @@ button.onda-aura:focus-visible {
   align-items: flex-start;
   flex-wrap: wrap;
   gap: var(--space-2);
+  min-width: 0;
 }
 .argument-relation-header {
   justify-content: space-between;
@@ -3718,13 +3723,16 @@ button.onda-aura:focus-visible {
   border-radius: var(--radius-pill);
   background: var(--accent-tint);
   color: var(--text-secondary);
-  font: var(--fw-medium) 11px/1.35 var(--font-sans);
+  font: var(--fw-medium) 12px/1.4 var(--font-sans);
+  max-width: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .argument-tag.is-evidence-unverified,
 .argument-tag.is-evidence-insufficient,
 .argument-tag.is-evidence-review-required {
   background: var(--warning-tint);
-  color: var(--warning);
+  color: var(--text-secondary);
 }
 .argument-claim-text,
 .argument-counter-text,
@@ -3737,9 +3745,13 @@ button.onda-aura:focus-visible {
 .argument-origin {
   display: block;
   margin-top: var(--space-2);
-  color: var(--text-tertiary);
-  font: var(--fw-regular) 11px/1.4 var(--font-sans);
+  color: var(--text-secondary);
+  font: var(--fw-regular) 12px/1.45 var(--font-sans);
   overflow-wrap: anywhere;
+}
+.argument-claim.is-stale {
+  border-style: dashed;
+  background: color-mix(in srgb, var(--warning-tint) 35%, var(--surface-2));
 }
 .argument-relation-flow {
   flex: 1;
@@ -3755,6 +3767,7 @@ button.onda-aura:focus-visible {
 .argument-action,
 .argument-primary {
   width: fit-content;
+  min-height: 44px;
   border: 1px solid var(--border-default);
   border-radius: var(--radius-control);
   background: transparent;
@@ -3786,6 +3799,12 @@ button.onda-aura:focus-visible {
   font: var(--fw-medium) var(--text-sm)/1.45 var(--font-sans);
 }
 .argument-compose summary { cursor: pointer; }
+.argument-compose summary,
+.argument-audit-details summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}
 .argument-form {
   align-items: flex-start;
   margin-top: var(--space-3);
@@ -3799,6 +3818,28 @@ button.onda-aura:focus-visible {
   background: var(--bg-app);
   color: var(--text-primary);
   font: var(--fw-regular) var(--text-base)/1.45 var(--font-sans);
+}
+.argument-select {
+  height: 44px;
+  min-height: 44px;
+}
+#argumentModal .onda-dialog-close {
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  min-height: 44px;
+}
+#argumentModal .onda-dialog-body > *,
+.argument-section,
+.argument-claim-list,
+.argument-claim,
+.argument-relation,
+.argument-finding,
+.argument-counter,
+.argument-path,
+.argument-round {
+  min-width: 0;
+  max-width: 100%;
 }
 .argument-input { resize: vertical; }
 .argument-central-chooser {
@@ -3820,6 +3861,7 @@ button.onda-aura:focus-visible {
   padding-left: var(--space-5);
   color: var(--text-secondary);
   font: var(--fw-regular) var(--text-sm)/1.5 var(--font-sans);
+  min-width: 0;
 }
 .argument-path-list {
   display: grid;

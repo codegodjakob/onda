@@ -4,11 +4,14 @@ import {
   ARGUMENT_CONFIDENCE,
   ARGUMENT_RELATION_TYPES,
   appendArgumentEvent,
+  correctArgumentClaim,
   correctArgumentRelation,
   createArgumentClaim,
   createArgumentEvent,
   createArgumentRelation,
   ensureArgumentModel,
+  validateArgumentEvidenceRefs,
+  validateArgumentModelIntegrity,
 } from '../src/argument-model.mjs'
 
 const provenance = { actor: 'agent', action: 'claim-ledger' }
@@ -155,6 +158,44 @@ test('ARG-02: Nutzerkorrektur ist bindende Projektion und erhält Ursprung sowie
   assert.equal(corrected.events.at(-1).provenance.actor, 'user')
 })
 
+test('ARG-01: Nutzerkorrektur eines Claims ist bindend und erhält die textnahe Herkunft', () => {
+  const original = claim('a', 'p-a', {
+    centrality: 'central',
+    kind: 'fact',
+    validity: 'asserted',
+  })
+  const model = ensureArgumentModel({ argumentModel: { claims: [original] } }).argumentModel
+  const next = correctArgumentClaim({
+    model,
+    claimId: original.id,
+    projectId: 'p-a',
+    kind: 'inference',
+    centrality: 'supporting',
+    validity: 'qualified',
+    at: 30,
+  })
+  assert.equal(next.claims[0].kind, 'inference')
+  assert.equal(next.claims[0].centrality, 'supporting')
+  assert.equal(next.claims[0].validity, 'qualified')
+  assert.deepEqual(next.claims[0].origin, {
+    kind: 'fact',
+    centrality: 'central',
+    validity: 'asserted',
+  })
+  assert.equal(next.claims[0].anchor.exact, original.anchor.exact)
+  assert.equal(next.claims[0].corrections.length, 1)
+  assert.equal(next.events.at(-1).kind, 'claim-corrected')
+  assert.throws(() => correctArgumentClaim({
+    model,
+    claimId: original.id,
+    projectId: 'p-b',
+    kind: 'fact',
+    centrality: 'central',
+    validity: 'asserted',
+    at: 31,
+  }), /project/i)
+})
+
 test('Argumentereignisse sind append-only; Migration repariert Listen additiv und Duplikate scheitern', () => {
   const event = createArgumentEvent({
     id: 'argument-event-1',
@@ -179,4 +220,85 @@ test('Argumentereignisse sind append-only; Migration repariert Listen additiv un
   assert.throws(() => appendArgumentEvent(next, event), /duplicate/i)
   event.snapshot.text = 'Mutiert'
   assert.equal(next.events[0].snapshot.text, 'A')
+})
+
+test('INV-05: Evidenzreferenzen müssen im selben Projekt tatsächlich existieren', () => {
+  const referenced = claim('referenced', 'p-a', {
+    evidenceRefs: [{ sourceId: 'source-a', locatorId: 'locator-a', bundleId: 'bundle-a' }],
+  })
+  const model = ensureArgumentModel({ argumentModel: { claims: [referenced] } }).argumentModel
+  const sources = [{
+    id: 'source-a',
+    projectId: 'p-a',
+    locators: [{ id: 'locator-a' }],
+  }]
+  const bundles = [{ id: 'bundle-a', projectId: 'p-a' }]
+  assert.doesNotThrow(() => validateArgumentEvidenceRefs({
+    model,
+    projectId: 'p-a',
+    sources,
+    evidenceBundles: bundles,
+  }))
+  assert.throws(() => validateArgumentEvidenceRefs({
+    model,
+    projectId: 'p-a',
+    sources: [{ ...sources[0], projectId: 'p-b' }],
+    evidenceBundles: bundles,
+  }), /foreign project/i)
+  assert.throws(() => validateArgumentEvidenceRefs({
+    model,
+    projectId: 'p-a',
+    sources: [],
+    evidenceBundles: bundles,
+  }), /source-a/i)
+  assert.throws(() => validateArgumentEvidenceRefs({
+    model,
+    projectId: 'p-a',
+    sources,
+    evidenceBundles: [],
+  }), /bundle-a/i)
+})
+
+test('INV-05: das persistierte Argumentmodell weist doppelte IDs und fremde Entitäten geschlossen ab', () => {
+  const claims = [claim('a'), claim('b')]
+  const relation = createArgumentRelation({
+    id: 'relation-a-b',
+    projectId: 'p-a',
+    fromClaimId: 'a',
+    toClaimId: 'b',
+    type: 'supports',
+    warrant: 'A stützt B auf derselben nachvollziehbaren Grundlage.',
+    confidence: 'medium',
+    provenance,
+    createdAt: 20,
+  }, { claims })
+  const valid = ensureArgumentModel({
+    argumentModel: {
+      claims,
+      relations: [relation],
+      findings: [{
+        id: 'finding-a',
+        projectId: 'p-a',
+        kind: 'gap',
+        claimId: 'a',
+        status: 'open',
+        basisFingerprint: 'basis-a',
+      }],
+    },
+  }).argumentModel
+  assert.equal(validateArgumentModelIntegrity({ model: valid, projectId: 'p-a' }), true)
+
+  const duplicate = structuredClone(valid)
+  duplicate.findings[0].id = 'a'
+  assert.throws(() => validateArgumentModelIntegrity({
+    model: duplicate,
+    projectId: 'p-a',
+  }), /duplicate argument entity/i)
+
+  const foreign = structuredClone(valid)
+  foreign.relations[0].projectId = 'p-b'
+  assert.throws(() => validateArgumentModelIntegrity({
+    model: foreign,
+    projectId: 'p-a',
+  }), /foreign project/i)
 })

@@ -9,14 +9,6 @@ function clone(value) {
 }
 
 function relationPlan(claim, central, role) {
-  if (claim.kind === 'definition') {
-    return {
-      fromClaimId: central.id,
-      toClaimId: claim.id,
-      type: 'depends-on',
-      warrant: 'Die zentrale Aussage hängt von der im selben Text ausdrücklich gesetzten Begriffsgrenze ab.',
-    }
-  }
   if (role === 'evidence') {
     return {
       fromClaimId: claim.id,

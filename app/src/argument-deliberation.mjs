@@ -122,6 +122,7 @@ function activeClaim(claims, id) {
 function pathBase(id, strategy, central, premiseClaim, bridge, perspective, evidenceStrategy, impact, risk) {
   return {
     id,
+    projectId: central.projectId,
     strategy,
     premiseClaimId: premiseClaim.id,
     premise: premiseClaim.text,
@@ -259,9 +260,11 @@ export function createDeliberationRound(input, { claims = [] } = {}) {
   const entries = [
     normalizeRoundEntry('critique', input.critique),
     normalizeRoundEntry('response', input.response),
-    normalizeRoundEntry('revision', input.revision),
   ]
-  if (!(entries[0].at < entries[1].at && entries[1].at < entries[2].at)) {
+  if (typeof input?.revision?.text === 'string' && input.revision.text.trim()) {
+    entries.push(normalizeRoundEntry('revision', input.revision))
+  }
+  if (!entries.every((entry, index) => index === 0 || entries[index - 1].at < entry.at)) {
     throw new TypeError('Deliberation entries must be chronological')
   }
   return {
@@ -270,7 +273,7 @@ export function createDeliberationRound(input, { claims = [] } = {}) {
     claimId,
     entries,
     createdAt: entries[0].at,
-    completedAt: entries[2].at,
+    completedAt: entries.at(-1).at,
   }
 }
 

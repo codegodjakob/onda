@@ -6,6 +6,7 @@
 
 import { showHomeView, setHomeMode, showStructView, showEditorView } from './ui.js'
 import { decideFinding, ensureProjectUnderstanding, getFindingQueue, isIntegrityCategory } from './reasoning-model.mjs'
+import { analyzeArgumentImpact } from './argument-graph.mjs'
 
 let ctx = null
 
@@ -953,7 +954,25 @@ function insertIntoText(htmlOrText, asBlock) {
 }
 
 function settleFinding(finding, decision) {
-  decideFinding(doc(), finding.id, decision)
+  const activeDoc = doc()
+  decideFinding(activeDoc, finding.id, decision)
+  const project = ctx.activeProjectObj()
+  const recorded = activeDoc.decisions.at(-1)
+  if (project?.id === activeDoc.projectId && project.argumentModel && recorded) {
+    project.argumentModel = analyzeArgumentImpact({
+      model: project.argumentModel,
+      projectId: project.id,
+      change: {
+        kind: 'decision',
+        entityId: recorded.id,
+        textId: activeDoc.id,
+        blockId: finding.blockId || finding.anchor?.blockId || null,
+        fingerprint: `${recorded.id}:${recorded.kind}:${recorded.outcome}:${recorded.at}`,
+        reason: 'Eine Nutzerentscheidung zu einem Texthinweis hat die argumentative Grundlage verändert.',
+      },
+      at: recorded.at,
+    }).model
+  }
   save()
   refreshAllPanels()
   closeOverlay()

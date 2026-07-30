@@ -40,6 +40,7 @@ import {
 import { createSourceLibraryUi } from './source-library-ui.mjs'
 import { createMemoryUi } from './memory-ui.mjs'
 import { createArgumentUi } from './argument-ui.mjs'
+import { analyzeArgumentImpact } from './argument-graph.mjs'
 
 const BLOCK_TYPES = [
   ['paragraph', 'Freier Absatz'],
@@ -518,7 +519,7 @@ function closeOndaDialog({ restoreFocus = true } = {}) {
 }
 
 function dialogFocusables(panel) {
-  return [...panel.querySelectorAll('button, [href], input, textarea, select, [tabindex]:not([tabindex="-1"])')]
+  return [...panel.querySelectorAll('button, summary, [href], input, textarea, select, [tabindex]:not([tabindex="-1"])')]
     .filter(node => !node.disabled && node.offsetParent !== null)
 }
 
@@ -1702,6 +1703,23 @@ function decideAndAdvance(finding, decision) {
   const doc = ctx.activeDoc()
   const workspace = activeWorkspace()
   decideFinding(doc, finding.id, decision)
+  const project = ctx.activeProjectObj()
+  const recorded = doc.decisions.at(-1)
+  if (project?.id === doc.projectId && project.argumentModel && recorded) {
+    project.argumentModel = analyzeArgumentImpact({
+      model: project.argumentModel,
+      projectId: project.id,
+      change: {
+        kind: 'decision',
+        entityId: recorded.id,
+        textId: doc.id,
+        blockId: finding.blockId || finding.anchor?.blockId || null,
+        fingerprint: `${recorded.id}:${recorded.kind}:${recorded.outcome}:${recorded.at}`,
+        reason: 'Eine Nutzerentscheidung zu einem Texthinweis hat die argumentative Grundlage verändert.',
+      },
+      at: recorded.at,
+    }).model
+  }
   clearFindingWorkspaceState(workspace, finding.id)
   localFeedbackError = null
   ctx.scheduleSave()

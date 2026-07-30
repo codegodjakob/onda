@@ -213,6 +213,21 @@ test('AC-C2-8: Kritik, Autorenantwort und Revision bleiben getrennt, chronologis
   assert.throws(() => appendDeliberationRound(next, round), /duplicate/i)
 })
 
+test('eine Prüfrunde kann ehrlich ohne erfundene Revision enden', () => {
+  const fixture = richFixture()
+  const round = createDeliberationRound({
+    id: 'round-without-revision',
+    projectId: 'p-a',
+    claimId: 'central',
+    critique: { text: 'Die Reichweite ist noch nicht geklärt.', actor: 'agent', at: 100 },
+    response: { text: 'Ich prüfe erst die Population.', actor: 'user', at: 110 },
+  }, { claims: fixture.model.claims })
+  assert.deepEqual(round.entries.map(entry => entry.kind), ['critique', 'response'])
+  assert.equal(round.completedAt, 110)
+  const next = appendDeliberationRound(fixture.model, round)
+  assert.deepEqual(next.deliberations[0].entries.map(entry => entry.kind), ['critique', 'response'])
+})
+
 test('Prüfrunden und Deliberation bleiben im Projekt und benötigen echte getrennte Beiträge', () => {
   const fixture = richFixture()
   const base = {

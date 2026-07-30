@@ -4,7 +4,9 @@ import {
   analyzeArgumentGraph,
   analyzeArgumentImpact,
   buildArgumentGraph,
+  mergeArgumentFindings,
   reconcileArgumentRegression,
+  resolveArgumentFinding,
 } from '../src/argument-graph.mjs'
 import {
   createArgumentClaim,
@@ -142,6 +144,23 @@ test('ARG-05: Claim-Änderung markiert nur gerichtete abhängige Claims und läs
   assert.equal(independentAfter, independentBefore)
 })
 
+test('ARG-05: ein Gegenargument löst keine falsche Wirkungskaskade in die angegriffene These aus', () => {
+  const counter = claim('counter')
+  const central = claim('central', { centrality: 'central' })
+  const claims = [counter, central]
+  const relations = [relation('counter-central', 'counter', 'central', 'counters', claims)]
+  const result = analyzeArgumentImpact({
+    model: model(claims, relations),
+    projectId: 'p-a',
+    change: { kind: 'claim', entityId: 'counter', fingerprint: 'counter-v2', reason: 'Gegenbeleg geändert' },
+    at: 200,
+  })
+  assert.deepEqual(result.impact.affectedClaimIds, ['counter'])
+  assert.deepEqual(result.impact.affectedRelationIds, [])
+  assert.equal(result.model.claims.find(item => item.id === 'central').review, undefined)
+  assert.equal(result.model.relations[0].review, undefined)
+})
+
 test('Quellen-, Definitions- und Entscheidungsänderungen beginnen an den direkt referenzierenden Claims', () => {
   const sourceClaim = claim('source', {
     evidenceRefs: [{ sourceId: 'source-1', locatorId: 'locator-1', bundleId: 'bundle-1' }],
@@ -214,6 +233,45 @@ test('ARG-06: gelöster Befund bleibt bei gleicher Grundlage geschlossen und öf
   assert.equal(changed.reopenReason, 'Neue Gegenquelle verändert die Beleglage')
   assert.equal(changed.reopenedAt, 201)
   assert.equal(finding.status, 'resolved')
+})
+
+test('ARG-06: geschlossene Befundhistorie bleibt erhalten und öffnet bei neuer Grundlage sichtbar', () => {
+  const claims = [claim('central', {
+    centrality: 'central',
+    evidenceStatus: 'unverified',
+    uncertainty: 'high',
+  })]
+  const base = model(claims, [])
+  const analyzed = analyzeArgumentGraph(base, { projectId: 'p-a', at: 100 }).findings
+  base.findings = analyzed
+  const resolved = resolveArgumentFinding({
+    model: base,
+    projectId: 'p-a',
+    findingId: analyzed[0].id,
+    resolution: 'Beleg wurde außerhalb des Dossiers geprüft.',
+    at: 110,
+  })
+  assert.equal(resolved.findings[0].status, 'resolved')
+  assert.equal(resolved.events.at(-1).kind, 'finding-resolved')
+
+  const absentNow = mergeArgumentFindings({
+    previous: resolved.findings,
+    analyzed: [],
+    projectId: 'p-a',
+    at: 120,
+  })
+  assert.equal(absentNow.length, 1)
+  assert.equal(absentNow[0].status, 'resolved')
+
+  const changed = [{ ...analyzed[0], basisFingerprint: 'new-basis' }]
+  const reopened = mergeArgumentFindings({
+    previous: resolved.findings,
+    analyzed: changed,
+    projectId: 'p-a',
+    at: 130,
+  })
+  assert.equal(reopened[0].status, 'open')
+  assert.equal(reopened[0].reopenReason, 'Die argumentative Grundlage dieses Befunds hat sich geändert.')
 })
 
 test('Projektfremde Graph- und Änderungszugriffe scheitern geschlossen', () => {

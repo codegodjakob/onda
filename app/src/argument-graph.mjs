@@ -3,7 +3,8 @@ import {
   ensureArgumentModel,
 } from './argument-model.mjs'
 
-const CHANGE_KINDS = new Set(['claim', 'definition', 'source', 'decision'])
+const CHANGE_KINDS = new Set(['claim', 'definition', 'source', 'decision', 'relation'])
+const IMPACT_RELATION_TYPES = new Set(['supports', 'qualifies', 'explains', 'depends-on'])
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value))
@@ -201,9 +202,31 @@ function seedClaims(model, change) {
       (claim.evidenceRefs || []).some(reference => reference.sourceId === change.entityId)
     )).map(claim => claim.id)
   }
+  if (change.kind === 'relation') {
+    const relation = model.relations.find(candidate => candidate?.id === change.entityId)
+    if (!relation) return []
+    return [dependencyDirection(relation).target]
+  }
   return model.claims.filter(claim => (
     claim.provenance?.originIds?.includes(change.entityId)
+    || (
+      change.kind === 'decision'
+      && change.textId
+      && claim.textId === change.textId
+      && (!change.blockId || claim.anchor?.blockId === change.blockId)
+    )
   )).map(claim => claim.id)
+}
+
+function buildImpactOutgoing(model, graph) {
+  const outgoing = new Map([...graph.nodes.keys()].map(claimId => [claimId, new Set()]))
+  model.relations.forEach(relation => {
+    if (!IMPACT_RELATION_TYPES.has(relation.type)) return
+    const flow = graph.relationFlow.get(relation.id)
+    if (!flow || !outgoing.has(flow.source) || !outgoing.has(flow.target)) return
+    outgoing.get(flow.source).add(flow.target)
+  })
+  return outgoing
 }
 
 export function analyzeArgumentImpact({
@@ -218,6 +241,7 @@ export function analyzeArgumentImpact({
   const reason = requiredText(change.reason, 'Argument impact reason')
   const next = ensureArgumentModel({ argumentModel: clone(model) }).argumentModel
   const graph = buildArgumentGraph(next, { projectId })
+  const impactOutgoing = buildImpactOutgoing(next, graph)
   const seeds = seedClaims(next, change)
   const affected = new Set()
   const queue = [...seeds]
@@ -225,13 +249,14 @@ export function analyzeArgumentImpact({
     const current = queue.shift()
     if (affected.has(current)) continue
     affected.add(current)
-    for (const dependent of graph.outgoing.get(current) || []) {
+    for (const dependent of impactOutgoing.get(current) || []) {
       if (!affected.has(dependent)) queue.push(dependent)
     }
   }
 
   const affectedClaimIds = next.claims.filter(claim => affected.has(claim.id)).map(claim => claim.id)
   const affectedRelationIds = next.relations.filter(relation => {
+    if (!IMPACT_RELATION_TYPES.has(relation.type)) return false
     const flow = graph.relationFlow.get(relation.id)
     return flow && affected.has(flow.source) && affected.has(flow.target)
   }).map(relation => relation.id)
@@ -305,5 +330,75 @@ export function reconcileArgumentRegression({
   next.basisFingerprint = basisFingerprintValue
   next.reopenReason = requiredText(reason, 'Argument regression reason')
   next.reopenedAt = at
+  return next
+}
+
+export function mergeArgumentFindings({
+  previous = [],
+  analyzed = [],
+  projectId,
+  at = Date.now(),
+}) {
+  if (!Number.isFinite(at)) throw new TypeError('Argument finding merge time is required')
+  const old = Array.isArray(previous) ? previous : []
+  const fresh = Array.isArray(analyzed) ? analyzed : []
+  if (
+    old.some(finding => finding?.projectId && finding.projectId !== projectId)
+    || fresh.some(finding => finding?.projectId && finding.projectId !== projectId)
+  ) {
+    throw new TypeError('Argument finding merge project mismatch')
+  }
+  const freshIds = new Set(fresh.map(finding => finding.id))
+  const merged = fresh.map(finding => {
+    const existing = old.find(candidate => candidate?.id === finding.id)
+    if (!existing) return clone(finding)
+    if (existing.basisFingerprint === finding.basisFingerprint) {
+      return { ...clone(finding), ...clone(existing), basisFingerprint: finding.basisFingerprint }
+    }
+    return reconcileArgumentRegression({
+      finding: existing,
+      projectId,
+      basisFingerprint: finding.basisFingerprint,
+      reason: 'Die argumentative Grundlage dieses Befunds hat sich geändert.',
+      at,
+    })
+  })
+  old
+    .filter(finding => finding?.status === 'resolved' && !freshIds.has(finding.id))
+    .forEach(finding => merged.push(clone(finding)))
+  return merged
+}
+
+export function resolveArgumentFinding({
+  model,
+  projectId,
+  findingId,
+  resolution,
+  at = Date.now(),
+}) {
+  if (!Number.isFinite(at)) throw new TypeError('Argument finding resolution time is required')
+  const next = ensureArgumentModel({ argumentModel: clone(model) }).argumentModel
+  const finding = next.findings.find(candidate => candidate?.id === findingId)
+  if (!finding) throw new TypeError('Argument finding is unknown')
+  if (finding.projectId !== projectId) throw new TypeError('Argument finding project mismatch')
+  finding.status = 'resolved'
+  finding.resolution = requiredText(resolution, 'Argument finding resolution')
+  finding.resolvedAt = at
+  const event = createArgumentEvent({
+    id: `argument-event:finding-resolved:${finding.id}:${at}`,
+    projectId,
+    kind: 'finding-resolved',
+    entityId: finding.id,
+    snapshot: {
+      basisFingerprint: finding.basisFingerprint,
+      resolution: finding.resolution,
+    },
+    provenance: { actor: 'user', action: 'finding-resolve' },
+    at,
+  })
+  if (next.events.some(candidate => candidate?.id === event.id)) {
+    throw new TypeError(`Duplicate argument event: ${event.id}`)
+  }
+  next.events.push(event)
   return next
 }

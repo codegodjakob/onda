@@ -2,6 +2,7 @@ import { importSource, recordSourceEvent } from './source-model.mjs'
 import { createLocator, resolveLocator } from './locator-model.mjs'
 import { buildEvidenceBundle, propagateSourceEvent } from './evidence-bundle.mjs'
 import { createResearchUi } from './research-ui.mjs'
+import { analyzeArgumentImpact } from './argument-graph.mjs'
 
 export function createSourceLibraryUi({
   context,
@@ -421,6 +422,18 @@ export function createSourceLibraryUi({
           const index = project.sources.findIndex(candidate => candidate.id === source.id)
           project.sources[index] = recordSourceEvent(source, event)
           project.evidenceBundles = propagateSourceEvent(project.evidenceBundles, event)
+          const impact = analyzeArgumentImpact({
+            model: project.argumentModel,
+            projectId: project.id,
+            change: {
+              kind: 'source',
+              entityId: source.id,
+              fingerprint: `${source.id}:${event.kind}:${event.at}`,
+              reason: event.reason,
+            },
+            at: event.at,
+          })
+          project.argumentModel = impact.model
           context.persist()
           renderProjectSourceLibrary(body, project, `${sourceTitle(source)} gilt nicht mehr als belastbare Quelle.`)
         })

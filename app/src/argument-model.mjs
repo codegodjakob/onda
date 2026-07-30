@@ -85,6 +85,13 @@ export function ensureArgumentModel(project) {
     if (!Array.isArray(model[key])) model[key] = []
   }
   if (!isObject(model.lastAnalysis)) model.lastAnalysis = null
+  if (typeof project.id === 'string' && project.id.trim()) {
+    for (const key of ['claims', 'relations', 'findings', 'paths', 'deliberations', 'events']) {
+      model[key].forEach(entity => {
+        if (isObject(entity) && !entity.projectId) entity.projectId = project.id
+      })
+    }
+  }
   project.argumentModel = model
   return project
 }
@@ -92,15 +99,18 @@ export function ensureArgumentModel(project) {
 export function createArgumentClaim(input) {
   if (!isObject(input)) throw new TypeError('Argument claim is required')
   if (!Number.isFinite(input.createdAt)) throw new TypeError('Claim createdAt is required')
+  const kind = normalizedEnum(input.kind, CLAIM_KIND_SET, 'Claim kind')
+  const centrality = normalizedEnum(input.centrality, CENTRALITY_SET, 'Claim centrality')
+  const validity = normalizedEnum(input.validity, VALIDITY_SET, 'Claim validity')
   return {
     id: requiredText(input.id, 'Claim id'),
     projectId: requiredText(input.projectId, 'Claim project'),
     textId: requiredText(input.textId, 'Claim text'),
     anchor: normalizeAnchor(input.anchor),
     text: requiredText(input.text, 'Claim text value'),
-    kind: normalizedEnum(input.kind, CLAIM_KIND_SET, 'Claim kind'),
-    centrality: normalizedEnum(input.centrality, CENTRALITY_SET, 'Claim centrality'),
-    validity: normalizedEnum(input.validity, VALIDITY_SET, 'Claim validity'),
+    kind,
+    centrality,
+    validity,
     evidenceStatus: normalizedEnum(input.evidenceStatus, EVIDENCE_STATUS_SET, 'Claim evidence status'),
     uncertainty: normalizedEnum(input.uncertainty, UNCERTAINTY_SET, 'Claim uncertainty'),
     evidenceRefs: normalizeEvidenceRefs(input.evidenceRefs),
@@ -108,6 +118,7 @@ export function createArgumentClaim(input) {
     fingerprint: requiredText(input.fingerprint, 'Claim fingerprint'),
     createdAt: input.createdAt,
     status: input.status === 'stale' ? 'stale' : 'active',
+    origin: isObject(input.origin) ? clone(input.origin) : { kind, centrality, validity },
     corrections: Array.isArray(input.corrections) ? clone(input.corrections) : [],
   }
 }
@@ -211,4 +222,121 @@ export function correctArgumentRelation({
     provenance: correction.provenance,
     at,
   }))
+}
+
+export function correctArgumentClaim({
+  model,
+  claimId,
+  projectId,
+  kind,
+  centrality,
+  validity,
+  at,
+}) {
+  if (!Number.isFinite(at)) throw new TypeError('Claim correction time is required')
+  const next = ensureArgumentModel({ argumentModel: clone(model) }).argumentModel
+  const claim = next.claims.find(candidate => candidate?.id === claimId)
+  if (!claim) throw new TypeError('Claim correction target is unknown')
+  if (claim.projectId !== projectId) throw new TypeError('Claim correction project mismatch')
+  const corrected = {
+    kind: normalizedEnum(kind, CLAIM_KIND_SET, 'Claim kind'),
+    centrality: normalizedEnum(centrality, CENTRALITY_SET, 'Claim centrality'),
+    validity: normalizedEnum(validity, VALIDITY_SET, 'Claim validity'),
+  }
+  const previous = {
+    kind: claim.kind,
+    centrality: claim.centrality,
+    validity: claim.validity,
+  }
+  if (!isObject(claim.origin)) claim.origin = clone(previous)
+  const correction = {
+    id: `argument-correction:${claim.id}:${at}`,
+    ...corrected,
+    provenance: { actor: 'user', action: 'claim-correct' },
+    at,
+  }
+  claim.kind = corrected.kind
+  claim.centrality = corrected.centrality
+  claim.validity = corrected.validity
+  claim.corrections = Array.isArray(claim.corrections) ? claim.corrections : []
+  claim.corrections.push(correction)
+  return appendArgumentEvent(next, createArgumentEvent({
+    id: `argument-event:claim-corrected:${claim.id}:${at}`,
+    projectId,
+    kind: 'claim-corrected',
+    entityId: claim.id,
+    snapshot: { previous, next: corrected },
+    provenance: correction.provenance,
+    at,
+  }))
+}
+
+export function validateArgumentModelIntegrity({
+  model,
+  projectId,
+}) {
+  const normalizedProjectId = requiredText(projectId, 'Argument model project')
+  const normalized = ensureArgumentModel({ argumentModel: clone(model) }).argumentModel
+  const seenIds = new Set()
+  const entities = [
+    ...normalized.claims,
+    ...normalized.relations,
+    ...normalized.findings,
+    ...normalized.paths,
+    ...normalized.deliberations,
+    ...normalized.events,
+  ]
+  entities.forEach(entity => {
+    const id = requiredText(entity?.id, 'Argument entity id')
+    if (seenIds.has(id)) throw new TypeError(`Duplicate argument entity: ${id}`)
+    seenIds.add(id)
+    if (entity?.projectId !== normalizedProjectId) {
+      throw new TypeError(`Argument entity belongs to a foreign project: ${id}`)
+    }
+  })
+
+  const claims = normalized.claims.map(createArgumentClaim)
+  normalized.relations.forEach(relation => createArgumentRelation(relation, { claims }))
+  normalized.events.forEach(createArgumentEvent)
+  return true
+}
+
+export function validateArgumentEvidenceRefs({
+  model,
+  projectId,
+  sources = [],
+  evidenceBundles = [],
+}) {
+  const normalizedProjectId = requiredText(projectId, 'Argument evidence project')
+  const sourceList = Array.isArray(sources) ? sources : []
+  const bundleList = Array.isArray(evidenceBundles) ? evidenceBundles : []
+  if (
+    sourceList.some(source => source?.projectId !== normalizedProjectId)
+    || bundleList.some(bundle => bundle?.projectId !== normalizedProjectId)
+  ) {
+    throw new TypeError('Argument evidence contains a foreign project')
+  }
+  const sourceIds = new Set(sourceList.map(source => source?.id).filter(Boolean))
+  const locatorIds = new Set(sourceList.flatMap(source => (
+    Array.isArray(source?.locators) ? source.locators.map(locator => locator?.id) : []
+  )).filter(Boolean))
+  const bundleIds = new Set(bundleList.map(bundle => bundle?.id).filter(Boolean))
+  const claims = Array.isArray(model?.claims) ? model.claims : []
+  if (claims.some(claim => claim?.projectId !== normalizedProjectId)) {
+    throw new TypeError('Argument evidence contains a foreign project')
+  }
+  claims.forEach(claim => {
+    ;(Array.isArray(claim?.evidenceRefs) ? claim.evidenceRefs : []).forEach(reference => {
+      if (reference.sourceId && !sourceIds.has(reference.sourceId)) {
+        throw new TypeError(`Argument evidence source is unknown: ${reference.sourceId}`)
+      }
+      if (reference.locatorId && !locatorIds.has(reference.locatorId)) {
+        throw new TypeError(`Argument evidence locator is unknown: ${reference.locatorId}`)
+      }
+      if (reference.bundleId && !bundleIds.has(reference.bundleId)) {
+        throw new TypeError(`Argument evidence bundle is unknown: ${reference.bundleId}`)
+      }
+    })
+  })
+  return true
 }
