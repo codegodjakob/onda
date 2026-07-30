@@ -3,6 +3,13 @@ import { chromium } from 'playwright'
 
 const baseUrl = process.env.AIWT_URL || 'http://127.0.0.1:4173/'
 
+async function waitForLibraryReady(page) {
+  await page.locator('#materialModal').waitFor({ state: 'visible' })
+  await page.locator('#materialModal').evaluate(async node => {
+    await Promise.all(node.getAnimations({ subtree: true }).map(animation => animation.finished.catch(() => {})))
+  })
+}
+
 async function freshProject(page) {
   await page.goto(baseUrl, { waitUntil: 'networkidle' })
   await page.evaluate(() => localStorage.clear())
@@ -18,7 +25,7 @@ async function openLibrary(page) {
     await page.evaluate(() => window.AIWT.openDoc(window.AIWT.state.active))
   }
   await page.locator('#materialSources').click()
-  await page.locator('#materialModal').waitFor({ state: 'visible' })
+  await waitForLibraryReady(page)
 }
 
 async function importSource(page, {
@@ -120,7 +127,7 @@ async function runImportAndRecovery(browser) {
       bundleSupport: project.evidenceBundles[0].support[0],
     }
   })
-  assert.equal(recovery.schemaVersion, 8)
+  assert.equal(recovery.schemaVersion, 9)
   assert.equal(recovery.sourceCount, 1)
   assert.equal(recovery.bundleCount, 1)
   assert.equal(recovery.bundleStatus, 'supported')
@@ -223,7 +230,7 @@ async function runResponsiveKeyboardFlow(browser) {
   await page.keyboard.press('Escape')
   assert.equal(await page.locator('#materialSources').evaluate(node => document.activeElement === node), true)
   await page.keyboard.press('Enter')
-  await page.locator('#materialModal').waitFor({ state: 'visible' })
+  await waitForLibraryReady(page)
   const locatorButton = page.locator('.source-locator-open')
   await locatorButton.focus()
   await page.keyboard.press('Enter')

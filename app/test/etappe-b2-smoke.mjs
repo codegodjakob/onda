@@ -19,6 +19,9 @@ async function openLibrary(page) {
   }
   await page.locator('#materialSources').click()
   await page.locator('#materialModal').waitFor({ state: 'visible' })
+  await page.locator('#materialModal').evaluate(async node => {
+    await Promise.all(node.getAnimations({ subtree: true }).map(animation => animation.finished.catch(() => {})))
+  })
 }
 
 async function installAdapter(page, delay = 0) {
@@ -197,7 +200,7 @@ async function runResearchFlow(browser) {
     }
   })
   assert.deepEqual(stored, {
-    schemaVersion: 8,
+    schemaVersion: 9,
     runCount: 1,
     status: 'completed',
     sourceCount: 3,

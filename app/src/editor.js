@@ -19,6 +19,8 @@ import { EXAMPLE_PROJECT_ID, migrateExampleSeed } from './example-seed.mjs'
 import { initGateway, runTask, hatSchluessel, setzeSchluessel, loescheSchluessel } from './agent-gateway.mjs'
 import { ensureProjectEvidenceShape } from './source-model.mjs'
 import { ensureProjectResearchShape } from './research-run.mjs'
+import { ensureMemoryStore, ensureProjectMemoryShape } from './memory-model.mjs'
+import { synchronizeProjectMemory } from './memory-dossier.mjs'
 
 // ---------- Sanfte Markierung (Peripherie): eine flüchtige Dekoration ----------
 // Zeigt eine Passage kurz an, OHNE das Dokument zu ändern — sie wird nicht
@@ -56,7 +58,7 @@ const Cue = Extension.create({
 const NATIVE = !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.store)
 const DEFAULTS = DEFAULT_SETTINGS
 const TRASH_DAYS = 30
-const SCHEMA = 8
+const SCHEMA = 9
 const EX_VERSION = 9
 
 // Schmaler Rückkanal der nativen saveimg-Brücke. Der frühere Bildeditor ist
@@ -71,7 +73,16 @@ window.__imgSaved__ = function (reqId, url) {
   callback(url)
 }
 
-export const state = { docs: [], active: null, projects: [], activeProject: null, settings: { ...DEFAULTS }, editor: null, native: NATIVE }
+export const state = {
+  docs: [],
+  active: null,
+  projects: [],
+  activeProject: null,
+  settings: { ...DEFAULTS },
+  memoryStore: ensureMemoryStore(null),
+  editor: null,
+  native: NATIVE,
+}
 
 // Schmale Test-Bridge fuer zustandsbehaftete ProseMirror-Regressionstests.
 // Sie exportiert keine UI und bleibt ausserhalb des produktiven Bedienflusses.
@@ -139,6 +150,7 @@ function ensureProjectShape(p) {
   if (!Array.isArray(p.material)) p.material = []
   ensureProjectEvidenceShape(p)
   ensureProjectResearchShape(p)
+  ensureProjectMemoryShape(p)
   ensureProjectUnderstanding(p)
   return p
 }
@@ -190,6 +202,7 @@ function load() {
   state.docs = (d && Array.isArray(d.docs)) ? d.docs : []
   state.active = d ? d.active : null
   state.settings = normalizeSettings(d && d.settings)
+  state.memoryStore = ensureMemoryStore(d && d.memoryStore)
   // Projekte: bestehende Texte wandern in ein Standard-Projekt (Migration).
   state.projects = (d && Array.isArray(d.projects) && d.projects.length) ? d.projects : []
   if (!state.projects.length) {
@@ -246,12 +259,26 @@ function buildExampleDocumentSeed() {
 }
 
 let ackPending = false
+function synchronizeAllProjectMemory() {
+  state.projects.forEach(project => {
+    const result = synchronizeProjectMemory({
+      project,
+      docs: state.docs,
+      store: state.memoryStore,
+    })
+    state.memoryStore = result.store
+    project.memory = result.projectMemory
+  })
+}
+
 export function persist() {
+  synchronizeAllProjectMemory()
   const payload = JSON.stringify({
     schemaVersion: SCHEMA,
     docs: state.docs, active: state.active,
     projects: state.projects, activeProject: state.activeProject,
     settings: state.settings,
+    memoryStore: state.memoryStore,
   })
   if (NATIVE) {
     ackPending = true
