@@ -46,6 +46,14 @@ _Avoid_: Quelle, Treffer
 Gesammeltes Material, das noch nicht automatisch als zitierfaehiger Beleg gilt.
 _Avoid_: Beleg, Wissen
 
+**Projektgedaechtnis**:
+Ein lokal abgeleitetes, korrigierbares Dossier aus bestaetigten Projektzustaenden, Quellen, Belegen, Entscheidungen und Recherchelagen. Es verweist auf unveraenderliche Ursprungsereignisse und ersetzt keine Primaerdaten.
+_Avoid_: verstecktes Modellwissen, globale Erinnerung
+
+**Gedaechtnisebene**:
+Der ausdrueckliche Geltungsbereich einer Erinnerung: Text, Projekt, Thema oder Person. Themen- und persoenliche Erinnerungen gelangen nur nach bewusster Freigabe in ein anderes Projekt.
+_Avoid_: automatischer Wissenstransfer, universelles Profil
+
 ## Agentische Zusammenarbeit
 
 **Hinweis**:
@@ -78,7 +86,7 @@ Der erste interaktive V2-Bauabschnitt ist eine fokussierte Schreiboberflaeche au
 
 ### Architektur
 
-- `app/src/editor.js` migriert Dokumente auf Schema 8, initialisiert das inhaltlich reduzierte Tiptap-Schema und verbindet Bibliothek, Persistenz und Workspace.
+- `app/src/editor.js` migriert Dokumente auf Schema 9, initialisiert das inhaltlich reduzierte Tiptap-Schema und verbindet Bibliothek, Persistenz, Projektgedaechtnis und Workspace.
 - `app/src/example-seed.mjs` besitzt die konservative Beispielmigration. Seed-Texte tragen stabile Marker und eine normalisierte Body-Signatur.
 - `app/src/workspace-model.mjs` besitzt die reinen Workspace-Zustaende, Block-Snapshots, Finding-Zielaufloesung, Threads und Regeln fuer Agenteninitiativen.
 - `app/src/block-identity.js` vergibt stabile IDs an semantische Tiptap-Bloecke und kapselt Einfuegen, aktive Blockauswahl und bewusste Textuebernahmen.
@@ -93,6 +101,9 @@ Der erste interaktive V2-Bauabschnitt ist eine fokussierte Schreiboberflaeche au
 - `app/src/research-run.mjs` besitzt Recherchefrage, Claim-Bezug, Suchwege, Budget, Stopbedingungen und den persistierbaren Zustandsautomaten. `app/src/research-orchestrator.mjs` fuehrt nur vorab geplante, noch nicht erledigte Wege aus und haelt Pause, Fortsetzung und Fehler atomar.
 - `app/src/research-adapter.mjs` kapselt austauschbare Recherchewerkzeuge, legale Alternativwege, zustandsabhaengige Fehlwegdeduplizierung und ein normalisiertes, geheimnisfreies Werkzeugprotokoll.
 - `app/src/research-synthesis.mjs` trennt Metadaten, Abstracts und Originalfundstellen, erhaelt Widersprueche und uebergibt nur erneut am B1-Original verifizierte Kandidaten an das belegte Projektwissen. `app/src/research-ui.mjs` bildet den ruhigen Bedienfluss in den Projektquellen.
+- `app/src/memory-model.mjs` besitzt das unveraenderliche Ereignisjournal und genau vier Gedaechtnisebenen. `app/src/memory-dossier.mjs` verdichtet Projektzustaende deterministisch, erhaelt die vollstaendige Herkunft und speichert Korrekturen als neue Ereignisse.
+- `app/src/memory-retrieval.mjs` erzwingt Projektgrenzen, begruendete Auswahl, ausdrueckliche Freigaben und die Trennung von Projekt- und Autorenstimme. `app/src/memory-portability.mjs` besitzt lesbaren Export, Geheimnisredaktion und gezieltes Loeschen ohne Primaerdatenverlust.
+- `app/src/memory-ui.mjs` bildet das ruhige Projektdossier hinter dem Projektverstaendnis: Korrektur, Freigabe/Ablehnung, Export, zweistufiges Loeschen und bewusster Wiederaufbau.
 - `app/src/ui.js` besitzt Bibliothek, Titel, Auswahl-Bubble, Slash-Menue und globale Tastaturregeln. Die alten Rails und Panel-Initialisierungen sind nicht mehr Teil des erreichbaren Oberflaechenpfads.
 - `app/src/example.js` liefert den aktuellen Beispieldatensatz. Seine Agentenantworten und Rechercheangaben sind Demo-Fixtures, keine Ergebnisse produktiver Agentenlaeufe.
 
@@ -124,6 +135,9 @@ Die alten Module `app/src/panels.js` und `app/src/structure.js` duerfen vorerst 
 - Recherche beginnt mit einer pruefbaren Frage, einer genauen Aussage, drei sichtbaren Suchrichtungen und einem begrenzten Werkzeugbudget. Der Plan wird gespeichert, bevor ein Adapter aufgerufen wird.
 - Ein Lauf kann pausiert, fortgesetzt und abgebrochen werden. Widersprechende Befunde und methodische Grenzen stehen in der Sichtung vor stuetzenden Funden; das vollstaendige, bereinigte Werkzeugprotokoll bleibt eingeklappt erreichbar.
 - Ohne verbundenen Rechercheadapter bleibt der Plan lokal erhalten und die Oberflaeche simuliert keine Ergebnisse. Die bewusste Uebernahme prueft Original, Fundstelle und Belegbuendel erneut und veraendert keinen Nutzertext.
+- Das Projektgedaechtnis entsteht automatisch aus bestaetigten Zustaenden. Aktualisierte Entitaeten erscheinen einmal mit vollstaendiger Historie; Nutzerkorrekturen bleiben sichtbar und veraendern weder Projektverstaendnis noch Quellen, Belege oder Text.
+- Text-, Projekt-, Themen- und persoenliche Erinnerung bleiben getrennt. Ein projektuebergreifender Vorschlag enthaelt bei sensiblen Inhalten vor Zustimmung keinen Vorschautext; Freigabe und Ablehnung werden explizit gespeichert und gelten nur fuer das Zielprojekt.
+- Export liefert ein versioniertes, lesbares und geheimnisbereinigtes Paket. Projektloeschung entfernt Dossier, Ereignisse, abgeleitete Eintraege und offene Freigaben, laesst Texte und Quellen bestehen und baut das Gedaechtnis nicht still neu auf.
 - Der Live-Editor besitzt keine Schriftgroessen-, Farb-, Highlight-, Ausrichtungs-, Unterstreichungs-, Bild- oder grafischen Anmerkungsbefehle. Links bleiben als inhaltliche Referenzen, Listen und Ueberschriften als Struktur erhalten.
 - Agenten- und Belegfenster liegen mobil mit 12 Pixel Abstand im Viewport und belegen hoechstens 70 Prozent der Hoehe.
 - Zwischen 761 und 1199 Pixel reservieren Agenten- und Belegfenster einen kollisionsfreien rechten Layouttrack; ab 1200 Pixel bleibt derselbe Abstand erhalten.
@@ -142,11 +156,12 @@ node test/v2-smoke.mjs
 node test/etappe-a-smoke.mjs
 node test/etappe-b1-smoke.mjs
 node test/etappe-b2-smoke.mjs
+node test/etappe-c1-smoke.mjs
 node test/decision-log-smoke.mjs
 node test/performance-smoke.mjs
 npm run eval:b1-quality
 npm run eval:b2-quality
-node evals/run-v2-evals.mjs --result evals/results/etappe-b2-latest.json
+node evals/run-v2-evals.mjs --result evals/results/etappe-c1-latest.json
 ```
 
 Der Haupt-Smoke prueft die Zustaende `base`, `shelf`, `finding`, `suggestion`, `local-dialogue`, `agent` und `evidence` bei Desktop, Mobile und relevanten Zwischenbreiten. Er deckt Seed-Erhalt, Klartext-Patches, expliziten Own-Version-Abschluss, Integritaetsbestaetigung, stale/mehrdeutige Anker, Fokus, Escape-Kaskade, Reduced Motion, ARIA-Beziehungen, horizontalen Overflow, Streaming und die lokale Monatsgrenze ab.
@@ -155,7 +170,9 @@ Die fokussierte Etappen-A-Eval beweist ausserdem: genau eine gebuendelte Einstie
 
 Die B2-Eval beweist Plan-vor-Werkzeug, zustandsabhaengige Fehlwegdeduplizierung, Secret-Redaktion, Pause und Fortsetzung, atomare Uebernahme, Gegenbeleg- und Grenzensuche sowie Reload. RESEARCH-05 erreicht 5,0 von 5,0; bei unzureichender Evidenz schlaegt die ehrliche Enthaltung die plausible Erfindung im festen Kontrast mit 5 zu 0.
 
-Der frische Gesamtlauf umfasst 293 bestandene Tests, den Produktionsbuild, alle bisherigen Browser-Smokes und 17 native Selbsttests. Die Performanceprobe misst waehrend eines langsamen Agentenlaufs 15 Eingaben mit einer p95-Zeit bis zum naechsten Frame von 9,9 ms und ohne Long Task. `app/evals/results/etappe-b2-latest.json` fuehrt alle 77 Ziel-Evals: 35 bestanden, 36 ehrlich spaeteren Etappen zugeordnet und 6 externe Live-Gates offen. Der gewichtete B2-Exitwert betraegt 4,84 von 5,0.
+Die C1-Eval beweist unveraenderliche Ereigniswahrheit, genau vier Gedaechtnisebenen, ein automatisch aufgebautes und korrigierbares Projektdossier, projektisoliertes Retrieval, explizite Freigabe/Ablehnung, getrennte Stimmen sowie vollstaendigen Export und kontrolliertes Loeschen ohne Primaerdatenverlust. Statuswechsel von Quellen und Belegen bleiben als eigene Ereignisse sichtbar; sensible Transfers enthalten vor Zustimmung keinen Inhalt.
+
+Der frische Gesamtlauf umfasst 327 bestandene Tests, den Produktionsbuild, alle bisherigen Browser-Smokes und 17 native Selbsttests. Die Performanceprobe misst waehrend eines langsamen Agentenlaufs 14 Eingaben mit einer p95-Zeit bis zum naechsten Frame von 8,2 ms und ohne Long Task. `app/evals/results/etappe-c1-latest.json` fuehrt alle 77 Ziel-Evals: 42 bestanden, 29 ehrlich spaeteren Etappen zugeordnet und 6 externe Live-Gates offen. Der gewichtete C1-Exitwert betraegt 4,87 von 5,0.
 
 Vom Repository-Wurzelverzeichnis muss ausserdem `git diff --check` ohne Ausgabe enden. Der lokale Prototyp ist unter `http://127.0.0.1:4173/` erreichbar, solange der vorhandene statische Server laeuft.
 
@@ -166,9 +183,8 @@ Projektverstaendnis, automatische verankerte Hinweise sowie lokaler und globaler
 Noch nicht produktiv verbunden sind:
 
 - ein produktiver Live-Rechercheadapter fuer echte Web-, Bibliotheks- oder Datenbankanbieter sowie automatische Volltextextraktion;
-- echtes Langzeitgedaechtnis und projektuebergreifendes Memory;
 - Multi-Agent-, Debatten- oder stochastischer Consensus;
 - redaktionelle Literaturverzeichnisbearbeitung und das vollstaendige Schlussaudit trotz bereits deterministisch vorhandener Zitationspruefungen;
 - Argumentgraph, deutsche Sprach- und Wirkungsdiagnostik sowie vollstaendiger Export.
 
-Echte Chat- und Hinweislauf-Antworten sind keine Fixtures, aber auch keine automatisch verifizierten Forschungsergebnisse. Quellen und Rechercheangaben im Beispiel bleiben Demo. Quellen-, Evidenz- und Recherchevertraege sind mit B1/B2 gebaut; die reale Providerabnahme bleibt extern, waehrend Gedaechtnis-, Argumentations-, Sprach- und Auditverhalten in C1 bis D2 gegen den festgeschriebenen Eval-Katalog folgen.
+Echte Chat- und Hinweislauf-Antworten sind keine Fixtures, aber auch keine automatisch verifizierten Forschungsergebnisse. Quellen und Rechercheangaben im Beispiel bleiben Demo. Quellen-, Evidenz-, Recherche- und Gedaechtnisvertraege sind mit B1/B2/C1 gebaut; die reale Providerabnahme bleibt extern, waehrend Argumentations-, Sprach-, Wirkungs- und Auditverhalten in C2 bis D2 gegen den festgeschriebenen Eval-Katalog folgen.

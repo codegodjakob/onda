@@ -1,0 +1,801 @@
+{
+  "schemaVersion": 1,
+  "catalogVersion": "2026-07-30.1",
+  "stage": "C1",
+  "iteration": 4,
+  "generatedAt": "2026-07-30T15:52:23Z",
+  "gitCommit": "d10699b",
+  "rubricScores": {
+    "truth": 4.9,
+    "authorship": 4.9,
+    "usefulness": 4.8,
+    "calm": 4.8,
+    "reliability": 4.9,
+    "access_privacy": 4.9
+  },
+  "weightedScore": 4.87,
+  "scoreRationale": {
+    "truth": "Das Projektgedächtnis wird ausschließlich aus unveränderlichen Ereignissen mit Ursprungs-IDs abgeleitet. Aktualisierte Begriffe, Quellen, Belege und Statuswechsel erscheinen einmal mit vollständiger Herkunft; Korrekturen überlagern das Dossier, ohne Primärdaten umzuschreiben.",
+    "authorship": "Projektverständnis, Quellen, Text und Entscheidungen bleiben maßgebliche Primärzustände. Dossierkorrekturen, projektübergreifende Freigaben, Ablehnungen, Löschung und Wiederaufbau sind ausdrückliche Nutzerhandlungen; Autoren- und Projektstimme bleiben getrennt.",
+    "usefulness": "Ein automatisch aufgebautes Projektdossier bündelt Ziele, Begriffe, Quellen, belegte Aussagen, Entscheidungen, Risiken und Recherchelagen. Herkunft, Freigabegrund, Export, Korrektur und kontrolliertes Löschen sind direkt erreichbar.",
+    "calm": "Das Gedächtnis liegt kontextuell hinter dem Projektverständnis, nutzt ruhige Karten und zeigt Freigaben nur bei Bedarf. Desktop und 390-Pixel-Ansicht sind ohne horizontalen Überlauf bedienbar; die reduzierte Oberfläche hält Primärdaten und abgeleitete Erinnerung verständlich auseinander.",
+    "reliability": "327 Tests, Produktionsbuild, A-, B1-, B2-, C1-, Entscheidungs- und vollständiger V2-Browserlauf, Reload, Statuswechsel, gezielte Löschung, Performance, 17 native Selbsttests und Startprobe bestehen. B1/B2-Animationsrennen wurden mit echten Zustandsgrenzen stabilisiert.",
+    "access_privacy": "Projektisoliertes Retrieval schließt Canary-Inhalte aus. Sensible Vorschläge enthalten vor Zustimmung keinen Vorschautext, explizite Freigabe gilt nur für das Zielprojekt, Exporte redigieren Geheimnisschlüssel und Löschung greift ohne stille Wiederherstellung."
+  },
+  "loops": [
+    {
+      "iteration": 1,
+      "commit": "d10699b",
+      "result": "Ereignisjournal, vier Gedächtnisebenen, Dossierableitung, Retrieval, Stimmenkontext, Export und Löschung wurden mit zunächst 16 kontrastiven Domänentests aufgebaut."
+    },
+    {
+      "iteration": 2,
+      "commit": "d10699b",
+      "result": "Der Browserfluss schloss automatische Ableitung, sichtbare Korrektur, Reload, Vorschlag, Zustimmung, Ablehnung, Export, zweistufiges Löschen, Fokus und 390-Pixel-Geometrie. Eine unrealistische Zeitfixture und eine Aufnahme mitten in der Dialoganimation wurden korrigiert."
+    },
+    {
+      "iteration": 3,
+      "commit": "d10699b",
+      "result": "Adversariales Review deckte doppelte Entitätsstände und einen intern gespeicherten sensiblen Vorschautext vor Zustimmung auf. Neueste Zustände werden nun einmalig mit kompletter Herkunft verdichtet; sensible Transfers bleiben bis zur Freigabe inhaltlich leer."
+    },
+    {
+      "iteration": 4,
+      "commit": "d10699b",
+      "result": "Quellenrücknahmen und Beleg-Neuprüfungen wurden als eigene Ereignisse geschlossen. 327 Tests, alle Browseretappen, p95 8,2 ms ohne Long Task sowie native Neubau- und Startprobe waren anschließend grün."
+    }
+  ],
+  "evals": [
+    {
+      "id": "INV-01",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/etappe-b1-latest.json",
+          "command": "node evals/run-v2-evals.mjs --result evals/results/etappe-b1-latest.json"
+        }
+      ]
+    },
+    {
+      "id": "INV-02",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "test/research-synthesis.test.mjs",
+          "command": "node --test test/research-synthesis.test.mjs test/provenance-model.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "INV-03",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "test/research-synthesis.test.mjs",
+          "command": "node --test test/research-synthesis.test.mjs test/evidence-bundle.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "INV-04",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "test/etappe-b2-smoke.mjs",
+          "command": "node test/etappe-b2-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "INV-05",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "test/memory-retrieval.test.mjs",
+          "command": "node --test test/memory-retrieval.test.mjs test/memory-portability.test.mjs"
+        },
+        {
+          "kind": "browser",
+          "path": "test/etappe-c1-smoke.mjs",
+          "command": "node test/etappe-c1-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "INV-06",
+      "status": "external-open",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "test/v2-smoke.mjs",
+          "command": "node test/v2-smoke.mjs"
+        }
+      ],
+      "note": "Der Browser-Offlinepfad ist geprüft; der geforderte Mac-Live-Test ohne Netz bleibt extern offen."
+    },
+    {
+      "id": "INV-07",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "test/v2-smoke.mjs",
+          "command": "node test/v2-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "INV-08",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "fixture",
+          "path": "evals/fixtures/recherchequalitaet.mjs",
+          "command": "npm run eval:b2-quality"
+        }
+      ]
+    },
+    {
+      "id": "INV-09",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "unit",
+          "path": "test/research-quality.test.mjs",
+          "command": "node --test test/research-quality.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "WORK-01",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "test/etappe-a-smoke.mjs",
+          "command": "node test/etappe-a-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "WORK-02",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "test/etappe-a-smoke.mjs",
+          "command": "node test/etappe-a-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "WORK-03",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/etappe-b1-latest.json",
+          "command": "node evals/run-v2-evals.mjs --result evals/results/etappe-b1-latest.json"
+        }
+      ]
+    },
+    {
+      "id": "WORK-04",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "test/etappe-a-smoke.mjs",
+          "command": "node test/etappe-a-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "WORK-05",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "test/v2-smoke.mjs",
+          "command": "node test/v2-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "WORK-06",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "test/v2-smoke.mjs",
+          "command": "node test/v2-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "WORK-07",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "test/v2-smoke.mjs",
+          "command": "node test/v2-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "WORK-08",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "persistence",
+          "path": "test/decision-log-smoke.mjs",
+          "command": "node test/decision-log-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "EVID-01",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "test/research-synthesis.test.mjs",
+          "command": "node --test test/research-synthesis.test.mjs test/source-model.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "EVID-02",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "test/etappe-b2-smoke.mjs",
+          "command": "node test/etappe-b2-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "EVID-03",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "test/research-synthesis.test.mjs",
+          "command": "node --test test/research-synthesis.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "EVID-04",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "fixture",
+          "path": "evals/fixtures/evidenzqualitaet.mjs",
+          "command": "npm run eval:b1-quality"
+        }
+      ]
+    },
+    {
+      "id": "EVID-05",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "test/citation-audit.test.mjs",
+          "command": "node --test test/citation-audit.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "EVID-06",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "test/citation-audit.test.mjs",
+          "command": "node --test test/citation-audit.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "EVID-07",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "test/citation-audit.test.mjs",
+          "command": "node --test test/citation-audit.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "EVID-08",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "test/research-synthesis.test.mjs",
+          "command": "node --test test/research-synthesis.test.mjs test/evidence-bundle.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "RESEARCH-01",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "test/research-run.test.mjs",
+          "command": "node --test test/research-run.test.mjs test/research-orchestrator.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "RESEARCH-02",
+      "status": "external-open",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "test/research-synthesis.test.mjs",
+          "command": "node --test test/research-synthesis.test.mjs"
+        },
+        {
+          "kind": "browser",
+          "path": "test/etappe-b2-smoke.mjs",
+          "command": "node test/etappe-b2-smoke.mjs"
+        }
+      ],
+      "note": "Metadaten-, Abstract- und Originalverträge sind lokal geprüft; ein echter Suchprovider mit realen Originalquellen bleibt als Live-Gate offen."
+    },
+    {
+      "id": "RESEARCH-03",
+      "status": "external-open",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "test/research-adapter.test.mjs",
+          "command": "node --test test/research-adapter.test.mjs"
+        }
+      ],
+      "note": "Paywall-, Preprint- und Repositoriumswege sind als legaler Adaptervertrag geprüft; Rechtmäßigkeit und Erreichbarkeit realer Wege bleiben live offen."
+    },
+    {
+      "id": "RESEARCH-04",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "unit",
+          "path": "test/research-run.test.mjs",
+          "command": "node --test test/research-run.test.mjs test/research-orchestrator.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "RESEARCH-05",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "fixture",
+          "path": "evals/fixtures/recherchequalitaet.mjs",
+          "command": "npm run eval:b2-quality"
+        }
+      ]
+    },
+    {
+      "id": "RESEARCH-06",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "test/research-orchestrator.test.mjs",
+          "command": "node --test test/research-orchestrator.test.mjs test/research-synthesis.test.mjs"
+        },
+        {
+          "kind": "browser",
+          "path": "test/etappe-b2-smoke.mjs",
+          "command": "node test/etappe-b2-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "RESEARCH-07",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "test/research-adapter.test.mjs",
+          "command": "node --test test/research-adapter.test.mjs test/research-orchestrator.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "MEMORY-01",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "test/memory-dossier.test.mjs",
+          "command": "node --test test/memory-model.test.mjs test/memory-dossier.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "MEMORY-02",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "unit",
+          "path": "test/memory-model.test.mjs",
+          "command": "node --test test/memory-model.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "MEMORY-03",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "test/memory-dossier.test.mjs",
+          "command": "node --test test/memory-dossier.test.mjs"
+        },
+        {
+          "kind": "browser",
+          "path": "test/etappe-c1-smoke.mjs",
+          "command": "node test/etappe-c1-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "MEMORY-04",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "test/memory-retrieval.test.mjs",
+          "command": "node --test test/memory-retrieval.test.mjs"
+        },
+        {
+          "kind": "browser",
+          "path": "test/etappe-c1-smoke.mjs",
+          "command": "node test/etappe-c1-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "MEMORY-05",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "unit",
+          "path": "test/memory-retrieval.test.mjs",
+          "command": "node --test test/memory-retrieval.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "MEMORY-06",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "test/memory-portability.test.mjs",
+          "command": "node --test test/memory-portability.test.mjs"
+        },
+        {
+          "kind": "browser",
+          "path": "test/etappe-c1-smoke.mjs",
+          "command": "node test/etappe-c1-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "ARG-01",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe C2: atomare überprüfbare Claims."
+    },
+    {
+      "id": "ARG-02",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe C2: explizite korrigierbare Argumentrelationen."
+    },
+    {
+      "id": "ARG-03",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe C2: Abhängigkeiten, Grundursachen und Neuberechnung."
+    },
+    {
+      "id": "ARG-04",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe C2: naheliegende Gegenargumente."
+    },
+    {
+      "id": "ARG-05",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe C2: begrenzte Auswirkungsanalyse nach Änderungen."
+    },
+    {
+      "id": "ARG-06",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe C2: mindestens zwei ehrliche Argumentationspfade."
+    },
+    {
+      "id": "ARG-07",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe C2: dokumentierte Kritik-, Antwort- und Revisionsschleife."
+    },
+    {
+      "id": "LANG-01",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe D1: Grunddiagnose vor Oberflächenstil."
+    },
+    {
+      "id": "LANG-02",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe D1: kontextabhängige Musterdiagnose."
+    },
+    {
+      "id": "LANG-03",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe D1: epistemische Kalibrierung."
+    },
+    {
+      "id": "LANG-04",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe D1: Informationsstruktur und Satzklammer."
+    },
+    {
+      "id": "LANG-05",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe D1: deutsche Korpusqualität und Idiomatik."
+    },
+    {
+      "id": "LANG-06",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe D1: Opt-in für Rechtschreibautomatik."
+    },
+    {
+      "id": "LANG-07",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe D1: Erhalt der Nutzerstimme."
+    },
+    {
+      "id": "LANG-08",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe D1: Korpus- und Blindvergleich."
+    },
+    {
+      "id": "EFFECT-01",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe D1: Zielgruppe, Zweck und Veränderungsziel."
+    },
+    {
+      "id": "EFFECT-02",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe D1: Passagenfunktion und Wirkungsbegründung."
+    },
+    {
+      "id": "EFFECT-03",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe D1: Genauigkeit vor Metapher."
+    },
+    {
+      "id": "EFFECT-04",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe D1: Einwand-, Missverständnis- und Erinnerungsprüfung."
+    },
+    {
+      "id": "EFFECT-05",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe D1: Fairness- und Manipulationswarnung."
+    },
+    {
+      "id": "EFFECT-06",
+      "status": "external-open",
+      "evidence": [],
+      "note": "Kommunikative Wirkung benötigt eine echte verblindete Nutzerstudie und bleibt extern offen."
+    },
+    {
+      "id": "AUDIT-01",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe D2: Abschlussprüfung über alle Dimensionen."
+    },
+    {
+      "id": "AUDIT-02",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe D2: Integrität vor Stil."
+    },
+    {
+      "id": "AUDIT-03",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe D2: angenommene Risiken bleiben sichtbar."
+    },
+    {
+      "id": "AUDIT-04",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe D2: Freigabegrenze für wissenschaftliche Texte."
+    },
+    {
+      "id": "AUDIT-05",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe D2: vollständiger Provenienzgraph."
+    },
+    {
+      "id": "AUDIT-06",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe D2: optionale KI-Nutzungserklärung."
+    },
+    {
+      "id": "AUDIT-07",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe D2: vollständiger reimportierbarer Export."
+    },
+    {
+      "id": "SYSTEM-01",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "test/etappe-b2-smoke.mjs",
+          "command": "node test/etappe-b2-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "SYSTEM-02",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "persistence",
+          "path": "test/etappe-b2-smoke.mjs",
+          "command": "node test/etappe-b2-smoke.mjs"
+        },
+        {
+          "kind": "persistence",
+          "path": "../mac/main.swift",
+          "command": "swiftc -O -warnings-as-errors -swift-version 5 -o /tmp/aiwt-b2-selftest ../mac/main.swift && /tmp/aiwt-b2-selftest --selftest"
+        }
+      ]
+    },
+    {
+      "id": "SYSTEM-03",
+      "status": "external-open",
+      "evidence": [
+        {
+          "kind": "security-inspection",
+          "path": "src/research-adapter.mjs",
+          "command": "node --test test/research-adapter.test.mjs test/research-orchestrator.test.mjs"
+        },
+        {
+          "kind": "security-inspection",
+          "path": "src/agent-transport.mjs",
+          "command": "node --test test/agent-transport.test.mjs"
+        },
+        {
+          "kind": "security-inspection",
+          "path": "test/memory-portability.test.mjs",
+          "command": "node --test test/memory-portability.test.mjs"
+        }
+      ],
+      "note": "Browser-, Adapter-, Brücken- und Memory-Exportvertrag sind geprüft; der reale macOS-Keychain- und Export-Live-Test bleibt extern offen."
+    },
+    {
+      "id": "SYSTEM-04",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "test/v2-smoke.mjs",
+          "command": "node test/v2-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "SYSTEM-05",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "test/v2-smoke.mjs",
+          "command": "node test/v2-smoke.mjs"
+        },
+        {
+          "kind": "browser",
+          "path": "test/etappe-b2-smoke.mjs",
+          "command": "node test/etappe-b2-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "SYSTEM-06",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "test/v2-smoke.mjs",
+          "command": "node test/v2-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "SYSTEM-07",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "test/performance-smoke.mjs",
+          "command": "node test/performance-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "SYSTEM-08",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "test/settings-model.test.mjs",
+          "command": "node --test test/settings-model.test.mjs test/hinweislauf-model.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "SYSTEM-09",
+      "status": "external-open",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "test/etappe-a-smoke.mjs",
+          "command": "node test/etappe-a-smoke.mjs"
+        }
+      ],
+      "note": "Gateway-Schema, Streaming und Fehlerverhalten sind per injizierter Transportschicht geprüft; ein echter Modellanbieter-Call mit Nutzerschlüssel bleibt extern offen."
+    },
+    {
+      "id": "SYSTEM-10",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe D2: exportierbares internes Ereignisprotokoll."
+    },
+    {
+      "id": "SYSTEM-11",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe D2: kompletter Lösch- und Recoverypfad."
+    }
+  ]
+}

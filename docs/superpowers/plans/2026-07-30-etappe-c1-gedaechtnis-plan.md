@@ -118,3 +118,33 @@ flowchart LR
 8. Eval-Katalog und C1-Ergebnis;
 9. native Build-/Startprobe;
 10. `git diff --check`.
+
+## Ausfuehrungsstand — 30. Juli 2026
+
+Alle sechs Aufgaben wurden in vier begrenzten Qualitaetsschleifen abgeschlossen. Die neun Abnahmekriterien und der Eval-Katalog blieben unveraendert.
+
+```mermaid
+flowchart LR
+  L1["Loop 1<br/>Journal · vier Ebenen · Dossier · Export"] --> L2["Loop 2<br/>vollstaendiger Browserfluss<br/>Desktop + 390 px"]
+  L2 --> F2["Befund<br/>unrealistische Zeitfixture<br/>Screenshot mitten in Animation"]
+  F2 --> L3["Loop 3<br/>adversariales Review"]
+  L3 --> F3["Befund<br/>doppelte Entitaetsstaende<br/>sensibler Previewtext vor Consent"]
+  F3 --> L4["Loop 4<br/>Quellen-/Belegstatus als Ereignis<br/>Gesamtregression"]
+  L4 --> X{"lokale C1-Gates gruen<br/>Gesamtwert 4,87 / 5?"}
+  X -- "ja" --> DONE["C1 abgeschlossen<br/>29 spaetere Evals · 6 externe Gates offen"]
+```
+
+### Frische Exit-Evidenz
+
+- 327 Unit- und Integrationstests bestanden, 0 fehlgeschlagen.
+- 18 fokussierte Memory-Domaenentests decken Ereignisimmutabilitaet, vier Ebenen, Dossier-Rebuild, Statuswechsel, Projektgrenzen, Consent, Stimmen, Export und Loeschung ab.
+- Produktionsbuild erfolgreich; Bundle 542,9 KB.
+- Etappen-A-, B1-, B2-, C1-, Entscheidungsverlauf- und vollstaendiger V2-Browser-Smoke bestanden.
+- B1 und B2 wurden nach Behebung ihrer Animations-Testflanken jeweils dreimal hintereinander gruen ausgefuehrt.
+- 14 Performanceeingaben: p95 bis zum naechsten Frame 8,2 ms, kein Long Task.
+- Native Mac-App: warnungsfreier Compile, 17 Selbsttests, Neubau und Start-/Persistenzprobe bestanden.
+- Evalkatalog und C1-Ergebnis validiert: 77 vollstaendig erfasste Evals, davon 42 bestanden, 29 spaeteren Etappen zugeordnet und 6 echte externe Live-Gates offen.
+- Desktop- und Mobile-Screenshots zeigen ein opakes, ruhiges Dossier ohne horizontalen Ueberlauf.
+- `git diff --check` ohne Befund.
+
+Damit sind `INV-05` und `MEMORY-01` bis `MEMORY-06` reproduzierbar geschlossen. Die sechs unveraenderten externen Live-Gates bleiben ausdruecklich offen.
