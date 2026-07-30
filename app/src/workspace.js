@@ -1,4 +1,4 @@
-import { getActiveBlockId, getEditorBlocks, insertSemanticBlock, replaceFindingTarget } from './block-identity.js'
+import { getActiveBlockId, getEditorBlocks, insertSemanticBlock, replaceAnchoredTexts, replaceFindingTarget } from './block-identity.js'
 import { decideFinding, ensureProjectUnderstanding, ensureReasoningModel, getFindingQueue, isIntegrityCategory, istEntwurfVersucht, istInterviewOffen, markiereEntwurfVersucht, markiereGeschuetzt, mergeVerstaendnis } from './reasoning-model.mjs'
 import {
   appendThreadMessage,
@@ -40,6 +40,7 @@ import {
 import { createSourceLibraryUi } from './source-library-ui.mjs'
 import { createMemoryUi } from './memory-ui.mjs'
 import { createArgumentUi } from './argument-ui.mjs'
+import { createLanguageUi } from './language-ui.mjs'
 import { analyzeArgumentImpact } from './argument-graph.mjs'
 
 const BLOCK_TYPES = [
@@ -975,6 +976,13 @@ function openProjectUnderstandingModal(opener) {
     openDialog: openOndaDialog,
     getBlocks: () => getEditorBlocks(ctx.editor),
   })
+  const languageUi = createLanguageUi({
+    context: ctx,
+    createNode,
+    openDialog: openOndaDialog,
+    getBlocks: () => getEditorBlocks(ctx.editor),
+    applyCorrections: corrections => replaceAnchoredTexts(ctx.editor, corrections),
+  })
   openOndaDialog({ id: 'pvModal', title: 'Projektverständnis', opener, build: body => {
     understandingField(body, 'Aufgabe', u.task, value => { u.task = value; commit('task') }, { geschuetzt: istGeschuetzt('task') })
     understandingField(body, 'Zielgruppe', u.audience.join(', '), value => { u.audience = splitList(value, false); commit('audience') }, { geschuetzt: istGeschuetzt('audience') })
@@ -991,7 +999,11 @@ function openProjectUnderstandingModal(opener) {
     argument.id = 'argumentOpen'
     argument.type = 'button'
     argument.addEventListener('click', () => argumentUi.open(project, document.getElementById('pvCard')))
-    tools.append(memory, argument)
+    const language = createNode('button', 'onda-pv-language', 'Sprache und Wirkung prüfen')
+    language.id = 'languageOpen'
+    language.type = 'button'
+    language.addEventListener('click', () => languageUi.open(project, document.getElementById('pvCard')))
+    tools.append(memory, argument, language)
     body.append(tools)
   }})
 }

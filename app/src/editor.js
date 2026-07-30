@@ -13,7 +13,7 @@ import { __workspaceTestBridge, initWorkspace, refreshWorkspace } from './worksp
 import { ensureProjectUnderstanding, ensureReasoningModel } from './reasoning-model.mjs'
 import { ensureWorkspaceState } from './workspace-model.mjs'
 import { DEFAULT_SETTINGS, normalizeSettings } from './settings-model.mjs'
-import { BlockIdentity, ensureTopLevelBlockIds, getActiveBlockId, getEditorBlocks, insertSemanticBlock, replaceFindingTarget } from './block-identity.js'
+import { BlockIdentity, ensureTopLevelBlockIds, getActiveBlockId, getEditorBlocks, insertSemanticBlock, replaceAnchoredText, replaceAnchoredTexts, replaceFindingTarget } from './block-identity.js'
 import { buildExampleStructure, buildExampleNarrative, buildExampleCoach, buildExampleLane, buildExampleBody, buildExampleMaterial, buildExampleUnderstanding, buildExampleAgentMessages } from './example.js'
 import { EXAMPLE_PROJECT_ID, migrateExampleSeed } from './example-seed.mjs'
 import { initGateway, runTask, hatSchluessel, setzeSchluessel, loescheSchluessel } from './agent-gateway.mjs'
@@ -22,6 +22,8 @@ import { ensureProjectResearchShape } from './research-run.mjs'
 import { ensureMemoryStore, ensureProjectMemoryShape } from './memory-model.mjs'
 import { synchronizeProjectMemory } from './memory-dossier.mjs'
 import { ensureArgumentModel } from './argument-model.mjs'
+import { ensureLanguageProfile } from './language-profile.mjs'
+import { ensureLanguageReportStore } from './language-report.mjs'
 
 // ---------- Sanfte Markierung (Peripherie): eine flüchtige Dekoration ----------
 // Zeigt eine Passage kurz an, OHNE das Dokument zu ändern — sie wird nicht
@@ -59,7 +61,7 @@ const Cue = Extension.create({
 const NATIVE = !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.store)
 const DEFAULTS = DEFAULT_SETTINGS
 const TRASH_DAYS = 30
-const SCHEMA = 10
+const SCHEMA = 11
 const EX_VERSION = 9
 
 // Schmaler Rückkanal der nativen saveimg-Brücke. Der frühere Bildeditor ist
@@ -101,6 +103,12 @@ export const __blockIdentityTestBridge = {
   getJSON() { return state.editor.getJSON() },
   replaceFindingTarget(target, replacement, blockId = null) {
     return replaceFindingTarget(state.editor, target, replacement, blockId)
+  },
+  replaceAnchoredText(target) {
+    return replaceAnchoredText(state.editor, target)
+  },
+  replaceAnchoredTexts(targets) {
+    return replaceAnchoredTexts(state.editor, targets)
   },
 }
 
@@ -153,6 +161,8 @@ function ensureProjectShape(p) {
   ensureProjectResearchShape(p)
   ensureProjectMemoryShape(p)
   ensureArgumentModel(p)
+  ensureLanguageProfile(p)
+  ensureLanguageReportStore(p)
   ensureProjectUnderstanding(p)
   return p
 }
