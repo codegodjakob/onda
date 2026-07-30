@@ -57,6 +57,18 @@ const TRASH_DAYS = 30
 const SCHEMA = 6
 const EX_VERSION = 9
 
+// Schmaler Rückkanal der nativen saveimg-Brücke. Der frühere Bildeditor ist
+// nicht mehr Teil der Onda-Oberfläche; die Mac-Startprobe prüft diesen
+// Infrastrukturvertrag weiterhin, damit Scheme-Handler und JS↔Swift-Rückruf
+// nicht unbemerkt veralten.
+const imgPending = Object.create(null)
+window.__imgSaved__ = function (reqId, url) {
+  const callback = imgPending[reqId]
+  if (!callback) return
+  delete imgPending[reqId]
+  callback(url)
+}
+
 export const state = { docs: [], active: null, projects: [], activeProject: null, settings: { ...DEFAULTS }, editor: null, native: NATIVE }
 
 // Schmale Test-Bridge fuer zustandsbehaftete ProseMirror-Regressionstests.

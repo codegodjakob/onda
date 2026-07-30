@@ -562,7 +562,7 @@ extension AppDelegate {
     private func streamLlm(id: String, request: URLRequest) {
         Task { [weak self] in
             guard let self = self else { return }
-            func fehler(_ typ: String, _ nachricht: String) {
+            @MainActor func fehler(_ typ: String, _ nachricht: String) {
                 self.llmRueckruf(["id": id, "typ": "fehler",
                                   "fehler": ["typ": typ, "nachricht": nachricht]])
             }
