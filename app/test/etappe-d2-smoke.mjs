@@ -184,6 +184,10 @@ async function runCoreFlow(browser) {
   page.on('pageerror', error => errors.push(error.message))
   await freshApp(page)
   const ids = await seedD2Project(page)
+  await page.keyboard.press('Control+e')
+  await page.locator('#auditModal').waitFor({ state: 'visible' })
+  await page.keyboard.press('Escape')
+  assert.equal(await page.locator('#auditModal').count(), 0)
   await openAudit(page)
 
   assert.deepEqual(
@@ -233,6 +237,15 @@ async function runCoreFlow(browser) {
   }, ids)
   assert.deepEqual(persisted, { status: 'blocked', history: 1 })
 
+  const beforeInvalidImport = await page.evaluate(() => localStorage.getItem('aiwt.v2'))
+  await page.getByLabel('Vollständiges lokales Datenpaket auswählen').setInputFiles({
+    name: 'ungueltig.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from('{"kind":"foreign"}'),
+  })
+  await page.locator('.audit-action-status').filter({ hasText: 'Datenpaket nicht übernommen' }).waitFor()
+  assert.equal(await page.evaluate(() => localStorage.getItem('aiwt.v2')), beforeInvalidImport)
+
   const dataDownloadPromise = page.waitForEvent('download')
   await page.getByRole('button', { name: 'Gesamtdaten sichern' }).click()
   const dataDownload = await dataDownloadPromise
@@ -281,6 +294,38 @@ async function runResponsiveFlow(browser) {
   await page.close()
 }
 
+async function runKeyboardAndZoomFlow(browser) {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 900 } })
+  await freshApp(page)
+  await seedD2Project(page)
+  await page.keyboard.press('Control+e')
+  await page.locator('#auditModal').waitFor({ state: 'visible' })
+  assert.equal(await page.getByRole('button', { name: 'Schließen', exact: true }).evaluate(node => (
+    document.activeElement === node
+  )), true)
+  await page.keyboard.press('Tab')
+  assert.equal(await page.getByText('Privater Autorschaftsnachweis', { exact: true }).evaluate(node => (
+    document.activeElement === node
+  )), true)
+  const focusVisible = await page.evaluate(() => {
+    const active = document.activeElement
+    const style = getComputedStyle(active)
+    return style.outlineStyle !== 'none' || style.boxShadow !== 'none'
+  })
+  assert.equal(focusVisible, true)
+  await page.evaluate(() => { document.documentElement.style.zoom = '2' })
+  const zoomLayout = await page.locator('#auditModal').evaluate(modal => ({
+    overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    modalRight: modal.getBoundingClientRect().right,
+    viewportWidth: document.documentElement.clientWidth,
+  }))
+  assert.equal(zoomLayout.overflow <= 1, true, JSON.stringify(zoomLayout))
+  assert.equal(zoomLayout.modalRight <= zoomLayout.viewportWidth + 1, true, JSON.stringify(zoomLayout))
+  await page.keyboard.press('Escape')
+  assert.equal(await page.locator('#pvCard').evaluate(node => document.activeElement === node), true)
+  await page.close()
+}
+
 async function runDeletionFlow(browser) {
   const page = await browser.newPage({ viewport: { width: 1024, height: 800 } })
   await freshApp(page)
@@ -326,6 +371,7 @@ for (const [name, launcher] of selected) {
   try {
     await runCoreFlow(browser)
     await runResponsiveFlow(browser)
+    await runKeyboardAndZoomFlow(browser)
     await runDeletionFlow(browser)
     console.log(`Etappe D2 smoke (${name}): PASS`)
   } finally {

@@ -939,6 +939,24 @@ function splitList(value, byLine) {
   return String(value || '').split(byLine ? /\r?\n/ : ',').map(part => part.trim()).filter(Boolean)
 }
 
+function currentAuditUi() {
+  return createAuditUi({
+    context: ctx,
+    createNode,
+    openDialog: openOndaDialog,
+    getEditorJson: () => ctx.editor.getJSON(),
+    download: ctx.downloadFile,
+    importLocalState: ctx.importLocalState,
+    deleteAllLocalData: ctx.deleteAllLocalData,
+  })
+}
+
+export function openFinalAudit(opener = null) {
+  const project = ctx?.activeProjectObj()
+  if (!project || !ctx?.activeDoc()) return null
+  return currentAuditUi().open(project, opener || document.getElementById('pvCard'))
+}
+
 // geschuetzt: dezenter Hinweis, dass dieses Feld eine bindende Nutzer-Korrektur trägt
 // (siehe openProjectUnderstandingModal) — ruhiger Onda-Ton, keine Warnfarbe, kein
 // Ausrufezeichen; nur ein zusätzliches, kleines Tag neben dem Feldlabel.
@@ -984,15 +1002,6 @@ function openProjectUnderstandingModal(opener) {
     getBlocks: () => getEditorBlocks(ctx.editor),
     applyCorrections: corrections => replaceAnchoredTexts(ctx.editor, corrections),
   })
-  const auditUi = createAuditUi({
-    context: ctx,
-    createNode,
-    openDialog: openOndaDialog,
-    getEditorJson: () => ctx.editor.getJSON(),
-    download: ctx.downloadFile,
-    importLocalState: ctx.importLocalState,
-    deleteAllLocalData: ctx.deleteAllLocalData,
-  })
   openOndaDialog({ id: 'pvModal', title: 'Projektverständnis', opener, build: body => {
     understandingField(body, 'Aufgabe', u.task, value => { u.task = value; commit('task') }, { geschuetzt: istGeschuetzt('task') })
     understandingField(body, 'Zielgruppe', u.audience.join(', '), value => { u.audience = splitList(value, false); commit('audience') }, { geschuetzt: istGeschuetzt('audience') })
@@ -1016,7 +1025,7 @@ function openProjectUnderstandingModal(opener) {
     const audit = createNode('button', 'onda-pv-audit', 'Schlussaudit und Export öffnen')
     audit.id = 'auditOpen'
     audit.type = 'button'
-    audit.addEventListener('click', () => auditUi.open(project, document.getElementById('pvCard')))
+    audit.addEventListener('click', () => openFinalAudit(document.getElementById('pvCard')))
     tools.append(memory, argument, language, audit)
     body.append(tools)
   }})

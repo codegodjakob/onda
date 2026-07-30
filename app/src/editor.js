@@ -9,7 +9,7 @@ import Placeholder from '@tiptap/extension-placeholder'
 import CharacterCount from '@tiptap/extension-character-count'
 import Typography from '@tiptap/extension-typography'
 import { initUI, setSaveState, refreshSidebar, applySettings, focusTitle, showEditorView, showHomeView } from './ui.js'
-import { __workspaceTestBridge, initWorkspace, refreshWorkspace } from './workspace.js'
+import { __workspaceTestBridge, initWorkspace, openFinalAudit, refreshWorkspace } from './workspace.js'
 import { ensureProjectUnderstanding, ensureReasoningModel } from './reasoning-model.mjs'
 import { ensureWorkspaceState } from './workspace-model.mjs'
 import { DEFAULT_SETTINGS, normalizeSettings } from './settings-model.mjs'
@@ -475,7 +475,7 @@ function blockMd(node) {
   })
   return out
 }
-export function exportMd() {
+function exportMarkdownDirect() {
   flushSave()
   const d = activeDoc(); if (!d) return
   const el = document.querySelector('#editor .ProseMirror'); if (!el) return
@@ -490,6 +490,11 @@ export function exportMd() {
   a.href = URL.createObjectURL(blob); a.download = fname
   document.body.appendChild(a); a.click(); document.body.removeChild(a)
   setTimeout(() => URL.revokeObjectURL(a.href), 1000)
+}
+
+export function exportMd() {
+  flushSave()
+  openFinalAudit(document.getElementById('pvCard'))
 }
 
 export function downloadFile(filename, content, mime = 'text/plain;charset=utf-8') {
@@ -564,6 +569,9 @@ export function boot() {
     ],
     content: (activeDoc() && activeDoc().body) || '',
     editorProps: {
+      attributes: {
+        'aria-label': 'Textinhalt bearbeiten',
+      },
       handleDrop(view, event) {
         // Baustein aus dem Struktur-Panel: Inhalt als Absatz an der Zielstelle einfügen.
         const block = event.dataTransfer && event.dataTransfer.getData('application/x-baustein')
