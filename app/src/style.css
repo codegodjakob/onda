@@ -3424,6 +3424,7 @@ button.onda-aura:focus-visible {
 
 /* C1 · lokales Projektgedaechtnis */
 .onda-pv-memory,
+.onda-pv-argument,
 .memory-action,
 .memory-primary,
 .memory-delete-confirm {
@@ -3436,7 +3437,8 @@ button.onda-aura:focus-visible {
   cursor: pointer;
   font: var(--fw-medium) var(--text-sm)/1.35 var(--font-sans);
 }
-.onda-pv-memory {
+.onda-pv-memory,
+.onda-pv-argument {
   margin-top: var(--space-2);
   border-color: var(--accent);
   color: var(--text-primary);
@@ -3447,6 +3449,7 @@ button.onda-aura:focus-visible {
   color: var(--on-accent);
 }
 .onda-pv-memory:hover,
+.onda-pv-argument:hover,
 .memory-action:hover,
 .memory-delete-confirm:hover {
   border-color: var(--border-strong);
@@ -3454,6 +3457,7 @@ button.onda-aura:focus-visible {
   color: var(--text-primary);
 }
 .onda-pv-memory:focus-visible,
+.onda-pv-argument:focus-visible,
 .memory-action:focus-visible,
 .memory-primary:focus-visible,
 .memory-delete-confirm:focus-visible,
@@ -3613,6 +3617,241 @@ button.onda-aura:focus-visible {
   .memory-consent-actions { align-items: stretch; flex-direction: column; }
   .memory-select,
   .memory-transfer-form .memory-primary { width: 100%; }
+}
+
+/* C2 · Argumentationsdossier */
+#argumentModal { width: min(880px, 100%); }
+.onda-pv-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.argument-intro,
+.argument-section,
+.argument-claim-list,
+.argument-form,
+.argument-round,
+.argument-intro-copy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.argument-intro {
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  background: var(--surface-2);
+}
+.argument-intro-copy p,
+.argument-section-intro,
+.argument-empty,
+.argument-warrant,
+.argument-finding-copy,
+.argument-path-copy,
+.argument-path-impact,
+.argument-path-risk,
+.argument-round-text {
+  margin: 0;
+  color: var(--text-secondary);
+  font: var(--fw-regular) var(--text-sm)/1.55 var(--font-sans);
+}
+.argument-kicker {
+  color: var(--text-tertiary);
+  font: var(--fw-semibold) 11px/1.3 var(--font-sans);
+  letter-spacing: var(--tracking-wider);
+  text-transform: uppercase;
+}
+.argument-status {
+  margin: 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-control);
+  background: var(--accent-tint);
+  color: var(--text-primary);
+  font: var(--fw-regular) var(--text-sm)/1.5 var(--font-sans);
+}
+.argument-status.is-error {
+  background: var(--warning-tint);
+  color: var(--warning);
+}
+.argument-section {
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border-subtle);
+}
+.argument-section-title {
+  margin: 0;
+  color: var(--text-primary);
+  font: var(--fw-semibold) var(--text-base)/1.4 var(--font-sans);
+}
+.argument-claim,
+.argument-relation,
+.argument-finding,
+.argument-counter,
+.argument-path,
+.argument-round,
+.argument-central-chooser {
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  background: var(--surface-2);
+}
+.argument-claim.is-central {
+  border-left: 3px solid var(--accent);
+}
+.argument-meta,
+.argument-relation-header {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.argument-relation-header {
+  justify-content: space-between;
+}
+.argument-tag {
+  display: inline-flex;
+  width: fit-content;
+  padding: 3px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-tint);
+  color: var(--text-secondary);
+  font: var(--fw-medium) 11px/1.35 var(--font-sans);
+}
+.argument-tag.is-evidence-unverified,
+.argument-tag.is-evidence-insufficient,
+.argument-tag.is-evidence-review-required {
+  background: var(--warning-tint);
+  color: var(--warning);
+}
+.argument-claim-text,
+.argument-counter-text,
+.argument-path-premise {
+  margin: var(--space-2) 0 0;
+  color: var(--text-primary);
+  font: var(--fw-medium) var(--text-sm)/1.55 var(--font-sans);
+  overflow-wrap: anywhere;
+}
+.argument-origin {
+  display: block;
+  margin-top: var(--space-2);
+  color: var(--text-tertiary);
+  font: var(--fw-regular) 11px/1.4 var(--font-sans);
+  overflow-wrap: anywhere;
+}
+.argument-relation-flow {
+  flex: 1;
+  min-width: min(280px, 100%);
+  color: var(--text-primary);
+  font: var(--fw-medium) var(--text-sm)/1.5 var(--font-sans);
+}
+.argument-warrant {
+  margin-top: var(--space-2);
+  padding-left: var(--space-3);
+  border-left: 2px solid var(--border-default);
+}
+.argument-action,
+.argument-primary {
+  width: fit-content;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-secondary);
+  padding: 7px 11px;
+  cursor: pointer;
+  font: var(--fw-medium) var(--text-sm)/1.35 var(--font-sans);
+}
+.argument-relation > .argument-action { margin-top: var(--space-3); }
+.argument-primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.argument-action:hover {
+  border-color: var(--border-strong);
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.argument-action:focus-visible,
+.argument-primary:focus-visible,
+.argument-select:focus-visible,
+.argument-input:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+.argument-compose {
+  color: var(--text-secondary);
+  font: var(--fw-medium) var(--text-sm)/1.45 var(--font-sans);
+}
+.argument-compose summary { cursor: pointer; }
+.argument-form {
+  align-items: flex-start;
+  margin-top: var(--space-3);
+}
+.argument-select,
+.argument-input {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-control);
+  background: var(--bg-app);
+  color: var(--text-primary);
+  font: var(--fw-regular) var(--text-base)/1.45 var(--font-sans);
+}
+.argument-input { resize: vertical; }
+.argument-central-chooser {
+  display: grid;
+  gap: var(--space-2);
+}
+.argument-field-label,
+.argument-finding-title,
+.argument-round-kind {
+  color: var(--text-primary);
+  font: var(--fw-semibold) var(--text-sm)/1.4 var(--font-sans);
+}
+.argument-finding.is-parked {
+  border-style: dashed;
+  opacity: .78;
+}
+.argument-limitations {
+  margin: var(--space-2) 0 0;
+  padding-left: var(--space-5);
+  color: var(--text-secondary);
+  font: var(--fw-regular) var(--text-sm)/1.5 var(--font-sans);
+}
+.argument-path-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+.argument-path {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.argument-path-impact,
+.argument-path-risk {
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border-subtle);
+}
+.argument-round-kind:not(:first-child) {
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border-subtle);
+}
+
+@media (max-width: 820px) {
+  .argument-path-list { grid-template-columns: 1fr; }
+}
+@media (max-width: 520px) {
+  .onda-pv-tools,
+  .argument-intro { flex-direction: column; }
+  .onda-pv-memory,
+  .onda-pv-argument,
+  .argument-action,
+  .argument-primary { width: 100%; }
 }
 
 /* Akzent-Auswahl (Popover) */

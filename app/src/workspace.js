@@ -39,6 +39,7 @@ import {
 } from './settings-model.mjs'
 import { createSourceLibraryUi } from './source-library-ui.mjs'
 import { createMemoryUi } from './memory-ui.mjs'
+import { createArgumentUi } from './argument-ui.mjs'
 
 const BLOCK_TYPES = [
   ['paragraph', 'Freier Absatz'],
@@ -967,6 +968,12 @@ function openProjectUnderstandingModal(opener) {
   }
   const istGeschuetzt = feld => u.geschuetzt.includes(feld)
   const memoryUi = createMemoryUi({ context: ctx, createNode, openDialog: openOndaDialog })
+  const argumentUi = createArgumentUi({
+    context: ctx,
+    createNode,
+    openDialog: openOndaDialog,
+    getBlocks: () => getEditorBlocks(ctx.editor),
+  })
   openOndaDialog({ id: 'pvModal', title: 'Projektverständnis', opener, build: body => {
     understandingField(body, 'Aufgabe', u.task, value => { u.task = value; commit('task') }, { geschuetzt: istGeschuetzt('task') })
     understandingField(body, 'Zielgruppe', u.audience.join(', '), value => { u.audience = splitList(value, false); commit('audience') }, { geschuetzt: istGeschuetzt('audience') })
@@ -974,11 +981,17 @@ function openProjectUnderstandingModal(opener) {
     understandingField(body, 'Belegstandard', u.evidenceStandard, value => { u.evidenceStandard = value; commit('evidenceStandard') }, { geschuetzt: istGeschuetzt('evidenceStandard') })
     understandingField(body, 'Geschützte Absicht', u.protectedIntentions.join('\n'), value => { u.protectedIntentions = splitList(value, true); commit('protectedIntentions') }, { line: true, geschuetzt: istGeschuetzt('protectedIntentions') })
     understandingField(body, 'Offene Frage', u.openQuestions.join('\n'), value => { u.openQuestions = splitList(value, true); commit('openQuestions') }, { line: true, geschuetzt: istGeschuetzt('openQuestions') })
+    const tools = createNode('div', 'onda-pv-tools')
     const memory = createNode('button', 'onda-pv-memory', 'Projektgedächtnis öffnen')
     memory.id = 'memoryOpen'
     memory.type = 'button'
     memory.addEventListener('click', () => memoryUi.open(project, document.getElementById('pvCard')))
-    body.append(memory)
+    const argument = createNode('button', 'onda-pv-argument', 'Argumentation prüfen')
+    argument.id = 'argumentOpen'
+    argument.type = 'button'
+    argument.addEventListener('click', () => argumentUi.open(project, document.getElementById('pvCard')))
+    tools.append(memory, argument)
+    body.append(tools)
   }})
 }
 

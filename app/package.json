@@ -5,7 +5,8 @@
     "build": "esbuild src/editor.js --bundle --minify --format=iife --global-name=AIWT --outfile=dist/editor.bundle.js",
     "test": "node --test test/*.test.mjs",
     "eval:b1-quality": "node evals/run-b1-quality.mjs",
-    "eval:b2-quality": "node evals/run-b2-quality.mjs"
+    "eval:b2-quality": "node evals/run-b2-quality.mjs",
+    "eval:c2-quality": "node evals/run-c2-quality.mjs"
   },
   "dependencies": {
     "@tiptap/core": "2.x",

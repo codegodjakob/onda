@@ -230,7 +230,7 @@ async function runMemoryFlow(browser) {
     const beta = data.projects.find(project => project.name === 'C1 Beta')
     return { schemaVersion: data.schemaVersion, enabled: beta.memory.enabled }
   })
-  assert.deepEqual(stored, { schemaVersion: 9, enabled: false })
+  assert.deepEqual(stored, { schemaVersion: 10, enabled: false })
   assert.deepEqual(errors, [])
   await page.close()
 }

@@ -21,6 +21,7 @@ import { ensureProjectEvidenceShape } from './source-model.mjs'
 import { ensureProjectResearchShape } from './research-run.mjs'
 import { ensureMemoryStore, ensureProjectMemoryShape } from './memory-model.mjs'
 import { synchronizeProjectMemory } from './memory-dossier.mjs'
+import { ensureArgumentModel } from './argument-model.mjs'
 
 // ---------- Sanfte Markierung (Peripherie): eine flüchtige Dekoration ----------
 // Zeigt eine Passage kurz an, OHNE das Dokument zu ändern — sie wird nicht
@@ -58,7 +59,7 @@ const Cue = Extension.create({
 const NATIVE = !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.store)
 const DEFAULTS = DEFAULT_SETTINGS
 const TRASH_DAYS = 30
-const SCHEMA = 9
+const SCHEMA = 10
 const EX_VERSION = 9
 
 // Schmaler Rückkanal der nativen saveimg-Brücke. Der frühere Bildeditor ist
@@ -151,6 +152,7 @@ function ensureProjectShape(p) {
   ensureProjectEvidenceShape(p)
   ensureProjectResearchShape(p)
   ensureProjectMemoryShape(p)
+  ensureArgumentModel(p)
   ensureProjectUnderstanding(p)
   return p
 }
