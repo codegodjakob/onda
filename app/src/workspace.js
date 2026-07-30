@@ -747,7 +747,16 @@ function renderKiVerbrauch(container) {
 
 function starteBewusstFreigegebenenAutomatiklauf() {
   const pausiert = pausierterAutomatiklauf
-  if (pausiert?.typ === 'verstaendnis' || (!pausiert && istInterviewAktiv())) {
+  if (pausiert?.typ === 'verstaendnis') {
+    // Die Budgetpause hat bereits eine sichtbare Interview-Nachricht angelegt.
+    // Der normale Pruefpfad wuerde deshalb bei "Nachricht existiert" abbrechen;
+    // die ausdrueckliche Einzelfreigabe nimmt genau den pausierten Lauf direkt
+    // wieder auf. starteVerstaendnisEntwurf prueft Dokument und Projekt nach
+    // dem asynchronen Schluesselzugriff erneut.
+    starteVerstaendnisEntwurf(pausiert.projectId, pausiert.docId)
+    return
+  }
+  if (!pausiert && istInterviewAktiv()) {
     interviewPruefKey = null
     pruefeVerstaendnisInterview()
     return
