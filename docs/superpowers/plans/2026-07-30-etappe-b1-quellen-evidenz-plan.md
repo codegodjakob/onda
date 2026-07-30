@@ -168,3 +168,32 @@ In einem frischen Lauf:
 9. `git diff --check`.
 
 Erst danach darf Etappe B1 als abgeschlossen gelten.
+
+## Ausfuehrungsstand — 30. Juli 2026
+
+Alle acht Aufgaben wurden in fuenf begrenzten Qualitaetsschleifen abgeschlossen. Die Zielkriterien und Rubrik blieben waehrend der Ausfuehrung unveraendert.
+
+```mermaid
+flowchart LR
+  L1["Loop 1<br/>Quellen-, Fundstellen- und Belegdomäne<br/>15 kontrastive RED-GREEN-Tests"] --> L2["Loop 2<br/>Import, Persistenz, Reader und Rücknahme<br/>Browserfluss grün"]
+  L2 --> L3A["Loop 3<br/>EVID-04 zunächst 4,4 / 5"]
+  L3A --> R3["Ursache: zwei Qualitätsbegründungen zu knapp"]
+  R3 --> L3B["Begründungen präzisiert<br/>EVID-04 = 5,0 / 5"]
+  L3B --> L4["Loop 4<br/>visuelle Prüfung, Provenienz und Kopierschutz"]
+  L4 --> L5["Loop 5<br/>UI-Modul extrahiert und Gesamtregression"]
+  L5 --> X{"alle B1-Hard-Gates<br/>und Gesamtwert 4,8 / 5?"}
+  X -- "ja" --> DONE["Etappen-Exit"]
+```
+
+### Frische Exit-Evidenz
+
+- 271 Unit- und Integrationstests bestanden, 0 fehlgeschlagen.
+- Produktionsbuild erfolgreich; Bundle 491,2 KB.
+- B1-, Etappen-A-, Entscheidungsverlauf- und vollständiger V2-Browser-Smoke bestanden.
+- EVID-04 erreicht in allen fünf Dimensionen 5,0 von 5,0.
+- 14 Performanceeingaben: p95 bis zum nächsten Frame 7,7 ms, kein Long Task.
+- Native Mac-App: Build erfolgreich, 17 Selbsttests bestanden und Start-/Persistenzprobe grün.
+- Evalkatalog und B1-Ergebnis validiert: 77 vollständig erfasste Evals, davon 29 bestanden, 42 späteren Etappen zugeordnet und 6 echte externe Live-Gates offen.
+- `git diff --check` ohne Befund.
+
+Damit sind `INV-02`, `INV-03` und `EVID-01` bis `EVID-08` mit reproduzierbarer Evidenz geschlossen. Die externen Live-Gates bleiben ausdrücklich offen; insbesondere wird aus dem lokalen Isolationstest keine produktive Multi-Tenant-Garantie abgeleitet.
