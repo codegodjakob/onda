@@ -1,6 +1,7 @@
 import { importSource, recordSourceEvent } from './source-model.mjs'
 import { createLocator, resolveLocator } from './locator-model.mjs'
 import { buildEvidenceBundle, propagateSourceEvent } from './evidence-bundle.mjs'
+import { createResearchUi } from './research-ui.mjs'
 
 export function createSourceLibraryUi({
   context,
@@ -16,6 +17,13 @@ export function createSourceLibraryUi({
     text: 'Text',
     audio: 'Audio',
     video: 'Video',
+  })
+  const researchUi = createResearchUi({
+    context,
+    createNode,
+    onProjectChanged: () => {
+      onCountChange()
+    },
   })
   
   const SOURCE_STATUS_LABELS = Object.freeze({
@@ -445,6 +453,7 @@ export function createSourceLibraryUi({
   
   function renderProjectSourceLibrary(body, project, statusText = '') {
     body.replaceChildren()
+    body.append(researchUi.buildResearchOverview(body, project, () => renderProjectSourceLibrary(body, project)))
     body.append(buildSourceLibraryList(body, project))
     body.append(buildSourceImportForm(body, project, statusText))
     const legacy = buildLegacyMaterial(project)

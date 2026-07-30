@@ -18,6 +18,7 @@ import { buildExampleStructure, buildExampleNarrative, buildExampleCoach, buildE
 import { EXAMPLE_PROJECT_ID, migrateExampleSeed } from './example-seed.mjs'
 import { initGateway, runTask, hatSchluessel, setzeSchluessel, loescheSchluessel } from './agent-gateway.mjs'
 import { ensureProjectEvidenceShape } from './source-model.mjs'
+import { ensureProjectResearchShape } from './research-run.mjs'
 
 // ---------- Sanfte Markierung (Peripherie): eine flüchtige Dekoration ----------
 // Zeigt eine Passage kurz an, OHNE das Dokument zu ändern — sie wird nicht
@@ -55,7 +56,7 @@ const Cue = Extension.create({
 const NATIVE = !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.store)
 const DEFAULTS = DEFAULT_SETTINGS
 const TRASH_DAYS = 30
-const SCHEMA = 7
+const SCHEMA = 8
 const EX_VERSION = 9
 
 // Schmaler Rückkanal der nativen saveimg-Brücke. Der frühere Bildeditor ist
@@ -137,6 +138,7 @@ function findBlockByTitle(list, title) {
 function ensureProjectShape(p) {
   if (!Array.isArray(p.material)) p.material = []
   ensureProjectEvidenceShape(p)
+  ensureProjectResearchShape(p)
   ensureProjectUnderstanding(p)
   return p
 }

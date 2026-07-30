@@ -120,7 +120,7 @@ async function runImportAndRecovery(browser) {
       bundleSupport: project.evidenceBundles[0].support[0],
     }
   })
-  assert.equal(recovery.schemaVersion, 7)
+  assert.equal(recovery.schemaVersion, 8)
   assert.equal(recovery.sourceCount, 1)
   assert.equal(recovery.bundleCount, 1)
   assert.equal(recovery.bundleStatus, 'supported')
