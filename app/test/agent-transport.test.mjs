@@ -159,6 +159,35 @@ test('direkt: Streaming liest Chunks, reicht Deltas durch und mischt usage', asy
   } finally { delete globalThis.localStorage; delete globalThis.fetch }
 })
 
+// Fix-Runde 2, Finding 4 (Important): eine werfende onDelta-Callback (z. B. ein DOM-Bug in der
+// UI-Verarbeitung) darf NIE als Netzfehler gelten — sonst faengt der Stream-catch das als
+// 'offline' auf, und agent-gateway.mjs wiederholt den bereits bezahlten Lauf (WIEDERHOLBAR
+// enthaelt 'offline'). Der Lauf muss trotz werfender onDelta ganz normal mit onFertig enden.
+test('direkt: eine werfende onDelta-Callback wird abgefangen -- kein offline, Lauf endet normal mit onFertig', async () => {
+  globalThis.localStorage = speicherStub({ [API_KEY_STORAGE]: 'sk-test' })
+  const enc = new TextEncoder()
+  const strom =
+    'data: ' + JSON.stringify({ type: 'content_block_delta', delta: { type: 'text_delta', text: 'Hal' } }) + '\n\n' +
+    'data: ' + JSON.stringify({ type: 'content_block_delta', delta: { type: 'text_delta', text: 'lo' } }) + '\n\n' +
+    'data: ' + JSON.stringify({ type: 'message_delta', usage: { output_tokens: 6 }, delta: { stop_reason: 'end_turn' } }) + '\n\n'
+  globalThis.fetch = async () => ({
+    ok: true, status: 200,
+    body: { getReader() { let i = 0; const chunks = [enc.encode(strom)]; return { async read() { return i < chunks.length ? { done: false, value: chunks[i++] } : { done: true, value: undefined } } } } },
+  })
+  const urspruenglicheConsoleError = console.error
+  console.error = () => {} // still: dieser Test erwartet bewusst ein protokolliertes, kein sichtbares Ereignis
+  try {
+    let onDeltaAufrufe = 0
+    const e = await sendePromise(direktTransport, { ...BASIS_ANFRAGE, stream: true }, () => {
+      onDeltaAufrufe += 1
+      throw new Error('kaputte UI-Verarbeitung')
+    })
+    assert.equal(onDeltaAufrufe, 2, 'beide Deltas muessen onDelta erreicht haben, trotz Wurf beim ersten Mal')
+    assert.equal(e.text, 'Hallo', 'der Lauf sammelt den Text weiter, unabhaengig vom onDelta-Fehler')
+    assert.equal(e.stopReason, 'end_turn')
+  } finally { delete globalThis.localStorage; delete globalThis.fetch; console.error = urspruenglicheConsoleError }
+})
+
 function brueckenWelt() {
   const llm = []; const key = []
   globalThis.window = {
@@ -192,6 +221,29 @@ test('bruecke: sende postet ohne x-api-key, puffert Deltas und schließt mit fer
   } finally { welt.weg() }
 })
 
+// Fix-Runde 2, Finding 4 (Important), Bruecken-Weg: ohne den Fix entkommt der Wurf direkt aus
+// llmRueckruf (dem Aufruf aus Swift) -- das Streaming faellt dann still aus, ohne dass onFertig
+// oder onFehler je laeuft. Nach dem Fix laeuft der Lauf normal weiter und schliesst mit fertig.
+test('bruecke: eine werfende onDelta-Callback wird abgefangen -- Streaming faellt nicht still aus, endet normal mit fertig', async () => {
+  const welt = brueckenWelt()
+  const urspruenglicheConsoleError = console.error
+  console.error = () => {} // still: dieser Test erwartet bewusst ein protokolliertes, kein sichtbares Ereignis
+  try {
+    let onDeltaAufrufe = 0
+    const p = sendePromise(brueckenTransport, { ...BASIS_ANFRAGE, stream: true }, () => {
+      onDeltaAufrufe += 1
+      throw new Error('kaputte UI-Verarbeitung')
+    })
+    const id = welt.llm[0].id
+    globalThis.window.AIWT.llmRueckruf({ id, typ: 'delta', text: 'data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"Hal"}}\n' })
+    globalThis.window.AIWT.llmRueckruf({ id, typ: 'delta', text: 'data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"lo"}}\n' })
+    globalThis.window.AIWT.llmRueckruf({ id, typ: 'fertig' })
+    const e = await p
+    assert.equal(onDeltaAufrufe, 2, 'beide Deltas muessen onDelta erreicht haben, trotz Wurf beim ersten Mal')
+    assert.equal(e.text, 'Hallo', 'llmRueckruf sammelt eintrag.text weiter, unabhaengig vom onDelta-Fehler')
+  } finally { welt.weg(); console.error = urspruenglicheConsoleError }
+})
+
 test('bruecke: fehler mit HTTP-Status wird gemappt (401 -> kein-schluessel)', async () => {
   const welt = brueckenWelt()
   try {
@@ -206,9 +258,57 @@ test('bruecke: hatSchluessel fragt llmkey und löst mit dem Status auf', async (
   try {
     const p = brueckenTransport.hatSchluessel()
     assert.equal(welt.key[0].aktion, 'status')
-    globalThis.window.AIWT.llmRueckruf({ id: welt.key[0].id, typ: 'schluesselstatus', status: true })
+    globalThis.window.AIWT.llmRueckruf({ id: welt.key[0].id, typ: 'schluesselstatus', status: { vorhanden: true } })
     assert.equal(await p, true)
   } finally { welt.weg() }
+})
+
+// Fix-Runde 2, Finding 1 (Critical): die ECHTE Swift-Nutzlastform ist status:{vorhanden:boolean}
+// -- ein Objekt, damit unter einem blossen !!status IMMER truthy, egal was vorhanden ist. Die
+// vorherigen Tests nutzten faelschlich einen rohen Boolean und haetten den Fehler nie gefangen.
+// Diese beiden Faelle sind der Pflicht-Beleg dafuer, dass hatSchluessel() die echte Form korrekt
+// auswertet, statt nur auf "irgendein Objekt kam an" zu reagieren.
+test('bruecke: hatSchluessel liest status:{vorhanden:false} korrekt als false (echte Swift-Form)', async () => {
+  const welt = brueckenWelt()
+  try {
+    const p = brueckenTransport.hatSchluessel()
+    globalThis.window.AIWT.llmRueckruf({ id: welt.key[0].id, typ: 'schluesselstatus', status: { vorhanden: false } })
+    assert.equal(await p, false, 'ein Objekt {vorhanden:false} ist truthy -- ohne den Fix waere das faelschlich true')
+  } finally { welt.weg() }
+})
+
+test('bruecke: hatSchluessel liest status:{vorhanden:true} korrekt als true (echte Swift-Form)', async () => {
+  const welt = brueckenWelt()
+  try {
+    const p = brueckenTransport.hatSchluessel()
+    globalThis.window.AIWT.llmRueckruf({ id: welt.key[0].id, typ: 'schluesselstatus', status: { vorhanden: true } })
+    assert.equal(await p, true)
+  } finally { welt.weg() }
+})
+
+test('bruecke: hatSchluessel bleibt abwärtskompatibel, falls status ausnahmsweise ein roher Boolean ist', async () => {
+  const weltWahr = brueckenWelt()
+  try {
+    const p = brueckenTransport.hatSchluessel()
+    globalThis.window.AIWT.llmRueckruf({ id: weltWahr.key[0].id, typ: 'schluesselstatus', status: true })
+    assert.equal(await p, true)
+  } finally { weltWahr.weg() }
+
+  const weltFalsch = brueckenWelt()
+  try {
+    const p = brueckenTransport.hatSchluessel()
+    globalThis.window.AIWT.llmRueckruf({ id: weltFalsch.key[0].id, typ: 'schluesselstatus', status: false })
+    assert.equal(await p, false)
+  } finally { weltFalsch.weg() }
+})
+
+// direktTransport.hatSchluessel ist vom Fix nicht betroffen (eigener Weg über localStorage) --
+// Vertrag bleibt exakt wie zuvor: boolescher Rueckgabewert, kein Objekt beteiligt.
+test('direkt: hatSchluessel bleibt unveraendert boolesch (localStorage-Weg, vom Fix nicht beruehrt)', async () => {
+  globalThis.localStorage = speicherStub({ [API_KEY_STORAGE]: 'sk-test' })
+  try { assert.equal(await direktTransport.hatSchluessel(), true) } finally { delete globalThis.localStorage }
+  globalThis.localStorage = speicherStub()
+  try { assert.equal(await direktTransport.hatSchluessel(), false) } finally { delete globalThis.localStorage }
 })
 
 test('waehleTransport: Brücke nur wenn der llm-Handler existiert', () => {
@@ -264,7 +364,7 @@ test('bruecke: llmRueckruf existiert bereits nach dem ersten sendeLlmKey() (Pane
     const p = brueckenTransport.hatSchluessel()
     assert.equal(welt.key.length, 1)
     assert.equal(typeof globalThis.window.AIWT.llmRueckruf, 'function')
-    globalThis.window.AIWT.llmRueckruf({ id: welt.key[0].id, typ: 'schluesselstatus', status: false })
+    globalThis.window.AIWT.llmRueckruf({ id: welt.key[0].id, typ: 'schluesselstatus', status: { vorhanden: false } })
     await p
   } finally { welt.weg() }
 })
@@ -295,7 +395,7 @@ test('bruecke: registriereRueckruf ist idempotent und lässt fremde window.AIWT-
     assert.equal(globalThis.window.AIWT.llmRueckruf, ersteRueckrufFn)
     assert.equal(globalThis.window.AIWT.boot, fremdesBoot)
     assert.equal(globalThis.window.AIWT.fremdesFeld, 42)
-    globalThis.window.AIWT.llmRueckruf({ id: welt.key[0].id, typ: 'schluesselstatus', status: false })
+    globalThis.window.AIWT.llmRueckruf({ id: welt.key[0].id, typ: 'schluesselstatus', status: { vorhanden: false } })
     await p2
     assert.equal(globalThis.window.AIWT.llmRueckruf, ersteRueckrufFn)
   } finally { welt.weg() }

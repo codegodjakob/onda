@@ -48,7 +48,7 @@ export function verarbeiteHinweisantwort({
     const ankerErgebnis = findeAnker(docText, hinweis?.anker)
     if (!ankerErgebnis.gefunden) { verworfen += 1; return }
     const blockId = blockFuerAnkerIndex(blocks, ankerErgebnis.index)
-    const finding = hinweisZuFinding(hinweis, ankerErgebnis, blockId, jetzt)
+    const finding = hinweisZuFinding(hinweis, ankerErgebnis, blockId, docText, jetzt)
     if (!finding) { verworfen += 1; return }
     uebernommen.push(finding)
   })

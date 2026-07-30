@@ -50,6 +50,26 @@ test('erkenneHinweisBitte ignoriert normale Fragen', () => {
   assert.equal(erkenneHinweisBitte(null), false)
 })
 
+// Fix-Runde 2, Finding 2a (Important): das Muster traf vorher ohne Wortgrenzen auch mitten in
+// ganz anderen Woertern -- "veranschaulichen" (schau), "überprüfbar" (prüf), "Checkliste"
+// (check) loesten faelschlich einen teuren Hinweislauf aus. Gaengige Beugungen ("schaust",
+// "prüfst") muessen weiterhin treffen.
+test('erkenneHinweisBitte erkennt gaengige Beugungen von schau/prüf/lies/check', () => {
+  assert.equal(erkenneHinweisBitte('schau mal'), true)
+  assert.equal(erkenneHinweisBitte('schaust du mal drüber?'), true)
+  assert.equal(erkenneHinweisBitte('prüf das bitte'), true)
+  assert.equal(erkenneHinweisBitte('prüfst du das nochmal?'), true)
+  assert.equal(erkenneHinweisBitte('lies'), true)
+  assert.equal(erkenneHinweisBitte('check das mal'), true)
+})
+
+test('erkenneHinweisBitte ignoriert Alltagswörter, die die Auslösewörter nur als Teilstring enthalten', () => {
+  assert.equal(erkenneHinweisBitte('Kannst du das an einem Beispiel veranschaulichen?'), false)
+  assert.equal(erkenneHinweisBitte('Das ist schließlich nur ein Entwurf.'), false)
+  assert.equal(erkenneHinweisBitte('Diese Aussage ist gut überprüfbar.'), false)
+  assert.equal(erkenneHinweisBitte('Ich brauche noch eine Checkliste für morgen.'), false)
+})
+
 test('formatiereRelativeZeit deckt Minuten, Stunden, gestern, Tage und Datum ab', () => {
   const now = new Date('2026-07-26T12:00:00').getTime()
   assert.equal(formatiereRelativeZeit(now - 20_000, now), 'gerade eben')
@@ -539,4 +559,39 @@ test('fuehreChatVorgangAus: setzt Status fehler, wenn chatte/verdichte selbst wi
   }))
   assert.deepEqual(statusVerlauf, [['laeuft', undefined], ['fehler', 'ueberlastet']])
   assert.deepEqual(ergebnis, { gestartet: true, erfolg: false })
+})
+
+// Fix-Runde 2, Finding 6 (hochgestuft): sperreSetzen(true) stand vorher AUSSERHALB von
+// try/finally. sperreSetzen loest refreshWorkspace() aus (DOM-Arbeit) -- wirft die dabei (oder
+// die anschliessende "laeuft"-Statusmeldung, die denselben Render-Pfad anstoesst), blieb die
+// Sperre fuer immer gesetzt: der Senden-Knopf war bis zum Neustart tot. Diese beiden Tests
+// nageln fest, dass sperreSetzen(false) in JEDEM Fall versucht wird -- auch wenn sperreSetzen
+// selbst oder das Rendern (hier: setzeStatus) beim Start wirft.
+
+test('fuehreChatVorgangAus: wirft sperreSetzen(true) selbst -> die Sperre bleibt nicht haengen', async () => {
+  const aufrufe = []
+  await assert.rejects(fuehreChatVorgangAus(chatVorgangEingabe({
+    sperreSetzen: wert => { aufrufe.push(wert); throw new Error('refreshWorkspace kaputt') },
+  })))
+  assert.deepEqual(aufrufe, [true, false], 'finally muss sperreSetzen(false) versuchen, auch wenn sperreSetzen(true) bereits geworfen hat')
+})
+
+test('fuehreChatVorgangAus: wirft das Rendern (setzeStatus) beim Start -> die Sperre bleibt nicht haengen', async () => {
+  const sperrenVerlauf = []
+  await assert.rejects(fuehreChatVorgangAus(chatVorgangEingabe({
+    sperreSetzen: wert => sperrenVerlauf.push(wert),
+    setzeStatus: () => { throw new Error('refreshWorkspace kaputt') },
+  })))
+  assert.deepEqual(sperrenVerlauf, [true, false], 'Sperre muss trotz durchgehend werfendem setzeStatus wieder geloest werden')
+})
+
+test('fuehreChatVorgangAus: ein einmaliger Wurf beim Setzen der Sperre (true) wird als Sicherheitsnetz abgefangen, die Sperre bleibt danach frei', async () => {
+  let sperre = false
+  const sperreSetzen = wert => { sperre = wert; if (wert === true) throw new Error('refreshWorkspace kaputt') }
+  const ergebnis = await fuehreChatVorgangAus(chatVorgangEingabe({
+    laeuftBereits: () => sperre,
+    sperreSetzen,
+  }))
+  assert.deepEqual(ergebnis, { gestartet: true, erfolg: false }, 'catch faengt den Wurf aus sperreSetzen(true) als Sicherheitsnetz ab')
+  assert.equal(sperre, false, 'die Sperre muss danach wieder frei sein -- ein Folge-Vorgang darf nicht faelschlich blockiert bleiben')
 })

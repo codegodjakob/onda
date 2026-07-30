@@ -11,7 +11,13 @@
 // volatiles-Array und bildet den Gesprächsverlauf auf das Anthropic-Rollenschema
 // ({role:'user'|'assistant', content}) ab — exakt das, was baueAnfrage tatsächlich liest.
 
-const HINWEIS_BITTE_MUSTER = /schau|prüf|lies|check/i
+// Fix-Runde 2, Finding 2a (Important): ohne Wortgrenzen traf das hier auch mitten in ganz
+// anderen Woertern -- "veranschaulichen" (schau), "überprüfbar" (prüf), "Checkliste" (check).
+// Eine fuehrende \b allein reicht nicht: "Checkliste" faengt ja ebenfalls an einer Wortgrenze
+// an. Darum zusaetzlich eine SCHLIESSENDE \b, und schau/prüf/check duerfen nur um eine kleine,
+// feste Menge gaengiger Verb-Endungen wachsen (schaust, schaut, schauen, schauend, prüfst, …) --
+// nicht um beliebige weitere Buchstaben. "lies" bleibt bewusst die blanke Imperativform.
+const HINWEIS_BITTE_MUSTER = /\b(schau(e|est|st|et|t|en|end)?|prüf(e|est|st|et|t|en|end)?|lies|check(e|est|st|et|t|en|end)?)\b/i
 const MAX_VERLAUF_TURNS = 20
 const BEHALTE_TURNS = 8
 
@@ -199,9 +205,15 @@ export function chatFehlerText(fehler) {
 // eigentlichen runTask-Aufruf) -- der normale Chat-Fehlerpfad laeuft nie hier durch.
 export async function fuehreChatVorgangAus({ laeuftBereits, sperreSetzen, setzeStatus, verdichte, chatte }) {
   if (laeuftBereits()) return { gestartet: false }
-  sperreSetzen(true)
-  setzeStatus({ zustand: 'laeuft' })
+  // Fix-Runde 2, Finding 6 (hochgestuft): sperreSetzen(true) stand hier vorher AUSSERHALB von
+  // try/finally. sperreSetzen loest refreshWorkspace() aus (viel DOM-Arbeit) -- wirft die (oder
+  // die anschliessende setzeStatus-Meldung, die denselben Render-Pfad anstoesst), blieb die
+  // Sperre fuer immer gesetzt: der Senden-Knopf war bis zum Neustart tot. Beide Aufrufe ziehen
+  // jetzt in den try-Block, damit finally sie in JEDEM Fall zurücksetzt. Die Race-Freiheit
+  // bleibt erhalten: sperreSetzen(true) laeuft weiterhin synchron als Erstes, vor jedem await.
   try {
+    sperreSetzen(true)
+    setzeStatus({ zustand: 'laeuft' })
     await verdichte()
     await chatte()
     return { gestartet: true }

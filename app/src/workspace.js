@@ -2204,6 +2204,13 @@ async function fuehreChatLauf(thread, kontext) {
       onDelta: text => {
         lauf.puffer += String(text || '')
         if (!lauf.agentMessage) {
+          // Fix-Runde 2, Finding 4: appendThreadMessage wirft bei leerem/reinem
+          // Whitespace-Text (workspace-model.mjs, gewollt fuer den allgemeinen Fall). Der
+          // allererste Delta-Chunk kann aber leer oder Whitespace-only sein, bevor sichtbarer
+          // Text ankommt -- ohne diese Absicherung wuerde genau dieser Wurf im Transport
+          // (agent-transport.mjs) als Netzfehler ('offline') fehlklassifiziert und einen
+          // bereits bezahlten Lauf erneut auslösen. Einfach auf mehr Text warten, statt zu werfen.
+          if (!lauf.puffer.trim()) return
           lauf.agentMessage = appendThreadMessage(thread, 'agent', lauf.puffer)
           refreshWorkspace()
           return
@@ -2775,9 +2782,16 @@ async function fuehreHinweislaufAus({ grund = 'pause' } = {}) {
     sperreSetzen: wert => { hinweislaufAktiv = wert },
     hatSchluessel,
     istNochDasselbeDokument: () => ctx.activeDoc()?.id === docId,
-    beansprucheKostenfreigabe: grund === 'chat'
-      ? null
-      : () => beansprucheAutomatikKosten('hinweis', { docId, grund }),
+    // Fix-Runde 2, Finding 2b (Important): der Chat-Auslöser umging bisher die Monatsbremse
+    // komplett (beansprucheKostenfreigabe:null -> versucheHinweislauf nimmt dann {erlaubt:true}
+    // an, siehe hinweislauf-model.mjs). Die Oberfläche behauptet aber "Automatische Läufe sind
+    // pausiert" OHNE Ausnahme für den Chat-Hinweislauf -- das war schlicht nicht wahr. Der
+    // reine Chat (die Antwort des Agenten, sendeAgentenChat/fuehreChatLauf) ist davon NICHT
+    // betroffen: das hier ist ausschliesslich der zusätzliche Hintergrund-Hinweislauf, den eine
+    // Chat-Bitte ("schau mal drüber") zusätzlich anstößt (siehe starteHinweislauf-Aufruf in
+    // sendeAgentenChat) -- genau der soll wie jeder andere automatische Lauf der Bremse
+    // unterliegen; die Chat-Antwort selbst läuft unabhängig davon immer weiter.
+    beansprucheKostenfreigabe: () => beansprucheAutomatikKosten('hinweis', { docId, grund }),
     verstaendnis,
     blocks,
     findings: doc?.findings,

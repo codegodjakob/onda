@@ -24,6 +24,20 @@ test('TASK_TABLE ist vollstaendig und zeigt auf gueltige Modelle', () => {
   assert.equal(MODELLE.routine, 'claude-haiku-4-5')
 })
 
+// Fix-Runde 2, Finding 5 (Important): auf claude-opus-5 deckelt max_tokens Denken UND Antwort
+// zusammen (adaptives Denken ist auf diesem Modell standardmaessig an). Bei 16000 lief das
+// regelmaessig auf stop_reason:'max_tokens', bevor die Antwort fertig war -- das Gateway
+// verwirft den Lauf dann komplett, bezahlt und ohne Ergebnis (siehe agent-gateway.test.mjs,
+// 'max_tokens: Lauf wird verworfen'). Die drei Opus-Aufgaben brauchen darum deutlich mehr Luft
+// als vorher; chat streamt sichtbar und darf grosszuegiger sein als die beiden JSON-Aufgaben.
+test('Fix-Runde 2, Finding 5: die drei Opus-Aufgaben haben deutlich mehr Budget als die frühere 16000-Grenze', () => {
+  for (const name of ['verstaendnis', 'hinweise', 'chat']) {
+    assert.equal(TASK_TABLE[name].modell, 'stark', `Task ${name} sollte auf dem starken Modell laufen`)
+    assert.ok(TASK_TABLE[name].maxTokens >= 32000, `Task ${name}: maxTokens (${TASK_TABLE[name].maxTokens}) sollte deutlich über der früheren 16000-Grenze liegen`)
+  }
+  assert.ok(TASK_TABLE.chat.maxTokens >= TASK_TABLE.hinweise.maxTokens, 'chat streamt und darf grosszuegiger budgetiert sein als die nicht-streamenden JSON-Aufgaben')
+})
+
 test('Schemata verbieten Zusatzfelder und verlangen Pflichtfelder', () => {
   assert.equal(HINWEISE_SCHEMA.additionalProperties, false)
   assert.deepEqual(HINWEISE_SCHEMA.required, ['hinweise'])
@@ -51,7 +65,7 @@ test('baueAnfrage: Wire-Format und Cache-Praefix-Ordnung exakt nach Vertrag', ()
   assert.equal(anfrage.stream, false)
   const body = anfrage.body
   assert.equal(body.model, 'claude-opus-5')
-  assert.equal(body.max_tokens, 16000)
+  assert.equal(body.max_tokens, TASK_TABLE.hinweise.maxTokens)
   assert.ok(!('temperature' in body) && !('top_p' in body) && !('thinking' in body))
   assert.equal(body.system[0].text, SYSTEM_COACH)
   assert.deepEqual(body.system[0].cache_control, { type: 'ephemeral' })

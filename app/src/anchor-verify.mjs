@@ -42,19 +42,32 @@ function normalisiereMitKarte(text) {
   return { norm, karte }
 }
 
+// Fix-Runde 2, Finding 3 (Important): zusaetzlich zum Start-Index liefert findeAnker jetzt auch
+// `laenge` -- die Laenge des Treffers im ORIGINALTEXT (nicht die Laenge des Anker-Strings vom
+// Modell). Additiv: bestehende Aufrufer, die nur gefunden/index/normalisiert lesen, sind
+// unveraendert. Aufrufer wie hinweisZuFinding koennen damit target = docText.slice(index,
+// index+laenge) bilden -- den ECHTEN Wortlaut aus dem Dokument statt der Modell-Schreibweise
+// (typografische vs. gerade Anfuehrungszeichen, kollabiertes Whitespace).
 export function findeAnker(docText, anker) {
   if (typeof docText !== 'string' || typeof anker !== 'string' || !anker.trim()) {
-    return { gefunden: false, index: null, normalisiert: false }
+    return { gefunden: false, index: null, normalisiert: false, laenge: null }
   }
 
   const exakt = docText.indexOf(anker)
-  if (exakt >= 0) return { gefunden: true, index: exakt, normalisiert: false }
+  if (exakt >= 0) return { gefunden: true, index: exakt, normalisiert: false, laenge: anker.length }
 
   const doc = normalisiereMitKarte(docText)
   const gesucht = normalisiereMitKarte(anker.trim())
   const treffer = doc.norm.indexOf(gesucht.norm)
-  if (treffer < 0) return { gefunden: false, index: null, normalisiert: false }
-  return { gefunden: true, index: doc.karte[treffer], normalisiert: true }
+  if (treffer < 0) return { gefunden: false, index: null, normalisiert: false, laenge: null }
+  const startIndex = doc.karte[treffer]
+  // gesucht stammt aus anker.trim() -- das letzte Zeichen von gesucht.norm ist darum GARANTIERT
+  // kein kollabierter Whitespace-Lauf, sondern ein normales 1:1-gemapptes Zeichen (Buchstabe
+  // oder ein via QUOTE_MAP vereinheitlichtes Anfuehrungszeichen). doc.karte an dieser Stelle
+  // zeigt deshalb exakt auf den letzten Original-Index des Treffers, kein Schaetzwert.
+  const letzterNormIndex = treffer + gesucht.norm.length - 1
+  const endeIndex = doc.karte[letzterNormIndex]
+  return { gefunden: true, index: startIndex, normalisiert: true, laenge: endeIndex - startIndex + 1 }
 }
 
 // Dedupe-Schlüssel: normalisierter Anker + Kategorie (Fuzzy-Varianten desselben
