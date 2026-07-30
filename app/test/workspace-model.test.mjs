@@ -138,6 +138,16 @@ test('array agent is replaced with state that survives a JSON roundtrip', () => 
   assert.deepEqual(restored.agent.dismissedIds, [])
 })
 
+test('ensureWorkspaceState ergänzt decisionsOpen additiv und erhält gespeicherte Werte', () => {
+  const doc = { workspace: { agent: { messages: [], dismissedIds: [] } } }
+  const workspace = ensureWorkspaceState(doc)
+  assert.equal(workspace.agent.decisionsOpen, false)
+
+  workspace.agent.decisionsOpen = true
+  const wieder = ensureWorkspaceState(doc)
+  assert.equal(wieder.agent.decisionsOpen, true)
+})
+
 test('top-level editor nodes become block previews', () => {
   const blocks = collectBlockSnapshots({
     type: 'doc',

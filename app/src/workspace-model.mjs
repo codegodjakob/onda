@@ -92,6 +92,7 @@ export function ensureWorkspaceState(doc) {
     ? [...new Set(agent.dismissedIds.filter(id => typeof id === 'string' && id.trim()).map(id => id.trim()))]
     : []
   if (typeof agent.open !== 'boolean') agent.open = false
+  if (typeof agent.decisionsOpen !== 'boolean') agent.decisionsOpen = false
   agent.activeMessageId = typeof agent.activeMessageId === 'string'
     && agent.messages.some(message => message.id === agent.activeMessageId)
     ? agent.activeMessageId

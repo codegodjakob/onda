@@ -27,6 +27,7 @@ import {
   baueChatKontext,
   baueFindingZusatzAnweisung,
   chatFehlerText,
+  entscheidungsEintraege,
   erkenneHinweisBitte,
   fuehreChatVorgangAus,
   planVerlaufVerdichtung,
@@ -2202,6 +2203,54 @@ export function meldeAgentInitiative(text, { earliestAt = Date.now() } = {}) {
   return message
 }
 
+function renderEntscheidungsverlauf(workspace) {
+  const doc = ctx?.activeDoc()
+  if (!doc) return null
+  const eintraege = entscheidungsEintraege(doc)
+  if (!eintraege.length) return null
+
+  const section = createNode('section', 'agent-decisions')
+  section.setAttribute('aria-label', 'Entscheidungsverlauf')
+  const offen = Boolean(workspace.agent.decisionsOpen)
+  const toggle = createNode('button', 'agent-decisions-toggle')
+  toggle.type = 'button'
+  toggle.id = 'agentDecisionsToggle'
+  toggle.setAttribute('aria-expanded', String(offen))
+  toggle.setAttribute('aria-controls', 'agentDecisionsList')
+  toggle.append(
+    createNode('span', 'agent-decisions-title', 'Entscheidungsverlauf'),
+    createNode('span', 'onda-badge agent-decisions-count', String(eintraege.length)),
+    createNode('span', 'agent-decisions-disclosure', offen ? '↘' : '›'),
+  )
+  toggle.addEventListener('click', () => {
+    workspace.agent.decisionsOpen = !workspace.agent.decisionsOpen
+    persistWorkspace()
+    refreshWorkspace()
+  })
+  section.append(toggle)
+
+  if (offen) {
+    const list = createNode('div', 'agent-decisions-list')
+    list.id = 'agentDecisionsList'
+    eintraege.forEach(eintrag => {
+      const item = createNode('article', 'agent-decision')
+      item.dataset.decisionId = eintrag.id
+      const meta = createNode('div', 'agent-decision-meta')
+      meta.append(
+        createNode('span', `agent-decision-label is-${eintrag.art}`, eintrag.label),
+        createNode('span', 'agent-decision-date', eintrag.datumText),
+      )
+      item.append(meta, createNode('p', 'agent-decision-short', eintrag.kurztext))
+      if (eintrag.begruendung) {
+        item.append(createNode('p', 'agent-decision-reason', `Begründung: ${eintrag.begruendung}`))
+      }
+      list.append(item)
+    })
+    section.append(list)
+  }
+  return section
+}
+
 function renderAgentWidget() {
   const ui = elements()
   const workspace = activeWorkspace()
@@ -2238,6 +2287,9 @@ function renderAgentWidget() {
 
   const unplaced = renderUnplacedFindingList()
   if (unplaced) ui.agentWidget.append(unplaced)
+
+  const decisions = renderEntscheidungsverlauf(workspace)
+  if (decisions) ui.agentWidget.append(decisions)
 
   if (!message) {
     ui.agentWidget.append(createNode('p', 'agent-widget-empty', 'Noch kein allgemeines Gespräch.'))
