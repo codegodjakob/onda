@@ -24,6 +24,7 @@ import { synchronizeProjectMemory } from './memory-dossier.mjs'
 import { ensureArgumentModel } from './argument-model.mjs'
 import { ensureLanguageProfile } from './language-profile.mjs'
 import { ensureLanguageReportStore } from './language-report.mjs'
+import { ensureFinalAuditStore } from './final-audit.mjs'
 
 // ---------- Sanfte Markierung (Peripherie): eine flüchtige Dekoration ----------
 // Zeigt eine Passage kurz an, OHNE das Dokument zu ändern — sie wird nicht
@@ -61,7 +62,7 @@ const Cue = Extension.create({
 const NATIVE = !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.store)
 const DEFAULTS = DEFAULT_SETTINGS
 const TRASH_DAYS = 30
-const SCHEMA = 11
+const SCHEMA = 12
 const EX_VERSION = 9
 
 // Schmaler Rückkanal der nativen saveimg-Brücke. Der frühere Bildeditor ist
@@ -163,6 +164,7 @@ function ensureProjectShape(p) {
   ensureArgumentModel(p)
   ensureLanguageProfile(p)
   ensureLanguageReportStore(p)
+  ensureFinalAuditStore(p)
   ensureProjectUnderstanding(p)
   return p
 }

@@ -455,7 +455,7 @@ async function runLanguageFlow(browser) {
     languageDecisions: stored.languageDecisions,
     alphaContainsBeta: stored.alphaContainsBeta,
   }, {
-    schemaVersion: 11,
+    schemaVersion: 12,
     alphaProfileProjectId: ids.alphaId,
     alphaGenre: 'marketing',
     betaGenre: '',

@@ -364,7 +364,7 @@ async function runArgumentFlow(browser) {
     deliberations: stored.deliberations,
     resolvedFindings: stored.resolvedFindings,
   }, {
-    schemaVersion: 11,
+    schemaVersion: 12,
     claims: 5,
     relations: 2,
     claimCorrections: 1,

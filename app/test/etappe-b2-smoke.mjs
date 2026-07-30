@@ -200,7 +200,7 @@ async function runResearchFlow(browser) {
     }
   })
   assert.deepEqual(stored, {
-    schemaVersion: 11,
+    schemaVersion: 12,
     runCount: 1,
     status: 'completed',
     sourceCount: 3,
