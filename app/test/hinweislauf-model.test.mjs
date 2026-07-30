@@ -291,6 +291,7 @@ function basisVersuch(extra = {}) {
     sperreSetzen: () => {},
     hatSchluessel: async () => true,
     istNochDasselbeDokument: () => true,
+    beansprucheKostenfreigabe: null,
     verstaendnis: null,
     blocks: [],
     findings: [],
@@ -300,6 +301,42 @@ function basisVersuch(extra = {}) {
     ...extra,
   }
 }
+
+test('SYSTEM-08: ein blockiertes Automatikbudget verhindert den teuren Hinweislauf', async () => {
+  let runTaskAufrufe = 0
+  const ergebnis = await versucheHinweislauf(basisVersuch({
+    beansprucheKostenfreigabe: () => ({ erlaubt: false, grund: 'monatsbudget-erreicht' }),
+    runTask: async () => {
+      runTaskAufrufe += 1
+      return { daten: { hinweise: [] } }
+    },
+  }))
+  assert.deepEqual(ergebnis, { gestartet: false, grund: 'monatsbudget-erreicht' })
+  assert.equal(runTaskAufrufe, 0)
+})
+
+test('SYSTEM-08: die Budgetfreigabe wird erst nach Schluessel- und Dokumentpruefung beansprucht', async () => {
+  let freigabeAufrufe = 0
+  const ohneSchluessel = await versucheHinweislauf(basisVersuch({
+    hatSchluessel: async () => false,
+    beansprucheKostenfreigabe: () => {
+      freigabeAufrufe += 1
+      return { erlaubt: true }
+    },
+  }))
+  assert.equal(ohneSchluessel.grund, 'kein-schluessel')
+  assert.equal(freigabeAufrufe, 0)
+
+  const gewechselt = await versucheHinweislauf(basisVersuch({
+    istNochDasselbeDokument: () => false,
+    beansprucheKostenfreigabe: () => {
+      freigabeAufrufe += 1
+      return { erlaubt: true }
+    },
+  }))
+  assert.equal(gewechselt.grund, 'dokument-gewechselt')
+  assert.equal(freigabeAufrufe, 0)
+})
 
 test('Fix-Runde 1, Finding 1 (Critical): Sperre wird synchron VOR dem ersten await gesetzt', async () => {
   const reihenfolge = []

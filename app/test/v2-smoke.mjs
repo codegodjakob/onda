@@ -2675,29 +2675,105 @@ async function runTask7KeyboardAndMotion(browser) {
   await page.close()
 }
 
+async function runSystem8BudgetGate(browser) {
+  const page = await browser.newPage({ viewport: { width: 1100, height: 850 } })
+  const errors = []
+  page.on('console', message => {
+    if (message.type() === 'error') errors.push(message.text())
+  })
+  page.on('pageerror', error => errors.push(error.message))
+  await openExample(page)
+  await installiereTransportMock(page)
+
+  await page.evaluate(() => {
+    window.AIWT.newProject('SYSTEM-08 Budget-Eval')
+    window.AIWT.newDoc()
+    window.AIWT.__blockIdentityTestBridge.setContent([
+      {
+        type: 'paragraph',
+        content: [{
+          type: 'text',
+          text: 'Dieser vorhandene Text ist absichtlich deutlich länger als zweihundert Zeichen. '
+            + 'Er beschreibt eine ruhige Schreibumgebung, in der automatische Hinweise nur dann '
+            + 'laufen sollen, wenn die Kostenbremse dies erlaubt. Die Passage wird verlängert, '
+            + 'damit beim erneuten Öffnen ein automatischer Verständnisentwurf vorgesehen ist.',
+        }],
+      },
+    ])
+    window.AIWT.flushSave()
+    const doc = window.AIWT.state.docs.find(candidate => candidate.id === window.AIWT.state.active)
+    doc.workspace.agent.messages = []
+    const project = window.AIWT.state.projects.find(candidate => candidate.id === doc.projectId)
+    project.understanding.entwurfVersuchtAm = null
+    window.AIWT.state.settings.usage.kostenCents = 100
+    window.__llmMock.aufrufe.length = 0
+    window.AIWT.persist()
+  })
+
+  await page.locator('#kiSettings').click()
+  const dialog = page.locator('#kiModal[role="dialog"]')
+  await expectVisible(dialog)
+  await dialog.locator('#kiBudgetInput').fill('0.50')
+  await dialog.locator('.ki-budget-form').getByRole('button', { name: 'Grenze speichern', exact: true }).click()
+  assert.match(await dialog.locator('.ki-budget-status').textContent(), /Grenze erreicht/)
+  await page.keyboard.press('Escape')
+
+  await page.evaluate(() => {
+    const doc = window.AIWT.state.docs.find(candidate => candidate.id === window.AIWT.state.active)
+    doc.workspace.agent.messages = []
+    const project = window.AIWT.state.projects.find(candidate => candidate.id === doc.projectId)
+    project.understanding.entwurfVersuchtAm = null
+    window.__llmMock.aufrufe.length = 0
+    window.AIWT.__workspaceTestBridge.reinitialize()
+  })
+  await page.waitForTimeout(100)
+  assert.equal(await page.evaluate(() => window.__llmMock.aufrufe.length), 0,
+    'Oberhalb der Monatsgrenze darf kein automatischer Netzwerkaufruf starten')
+
+  await page.locator('#kiSettings').click()
+  await expectVisible(dialog)
+  assert.match(await dialog.locator('.ki-budget-status--paused').textContent(), /Automatische Läufe sind pausiert/)
+  await dialog.getByRole('button', { name: 'Genau einen automatischen Lauf freigeben', exact: true }).click()
+  await page.waitForFunction(() => window.__llmMock.aufrufe.length === 1)
+  await page.waitForTimeout(100)
+  const nachFreigabe = await page.evaluate(() => ({
+    aufrufe: window.__llmMock.aufrufe.length,
+    freigaben: window.AIWT.state.settings.automatikFreigabe.verbleibend,
+    budget: window.AIWT.state.settings.kiMonatsbudgetCents,
+  }))
+  assert.deepEqual(nachFreigabe, { aufrufe: 1, freigaben: 0, budget: 50 })
+  assert.deepEqual(errors, [])
+  await page.close()
+}
+
 const browser = await chromium.launch({ headless: true })
 try {
-  if (process.env.AIWT_TASK7_ONLY !== '1') {
-    await runSeedMigrationRegression(browser)
-    await runDesktop(browser)
-    await runBlockIdentityRegressions(browser)
-    await runTask4InteractionRegressions(browser)
-    await runTask5PassageFeedback(browser)
-    await runTask5OwnershipAndAmbiguity(browser)
-    await runFinalFindingRegressions(browser)
-    await runSaveAlert(browser)
-    await runPrintLayout(browser)
-    await runHomeFocus(browser)
-    await runMobile(browser)
-    await runTask5MobileFeedback(browser)
-    await runTask6DialogueAndEvidence(browser)
-    await runTask6Mobile(browser)
-    await runTask6InitiativeAndLifecycle(browser)
+  if (process.env.AIWT_SYSTEM8_ONLY === '1') {
+    await runSystem8BudgetGate(browser)
+  } else {
+    if (process.env.AIWT_TASK7_ONLY !== '1') {
+      await runSeedMigrationRegression(browser)
+      await runDesktop(browser)
+      await runBlockIdentityRegressions(browser)
+      await runTask4InteractionRegressions(browser)
+      await runTask5PassageFeedback(browser)
+      await runTask5OwnershipAndAmbiguity(browser)
+      await runFinalFindingRegressions(browser)
+      await runSaveAlert(browser)
+      await runPrintLayout(browser)
+      await runHomeFocus(browser)
+      await runMobile(browser)
+      await runTask5MobileFeedback(browser)
+      await runTask6DialogueAndEvidence(browser)
+      await runTask6Mobile(browser)
+      await runTask6InitiativeAndLifecycle(browser)
+      await runSystem8BudgetGate(browser)
+    }
+    await runTask7Scenarios(browser, false)
+    await runTask7Scenarios(browser, true)
+    await runTask7Intermediate(browser)
+    await runTask7KeyboardAndMotion(browser)
   }
-  await runTask7Scenarios(browser, false)
-  await runTask7Scenarios(browser, true)
-  await runTask7Intermediate(browser)
-  await runTask7KeyboardAndMotion(browser)
   console.log('V2 smoke passed')
 } finally {
   await browser.close()

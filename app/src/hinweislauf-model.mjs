@@ -129,6 +129,7 @@ export async function versucheHinweislauf({
   sperreSetzen,
   hatSchluessel,
   istNochDasselbeDokument,
+  beansprucheKostenfreigabe,
   verstaendnis,
   blocks,
   findings,
@@ -143,6 +144,12 @@ export async function versucheHinweislauf({
   try {
     if (!(await hatSchluessel())) return { gestartet: false, grund: 'kein-schluessel' }
     if (!istNochDasselbeDokument()) return { gestartet: false, grund: 'dokument-gewechselt' }
+    const kostenfreigabe = typeof beansprucheKostenfreigabe === 'function'
+      ? beansprucheKostenfreigabe()
+      : { erlaubt: true }
+    if (!kostenfreigabe?.erlaubt) {
+      return { gestartet: false, grund: kostenfreigabe?.grund || 'kostenfreigabe-fehlt' }
+    }
 
     const kontext = baueHinweisKontext({
       verstaendnis,

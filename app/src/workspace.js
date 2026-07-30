@@ -32,6 +32,11 @@ import {
   fuehreChatVorgangAus,
   planVerlaufVerdichtung,
 } from './chat-kontext.mjs'
+import {
+  beansprucheAutomatiklauf,
+  budgetStand,
+  gibNaechstenAutomatiklaufFrei,
+} from './settings-model.mjs'
 
 const BLOCK_TYPES = [
   ['paragraph', 'Freier Absatz'],
@@ -86,6 +91,7 @@ let accentMenu = null
 let interviewPruefKey = null
 let interviewLaufAktiv = false
 let interviewStatus = null // null | 'laeuft' | ruhiger Fehlertext für die Statuszeile
+let pausierterAutomatiklauf = null
 // Echter Chat (Etappe A, Bereich C): genau ein Lauf gleichzeitig, app-weit (Panel und,
 // ab Task C-3, auch die Randkarten-Gespraeche teilen sich dieses Feld ueber fuehreChatLauf).
 let laufenderChatLauf = null
@@ -704,9 +710,13 @@ function buildKiSettingsBody(body) {
   const verbrauch = createNode('section', 'ki-verbrauch')
   body.append(verbrauch)
   renderKiVerbrauch(verbrauch)
+  const budget = createNode('section', 'ki-budget')
+  body.append(budget)
+  renderKiBudget(budget)
   const abmelden = beiAgentStatus(() => {
     if (!verbrauch.isConnected) { abmelden(); return }
     renderKiVerbrauch(verbrauch)
+    renderKiBudget(budget)
   })
 }
 
@@ -733,6 +743,103 @@ function renderKiVerbrauch(container) {
       `Geschätzte Kosten: ${((usage.kostenCents || 0) / 100).toLocaleString('de-DE', { style: 'currency', currency: 'USD' })}`
       + ' — Schätzung nach Preisstand 07/2026; verbindlich ist die Abrechnung im Anthropic-Konto.'),
   )
+}
+
+function starteBewusstFreigegebenenAutomatiklauf() {
+  const pausiert = pausierterAutomatiklauf
+  if (pausiert?.typ === 'verstaendnis' || (!pausiert && istInterviewAktiv())) {
+    interviewPruefKey = null
+    pruefeVerstaendnisInterview()
+    return
+  }
+  fuehreHinweislaufAus({ grund: 'freigabe' })
+}
+
+function renderKiBudget(container) {
+  container.replaceChildren()
+  const settings = ctx?.state?.settings
+  if (!settings) return
+  const stand = budgetStand(settings)
+  container.append(
+    createNode('span', 'onda-eyebrow', 'Lokale Monatsgrenze'),
+    createNode('p', 'ki-hinweis',
+      'Zusätzliche Kostenbremse für selbstständig gestartete KI-Läufe. '
+      + 'Das Ausgabenlimit im Anbieter-Konto bleibt der verbindliche Schutz.'),
+  )
+
+  const form = createNode('form', 'ki-budget-form')
+  const label = createNode('label', 'ki-budget-label', 'Grenze in US-Dollar')
+  label.htmlFor = 'kiBudgetInput'
+  const input = createNode('input', 'ki-budget-input')
+  input.id = 'kiBudgetInput'
+  input.name = 'kiBudgetUsd'
+  input.type = 'number'
+  input.min = '0.01'
+  input.step = '0.01'
+  input.inputMode = 'decimal'
+  input.placeholder = 'z. B. 10,00'
+  input.value = stand.konfiguriert ? String(stand.budgetCents / 100) : ''
+  const speichern = createNode('button', 'onda-btn onda-btn--sm', 'Grenze speichern')
+  speichern.type = 'submit'
+  form.append(label, input, speichern)
+  container.append(form)
+
+  form.addEventListener('submit', event => {
+    event.preventDefault()
+    const betrag = Number.parseFloat(String(input.value || '').replace(',', '.'))
+    if (!Number.isFinite(betrag) || betrag <= 0) {
+      input.setCustomValidity('Bitte gib einen Betrag größer als null ein.')
+      input.reportValidity()
+      return
+    }
+    input.setCustomValidity('')
+    settings.kiMonatsbudgetCents = Math.round(betrag * 100)
+    settings.automatikFreigabe = { monat: settings.usage?.monat, verbleibend: 0 }
+    ctx.persist()
+    renderKiBudget(container)
+    announceAgentStatus('Lokale Monatsgrenze gespeichert.')
+  })
+
+  if (stand.konfiguriert) {
+    const entfernen = createNode('button', 'onda-btn onda-btn--ghost onda-btn--sm', 'Lokale Grenze entfernen')
+    entfernen.type = 'button'
+    entfernen.addEventListener('click', () => {
+      settings.kiMonatsbudgetCents = null
+      settings.automatikFreigabe = { monat: settings.usage?.monat, verbleibend: 0 }
+      pausierterAutomatiklauf = null
+      ctx.persist()
+      renderKiBudget(container)
+      announceAgentStatus('Lokale Monatsgrenze entfernt.')
+    })
+    container.append(entfernen)
+  }
+
+  if (!stand.erreicht) {
+    const text = stand.konfiguriert
+      ? `${(stand.kostenCents / 100).toFixed(2)} von ${(stand.budgetCents / 100).toFixed(2)} US-Dollar geschätzt verbraucht.`
+      : 'Keine zusätzliche lokale Grenze gesetzt.'
+    container.append(createNode('p', 'ki-budget-status', text))
+    return
+  }
+
+  container.append(createNode('p', 'ki-budget-status ki-budget-status--paused',
+    `Grenze erreicht: ${(stand.kostenCents / 100).toFixed(2)} von ${(stand.budgetCents / 100).toFixed(2)} US-Dollar. `
+    + 'Automatische Läufe sind pausiert; selbst gesendete Nachrichten bleiben möglich.'))
+  const freigeben = createNode(
+    'button',
+    'onda-btn onda-btn--sm ki-budget-approve',
+    stand.freigaben ? 'Ein automatischer Lauf ist freigegeben' : 'Genau einen automatischen Lauf freigeben',
+  )
+  freigeben.type = 'button'
+  freigeben.disabled = stand.freigaben > 0
+  freigeben.addEventListener('click', () => {
+    gibNaechstenAutomatiklaufFrei(settings)
+    ctx.persist()
+    renderKiBudget(container)
+    announceAgentStatus('Genau ein automatischer KI-Lauf wurde freigegeben.')
+    starteBewusstFreigegebenenAutomatiklauf()
+  })
+  container.append(freigeben)
 }
 
 function syncThemeToggle() {
@@ -873,6 +980,7 @@ function openProjectUnderstandingModal(opener) {
 const INTERVIEW_EROEFFNUNG = 'Bevor ich beim Schreiben helfen kann, würde ich das Projekt gern verstehen: Worum soll es in diesem Text gehen — und für wen schreibst du ihn?'
 const INTERVIEW_ENTWURF_MIN_ZEICHEN = 200
 const INTERVIEW_OFFLINE_TEXT = 'Agent ist offline — dein Text ist davon unberührt.'
+const BUDGET_PAUSE_TEXT = 'Die lokale Monatsgrenze ist erreicht. Selbst gesendete Nachrichten bleiben möglich; unter „KI-Anschluss“ kannst du genau einen automatischen Lauf bewusst freigeben.'
 
 function istBeispielProjekt(project) {
   return Boolean(project && (project.id === EXAMPLE_PROJECT_ID || project.example === true))
@@ -880,6 +988,36 @@ function istBeispielProjekt(project) {
 
 function interviewMessageId(project) {
   return `interview-${project.id}`
+}
+
+function beansprucheAutomatikKosten(typ, referenz = {}) {
+  const ergebnis = beansprucheAutomatiklauf(ctx?.state?.settings)
+  if (!ergebnis.erlaubt) {
+    pausierterAutomatiklauf = { typ, ...referenz }
+    // Die normalisierte Null-Freigabe gehoert zum gespeicherten Sicherheitszustand.
+    ctx?.persist()
+    return ergebnis
+  }
+  if (ergebnis.freigabeVerbraucht) {
+    pausierterAutomatiklauf = null
+    ctx?.persist()
+  }
+  return ergebnis
+}
+
+function zeigeBudgetPause(workspace) {
+  if (!workspace) return
+  const monat = ctx?.state?.settings?.usage?.monat || 'aktuell'
+  const id = `budget-pause-${monat}`
+  let message = workspace.agent.messages.find(candidate => candidate.id === id)
+  if (!message) {
+    message = { id, status: 'new', earliestAt: 0, text: BUDGET_PAUSE_TEXT, thread: [] }
+    workspace.agent.messages.push(message)
+  } else {
+    message.status = 'new'
+    message.text = BUDGET_PAUSE_TEXT
+  }
+  announceAgentStatus(BUDGET_PAUSE_TEXT)
 }
 
 function docPlainText() {
@@ -1005,6 +1143,14 @@ async function starteVerstaendnisEntwurf(projectId, docId) {
       interviewStatus = null
       const message = ensureInterviewMessage(workspace, project)
       if (!message.text) message.text = INTERVIEW_EROEFFNUNG
+      persistWorkspace()
+      return
+    }
+    const kostenfreigabe = beansprucheAutomatikKosten('verstaendnis', { projectId, docId })
+    if (!kostenfreigabe.erlaubt) {
+      interviewStatus = BUDGET_PAUSE_TEXT
+      const message = ensureInterviewMessage(workspace, project)
+      message.text = BUDGET_PAUSE_TEXT
       persistWorkspace()
       return
     }
@@ -2614,6 +2760,9 @@ async function fuehreHinweislaufAus({ grund = 'pause' } = {}) {
     sperreSetzen: wert => { hinweislaufAktiv = wert },
     hatSchluessel,
     istNochDasselbeDokument: () => ctx.activeDoc()?.id === docId,
+    beansprucheKostenfreigabe: grund === 'chat'
+      ? null
+      : () => beansprucheAutomatikKosten('hinweis', { docId, grund }),
     verstaendnis: project ? ensureProjectUnderstanding(project) : null,
     blocks,
     findings: doc?.findings,
@@ -2622,7 +2771,14 @@ async function fuehreHinweislaufAus({ grund = 'pause' } = {}) {
     setzeAgentStatus,
   })
 
-  if (!ergebnis.gestartet) return ergebnis // Gate/Dokumentwechsel hat blockiert -- nichts zu protokollieren
+  if (!ergebnis.gestartet) {
+    if (ergebnis.grund === 'monatsbudget-erreicht') {
+      zeigeBudgetPause(workspace)
+      persistWorkspace()
+      refreshWorkspace()
+    }
+    return ergebnis // Gate/Dokumentwechsel/Budget hat blockiert -- nichts zu protokollieren
+  }
 
   if (!ergebnis.erfolg) {
     // Spec §7: Schema-Muell/Abbruch -> Lauf verwerfen, still protokollieren, beim naechsten
@@ -3110,6 +3266,7 @@ export function initWorkspace(context) {
     interviewPruefKey = null
     interviewLaufAktiv = false
     interviewStatus = null
+    pausierterAutomatiklauf = null
   }
 
   window.__workspaceCloseTopLayer = closeTopLayer

@@ -3023,6 +3023,42 @@ button.onda-aura:focus-visible {
 .ki-verbrauch p { margin: 0; color: var(--text-secondary); font: var(--fw-regular) var(--text-sm)/1.5 var(--font-sans); }
 .ki-verbrauch-kosten { color: var(--text-primary); }
 .ki-verbrauch-leer { color: var(--text-tertiary); }
+.ki-budget {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+}
+.ki-budget-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-2);
+  align-items: end;
+}
+.ki-budget-label {
+  grid-column: 1 / -1;
+  color: var(--text-secondary);
+  font: var(--fw-medium) var(--text-sm)/1.4 var(--font-sans);
+}
+.ki-budget-input {
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--text-primary);
+  font: var(--fw-regular) var(--text-md)/1.4 var(--font-sans);
+}
+.ki-budget-input:focus-visible { outline: none; border-color: var(--accent); box-shadow: var(--shadow-focus); }
+.ki-budget-status {
+  margin: 0;
+  color: var(--text-tertiary);
+  font: var(--fw-regular) var(--text-sm)/1.5 var(--font-sans);
+}
+.ki-budget-status--paused { color: var(--warning); }
+.ki-budget-approve { align-self: flex-start; min-height: 44px; }
 
 /* Ruhige Statuszeile im Agenten-Panel (Bereich U) */
 .agent-statusline {

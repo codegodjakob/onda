@@ -1,6 +1,16 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { DEFAULT_SETTINGS, ACCENTS, normalizeSettings, aktuellerMonat, leereUsage, verbucheUsage } from '../src/settings-model.mjs'
+import {
+  ACCENTS,
+  DEFAULT_SETTINGS,
+  aktuellerMonat,
+  beansprucheAutomatiklauf,
+  budgetStand,
+  gibNaechstenAutomatiklaufFrei,
+  leereUsage,
+  normalizeSettings,
+  verbucheUsage,
+} from '../src/settings-model.mjs'
 
 test('defaults: accent sky, sidebar not collapsed, existing fields intact', () => {
   const s = normalizeSettings(undefined)
@@ -90,4 +100,69 @@ test('aktuellerMonat liefert JJJJ-MM und verbucheUsage wirft nie bei Muell', () 
   verbucheUsage(s, undefined, 'quatsch', '2026-07')
   assert.equal(s.usage.inputTokens, 0)
   assert.equal(s.usage.kostenCents, 0)
+})
+
+test('Monatsbudget: positive Cent-Betraege bleiben erhalten, Muell bedeutet keine lokale Grenze', () => {
+  assert.equal(normalizeSettings({ kiMonatsbudgetCents: 1250 }, '2026-07').kiMonatsbudgetCents, 1250)
+  assert.equal(normalizeSettings({ kiMonatsbudgetCents: '2500' }, '2026-07').kiMonatsbudgetCents, 2500)
+  for (const wert of [0, -1, 'quatsch', Number.POSITIVE_INFINITY, null]) {
+    assert.equal(normalizeSettings({ kiMonatsbudgetCents: wert }, '2026-07').kiMonatsbudgetCents, null)
+  }
+})
+
+test('Monatsbudget: unter der Grenze darf Automatik laufen, an und ueber der Grenze nicht', () => {
+  const settings = normalizeSettings({
+    kiMonatsbudgetCents: 500,
+    usage: { monat: '2026-07', kostenCents: 499 },
+  }, '2026-07')
+  assert.deepEqual(beansprucheAutomatiklauf(settings, '2026-07'), {
+    erlaubt: true,
+    grund: 'unter-budget',
+    freigabeVerbraucht: false,
+  })
+  settings.usage.kostenCents = 500
+  assert.deepEqual(beansprucheAutomatiklauf(settings, '2026-07'), {
+    erlaubt: false,
+    grund: 'monatsbudget-erreicht',
+    freigabeVerbraucht: false,
+  })
+  settings.usage.kostenCents = 900
+  assert.equal(budgetStand(settings, '2026-07').erreicht, true)
+})
+
+test('Monatsbudget: bewusste Freigabe erlaubt genau einen automatischen Lauf', () => {
+  const settings = normalizeSettings({
+    kiMonatsbudgetCents: 500,
+    usage: { monat: '2026-07', kostenCents: 600 },
+  }, '2026-07')
+  gibNaechstenAutomatiklaufFrei(settings, '2026-07')
+  assert.equal(budgetStand(settings, '2026-07').freigaben, 1)
+  assert.deepEqual(beansprucheAutomatiklauf(settings, '2026-07'), {
+    erlaubt: true,
+    grund: 'einmal-freigegeben',
+    freigabeVerbraucht: true,
+  })
+  assert.equal(budgetStand(settings, '2026-07').freigaben, 0)
+  assert.equal(beansprucheAutomatiklauf(settings, '2026-07').erlaubt, false)
+})
+
+test('Monatsbudget: Freigaben gelten nie ueber einen Monatswechsel hinaus', () => {
+  const settings = normalizeSettings({
+    kiMonatsbudgetCents: 500,
+    automatikFreigabe: { monat: '2026-06', verbleibend: 1 },
+    usage: { monat: '2026-07', kostenCents: 600 },
+  }, '2026-07')
+  assert.deepEqual(settings.automatikFreigabe, { monat: '2026-07', verbleibend: 0 })
+  assert.equal(beansprucheAutomatiklauf(settings, '2026-07').erlaubt, false)
+})
+
+test('Monatsbudget: ohne konfigurierte Grenze bleibt Automatik unveraendert erlaubt', () => {
+  const settings = normalizeSettings({
+    usage: { monat: '2026-07', kostenCents: 999999 },
+  }, '2026-07')
+  assert.deepEqual(beansprucheAutomatiklauf(settings, '2026-07'), {
+    erlaubt: true,
+    grund: 'kein-budget',
+    freigabeVerbraucht: false,
+  })
 })
