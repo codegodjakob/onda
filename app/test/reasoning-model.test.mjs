@@ -99,13 +99,14 @@ test('uses integrity before age when priorities match', () => {
 })
 
 test('records rejection of an integrity finding as accepted risk', () => {
-  const doc = { findings: [{ id: 'source', status: 'open', category: 'source', priority: 'critical' }] }
+  const doc = { findings: [{ id: 'source', status: 'open', category: 'source', priority: 'critical', target: 'Die ursprüngliche Behauptung' }] }
 
   const finding = decideFinding(doc, 'source', { kind: 'reject', reason: 'Abgabe heute' }, 42)
 
   assert.equal(finding.status, 'risk-accepted')
   assert.equal(doc.decisions[0].at, 42)
   assert.equal(doc.decisions[0].reason, 'Abgabe heute')
+  assert.equal(doc.decisions[0].resultingText, 'Die ursprüngliche Behauptung')
   assert.equal(getFindingQueue(doc).acceptedRisks.length, 1)
 })
 
@@ -125,6 +126,7 @@ test('records accepted and edited suggestions without changing text itself', () 
 
   assert.equal(finding.status, 'resolved')
   assert.equal(doc.decisions[0].appliedText, 'Praeziser.')
+  assert.equal(doc.decisions[0].resultingText, 'Praeziser.')
   assert.equal(finding.action, 'Kuerzer.')
 })
 

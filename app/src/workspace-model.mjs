@@ -54,6 +54,32 @@ export function normalizeThread(value) {
   return normalized
 }
 
+// Render-/Persistenz-Normalisierung muss Referenzen erhalten: laufende Streams
+// halten sowohl das Thread-Array als auch die gerade wachsende Nachricht fest.
+// Ein Austausch durch strukturgleiche Kopien würde weitere Deltas und den
+// finalen Text in verwaiste Objekte schreiben.
+function normalizeThreadInPlace(value) {
+  if (!Array.isArray(value)) return []
+  const normalized = []
+  const usedIds = new Set()
+
+  value.forEach(candidate => {
+    if (!isPlainObject(candidate)) return
+    if (!THREAD_ROLES.has(candidate.role)) return
+    if (typeof candidate.text !== 'string' || !candidate.text.trim()) return
+    if (!Number.isFinite(candidate.at)) return
+
+    const preferredId = typeof candidate.id === 'string' && candidate.id.trim()
+      ? candidate.id.trim()
+      : `message-${candidate.at}-${normalized.length}`
+    candidate.id = uniqueMessageId(preferredId, usedIds)
+    normalized.push(candidate)
+  })
+
+  value.splice(0, value.length, ...normalized)
+  return value
+}
+
 function normalizeAgentMessages(value) {
   if (!Array.isArray(value)) return []
   const normalized = []
@@ -66,7 +92,7 @@ function normalizeAgentMessages(value) {
       : `agent-message-${index}`
     const message = candidate
     message.id = uniqueMessageId(preferredId, usedIds)
-    message.thread = normalizeThread(candidate.thread)
+    message.thread = normalizeThreadInPlace(candidate.thread)
     if (typeof message.text !== 'string') message.text = ''
     normalized.push(message)
   })
@@ -92,6 +118,7 @@ export function ensureWorkspaceState(doc) {
     ? [...new Set(agent.dismissedIds.filter(id => typeof id === 'string' && id.trim()).map(id => id.trim()))]
     : []
   if (typeof agent.open !== 'boolean') agent.open = false
+  if (typeof agent.decisionsOpen !== 'boolean') agent.decisionsOpen = false
   agent.activeMessageId = typeof agent.activeMessageId === 'string'
     && agent.messages.some(message => message.id === agent.activeMessageId)
     ? agent.activeMessageId
@@ -101,7 +128,7 @@ export function ensureWorkspaceState(doc) {
   if (Array.isArray(doc.findings)) {
     doc.findings.forEach(finding => {
       if (!isPlainObject(finding) || !Object.hasOwn(finding, 'thread')) return
-      finding.thread = normalizeThread(finding.thread)
+      finding.thread = normalizeThreadInPlace(finding.thread)
     })
   }
 
@@ -175,6 +202,18 @@ export function structureHintMap(doc, blocks) {
     if (map.get(placement.block.id) !== 'evidence') map.set(placement.block.id, kind)
   }
   return map
+}
+
+// Belegfenster-Guard (Etappe A, H-4): Demo-Quellen (verificationStatus 'demo')
+// gehoeren exklusiv zum Beispielprojekt -- alles andere waere eine Falschbehauptung
+// gegenueber der Autorin/dem Autor. Echte Findings haben ohnehin sources: [] (H-1,
+// die Quellensuche kommt erst in Etappe B); diese reine Funktion sichert zusaetzlich
+// jeden anderen Weg ins Belegfenster ab, falls doch einmal eine Demo-Quelle an einem
+// echten Finding haengen bliebe.
+export function resolveEvidenceSources(sources, istBeispielprojekt) {
+  const list = Array.isArray(sources) ? sources : []
+  if (istBeispielprojekt) return list
+  return list.filter(source => source?.verificationStatus !== 'demo')
 }
 
 export function createEditingFindingState(finding, block, startedAt = Date.now()) {

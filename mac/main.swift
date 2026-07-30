@@ -1,5 +1,6 @@
 import Cocoa
 import WebKit
+import Security
 
 // MARK: - Speicher (echte Datei mit Backup + Reparatur)
 
@@ -53,6 +54,54 @@ enum Store {
     }
 }
 
+// MARK: - Schlüsselbund (API-Schlüssel verlässt nie den nativen Prozess)
+
+enum Keychain {
+    static let service = "Schreibwerkzeug"
+    static let account = "anthropic-api-key"
+
+    private static func basisAbfrage(service: String, account: String) -> [String: Any] {
+        [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+        ]
+    }
+
+    /// Legt den Schlüssel ab (ersetzt einen vorhandenen Eintrag).
+    @discardableResult
+    static func setzen(_ schluessel: String, service: String = Keychain.service, account: String = Keychain.account) -> Bool {
+        guard !schluessel.isEmpty, let data = schluessel.data(using: .utf8) else { return false }
+        let query = basisAbfrage(service: service, account: account)
+        SecItemDelete(query as CFDictionary)
+        var add = query
+        add[kSecValueData as String] = data
+        add[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlocked
+        return SecItemAdd(add as CFDictionary, nil) == errSecSuccess
+    }
+
+    /// Liest den Schlüssel — nur für den nativen 'llm'-Handler, nie für JS.
+    static func lesen(service: String = Keychain.service, account: String = Keychain.account) -> String? {
+        var query = basisAbfrage(service: service, account: account)
+        query[kSecReturnData as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
+        var out: CFTypeRef?
+        guard SecItemCopyMatching(query as CFDictionary, &out) == errSecSuccess,
+              let d = out as? Data, let s = String(data: d, encoding: .utf8), !s.isEmpty else { return nil }
+        return s
+    }
+
+    @discardableResult
+    static func loeschen(service: String = Keychain.service, account: String = Keychain.account) -> Bool {
+        let status = SecItemDelete(basisAbfrage(service: service, account: account) as CFDictionary)
+        return status == errSecSuccess || status == errSecItemNotFound
+    }
+
+    static func vorhanden(service: String = Keychain.service, account: String = Keychain.account) -> Bool {
+        lesen(service: service, account: account) != nil
+    }
+}
+
 // MARK: - Selbsttest (läuft ohne Fenster, prüft die Speicherschicht)
 
 func runSelfTest() -> Never {
@@ -103,6 +152,19 @@ func runSelfTest() -> Never {
         if !Store.save(s) { ok = false }
     }
     check("50x-schnell-speichern", ok && Store.load().contains("t49"))
+
+    // 8) Schlüsselbund-Helfer (eigener Selbsttest-Eintrag — der echte bleibt unberührt)
+    let tService = "Schreibwerkzeug-Selbsttest"
+    _ = Keychain.loeschen(service: tService)
+    check("keychain-anfangs-leer", Keychain.vorhanden(service: tService) == false)
+    check("keychain-setzen", Keychain.setzen("test-schluessel-123", service: tService))
+    check("keychain-lesen", Keychain.lesen(service: tService) == "test-schluessel-123")
+    check("keychain-ueberschreiben",
+          Keychain.setzen("test-schluessel-456", service: tService)
+          && Keychain.lesen(service: tService) == "test-schluessel-456")
+    check("keychain-loeschen",
+          Keychain.loeschen(service: tService) && Keychain.vorhanden(service: tService) == false)
+    check("keychain-leer-abgelehnt", Keychain.setzen("", service: tService) == false)
 
     try? FileManager.default.removeItem(at: Store.dir)
     print(fails == 0 ? "SELFTEST OK" : "SELFTEST FAILED (\(fails))")
@@ -170,6 +232,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         ucc.add(self, name: "saveimg")
         ucc.add(self, name: "printreq")
         ucc.add(self, name: "openurl")
+        ucc.add(self, name: "llmkey")
+        ucc.add(self, name: "llm")
 
         let data = Store.load()
         let js = "window.__NATIVE_DATA__ = \(data); window.__PROBE__ = \(probePath != nil ? "true" : "false");"
@@ -181,6 +245,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         webView = WKWebView(frame: .zero, configuration: cfg)
         webView.allowsMagnification = true
         webView.uiDelegate = self
+
+        // Entwickler-Smoke: Web-Inspektor nur bei AIWT_DEBUG=1 (Safari → Entwickler).
+        if ProcessInfo.processInfo.environment["AIWT_DEBUG"] == "1" {
+            if #available(macOS 13.3, *) { webView.isInspectable = true }
+        }
 
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1150, height: 760),
                           styleMask: [.titled, .closable, .miniaturizable, .resizable],
@@ -257,12 +326,50 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
                ["http", "https"].contains(url.scheme ?? "") {
                 NSWorkspace.shared.open(url)
             }
+        case "llmkey":
+            guard let obj = message.body as? [String: Any],
+                  let id = obj["id"] as? String,
+                  let aktion = obj["aktion"] as? String else { return }
+            switch aktion {
+            case "setzen":
+                let roh = (obj["schluessel"] as? String ?? "")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                if !roh.isEmpty { Keychain.setzen(roh) }
+            case "loeschen":
+                Keychain.loeschen()
+            default:
+                break // "status" fragt nur ab
+            }
+            // Antwort enthält NIE den Schlüssel — nur ja/nein.
+            llmRueckruf(["id": id, "typ": "schluesselstatus",
+                         "status": ["vorhanden": Keychain.vorhanden()]])
+        case "llm":
+            guard let obj = message.body as? [String: Any] else { return }
+            handleLlm(obj)
         case "probe":
             if let p = probePath, let s = message.body as? String {
                 try? s.write(toFile: p, atomically: true, encoding: .utf8)
                 exit(0)
             }
         default: break
+        }
+    }
+
+    /// Einziger Rückkanal der LLM-Brücke: window.AIWT.llmRueckruf(payload).
+    /// JSON-Serialisierung übernimmt jedes Escaping (Anführungszeichen, Zeilen-
+    /// umbrüche in SSE-Rohzeilen); der Guard macht Aufrufe vor der JS-Registrierung
+    /// zu No-ops. Reihenfolge ist trotzdem sicher: Swift ruft llmRueckruf nur als
+    /// Antwort auf ein postMessage aus dem JS — zu dem Zeitpunkt ist
+    /// agent-transport.mjs (Bereich T) längst geladen und window.AIWT registriert.
+    func llmRueckruf(_ payload: [String: Any]) {
+        guard let data = try? JSONSerialization.data(withJSONObject: payload),
+              var json = String(data: data, encoding: .utf8) else { return }
+        // U+2028/U+2029 sind gültiges JSON, aber Zeilenumbrüche im JS-Quelltext.
+        json = json.replacingOccurrences(of: "\u{2028}", with: "\\u2028")
+                   .replacingOccurrences(of: "\u{2029}", with: "\\u2029")
+        let js = "window.AIWT && window.AIWT.llmRueckruf && window.AIWT.llmRueckruf(\(json));"
+        DispatchQueue.main.async { [weak self] in
+            self?.webView?.evaluateJavaScript(js, completionHandler: nil)
         }
     }
 
@@ -358,6 +465,150 @@ func buildMenus(_ delegate: AppDelegate) {
     editItem.submenu = editMenu
 
     NSApp.mainMenu = main
+}
+
+// MARK: - LLM-Brücke (Handler 'llm')
+//
+// Entscheidung (verbindlich für Bereich T): Swift parst weder die JSON-Antwort
+// noch den SSE-Strom. stream=false → der rohe Antwort-Körper geht als `text`
+// im 'fertig'-Rückruf an JS; stream=true → jede SSE-Rohzeile (inkl. '\n',
+// ohne '\r') geht als 'delta' an JS, dort arbeitet parseSseZeilen aus
+// agent-transport.mjs. Ein Parser, eine Wahrheit — kein Duplikat in Swift.
+
+extension AppDelegate {
+    /// Großzügige Fristen: Opus-5-Läufe mit adaptivem Denken dürfen lange dauern.
+    static let llmSession: URLSession = {
+        let cfg = URLSessionConfiguration.ephemeral
+        cfg.timeoutIntervalForRequest = 600   // 10 Minuten je Anfrage
+        cfg.timeoutIntervalForResource = 1200
+        return URLSession(configuration: cfg)
+    }()
+
+    /// HTTP-Status → Fehler-Vokabular des Verteilers (agent-gateway.mjs).
+    static func fehlerTyp(fuerStatus status: Int) -> String {
+        switch status {
+        case 401, 403: return "kein-schluessel"
+        case 429: return "ratenlimit"
+        case 529: return "ueberlastet"
+        case 500...599: return "ueberlastet"
+        default: return "schema" // fehlerhafte Anfrage (z. B. 400) — nicht wiederholbar
+        }
+    }
+
+    func handleLlm(_ obj: [String: Any]) {
+        guard let id = obj["id"] as? String else { return }
+        func fehler(_ typ: String, _ nachricht: String) {
+            llmRueckruf(["id": id, "typ": "fehler",
+                         "fehler": ["typ": typ, "nachricht": nachricht]])
+        }
+        guard let urlString = obj["url"] as? String,
+              let url = URL(string: urlString),
+              url.scheme == "https", url.host == "api.anthropic.com" else {
+            fehler("schema", "Unzulässige Ziel-Adresse — die Brücke spricht nur mit api.anthropic.com.")
+            return
+        }
+        guard let key = Keychain.lesen() else {
+            fehler("kein-schluessel", "Kein API-Schlüssel im Schlüsselbund hinterlegt.")
+            return
+        }
+        guard let body = obj["body"], JSONSerialization.isValidJSONObject(body),
+              let bodyData = try? JSONSerialization.data(withJSONObject: body) else {
+            fehler("schema", "Anfrage-Körper ließ sich nicht serialisieren.")
+            return
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.httpBody = bodyData
+        request.timeoutInterval = 600
+        request.setValue("application/json", forHTTPHeaderField: "content-type")
+        let gesperrt = ["x-api-key", "anthropic-dangerous-direct-browser-access"]
+        for (k, v) in (obj["headers"] as? [String: String]) ?? [:]
+            where !gesperrt.contains(k.lowercased()) {
+            request.setValue(v, forHTTPHeaderField: k)
+        }
+        request.setValue(key, forHTTPHeaderField: "x-api-key") // NUR hier, nie aus JS
+
+        if (obj["stream"] as? Bool) == true {
+            streamLlm(id: id, request: request)
+        } else {
+            fetchLlm(id: id, request: request)
+        }
+    }
+
+    /// stream=false: komplette Antwort abholen, roher Body als `text` an JS.
+    private func fetchLlm(id: String, request: URLRequest) {
+        AppDelegate.llmSession.dataTask(with: request) { [weak self] data, response, error in
+            guard let self = self else { return }
+            func fehler(_ typ: String, _ nachricht: String) {
+                self.llmRueckruf(["id": id, "typ": "fehler",
+                                  "fehler": ["typ": typ, "nachricht": nachricht]])
+            }
+            if let error = error {
+                fehler("offline", "Netzfehler: \(error.localizedDescription)")
+                return
+            }
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            let text = data.flatMap { String(data: $0, encoding: .utf8) } ?? ""
+            guard status == 200 else {
+                fehler(AppDelegate.fehlerTyp(fuerStatus: status),
+                       "HTTP \(status): \(String(text.prefix(300)))")
+                return
+            }
+            self.llmRueckruf(["id": id, "typ": "fertig", "text": text])
+        }.resume()
+    }
+
+    /// stream=true: SSE Zeile für Zeile, jede Rohzeile als 'delta' an JS.
+    private func streamLlm(id: String, request: URLRequest) {
+        Task { [weak self] in
+            guard let self = self else { return }
+            @MainActor func fehler(_ typ: String, _ nachricht: String) {
+                self.llmRueckruf(["id": id, "typ": "fehler",
+                                  "fehler": ["typ": typ, "nachricht": nachricht]])
+            }
+            func alsZeile(_ d: Data) -> String {
+                var s = String(data: d, encoding: .utf8) ?? ""
+                if s.hasSuffix("\r") { s.removeLast() }
+                return s
+            }
+            do {
+                let (bytes, response) = try await AppDelegate.llmSession.bytes(for: request)
+                let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+                if status != 200 {
+                    // Status ist bekannt, sobald die Antwort-Kopfzeilen da sind — der
+                    // Fehlertyp steht damit fest, EGAL ob der Diagnose-Körper danach
+                    // noch vollständig gelesen werden kann. Eigenes do/catch, damit ein
+                    // Abbruch beim Körper-Lesen NICHT in den äußeren offline-catch fällt
+                    // und einen z. B. echten 401 fälschlich als vorübergehend meldet.
+                    let typ = AppDelegate.fehlerTyp(fuerStatus: status)
+                    var koerper = Data()
+                    do {
+                        for try await b in bytes { koerper.append(b); if koerper.count > 4096 { break } }
+                    } catch {
+                        // Körper unvollständig/nicht lesbar — Status-Typ gilt trotzdem.
+                    }
+                    let text = String(data: koerper, encoding: .utf8) ?? ""
+                    fehler(typ, "HTTP \(status): \(String(text.prefix(300)))")
+                    return
+                }
+                var zeile = Data()
+                for try await b in bytes {
+                    if b == 0x0A {
+                        self.llmRueckruf(["id": id, "typ": "delta", "text": alsZeile(zeile) + "\n"])
+                        zeile.removeAll(keepingCapacity: true)
+                    } else {
+                        zeile.append(b)
+                    }
+                }
+                if !zeile.isEmpty {
+                    self.llmRueckruf(["id": id, "typ": "delta", "text": alsZeile(zeile) + "\n"])
+                }
+                self.llmRueckruf(["id": id, "typ": "fertig"])
+            } catch {
+                fehler("offline", "Netzfehler: \(error.localizedDescription)")
+            }
+        }
+    }
 }
 
 // MARK: - Start

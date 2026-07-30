@@ -6,6 +6,11 @@ const UNDERSTANDING_DEFAULTS = Object.freeze({
   protectedIntentions: [],
   openQuestions: [],
   updatedAt: null,
+  // Kein Verständnisfeld, kein Merge-Ziel — reine Kostenbremse (Fix-Runde 1,
+  // Finding 2): sobald gesetzt, startet kein weiterer bezahlter Entwurf-Lauf
+  // fürs selbe Projekt. Additiv: alte Projekte ohne dieses Feld gelten als
+  // „noch nicht versucht" (null).
+  entwurfVersuchtAm: null,
 })
 
 const PRIORITY_RANK = Object.freeze({ critical: 0, high: 1, normal: 2, low: 3 })
@@ -27,8 +32,124 @@ export function ensureProjectUnderstanding(project) {
   current.audience = cleanList(current.audience)
   current.protectedIntentions = cleanList(current.protectedIntentions)
   current.openQuestions = cleanList(current.openQuestions)
+  current.geschuetzt = cleanList(current.geschuetzt)
   project.understanding = current
   return current
+}
+
+const GESCHUETZT_FELDER = Object.freeze([
+  'task', 'audience', 'desiredEffect', 'evidenceStandard', 'protectedIntentions', 'openQuestions',
+])
+
+function textOderLeer(value) {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+export function istInterviewOffen(understanding) {
+  if (!understanding || typeof understanding !== 'object') return true
+  const task = textOderLeer(understanding.task)
+  const effect = textOderLeer(understanding.desiredEffect)
+  const audience = cleanList(understanding.audience)
+  return !(task && effect && audience.length)
+}
+
+export function markiereGeschuetzt(understanding, feld) {
+  if (!understanding || typeof understanding !== 'object') return understanding
+  if (!GESCHUETZT_FELDER.includes(feld)) return understanding
+  if (!Array.isArray(understanding.geschuetzt)) understanding.geschuetzt = []
+  if (!understanding.geschuetzt.includes(feld)) understanding.geschuetzt.push(feld)
+  return understanding
+}
+
+// Projektweite Kostenbremse für den bezahlten Entwurf-Lauf (nicht für die kostenlose
+// feste Eröffnungsfrage — die darf weiterhin pro Dokument erscheinen). Kein
+// Verständnisfeld: beeinflusst istInterviewOffen nicht und ist kein Merge-Ziel in
+// mergeVerstaendnis (siehe dort — es lebt außerhalb der sechs Kernfelder und wird per
+// Objekt-Spread einfach durchgereicht).
+export function istEntwurfVersucht(understanding) {
+  return Boolean(understanding && understanding.entwurfVersuchtAm)
+}
+
+export function markiereEntwurfVersucht(understanding, jetzt = Date.now()) {
+  if (!understanding || typeof understanding !== 'object') return understanding
+  understanding.entwurfVersuchtAm = jetzt
+  return understanding
+}
+
+// Pur: mischt eine KI-Antwort (VERSTAENDNIS_SCHEMA) in ein bestehendes Understanding.
+// Nur nicht-leere Felder überschreiben; geschützte Felder (Nutzer-Korrekturen) nie.
+// Ausnahme openQuestions: die Lückenliste der KI ersetzt die alte auch durch leer,
+// damit beantwortete Lücken verschwinden. protectedIntentions werden vereinigt.
+export function mergeVerstaendnis(alt, neu, geschuetzt = [], jetzt = Date.now()) {
+  const basis = alt && typeof alt === 'object' ? alt : {}
+  const eingehend = neu && typeof neu === 'object' ? neu : {}
+
+  // Defensive Behandlung von geschuetzt: Array, Set erlaubt; kaputte Werte führen zu fail-closed.
+  let gesperrt
+  if (geschuetzt === null || geschuetzt === undefined) {
+    gesperrt = new Set() // nichts geschützt — legitimer Normalfall
+  } else if (Array.isArray(geschuetzt)) {
+    gesperrt = new Set(cleanList(geschuetzt))
+  } else if (geschuetzt instanceof Set) {
+    // Set ist gültig — Werte übernehmen, aber tolerant normalisieren
+    gesperrt = new Set(Array.from(geschuetzt).map(v => String(v).trim()).filter(Boolean))
+  } else {
+    // Kaputter Wert (String, Objekt, Zahl, etc.): fail-closed.
+    // Im Zweifel schützt das System die Nutzer-Korrekturen, statt sie zu verlieren.
+    gesperrt = new Set(GESCHUETZT_FELDER)
+  }
+
+  const ergebnis = {
+    ...basis,
+    task: textOderLeer(basis.task),
+    audience: cleanList(basis.audience),
+    desiredEffect: textOderLeer(basis.desiredEffect),
+    evidenceStandard: textOderLeer(basis.evidenceStandard),
+    protectedIntentions: cleanList(basis.protectedIntentions),
+    openQuestions: cleanList(basis.openQuestions),
+    geschuetzt: cleanList(basis.geschuetzt),
+    updatedAt: Number.isFinite(basis.updatedAt) ? basis.updatedAt : null,
+  }
+  delete ergebnis.antwortText
+  let geaendert = false
+
+  const uebernimmText = feld => {
+    if (gesperrt.has(feld)) return
+    const wert = textOderLeer(eingehend[feld])
+    if (wert && wert !== ergebnis[feld]) { ergebnis[feld] = wert; geaendert = true }
+  }
+  uebernimmText('task')
+  uebernimmText('desiredEffect')
+  uebernimmText('evidenceStandard')
+
+  if (!gesperrt.has('audience')) {
+    const roh = eingehend.audience
+    const liste = Array.isArray(roh) ? cleanList(roh) : cleanList(String(roh || '').split(','))
+    if (liste.length && JSON.stringify(liste) !== JSON.stringify(ergebnis.audience)) {
+      ergebnis.audience = liste
+      geaendert = true
+    }
+  }
+
+  if (!gesperrt.has('protectedIntentions')) {
+    const zugaenge = cleanList(eingehend.protectedIntentions)
+      .filter(eintrag => !ergebnis.protectedIntentions.includes(eintrag))
+    if (zugaenge.length) {
+      ergebnis.protectedIntentions = [...ergebnis.protectedIntentions, ...zugaenge]
+      geaendert = true
+    }
+  }
+
+  if (!gesperrt.has('openQuestions') && Array.isArray(eingehend.openQuestions)) {
+    const liste = cleanList(eingehend.openQuestions)
+    if (JSON.stringify(liste) !== JSON.stringify(ergebnis.openQuestions)) {
+      ergebnis.openQuestions = liste
+      geaendert = true
+    }
+  }
+
+  if (geaendert) ergebnis.updatedAt = jetzt
+  return ergebnis
 }
 
 function legacyStatus(status) {
@@ -144,6 +265,8 @@ export function decideFinding(doc, findingId, decision, at = Date.now()) {
   }
   finding.status = outcome
   finding.decidedAt = at
+  const appliedText = String(decision.appliedText || '')
+  const resultingText = appliedText || (decision.kind === 'reject' ? String(finding.target || '') : '')
 
   doc.decisions.push({
     id: `decision-${finding.id}-${at}`,
@@ -151,7 +274,11 @@ export function decideFinding(doc, findingId, decision, at = Date.now()) {
     kind: decision.kind,
     outcome,
     reason: decision.reason || '',
-    appliedText: decision.appliedText || '',
+    appliedText,
+    // Betroffene Passage zum Entscheidungszeitpunkt. Dadurch bleibt im Verlauf
+    // sichtbar, welcher Wortlaut aus Übernahme, eigener Fassung oder Verwerfen
+    // tatsächlich resultierte, auch wenn sich der Text später weiterentwickelt.
+    resultingText,
     at,
   })
   return finding

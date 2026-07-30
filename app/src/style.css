@@ -1453,6 +1453,19 @@ body.zen #minimap, body.zen #lane { display: none; }
 #ondaAura {
   margin-left: auto;
   --aura-size: 30px;
+  width: 44px;
+  height: 44px;
+  background: transparent;
+  box-shadow: none;
+}
+
+#ondaAura::before {
+  content: "";
+  width: var(--aura-size);
+  height: var(--aura-size);
+  border-radius: var(--radius-pill);
+  background: var(--gradient-aura);
+  box-shadow: var(--shadow-glow);
 }
 
 #sidebarReopen { flex: none; }
@@ -2114,12 +2127,112 @@ body.zen #minimap, body.zen #lane { display: none; }
   font: 10.5px/1.35 var(--sans);
 }
 
+.agent-decisions {
+  flex: none;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-2);
+}
+
+.agent-decisions-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 16px;
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font: var(--fw-semibold) 11.5px/1.35 var(--font-sans);
+  text-align: left;
+  cursor: pointer;
+  transition: color var(--dur-quick) var(--ease-out), background var(--dur-quick) var(--ease-out);
+}
+
+.agent-decisions-toggle:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.agent-decisions-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.agent-decisions-title { flex: 1; }
+
+.agent-decisions-disclosure {
+  color: var(--text-tertiary);
+  font: 13px/1 var(--font-sans);
+}
+
+.agent-decisions-list {
+  max-height: 220px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: grid;
+  gap: 10px;
+  padding: 2px 16px 13px;
+  scrollbar-width: thin;
+}
+
+.agent-decision { display: grid; gap: 2px; }
+
+.agent-decision-meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.agent-decision-label {
+  color: var(--text-secondary);
+  font: var(--fw-semibold) 10.5px/1.35 var(--font-sans);
+}
+
+.agent-decision-label.is-risiko { color: var(--warning); }
+.agent-decision-label.is-verworfen { color: var(--text-tertiary); }
+.agent-decision-label.is-angenommen,
+.agent-decision-label.is-eigene { color: var(--success); }
+
+.agent-decision-date {
+  flex: none;
+  color: var(--text-tertiary);
+  font: 10.5px/1.35 var(--font-sans);
+}
+
+.agent-decision-short {
+  margin: 0;
+  color: var(--text-primary);
+  font: 12.5px/1.45 var(--font-sans);
+  overflow-wrap: anywhere;
+}
+
+.agent-decision-result {
+  margin: 1px 0 0;
+  color: var(--text-secondary);
+  font: 11.5px/1.4 var(--font-sans);
+  overflow-wrap: anywhere;
+}
+
+.agent-decision-reason {
+  margin: 0;
+  color: var(--text-secondary);
+  font: 11.5px/1.4 var(--font-sans);
+}
+
 .agent-widget-empty,
 .evidence-empty {
   margin: 0;
   padding: 16px;
   color: var(--text-secondary);
   font: 13px/1.5 var(--sans);
+}
+
+.agent-widget-status {
+  margin: 0;
+  padding: 0 16px 12px;
+  color: var(--text-tertiary);
+  font: italic 12px/1.5 var(--sans);
 }
 
 .evidence-context {
@@ -2476,6 +2589,10 @@ button.onda-aura:focus-visible {
   outline: none;
   box-shadow: var(--shadow-glow), var(--shadow-focus);
 }
+/* #ondaAura sets box-shadow:none (ID specificity) which silently wins over
+   the class rule above and swallows the focus ring — restate it here at
+   ID level so keyboard focus stays visible. */
+#ondaAura:focus-visible { outline: none; box-shadow: var(--shadow-glow), var(--shadow-focus); }
 
 /* states: quiet (still) vs. thinking (calm breathe on --ease-spring, no bounce) */
 .onda-aura.is-quiet { animation: none; }
@@ -2503,11 +2620,25 @@ button.onda-aura:focus-visible {
   box-shadow: 0 0 0 2px var(--bg-surface);
 }
 
+#ondaAura.has-unseen::after {
+  top: 5px;
+  right: 5px;
+}
+
+#ondaAura.is-thinking {
+  animation: none;
+}
+
+#ondaAura.is-thinking::before {
+  animation: onda-aura-breathe 3.2s var(--ease-spring) infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .onda-aura,
   .onda-aura.is-thinking { animation: none; transition: none; }
   button.onda-aura:hover,
   button.onda-aura:active { transform: none; }
+  #ondaAura.is-thinking::before { animation: none; }
 }
 
 /* ADOPTION NOTES (consumers wire these up in their own tasks, not here):
@@ -2641,6 +2772,8 @@ button.onda-aura:focus-visible {
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
+  flex: none;
+  min-height: 44px;
   margin: var(--space-3) 0 0;
   padding: var(--space-1) var(--space-2);
   width: fit-content;
@@ -2789,6 +2922,9 @@ button.onda-aura:focus-visible {
 @media (prefers-reduced-motion: reduce) { .onda-dialog-scrim, .onda-dialog { animation: none; } }
 
 .onda-pv-field { display: flex; flex-direction: column; gap: var(--space-1); }
+/* Trägt Label + optionales .onda-tag (V-4: bindende Nutzer-Korrektur) nebeneinander —
+   derselbe ruhige Tag-Baustein wie bei Material-Kind-Chips, keine Warnfarbe. */
+.onda-pv-label-row { display: flex; align-items: center; gap: var(--space-2); }
 .onda-pv-label {
   color: var(--text-tertiary);
   font: var(--fw-semibold) 11px/1.2 var(--font-sans);
@@ -2850,3 +2986,100 @@ button.onda-aura:focus-visible {
 .onda-accent-swatch[data-accent="clay"] { background: #c07a5c; }
 .onda-accent-swatch[data-accent="lavender"] { background: #9a86c4; }
 .onda-accent-swatch[data-accent="sand"] { background: #c2a15e; }
+
+/* ==================== KI-Anschluss (Einstellungen, Bereich U) ==================== */
+.ki-status-row { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+.ki-ort { margin: 0; color: var(--text-tertiary); font: var(--fw-regular) var(--text-sm)/1.5 var(--font-sans); }
+.ki-key-form { display: flex; gap: var(--space-2); }
+.ki-key-input {
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-control);
+  background: var(--bg-app);
+  color: var(--text-primary);
+  font: var(--fw-regular) var(--text-base)/1.4 var(--font-mono);
+}
+.ki-key-input:focus-visible { outline: none; border-color: var(--accent); box-shadow: var(--shadow-focus); }
+.ki-hinweis { margin: 0; color: var(--text-tertiary); font: var(--fw-regular) var(--text-sm)/1.5 var(--font-sans); }
+.ki-anleitung {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  padding: var(--space-3);
+  background: var(--surface-2);
+}
+.ki-anleitung summary { cursor: pointer; color: var(--text-secondary); font: var(--fw-medium) var(--text-sm)/1.4 var(--font-sans); }
+.ki-anleitung-schritte {
+  margin: var(--space-3) 0 0;
+  padding-left: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  color: var(--text-primary);
+  font: var(--fw-regular) var(--text-sm)/1.5 var(--font-sans);
+}
+.ki-pflicht { color: var(--warning); font-weight: var(--fw-semibold); }
+.ki-link {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: underline;
+  font: inherit;
+}
+.ki-link:focus-visible { outline: none; box-shadow: var(--shadow-focus); border-radius: 2px; }
+.ki-verbrauch { display: flex; flex-direction: column; gap: var(--space-1); }
+.ki-verbrauch p { margin: 0; color: var(--text-secondary); font: var(--fw-regular) var(--text-sm)/1.5 var(--font-sans); }
+.ki-verbrauch-kosten { color: var(--text-primary); }
+.ki-verbrauch-leer { color: var(--text-tertiary); }
+.ki-budget {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+}
+.ki-budget-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-2);
+  align-items: end;
+}
+.ki-budget-label {
+  grid-column: 1 / -1;
+  color: var(--text-secondary);
+  font: var(--fw-medium) var(--text-sm)/1.4 var(--font-sans);
+}
+.ki-budget-input {
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--text-primary);
+  font: var(--fw-regular) var(--text-md)/1.4 var(--font-sans);
+}
+.ki-budget-input:focus-visible { outline: none; border-color: var(--accent); box-shadow: var(--shadow-focus); }
+.ki-budget-status {
+  margin: 0;
+  color: var(--text-tertiary);
+  font: var(--fw-regular) var(--text-sm)/1.5 var(--font-sans);
+}
+.ki-budget-status--paused { color: var(--warning); }
+.ki-budget-approve { align-self: flex-start; min-height: 44px; }
+
+/* Ruhige Statuszeile im Agenten-Panel (Bereich U) */
+.agent-statusline {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  color: var(--text-secondary);
+  font: var(--fw-regular) var(--text-sm)/1.45 var(--font-sans);
+}
+.agent-statusline[hidden] { display: none; }
+.agent-statusline-text { min-width: 0; }
+.agent-statusline .onda-btn { flex: none; margin-left: auto; }

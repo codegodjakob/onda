@@ -1,5 +1,5 @@
 import { getActiveBlockId, getEditorBlocks, insertSemanticBlock, replaceFindingTarget } from './block-identity.js'
-import { decideFinding, ensureProjectUnderstanding, getFindingQueue, isIntegrityCategory } from './reasoning-model.mjs'
+import { decideFinding, ensureProjectUnderstanding, ensureReasoningModel, getFindingQueue, isIntegrityCategory, istEntwurfVersucht, istInterviewOffen, markiereEntwurfVersucht, markiereGeschuetzt, mergeVerstaendnis } from './reasoning-model.mjs'
 import {
   appendThreadMessage,
   completeEditingFinding,
@@ -8,6 +8,7 @@ import {
   ensureWorkspaceState,
   hasUnseenInitiative,
   reconcileEditingFinding,
+  resolveEvidenceSources,
   resolveFindingBlock,
   resolveFindingPlacement,
   shouldOpenAgentWidget,
@@ -16,6 +17,26 @@ import {
 import { Plugin, PluginKey } from '@tiptap/pm/state'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import { applySettings } from './ui.js'
+import { hatSchluessel, setzeSchluessel, loescheSchluessel, runTask } from './agent-gateway.mjs'
+import { aktuellerAgentStatus, beiAgentStatus, setzeAgentStatus, statuszeileFuer } from './agent-status.mjs'
+import { EXAMPLE_PROJECT_ID, seedBodySignature } from './example-seed.mjs'
+import { baueVerstaendnisKontext } from './verstaendnis-kontext.mjs'
+import { baueDocText } from './agent-findings.mjs'
+import { pruefePausenAusloeser, versucheHinweislauf } from './hinweislauf-model.mjs'
+import {
+  baueChatKontext,
+  baueFindingZusatzAnweisung,
+  chatFehlerText,
+  entscheidungsEintraege,
+  erkenneHinweisBitte,
+  fuehreChatVorgangAus,
+  planVerlaufVerdichtung,
+} from './chat-kontext.mjs'
+import {
+  beansprucheAutomatiklauf,
+  budgetStand,
+  gibNaechstenAutomatiklaufFrei,
+} from './settings-model.mjs'
 
 const BLOCK_TYPES = [
   ['paragraph', 'Freier Absatz'],
@@ -54,6 +75,10 @@ let localFeedbackError = null
 let localPositionFrame = null
 let localSummaryFocusRequest = null
 let agentInitiativeTimer = null
+// Echter Hinweislauf (Etappe A, Spec §5): genau ein Lauf gleichzeitig; hinweislaufTimer ist
+// der Zeitgeber-Griff fuer den Pausen-Ausloeser (planeHinweislauf/clearHinweislaufTimer, H-3).
+let hinweislaufAktiv = false
+let hinweislaufTimer = null
 let agentLiveFrame = null
 let agentPresenceFocusRequest = false
 let pendingParagraphBoundaryDocId = null
@@ -62,11 +87,20 @@ let evidenceReturnFindingId = null
 let riskConfirmationFocusRequest = false
 let ondaDialog = null
 let accentMenu = null
+// Verständnis-Interview: einmal je Projekt+Dokument prüfen, genau ein Lauf gleichzeitig.
+let interviewPruefKey = null
+let interviewLaufAktiv = false
+let interviewStatus = null // null | 'laeuft' | ruhiger Fehlertext für die Statuszeile
+let pausierterAutomatiklauf = null
+// Echter Chat (Etappe A, Bereich C): genau ein Lauf gleichzeitig, app-weit (Panel und,
+// ab Task C-3, auch die Randkarten-Gespraeche teilen sich dieses Feld ueber fuehreChatLauf).
+let laufenderChatLauf = null
 const ONDA_ACCENTS = ['sky', 'sage', 'blue', 'clay', 'lavender', 'sand']
 const ONDA_ACCENT_LABELS = { sky: 'Himmel', sage: 'Salbei', blue: 'Blau', clay: 'Ton', lavender: 'Lavendel', sand: 'Sand' }
 
 const AGENT_IDLE_MS = 3000
 const AGENT_BOUNDARY_IDLE_MS = 300
+const CHAT_UI_DROSSEL_MS = 50
 const MAX_LOCAL_FEEDBACK_SPACING = 440
 const MAX_LOCAL_SUGGESTION_SPACING = 640
 
@@ -560,6 +594,263 @@ function openProjectSourcesModal(opener) {
   }})
 }
 
+// ---------- Einstellungen: KI-Anschluss (Bereich U) ----------
+// Der Schluessel wird IMMER vom Nutzer selbst eingetragen. Setzen/Loeschen laeuft
+// ausschliesslich ueber die echten, getesteten Gateway-Funktionen (agent-gateway.mjs
+// -> agent-transport.mjs) — kein lokaler Nachbau des Bruecken-Protokolls hier.
+// Mac: Keychain via Handler 'llm'/'llmkey' (der Schluessel kommt nie an JS zurueck).
+// Browser: Dev-Weg in localStorage 'aiwt.apikey' (separat von aiwt.v2, taucht in
+// keinem Export auf) — das schreibt bereits direktTransport.setzeSchluessel selbst.
+
+const KI_KONSOLE_URL = 'https://console.anthropic.com'
+
+// Bewusst dasselbe Kriterium wie waehleTransport() (agent-transport.mjs) — EINE
+// Quelle der Wahrheit, welcher Transport (und damit welcher Schluessel-Speicher) greift.
+function schluesselOrtIstKeychain() {
+  return Boolean(window.webkit?.messageHandlers?.llm)
+}
+
+async function speichereApiSchluessel(wert) {
+  const schluessel = String(wert || '').trim()
+  if (!schluessel) return false
+  await setzeSchluessel(schluessel)
+  return true
+}
+
+async function loescheApiSchluessel() {
+  await loescheSchluessel()
+}
+
+function openKiSettingsDialog(opener) {
+  openOndaDialog({ id: 'kiModal', title: 'KI-Anschluss', opener, build: body => buildKiSettingsBody(body) })
+}
+
+function buildKiSettingsBody(body) {
+  body.replaceChildren()
+  const keychain = schluesselOrtIstKeychain()
+
+  // Schluessel-Status + Ablageort
+  const statusRow = createNode('div', 'ki-status-row')
+  const statusBadge = createNode('span', 'onda-badge', 'Prüfe …')
+  statusRow.append(createNode('span', 'onda-eyebrow', 'Schlüssel'), statusBadge)
+  body.append(statusRow)
+  body.append(createNode('p', 'ki-ort', keychain
+    ? 'Ablageort: macOS-Schlüsselbund — der Schlüssel verlässt die Mac-App nicht.'
+    : 'Ablageort: dieser Browser (Entwicklungsweg).'))
+
+  // Eintragen
+  const form = createNode('form', 'ki-key-form')
+  const input = createNode('input', 'ki-key-input')
+  input.type = 'password'
+  input.placeholder = 'sk-ant-…'
+  input.autocomplete = 'off'
+  input.spellcheck = false
+  input.setAttribute('aria-label', 'Anthropic-API-Schlüssel eintragen')
+  const speichern = createNode('button', 'onda-btn onda-btn--sm', 'Speichern')
+  speichern.type = 'submit'
+  form.append(input, speichern)
+  body.append(form)
+
+  if (!keychain) {
+    body.append(createNode('p', 'ki-hinweis',
+      'Sicherheitshinweis: Im Browser liegt der Schlüssel unverschlüsselt im lokalen Speicher '
+      + '(nur für Entwicklung und Notfall gedacht). Empfohlen ist die Mac-App — dort wandert er '
+      + 'in den macOS-Schlüsselbund. In Exporten taucht der Schlüssel nie auf.'))
+  }
+
+  const loeschen = createNode('button', 'onda-btn onda-btn--ghost onda-btn--sm', 'Schlüssel löschen')
+  loeschen.type = 'button'
+  loeschen.hidden = true
+  body.append(loeschen)
+
+  const zeigeStatus = vorhanden => {
+    statusBadge.textContent = vorhanden ? 'Hinterlegt' : 'Fehlt'
+    statusBadge.classList.toggle('onda-badge--success', vorhanden)
+    statusBadge.classList.toggle('onda-badge--warning', !vorhanden)
+    loeschen.hidden = !vorhanden
+  }
+  hatSchluessel().then(zeigeStatus).catch(() => zeigeStatus(false))
+
+  form.addEventListener('submit', async event => {
+    event.preventDefault()
+    if (!(await speichereApiSchluessel(input.value))) return
+    input.value = ''
+    announceAgentStatus('Schlüssel gespeichert.')
+    pruefeAgentVerbindung()
+    hatSchluessel().then(zeigeStatus).catch(() => zeigeStatus(false))
+  })
+  loeschen.addEventListener('click', async () => {
+    await loescheApiSchluessel()
+    announceAgentStatus('Schlüssel gelöscht.')
+    pruefeAgentVerbindung()
+    hatSchluessel().then(zeigeStatus).catch(() => zeigeStatus(false))
+  })
+
+  // Anleitung (aufklappbar)
+  const anleitung = createNode('details', 'ki-anleitung')
+  anleitung.append(createNode('summary', null, 'So richtest du den KI-Anschluss ein'))
+  const schritte = createNode('ol', 'ki-anleitung-schritte')
+  const schritt1 = createNode('li', null, 'Ein Konto anlegen auf ')
+  const link = createNode('button', 'ki-link', 'console.anthropic.com')
+  link.type = 'button'
+  link.addEventListener('click', () => openSecureExternal(KI_KONSOLE_URL))
+  schritt1.append(link, document.createTextNode('.'))
+  const schritt3 = createNode('li', null, 'Im Anbieter-Konto ein Ausgabenlimit setzen ')
+  schritt3.append(createNode('strong', 'ki-pflicht', '(Pflichtschritt — schützt vor unerwarteten Kosten).'))
+  schritte.append(
+    schritt1,
+    createNode('li', null, 'Dort einen API-Schlüssel erzeugen (Bereich „API Keys“).'),
+    schritt3,
+    createNode('li', null, 'Den Schlüssel oben eintragen und speichern.'),
+  )
+  anleitung.append(schritte)
+  body.append(anleitung)
+
+  // Verbrauch (settings.usage — vom Verteiler nach jedem Lauf verbucht)
+  const verbrauch = createNode('section', 'ki-verbrauch')
+  body.append(verbrauch)
+  renderKiVerbrauch(verbrauch)
+  const budget = createNode('section', 'ki-budget')
+  body.append(budget)
+  renderKiBudget(budget)
+  const abmelden = beiAgentStatus(() => {
+    if (!verbrauch.isConnected) { abmelden(); return }
+    renderKiVerbrauch(verbrauch)
+    renderKiBudget(budget)
+  })
+}
+
+function formatTokenZahl(wert) {
+  return (Number.isFinite(+wert) ? +wert : 0).toLocaleString('de-DE')
+}
+
+function renderKiVerbrauch(container) {
+  container.replaceChildren()
+  container.append(createNode('span', 'onda-eyebrow', 'Verbrauch'))
+  const usage = ctx?.state?.settings?.usage
+  if (!usage || (!usage.inputTokens && !usage.outputTokens)) {
+    container.append(createNode('p', 'ki-verbrauch-leer', 'Diesen Monat noch keine Läufe.'))
+    return
+  }
+  let monatsName = usage.monat
+  try {
+    monatsName = new Date(usage.monat + '-01T00:00:00').toLocaleDateString('de-DE', { month: 'long', year: 'numeric' })
+  } catch {}
+  container.append(
+    createNode('p', null, `${monatsName}: ${formatTokenZahl(usage.inputTokens)} Tokens hinein · ${formatTokenZahl(usage.outputTokens)} Tokens heraus`),
+    createNode('p', null, `Aus dem Zwischenspeicher gelesen: ${formatTokenZahl(usage.cacheReadTokens)} · hineingeschrieben: ${formatTokenZahl(usage.cacheWriteTokens)}`),
+    createNode('p', 'ki-verbrauch-kosten',
+      `Geschätzte Kosten: ${((usage.kostenCents || 0) / 100).toLocaleString('de-DE', { style: 'currency', currency: 'USD' })}`
+      + ' — Schätzung nach Preisstand 07/2026; verbindlich ist die Abrechnung im Anthropic-Konto.'),
+  )
+}
+
+function starteBewusstFreigegebenenAutomatiklauf() {
+  const pausiert = pausierterAutomatiklauf
+  if (pausiert?.typ === 'verstaendnis') {
+    // Die Budgetpause hat bereits eine sichtbare Interview-Nachricht angelegt.
+    // Der normale Pruefpfad wuerde deshalb bei "Nachricht existiert" abbrechen;
+    // die ausdrueckliche Einzelfreigabe nimmt genau den pausierten Lauf direkt
+    // wieder auf. starteVerstaendnisEntwurf prueft Dokument und Projekt nach
+    // dem asynchronen Schluesselzugriff erneut.
+    starteVerstaendnisEntwurf(pausiert.projectId, pausiert.docId)
+    return
+  }
+  if (!pausiert && istInterviewAktiv()) {
+    interviewPruefKey = null
+    pruefeVerstaendnisInterview()
+    return
+  }
+  fuehreHinweislaufAus({ grund: 'freigabe' })
+}
+
+function renderKiBudget(container) {
+  container.replaceChildren()
+  const settings = ctx?.state?.settings
+  if (!settings) return
+  const stand = budgetStand(settings)
+  container.append(
+    createNode('span', 'onda-eyebrow', 'Lokale Monatsgrenze'),
+    createNode('p', 'ki-hinweis',
+      'Zusätzliche Kostenbremse für selbstständig gestartete KI-Läufe. '
+      + 'Das Ausgabenlimit im Anbieter-Konto bleibt der verbindliche Schutz.'),
+  )
+
+  const form = createNode('form', 'ki-budget-form')
+  const label = createNode('label', 'ki-budget-label', 'Grenze in US-Dollar')
+  label.htmlFor = 'kiBudgetInput'
+  const input = createNode('input', 'ki-budget-input')
+  input.id = 'kiBudgetInput'
+  input.name = 'kiBudgetUsd'
+  input.type = 'number'
+  input.min = '0.01'
+  input.step = '0.01'
+  input.inputMode = 'decimal'
+  input.placeholder = 'z. B. 10,00'
+  input.value = stand.konfiguriert ? String(stand.budgetCents / 100) : ''
+  const speichern = createNode('button', 'onda-btn onda-btn--sm', 'Grenze speichern')
+  speichern.type = 'submit'
+  form.append(label, input, speichern)
+  container.append(form)
+
+  form.addEventListener('submit', event => {
+    event.preventDefault()
+    const betrag = Number.parseFloat(String(input.value || '').replace(',', '.'))
+    if (!Number.isFinite(betrag) || betrag <= 0) {
+      input.setCustomValidity('Bitte gib einen Betrag größer als null ein.')
+      input.reportValidity()
+      return
+    }
+    input.setCustomValidity('')
+    settings.kiMonatsbudgetCents = Math.round(betrag * 100)
+    settings.automatikFreigabe = { monat: settings.usage?.monat, verbleibend: 0 }
+    ctx.persist()
+    renderKiBudget(container)
+    announceAgentStatus('Lokale Monatsgrenze gespeichert.')
+  })
+
+  if (stand.konfiguriert) {
+    const entfernen = createNode('button', 'onda-btn onda-btn--ghost onda-btn--sm', 'Lokale Grenze entfernen')
+    entfernen.type = 'button'
+    entfernen.addEventListener('click', () => {
+      settings.kiMonatsbudgetCents = null
+      settings.automatikFreigabe = { monat: settings.usage?.monat, verbleibend: 0 }
+      pausierterAutomatiklauf = null
+      ctx.persist()
+      renderKiBudget(container)
+      announceAgentStatus('Lokale Monatsgrenze entfernt.')
+    })
+    container.append(entfernen)
+  }
+
+  if (!stand.erreicht) {
+    const text = stand.konfiguriert
+      ? `${(stand.kostenCents / 100).toFixed(2)} von ${(stand.budgetCents / 100).toFixed(2)} US-Dollar geschätzt verbraucht.`
+      : 'Keine zusätzliche lokale Grenze gesetzt.'
+    container.append(createNode('p', 'ki-budget-status', text))
+    return
+  }
+
+  container.append(createNode('p', 'ki-budget-status ki-budget-status--paused',
+    `Grenze erreicht: ${(stand.kostenCents / 100).toFixed(2)} von ${(stand.budgetCents / 100).toFixed(2)} US-Dollar. `
+    + 'Automatische Läufe sind pausiert; selbst gesendete Nachrichten bleiben möglich.'))
+  const freigeben = createNode(
+    'button',
+    'onda-btn onda-btn--sm ki-budget-approve',
+    stand.freigaben ? 'Ein automatischer Lauf ist freigegeben' : 'Genau einen automatischen Lauf freigeben',
+  )
+  freigeben.type = 'button'
+  freigeben.disabled = stand.freigaben > 0
+  freigeben.addEventListener('click', () => {
+    gibNaechstenAutomatiklaufFrei(settings)
+    ctx.persist()
+    renderKiBudget(container)
+    announceAgentStatus('Genau ein automatischer KI-Lauf wurde freigegeben.')
+    starteBewusstFreigegebenenAutomatiklauf()
+  })
+  container.append(freigeben)
+}
+
 function syncThemeToggle() {
   const button = document.getElementById('themeToggle')
   if (!button) return
@@ -649,13 +940,19 @@ function splitList(value, byLine) {
   return String(value || '').split(byLine ? /\r?\n/ : ',').map(part => part.trim()).filter(Boolean)
 }
 
-function understandingField(body, label, value, onCommit, { line = false } = {}) {
+// geschuetzt: dezenter Hinweis, dass dieses Feld eine bindende Nutzer-Korrektur trägt
+// (siehe openProjectUnderstandingModal) — ruhiger Onda-Ton, keine Warnfarbe, kein
+// Ausrufezeichen; nur ein zusätzliches, kleines Tag neben dem Feldlabel.
+function understandingField(body, label, value, onCommit, { line = false, geschuetzt = false } = {}) {
   const row = createNode('div', 'onda-pv-field')
-  row.append(createNode('span', 'onda-pv-label', label))
+  const labelRow = createNode('div', 'onda-pv-label-row')
+  labelRow.append(createNode('span', 'onda-pv-label', label))
+  if (geschuetzt) labelRow.append(createNode('span', 'onda-tag', 'bindend'))
+  row.append(labelRow)
   const field = createNode('textarea', 'onda-pv-input')
   field.rows = line ? 3 : 2
   field.value = value
-  field.setAttribute('aria-label', label)
+  field.setAttribute('aria-label', geschuetzt ? `${label}, bindend` : label)
   field.addEventListener('input', () => onCommit(field.value))
   row.append(field)
   body.append(row)
@@ -665,15 +962,293 @@ function openProjectUnderstandingModal(opener) {
   const project = ctx.activeProjectObj()
   if (!project) return
   const u = ensureProjectUnderstanding(project)
-  const commit = () => { ctx.scheduleSave(); renderProjectUnderstandingCard() }
+  // Jede Nutzer-Korrektur im Modal ist bindend: der geschuetzt-Merker sorgt dafür,
+  // dass die KI dieses Feld in Folge-Läufen nie mehr überschreibt (mergeVerstaendnis
+  // liest ihn; verstaendnisEingabe gibt ihn über baueVerstaendnisKontext mit).
+  const commit = feld => {
+    markiereGeschuetzt(u, feld)
+    ctx.scheduleSave()
+    renderProjectUnderstandingCard()
+  }
+  const istGeschuetzt = feld => u.geschuetzt.includes(feld)
   openOndaDialog({ id: 'pvModal', title: 'Projektverständnis', opener, build: body => {
-    understandingField(body, 'Aufgabe', u.task, value => { u.task = value; commit() })
-    understandingField(body, 'Zielgruppe', u.audience.join(', '), value => { u.audience = splitList(value, false); commit() })
-    understandingField(body, 'Beabsichtigte Wirkung', u.desiredEffect, value => { u.desiredEffect = value; commit() })
-    understandingField(body, 'Belegstandard', u.evidenceStandard, value => { u.evidenceStandard = value; commit() })
-    understandingField(body, 'Geschützte Absicht', u.protectedIntentions.join('\n'), value => { u.protectedIntentions = splitList(value, true); commit() }, { line: true })
-    understandingField(body, 'Offene Frage', u.openQuestions.join('\n'), value => { u.openQuestions = splitList(value, true); commit() }, { line: true })
+    understandingField(body, 'Aufgabe', u.task, value => { u.task = value; commit('task') }, { geschuetzt: istGeschuetzt('task') })
+    understandingField(body, 'Zielgruppe', u.audience.join(', '), value => { u.audience = splitList(value, false); commit('audience') }, { geschuetzt: istGeschuetzt('audience') })
+    understandingField(body, 'Beabsichtigte Wirkung', u.desiredEffect, value => { u.desiredEffect = value; commit('desiredEffect') }, { geschuetzt: istGeschuetzt('desiredEffect') })
+    understandingField(body, 'Belegstandard', u.evidenceStandard, value => { u.evidenceStandard = value; commit('evidenceStandard') }, { geschuetzt: istGeschuetzt('evidenceStandard') })
+    understandingField(body, 'Geschützte Absicht', u.protectedIntentions.join('\n'), value => { u.protectedIntentions = splitList(value, true); commit('protectedIntentions') }, { line: true, geschuetzt: istGeschuetzt('protectedIntentions') })
+    understandingField(body, 'Offene Frage', u.openQuestions.join('\n'), value => { u.openQuestions = splitList(value, true); commit('openQuestions') }, { line: true, geschuetzt: istGeschuetzt('openQuestions') })
   }})
+}
+
+// ---------- Verständnis-Interview (Etappe A, Fähigkeit 1) ----------
+// Neues Projekt: der Agent eröffnet mit genau EINER gebündelten offenen Frage
+// (fester Text, kein API-Aufruf). Existiert schon Text (> 200 Zeichen), leitet
+// er stattdessen per runTask('verstaendnis') einen Entwurf aus dem Text ab.
+// Das Beispielprojekt bleibt Demo: dort startet nie ein Interview.
+const INTERVIEW_EROEFFNUNG = 'Bevor ich beim Schreiben helfen kann, würde ich das Projekt gern verstehen: Worum soll es in diesem Text gehen — und für wen schreibst du ihn?'
+const INTERVIEW_ENTWURF_MIN_ZEICHEN = 200
+const INTERVIEW_OFFLINE_TEXT = 'Agent ist offline — dein Text ist davon unberührt.'
+const BUDGET_PAUSE_TEXT = 'Die lokale Monatsgrenze ist erreicht. Selbst gesendete Nachrichten bleiben möglich; unter „KI-Anschluss“ kannst du genau einen automatischen Lauf bewusst freigeben.'
+
+function istBeispielProjekt(project) {
+  return Boolean(project && (project.id === EXAMPLE_PROJECT_ID || project.example === true))
+}
+
+function interviewMessageId(project) {
+  return `interview-${project.id}`
+}
+
+function beansprucheAutomatikKosten(typ, referenz = {}) {
+  const ergebnis = beansprucheAutomatiklauf(ctx?.state?.settings)
+  if (!ergebnis.erlaubt) {
+    pausierterAutomatiklauf = { typ, ...referenz }
+    // Die normalisierte Null-Freigabe gehoert zum gespeicherten Sicherheitszustand.
+    ctx?.persist()
+    return ergebnis
+  }
+  if (ergebnis.freigabeVerbraucht) {
+    pausierterAutomatiklauf = null
+    ctx?.persist()
+  }
+  return ergebnis
+}
+
+function zeigeBudgetPause(workspace) {
+  if (!workspace) return
+  const monat = ctx?.state?.settings?.usage?.monat || 'aktuell'
+  const id = `budget-pause-${monat}`
+  let message = workspace.agent.messages.find(candidate => candidate.id === id)
+  if (!message) {
+    message = { id, status: 'new', earliestAt: 0, text: BUDGET_PAUSE_TEXT, thread: [] }
+    workspace.agent.messages.push(message)
+  } else {
+    message.status = 'new'
+    message.text = BUDGET_PAUSE_TEXT
+  }
+  announceAgentStatus(BUDGET_PAUSE_TEXT)
+}
+
+function docPlainText() {
+  return getEditorBlocks(ctx.editor)
+    .map(block => String(block.text || '').trim())
+    .filter(Boolean)
+    .join('\n\n')
+}
+
+export function istInterviewAktiv() {
+  const project = ctx?.activeProjectObj()
+  if (!project || istBeispielProjekt(project)) return false
+  return istInterviewOffen(ensureProjectUnderstanding(project))
+}
+
+function ensureInterviewMessage(workspace, project) {
+  const id = interviewMessageId(project)
+  let message = workspace.agent.messages.find(candidate => candidate.id === id)
+  if (!message) {
+    message = { id, status: 'new', earliestAt: 0, text: '', thread: [] }
+    workspace.agent.messages.push(message)
+  }
+  return message
+}
+
+function verstaendnisEingabe(modus, nutzerText = '') {
+  const project = ctx.activeProjectObj()
+  const u = ensureProjectUnderstanding(project)
+  const workspace = activeWorkspace()
+  const message = workspace?.agent.messages.find(candidate => candidate.id === interviewMessageId(project)) || null
+  const thread = message?.thread || []
+  const text = String(nutzerText || '').trim()
+  // sendeInterviewAntwort haengt die aktuelle Antwort VOR diesem Aufruf bereits an
+  // message.thread an (siehe dort) — hier abschneiden, sonst stuende sie doppelt im
+  // Kontext: einmal als letzter Verlauf-Eintrag, einmal als eigenstaendige `anfrage`
+  // (baueVerstaendnisKontext erwartet interviewVerlauf als reine Vorgeschichte).
+  const bisherigerVerlauf = text && thread.length && thread[thread.length - 1]?.role === 'user'
+    ? thread.slice(0, -1)
+    : thread
+  return baueVerstaendnisKontext({
+    modus,
+    verstaendnis: {
+      task: u.task,
+      audience: u.audience,
+      desiredEffect: u.desiredEffect,
+      evidenceStandard: u.evidenceStandard,
+      protectedIntentions: u.protectedIntentions,
+      openQuestions: u.openQuestions,
+    },
+    geschuetzt: [...(u.geschuetzt || [])],
+    docText: docPlainText(),
+    nutzerText,
+    interviewVerlauf: bisherigerVerlauf.map(entry => ({ role: entry.role, text: entry.text })),
+  })
+}
+
+function interviewFehlerText(fehler) {
+  const typ = fehler?.typ
+  if (typ === 'kein-schluessel' || typ === 'offline') return INTERVIEW_OFFLINE_TEXT
+  if (typ === 'ratenlimit' || typ === 'ueberlastet') return 'Der Agent ist gerade überlastet — er meldet sich, sobald es wieder geht.'
+  if (typ === 'abgelehnt') return 'Der Agent hat auf diese Anfrage keine Antwort gegeben.'
+  return 'Die Antwort des Agenten ist verloren gegangen. Deine Angaben sind gespeichert — versuch es gleich noch einmal.'
+}
+
+// Merged eine KI-Antwort in das Understanding, OHNE die Objekt-Identität zu
+// brechen (offene Modal-Closures schreiben weiter in dasselbe Objekt).
+function uebernimmVerstaendnis(project, daten) {
+  const u = ensureProjectUnderstanding(project)
+  Object.assign(u, mergeVerstaendnis(u, daten, u.geschuetzt))
+  return u
+}
+
+function refreshProjectUnderstandingModal() {
+  if (!ondaDialog || ondaDialog.panel?.id !== 'pvModal') return
+  // Tippt der Nutzer gerade im Modal, nicht neu aufbauen — seine Eingabe ist bindend.
+  if (ondaDialog.panel.contains(document.activeElement)) return
+  openProjectUnderstandingModal(ondaDialog.opener)
+}
+
+function pruefeVerstaendnisInterview() {
+  const doc = ctx?.activeDoc()
+  const project = ctx?.activeProjectObj()
+  const workspace = activeWorkspace()
+  if (!doc || !project || !workspace) return
+  const pruefKey = `${project.id}:${doc.id}`
+  if (interviewPruefKey === pruefKey) return
+  interviewPruefKey = pruefKey
+  if (istBeispielProjekt(project)) return
+  const understanding = ensureProjectUnderstanding(project)
+  if (!istInterviewOffen(understanding)) return
+  if (workspace.agent.messages.some(message => message.id === interviewMessageId(project))) return
+
+  // Der bezahlte Entwurf-Lauf ist projektweit gesperrt, sobald er einmal versucht
+  // wurde (auch bei Fehlschlag — kein Wiederholungs-Sturm über mehrere Dokumente
+  // desselben Projekts). Die kostenlose feste Eröffnungsfrage bleibt frei — sie
+  // darf in jedem Dokument erscheinen, sie kostet nichts.
+  if (docPlainText().length > INTERVIEW_ENTWURF_MIN_ZEICHEN && !istEntwurfVersucht(understanding)) {
+    starteVerstaendnisEntwurf(project.id, doc.id)
+    return
+  }
+  const message = ensureInterviewMessage(workspace, project)
+  message.text = INTERVIEW_EROEFFNUNG
+  persistWorkspace()
+}
+
+async function starteVerstaendnisEntwurf(projectId, docId) {
+  if (interviewLaufAktiv) return
+  interviewLaufAktiv = true
+  interviewStatus = 'laeuft'
+  // Ausserhalb des try deklariert, damit der catch-Zweig bei einem fehlgeschlagenen
+  // Lauf noch weiss, fuer welches Projekt/welche Nachricht der Fehlertext sichtbar
+  // gemacht werden muss (Fix-Runde 1, Finding 1).
+  let project = null
+  try {
+    const schluesselDa = await hatSchluessel()
+    if (!ctx || ctx.activeDoc()?.id !== docId) { interviewStatus = null; return }
+    project = ctx.state.projects.find(candidate => candidate.id === projectId)
+    const workspace = activeWorkspace()
+    if (!project || !workspace) { interviewStatus = null; return }
+    if (!schluesselDa) {
+      // Offline-Würde: kein Entwurf möglich — die feste Eröffnungsfrage steht
+      // trotzdem bereit; die Antwort darauf scheitert später ruhig per Statuszeile.
+      interviewStatus = null
+      const message = ensureInterviewMessage(workspace, project)
+      if (!message.text) message.text = INTERVIEW_EROEFFNUNG
+      persistWorkspace()
+      return
+    }
+    const kostenfreigabe = beansprucheAutomatikKosten('verstaendnis', { projectId, docId })
+    if (!kostenfreigabe.erlaubt) {
+      interviewStatus = BUDGET_PAUSE_TEXT
+      const message = ensureInterviewMessage(workspace, project)
+      message.text = BUDGET_PAUSE_TEXT
+      persistWorkspace()
+      return
+    }
+    // Projektweite Kostenbremse (Fix-Runde 1, Finding 2): VOR dem bezahlten Aufruf
+    // setzen und sofort persistieren, damit sie auch bei einem Fehlschlag gilt —
+    // kein zweiter bezahlter Versuch über weitere Dokumente desselben Projekts.
+    markiereEntwurfVersucht(ensureProjectUnderstanding(project))
+    persistWorkspace()
+    // Bereich W (Aura/Statuszeile) atmet ausschliesslich am echten Gateway-Zustand
+    // (applyAuraState liest aktuellerAgentStatus().zustand === 'laeuft') — dieser
+    // Aufruf ist der erste echte runTask-Aufruf im Panel, darum wird er hier gesetzt.
+    setzeAgentStatus({ zustand: 'laeuft' })
+    const { daten } = await runTask('verstaendnis', verstaendnisEingabe('entwurf'))
+    setzeAgentStatus({ zustand: 'bereit' })
+    if (!ctx) return
+    uebernimmVerstaendnis(project, daten)
+    interviewStatus = null
+    const antwort = String(daten.antwortText || '').trim()
+    if (antwort && ctx.activeDoc()?.id === docId) {
+      const message = ensureInterviewMessage(activeWorkspace(), project)
+      message.text = antwort
+      appendThreadMessage(message.thread, 'agent', antwort, Date.now())
+      announceAgentStatus(antwort)
+    }
+    ctx.persist()
+    refreshProjectUnderstandingModal()
+  } catch (fehler) {
+    interviewStatus = interviewFehlerText(fehler)
+    setzeAgentStatus({ zustand: 'fehler', fehlerTyp: fehler?.typ })
+    // Sichtbarkeit erzwingen (Fix-Runde 1, Finding 1): ohne eine existierende
+    // Nachricht kehrt renderAgentWidget vor dem interviewStatus-Absatz zurück, und
+    // der Fehlertext bliebe unsichtbar — bei bereits gesetztem Prüf-Gate ohne jede
+    // Wiederholmöglichkeit. Der Nutzer bekommt so den ruhigen Fehlertext UND das
+    // Eingabefeld; kein automatischer Retry, kein Kosten-Risiko.
+    if (ctx && project && ctx.activeDoc()?.id === docId) {
+      const workspace = activeWorkspace()
+      if (workspace) {
+        ensureInterviewMessage(workspace, project)
+        persistWorkspace()
+      }
+    }
+  } finally {
+    interviewLaufAktiv = false
+    if (ctx) refreshWorkspace()
+  }
+}
+
+// Composer-Routing: solange istInterviewAktiv() wahr ist, gehört jede Eingabe im
+// Agenten-Panel dem Interview (siehe Submit-Handler in renderAgentWidget). Anders als
+// starteVerstaendnisEntwurf ist das hier KEIN automatischer, kostenpflichtiger Lauf,
+// den entwurfVersuchtAm bremsen dürfte — der Nutzer hat aktiv geantwortet, das zählt
+// nicht als der bezahlte Automatik-Entwurf und bleibt vom Merker unberührt.
+async function sendeInterviewAntwort(message, text) {
+  const project = ctx?.activeProjectObj()
+  if (!project || interviewLaufAktiv) return
+  appendThreadMessage(message.thread, 'user', text, Date.now())
+  interviewLaufAktiv = true
+  interviewStatus = 'laeuft'
+  announceAgentStatus('Agent denkt nach …')
+  persistWorkspace()
+  refreshWorkspace()
+  try {
+    // Bereich W (Aura/Statuszeile) atmet ausschliesslich am echten Gateway-Zustand
+    // (applyAuraState liest aktuellerAgentStatus().zustand === 'laeuft') — wie in
+    // starteVerstaendnisEntwurf muss jeder echte runTask-Aufruf ihn setzen (U-5-Aura).
+    setzeAgentStatus({ zustand: 'laeuft' })
+    const { daten } = await runTask('verstaendnis', verstaendnisEingabe('antwort', text))
+    setzeAgentStatus({ zustand: 'bereit' })
+    if (!ctx) return
+    uebernimmVerstaendnis(project, daten)
+    interviewStatus = null
+    const antwort = String(daten.antwortText || '').trim()
+    if (antwort) {
+      appendThreadMessage(message.thread, 'agent', antwort, Date.now())
+      message.text = antwort
+      announceAgentStatus(antwort)
+    }
+    // Sind task + audience + desiredEffect jetzt gefüllt, ist das Interview
+    // abgeschlossen — der nächste Composer-Beitrag geht in den normalen Chat.
+    ctx.persist()
+    refreshProjectUnderstandingModal()
+  } catch (fehler) {
+    interviewStatus = interviewFehlerText(fehler)
+    setzeAgentStatus({ zustand: 'fehler', fehlerTyp: fehler?.typ })
+    announceAgentStatus(interviewStatus)
+  } finally {
+    interviewLaufAktiv = false
+    if (ctx) refreshWorkspace()
+  }
 }
 
 function scheduleTriggerRender() {
@@ -775,6 +1350,7 @@ function clearAgentInitiativeTimer() {
 
 function invalidateAgentInitiative({ requireNewInput = false } = {}) {
   clearAgentInitiativeTimer()
+  clearHinweislaufTimer()
   pendingParagraphBoundaryDocId = null
   const state = initiativeInputState()
   if (!state) return
@@ -949,24 +1525,18 @@ function renderLocalDialogue(finding) {
   send.type = 'submit'
   send.title = 'Senden'
   send.setAttribute('aria-label', 'Nachricht senden')
+  send.disabled = Boolean(laufenderChatLauf)
   form.append(input, send)
   form.addEventListener('submit', event => {
     event.preventDefault()
     const text = input.value.trim()
-    if (!text) return
-    const at = Date.now()
-    appendThreadMessage(finding.thread, 'user', text, at)
-    const reply = 'Beispielreaktion: Verstanden. Dann würde ich die Passage als gestaltete Bedingung lesen und die Verantwortung des Werkzeugs deutlicher machen.'
-    appendThreadMessage(
-      finding.thread,
-      'agent',
-      reply,
-      at + 1,
-    )
+    if (!text || laufenderChatLauf) return
+    // Echter, gestreamter Chat mit Finding-Kontext (Bereich C, Task C-3) — die Kulisse ist weg.
     input.value = ''
-    announceAgentStatus(reply)
+    appendThreadMessage(finding.thread, 'user', text, Date.now())
     ctx.persist()
     refreshWorkspace()
+    sendeLocalChat(finding, text)
   })
 
   dialogue.append(messages, form)
@@ -1500,15 +2070,53 @@ function applyAuraState() {
   const orb = elements().agentPresence
   if (!orb) return
   const workspace = activeWorkspace()
-  const active = Boolean(workspace?.agent.open)
+  // Quelle echt: Die Aura atmet nur, wenn wirklich ein Gateway-Task laeuft —
+  // nicht mehr bloss, weil das Panel offen ist (die Attrappen-Quelle ist weg).
+  const laeuft = aktuellerAgentStatus().zustand === 'laeuft'
   const unseen = hasUnseenInitiative(workspace)
-  orb.classList.toggle('is-thinking', active)
-  orb.classList.toggle('is-quiet', !active)
+  orb.classList.toggle('is-thinking', laeuft)
+  orb.classList.toggle('is-quiet', !laeuft)
   orb.classList.toggle('has-unseen', unseen)
   orb.setAttribute(
     'aria-label',
     unseen ? 'Agentengespräch öffnen (neue Anmerkung)' : 'Agentengespräch öffnen',
   )
+}
+
+// Prueft die Schluessel-Lage und setzt den ruhigen Grundzustand des Agenten.
+// Laufende Tasks werden nie ueberschrieben (Bereich W setzt 'laeuft'/'fehler').
+async function pruefeAgentVerbindung() {
+  let vorhanden = false
+  try {
+    vorhanden = await hatSchluessel()
+  } catch {
+    vorhanden = false
+  }
+  if (aktuellerAgentStatus().zustand === 'laeuft') return
+  setzeAgentStatus(vorhanden ? { zustand: 'bereit' } : { zustand: 'offline' })
+}
+
+// Ruhige Statuszeile im Agenten-Panel: offline / Lauf aktiv / Fehler.
+// Ersetzt nur die Kinder des Containers — nie Modals, nie Fokusraub.
+function renderAgentStatuszeile() {
+  const host = document.getElementById('agentStatusline')
+  if (!host) return
+  const zeile = statuszeileFuer(aktuellerAgentStatus())
+  host.replaceChildren()
+  host.hidden = !zeile
+  if (!zeile) return
+  if (zeile.aura) {
+    const orb = createNode('span', 'onda-aura onda-aura--xs is-thinking')
+    orb.setAttribute('aria-hidden', 'true')
+    host.append(orb)
+  }
+  host.append(createNode('span', 'agent-statusline-text', zeile.text))
+  if (zeile.knopf === 'einstellungen') {
+    const oeffnen = createNode('button', 'onda-btn onda-btn--ghost onda-btn--sm', 'Einstellungen öffnen')
+    oeffnen.type = 'button'
+    oeffnen.addEventListener('click', event => openKiSettingsDialog(event.currentTarget))
+    host.append(oeffnen)
+  }
 }
 
 function activeAgentMessage(workspace) {
@@ -1554,6 +2162,260 @@ function renderUnplacedFindingList() {
   return section
 }
 
+// Gleicher Text wie fuer das Verstaendnis-Interview (docPlainText, siehe dort) — nur unter
+// dem Namen, den der Chat-Kontext und (modulintern, Task C-3) die Randkarten-Gespraeche
+// erwarten. Bewusst KEIN zweiter Weg, den Dokumenttext zu lesen.
+function dokumentText() {
+  return docPlainText()
+}
+
+function chatNachrichtenTextKnoten(messageId) {
+  const selectorId = escapedSelectorValue(messageId)
+  return document.querySelector(`.agent-message[data-message-id="${selectorId}"] .agent-message-text`)
+}
+
+// Streamt EINE Agenten-Antwort in den übergebenen Thread: die Nachricht entsteht beim
+// ersten Delta (per refreshWorkspace, damit der DOM-Knoten überhaupt existiert), wächst
+// danach gedrosselt (~50 ms) per direktem Text-Update — nie per Voll-Rerender, damit der
+// Fokus im Eingabefeld unangetastet bleibt und der Editor bedienbar bleibt. Modulintern
+// auch für Task C-3 (Randkarten-Gespräch) gedacht — deshalb der doppelte Container-Selektor
+// in scrollThreadToLatest weiter unten.
+// Fix-Runde 1, Finding 2 (Important): jeder echte runTask-Aufruf muss setzeAgentStatus
+// setzen (Bereich W/Aura atmet ausschliesslich am echten Gateway-Zustand) — Vorbild:
+// starteVerstaendnisEntwurf/sendeInterviewAntwort (dieselbe Datei), versucheHinweislauf
+// (hinweislauf-model.mjs). fuehreChatLauf setzt 'laeuft'/'bereit'/'fehler' hier vollstaendig
+// SELBST, weil es auch direkt (ohne sendeAgentenChat/fuehreChatVorgangAus) aufgerufen wird —
+// modulintern fuer Task C-3 (Randkarten-Gespräch, keine Verdichtung dort).
+//
+// Fix-Runde 1, Finding 1 (Critical): erzeugt KEIN eigenes Sperr-Objekt mehr, sondern
+// uebernimmt ein von sendeAgentenChat bereits gesetztes (laufenderChatLauf ist zu diesem
+// Zeitpunkt schon non-null, siehe dort) — bei einem direkten Aufruf (C-3) erzeugt es weiterhin
+// selbst eins. Zwei verschiedene Sperr-Objekte fuer denselben Lauf waren die Ueberschreib-
+// Luecke, durch die ein dritter Submit moeglich wurde.
+async function fuehreChatLauf(thread, kontext) {
+  const lauf = laufenderChatLauf || { agentMessage: null, puffer: '', flushTimer: null }
+  laufenderChatLauf = lauf
+  const flush = () => {
+    lauf.flushTimer = null
+    if (!lauf.agentMessage) return
+    lauf.agentMessage.text = lauf.puffer
+    const node = chatNachrichtenTextKnoten(lauf.agentMessage.id)
+    if (!node) return
+    node.textContent = lauf.puffer
+    scrollThreadToLatest(node.closest('.agent-widget-messages, .local-dialogue-messages'))
+  }
+  try {
+    setzeAgentStatus({ zustand: 'laeuft' })
+    const { daten } = await runTask('chat', kontext, {
+      onDelta: text => {
+        lauf.puffer += String(text || '')
+        if (!lauf.agentMessage) {
+          // Fix-Runde 2, Finding 4: appendThreadMessage wirft bei leerem/reinem
+          // Whitespace-Text (workspace-model.mjs, gewollt fuer den allgemeinen Fall). Der
+          // allererste Delta-Chunk kann aber leer oder Whitespace-only sein, bevor sichtbarer
+          // Text ankommt -- ohne diese Absicherung wuerde genau dieser Wurf im Transport
+          // (agent-transport.mjs) als Netzfehler ('offline') fehlklassifiziert und einen
+          // bereits bezahlten Lauf erneut auslösen. Einfach auf mehr Text warten, statt zu werfen.
+          if (!lauf.puffer.trim()) return
+          lauf.agentMessage = appendThreadMessage(thread, 'agent', lauf.puffer)
+          refreshWorkspace()
+          return
+        }
+        if (!lauf.flushTimer) lauf.flushTimer = setTimeout(flush, CHAT_UI_DROSSEL_MS)
+      },
+    })
+    setzeAgentStatus({ zustand: 'bereit' })
+    if (lauf.flushTimer) clearTimeout(lauf.flushTimer)
+    const antwort = typeof daten === 'string' && daten.trim() ? daten : lauf.puffer
+    if (!antwort.trim()) return
+    if (lauf.agentMessage) lauf.agentMessage.text = antwort
+    else appendThreadMessage(thread, 'agent', antwort)
+    announceAgentStatus(antwort)
+  } catch (fehler) {
+    if (lauf.flushTimer) clearTimeout(lauf.flushTimer)
+    setzeAgentStatus({ zustand: 'fehler', fehlerTyp: fehler?.typ })
+    if (fehler?.typ === 'abgebrochen') return
+    const meldung = chatFehlerText(fehler)
+    if (lauf.agentMessage) lauf.agentMessage.text = meldung
+    else appendThreadMessage(thread, 'agent', meldung)
+    announceAgentStatus(meldung)
+  } finally {
+    laufenderChatLauf = null
+    ctx?.persist()
+    refreshWorkspace()
+  }
+}
+
+// Baut den Chat-Kontext aus dem Live-Zustand und startet fuehreChatLauf — orchestriert ueber
+// fuehreChatVorgangAus (chat-kontext.mjs, Fix-Runde 1), das die Sperre SYNCHRON vor jedem
+// await setzt (Finding 1) und den ganzen Vorgang inklusive Verdichtung als 'laeuft' meldet
+// (Finding 2). doc/project werden VOR der Sperre gelesen (reiner, synchroner Zugriff ohne
+// Risiko) und in den Callbacks weiterverwendet, damit chatte() IMMER fuehreChatLauf erreicht
+// — kein frueher Return mehr, der die Sperre/den Status haengen lassen koennte.
+//
+// Der Chat selbst ist ueberall echt, auch im Beispielprojekt (Spec) — istBeispielProjekt
+// sperrt hier NUR den automatischen Hinweislauf, den eine Chat-Bitte sonst ausloesen wuerde
+// (der Seed bleibt unveraenderte Demo); starteHinweislauf/versucheHinweislauf sperren das
+// Beispielprojekt ohnehin zusaetzlich autoritativ (istBeispielprojekt-Gate dort), diese
+// Pruefung hier vermeidet nur den unnoetigen Zusatzsatz in der Antwort.
+async function sendeAgentenChat(message, anfrage) {
+  const doc = ctx.activeDoc()
+  const project = ctx.activeProjectObj()
+  if (!doc || !project) return
+
+  await fuehreChatVorgangAus({
+    laeuftBereits: () => Boolean(laufenderChatLauf),
+    sperreSetzen: wert => {
+      laufenderChatLauf = wert ? (laufenderChatLauf || { agentMessage: null, puffer: '', flushTimer: null }) : null
+      refreshWorkspace() // Senden-Knopf sofort sichtbar deaktivieren (schliesst die Luecke aus Finding 1)
+    },
+    setzeStatus: setzeAgentStatus,
+    verdichte: async () => {
+      const plan = planVerlaufVerdichtung(message.thread, message.verlaufsNotiz || null)
+      if (!plan) return
+      try {
+        const { daten } = await runTask('zusammenfassung', { anfrage: plan.verdichtungsEingabe })
+        if (typeof daten === 'string' && daten.trim()) {
+          message.verlaufsNotiz = { text: daten.trim(), bisMessageId: plan.bisMessageId, erstelltAt: Date.now() }
+          ctx?.persist()
+        }
+      } catch {
+        // Die Verdichtung ist Komfort: scheitert sie, läuft der Chat mit vollem Verlauf weiter.
+      }
+    },
+    chatte: async () => {
+      const hinweisBitte = !istBeispielProjekt(project) && erkenneHinweisBitte(anfrage)
+      if (hinweisBitte) starteHinweislauf({ grund: 'chat' })
+
+      const kontext = baueChatKontext({
+        verstaendnis: ensureProjectUnderstanding(project),
+        docText: dokumentText(),
+        findings: doc.findings,
+        doc,
+        thread: message.thread.slice(0, -1), // der aktuelle Nutzer-Turn geht separat als `anfrage` mit
+        verlaufsNotiz: message.verlaufsNotiz || null,
+        anfrage,
+        zusatzAnweisung: hinweisBitte
+          ? 'Der Nutzer hat um eine Durchsicht gebeten. Ein Hinweislauf über den Text wurde soeben gestartet — erwähne kurz, dass du den Text jetzt durchgehst und dass Hinweise am Rand erscheinen, sobald etwas Belastbares dabei ist.'
+          : null,
+      })
+      await fuehreChatLauf(message.thread, kontext)
+    },
+  })
+}
+
+// Startet den echten Chat-Lauf FÜR EIN FINDING an der Randkarte (Task C-3) — dieselbe
+// Sperr-/Status-Disziplin wie sendeAgentenChat: fuehreChatVorgangAus setzt die Sperre SYNCHRON
+// vor jedem await (kein zweiter, ungesicherter Pfad, kein doppelter bezahlter Lauf — siehe
+// Fix-Runde 1 zu C-2, chat-kontext.mjs). laufenderChatLauf ist app-weit EIN Feld (siehe
+// Deklaration oben) — ein laufendes Panel-Gespräch blockiert ein Randkarten-Gespräch und
+// umgekehrt. Anders als sendeAgentenChat: keine Verlaufs-Verdichtung (Randkarten-Gespräche
+// bleiben kurz, Findings kennen kein verlaufsNotiz-Feld) und keine Hinweisbitte-Erkennung —
+// das Gespräch soll bei GENAU dieser Stelle bleiben (baueFindingZusatzAnweisung weist das
+// Modell entsprechend an).
+async function sendeLocalChat(finding, anfrage) {
+  const doc = ctx.activeDoc()
+  const project = ctx.activeProjectObj()
+  if (!doc || !project) return
+
+  await fuehreChatVorgangAus({
+    laeuftBereits: () => Boolean(laufenderChatLauf),
+    sperreSetzen: wert => {
+      laufenderChatLauf = wert ? (laufenderChatLauf || { agentMessage: null, puffer: '', flushTimer: null }) : null
+      refreshWorkspace() // Senden-Knopf an der Randkarte sofort sichtbar deaktivieren
+    },
+    setzeStatus: setzeAgentStatus,
+    verdichte: async () => {},
+    chatte: async () => {
+      const kontext = baueChatKontext({
+        verstaendnis: ensureProjectUnderstanding(project),
+        docText: dokumentText(),
+        findings: doc.findings,
+        doc,
+        thread: finding.thread.slice(0, -1), // der aktuelle Nutzer-Turn geht separat als `anfrage` mit
+        anfrage,
+        zusatzAnweisung: baueFindingZusatzAnweisung(finding),
+      })
+      await fuehreChatLauf(finding.thread, kontext)
+    },
+  })
+}
+
+// Echte Initiative-Quelle, additiv zum bestehenden Aura-/Pausen-Mechanismus: eine Nachricht
+// in dieser Form haelt hasUnseenInitiative (Aura-Punkt) und scheduleAgentInitiative
+// (Pausen-/Dismiss-Regeln, kein Fokus-Raub) unveraendert; nur die Quelle ist echt.
+// Hinweis: Bereich H hat fuer denselben Zweck (echter Hinweislauf findet Grundursache oder
+// Integritaetsthema) bereits eine eigene, gleichwertige interne Loesung (ergaenzeEchteInitiative
+// in fuehreHinweislaufAus) — die war noetig, bevor dieser Hook hier existierte, und bleibt hier
+// unangetastet (ausserhalb des Datei-Scopes von Task C-2). Dieser Export ist additiv fuer
+// zukuenftige Aufrufer außerhalb dieses Moduls bzw. eine spaetere Konsolidierung.
+export function meldeAgentInitiative(text, { earliestAt = Date.now() } = {}) {
+  const workspace = activeWorkspace()
+  if (!workspace || typeof text !== 'string' || !text.trim()) return null
+  const message = {
+    id: `initiative-${Date.now()}-${workspace.agent.messages.length}`,
+    text: text.trim(),
+    status: 'new',
+    earliestAt,
+    thread: [],
+  }
+  workspace.agent.messages.push(message)
+  persistWorkspace()
+  refreshWorkspace()
+  return message
+}
+
+function renderEntscheidungsverlauf(workspace) {
+  const doc = ctx?.activeDoc()
+  if (!doc) return null
+  const eintraege = entscheidungsEintraege(doc)
+  if (!eintraege.length) return null
+
+  const section = createNode('section', 'agent-decisions')
+  section.setAttribute('aria-label', 'Entscheidungsverlauf')
+  const offen = Boolean(workspace.agent.decisionsOpen)
+  const toggle = createNode('button', 'agent-decisions-toggle')
+  toggle.type = 'button'
+  toggle.id = 'agentDecisionsToggle'
+  toggle.setAttribute('aria-expanded', String(offen))
+  toggle.setAttribute('aria-controls', 'agentDecisionsList')
+  toggle.append(
+    createNode('span', 'agent-decisions-title', 'Entscheidungsverlauf'),
+    createNode('span', 'onda-badge agent-decisions-count', String(eintraege.length)),
+    createNode('span', 'agent-decisions-disclosure', offen ? '↘' : '›'),
+  )
+  toggle.addEventListener('click', () => {
+    workspace.agent.decisionsOpen = !workspace.agent.decisionsOpen
+    persistWorkspace()
+    refreshWorkspace()
+  })
+  section.append(toggle)
+
+  if (offen) {
+    const list = createNode('div', 'agent-decisions-list')
+    list.id = 'agentDecisionsList'
+    eintraege.forEach(eintrag => {
+      const item = createNode('article', 'agent-decision')
+      item.dataset.decisionId = eintrag.id
+      const meta = createNode('div', 'agent-decision-meta')
+      meta.append(
+        createNode('span', `agent-decision-label is-${eintrag.art}`, eintrag.label),
+        createNode('span', 'agent-decision-date', eintrag.datumText),
+      )
+      item.append(meta, createNode('p', 'agent-decision-short', eintrag.kurztext))
+      if (eintrag.resultierenderWortlaut) {
+        item.append(createNode('p', 'agent-decision-result', `Resultierender Wortlaut: ${eintrag.resultierenderWortlaut}`))
+      }
+      if (eintrag.begruendung) {
+        item.append(createNode('p', 'agent-decision-reason', `Begründung: ${eintrag.begruendung}`))
+      }
+      list.append(item)
+    })
+    section.append(list)
+  }
+  return section
+}
+
 function renderAgentWidget() {
   const ui = elements()
   const workspace = activeWorkspace()
@@ -1582,8 +2444,17 @@ function renderAgentWidget() {
   header.append(close)
   ui.agentWidget.append(header)
 
+  const statusline = createNode('div', 'agent-statusline')
+  statusline.id = 'agentStatusline'
+  statusline.hidden = true
+  ui.agentWidget.append(statusline)
+  renderAgentStatuszeile()
+
   const unplaced = renderUnplacedFindingList()
   if (unplaced) ui.agentWidget.append(unplaced)
+
+  const decisions = renderEntscheidungsverlauf(workspace)
+  if (decisions) ui.agentWidget.append(decisions)
 
   if (!message) {
     ui.agentWidget.append(createNode('p', 'agent-widget-empty', 'Noch kein allgemeines Gespräch.'))
@@ -1606,26 +2477,34 @@ function renderAgentWidget() {
   send.type = 'submit'
   send.title = 'Senden'
   send.setAttribute('aria-label', 'Nachricht senden')
+  send.disabled = Boolean(laufenderChatLauf)
   form.append(input, send)
   form.addEventListener('submit', event => {
     event.preventDefault()
     const text = input.value.trim()
-    if (!text) return
-    const at = Date.now()
-    appendThreadMessage(message.thread, 'user', text, at)
-    const reply = 'Beispielreaktion: Dann behandle ich Aufmerksamkeit im weiteren Text als gestaltete Bedingung und prüfe, wo die Formulierung noch beim Individuum bleibt.'
-    appendThreadMessage(
-      message.thread,
-      'agent',
-      reply,
-      at + 1,
-    )
+    if (!text || laufenderChatLauf) return
+    if (istInterviewAktiv()) {
+      if (interviewLaufAktiv) return // ein Lauf zur Zeit; die Eingabe bleibt stehen
+      input.value = ''
+      sendeInterviewAntwort(message, text)
+      return
+    }
+    // Echter, gestreamter Chat (Bereich C) — die Kulisse ist weg.
     input.value = ''
-    announceAgentStatus(reply)
+    appendThreadMessage(message.thread, 'user', text, Date.now())
     ctx.persist()
     refreshWorkspace()
+    sendeAgentenChat(message, text)
   })
-  ui.agentWidget.append(messages, form)
+  ui.agentWidget.append(messages)
+  if (interviewStatus) {
+    ui.agentWidget.append(createNode(
+      'p',
+      'agent-widget-status',
+      interviewStatus === 'laeuft' ? 'Agent denkt nach …' : interviewStatus,
+    ))
+  }
+  ui.agentWidget.append(form)
   restoreInputState(input, inputState)
   scrollThreadToLatest(messages)
 }
@@ -1743,7 +2622,13 @@ function renderEvidenceWindow() {
   ui.evidenceWindow.append(claimSection)
 
   const sources = createNode('div', 'evidence-sources')
-  ;(finding.sources || []).forEach(source => {
+  // Etappe-A-Guard (H-4): In echten Projekten zeigt das Belegfenster nur den
+  // Hinweis-Kontext -- Demo-Quellen bleiben exklusiv im Beispielprojekt. Welche
+  // Quellen sichtbar sind, entscheidet die reine, node-getestete Funktion
+  // resolveEvidenceSources (workspace-model.mjs, siehe workspace-model.test.mjs).
+  const istBeispielprojekt = istBeispielDokument(doc)
+  const sichtbareQuellen = resolveEvidenceSources(finding.sources, istBeispielprojekt)
+  sichtbareQuellen.forEach(source => {
     const sourceUrl = safeHttpsUrl(source.url)
     const verificationStatus = ['demo', 'unverified', 'verified'].includes(source.verificationStatus)
       ? source.verificationStatus
@@ -1802,13 +2687,155 @@ function renderEvidenceWindow() {
     sources.append(item)
   })
   if (!sources.children.length) {
-    sources.append(createNode('p', 'evidence-empty', 'Für diese Aussage ist noch keine sichere direkte Quelle hinterlegt.'))
+    sources.append(createNode('p', 'evidence-empty', istBeispielprojekt
+      ? 'Für diese Aussage ist noch keine sichere direkte Quelle hinterlegt.'
+      : 'Dieser Hinweis stützt sich allein auf deinen Text — Quellen sucht der Agent dafür noch nicht.'))
   }
   ui.evidenceWindow.append(sources)
   if (evidenceFocusRequest) {
     evidenceFocusRequest = false
     requestAnimationFrame(() => close.focus({ preventScroll: true }))
   }
+}
+
+// ---- Echte Hinweis-Läufe (Etappe A, Spec §5) -------------------------------
+// Gate, Sperre, Kontextbau, runTask-Aufruf und Modellantwort-Verarbeitung stecken
+// vollstaendig in versucheHinweislauf (hinweislauf-model.mjs, node-getestet, inkl.
+// Kollisions- und Kontext-Drift-Schutz — Fix-Runde 1). Diese Funktionen hier sind die
+// duenne ctx/DOM-Klammer: Dokument/Editor lesen, versucheHinweislauf aufrufen, Ergebnis
+// in doc.findings + workspace.hinweislauf uebernehmen, Panel aktualisieren.
+
+function istBeispielDokument(doc) {
+  return doc?.projectId === EXAMPLE_PROJECT_ID
+}
+
+function hinweislaufProtokoll(workspace) {
+  if (!workspace.hinweislauf || typeof workspace.hinweislauf !== 'object') {
+    workspace.hinweislauf = {
+      signatur: null,
+      beendetAt: null,
+      gestartet: 0,
+      verworfen: 0,
+      uebernommen: 0,
+      fehler: null,
+    }
+  }
+  return workspace.hinweislauf
+}
+
+// Echte Initiative-Quelle: nach einem Lauf mit Grundursache oder Integritätsthema
+// entsteht eine Agenten-Nachricht. Anzeige-Gates (shouldOpenAgentWidget,
+// hasUnseenInitiative, Dismiss-Regeln) bleiben unverändert die bestehenden — nur
+// die Quelle wird echt (Spec §6: "die Quelle wird echt").
+function ergaenzeEchteInitiative(workspace, finding, jetzt) {
+  const offenVorhanden = workspace.agent.messages.some(message => (
+    message.status === 'new' && !workspace.agent.dismissedIds.includes(message.id)
+  ))
+  if (offenVorhanden) return
+  const text = finding.istGrundursache
+    ? `Beim Lesen ist mir etwas Grundsätzliches aufgefallen: ${finding.short}`
+    : `Ein Hinweis betrifft die Verlässlichkeit deines Textes: ${finding.short}`
+  workspace.agent.messages.push({
+    id: `initiative-${jetzt.toString(36)}`,
+    status: 'new',
+    earliestAt: jetzt,
+    text,
+    thread: [],
+  })
+}
+
+// fuehreHinweislaufAus ist modulintern. Die drei Ausloeser aus Spec §5 rufen sie auf:
+// Schreibpause ueber planeHinweislauf, Dokument-oeffnen ueber onViewChange/initWorkspace
+// (H-3), und die Chat-Bitte ueber den bereits exportierten Hook starteHinweislauf.
+//
+// Die gesamte Ablauflogik (Gate, Sperre-vor-jedem-await, Kontext, runTask, Antwort-
+// Verarbeitung) steckt in versucheHinweislauf (hinweislauf-model.mjs, node-getestet, u.a.
+// gegen Kollision zweier Ausloeser und Dokument-/Projekt-Drift ueber den Schluessel-Check
+// hinweg — Fix-Runde 1, Finding 1+2). Diese Funktion hier sammelt nur noch ctx-gebundene
+// Werte SYNCHRON VOR dem Aufruf ein (Dokument-ID, Projekt ueber doc.projectId statt ueber
+// den jederzeit verschiebbaren ctx.activeProjectObj()-Zeiger) und uebernimmt danach das
+// Ergebnis in doc.findings + workspace.hinweislauf + Panel.
+async function fuehreHinweislaufAus({ grund = 'pause' } = {}) {
+  const doc = ctx?.activeDoc()
+  const workspace = activeWorkspace()
+  const blocks = doc ? getEditorBlocks(ctx.editor) : []
+  const docText = doc ? baueDocText(blocks) : ''
+  const protokoll = workspace ? hinweislaufProtokoll(workspace) : null
+  const signatur = seedBodySignature(docText)
+  if (doc) ensureReasoningModel(doc) // Selbstheilung wie decideFinding: doc.findings/decisions sicher als Arrays
+  const docId = doc?.id ?? null
+  // Ueber doc.projectId aufloesen (VOR jedem await erfasst), nicht ueber ctx.activeProjectObj()
+  // -- der zeigt auf das GERADE aktive Projekt und koennte waehrend hatSchluessel() bereits
+  // auf ein anderes Projekt wechseln (Fix-Runde 1, Finding 2).
+  const project = doc?.projectId ? ctx.state.projects.find(candidate => candidate.id === doc.projectId) : null
+  const verstaendnis = project ? ensureProjectUnderstanding(project) : null
+
+  const ergebnis = await versucheHinweislauf({
+    hatDokument: Boolean(doc && workspace),
+    istBeispielprojekt: istBeispielDokument(doc),
+    verstaendnisOffen: verstaendnis ? istInterviewOffen(verstaendnis) : false,
+    laeuftBereits: hinweislaufAktiv,
+    docText,
+    signatur,
+    letzteSignatur: protokoll?.signatur ?? null,
+    sperreSetzen: wert => { hinweislaufAktiv = wert },
+    hatSchluessel,
+    istNochDasselbeDokument: () => ctx.activeDoc()?.id === docId,
+    // Fix-Runde 2, Finding 2b (Important): der Chat-Auslöser umging bisher die Monatsbremse
+    // komplett (beansprucheKostenfreigabe:null -> versucheHinweislauf nimmt dann {erlaubt:true}
+    // an, siehe hinweislauf-model.mjs). Die Oberfläche behauptet aber "Automatische Läufe sind
+    // pausiert" OHNE Ausnahme für den Chat-Hinweislauf -- das war schlicht nicht wahr. Der
+    // reine Chat (die Antwort des Agenten, sendeAgentenChat/fuehreChatLauf) ist davon NICHT
+    // betroffen: das hier ist ausschliesslich der zusätzliche Hintergrund-Hinweislauf, den eine
+    // Chat-Bitte ("schau mal drüber") zusätzlich anstößt (siehe starteHinweislauf-Aufruf in
+    // sendeAgentenChat) -- genau der soll wie jeder andere automatische Lauf der Bremse
+    // unterliegen; die Chat-Antwort selbst läuft unabhängig davon immer weiter.
+    beansprucheKostenfreigabe: () => beansprucheAutomatikKosten('hinweis', { docId, grund }),
+    verstaendnis,
+    blocks,
+    findings: doc?.findings,
+    decisions: doc?.decisions,
+    runTask,
+    setzeAgentStatus,
+  })
+
+  if (!ergebnis.gestartet) {
+    if (ergebnis.grund === 'monatsbudget-erreicht') {
+      zeigeBudgetPause(workspace)
+      persistWorkspace()
+      refreshWorkspace()
+    }
+    return ergebnis // Gate/Dokumentwechsel/Budget hat blockiert -- nichts zu protokollieren
+  }
+
+  if (!ergebnis.erfolg) {
+    // Spec §7: Schema-Muell/Abbruch -> Lauf verwerfen, still protokollieren, beim naechsten
+    // Ausloeser neu. signatur bleibt unveraendert -> derselbe Text darf erneut versucht werden.
+    Object.assign(protokoll, { beendetAt: Date.now(), fehler: ergebnis.fehler })
+    ctx?.scheduleSave()
+    return { gestartet: true, fehler: ergebnis.fehler }
+  }
+
+  ergebnis.uebernommen.forEach(finding => doc.findings.push(finding))
+  Object.assign(protokoll, {
+    signatur,
+    beendetAt: ergebnis.zeit,
+    gestartet: ergebnis.geliefertAnzahl,
+    verworfen: ergebnis.verworfen,
+    uebernommen: ergebnis.uebernommen.length,
+    fehler: null,
+  })
+  const initiativeAnlass = ergebnis.grundursache
+    || ergebnis.uebernommen.find(finding => isIntegrityCategory(finding.category))
+  if (initiativeAnlass) ergaenzeEchteInitiative(workspace, initiativeAnlass, ergebnis.zeit)
+  ctx.scheduleSave()
+  refreshWorkspace()
+  return { gestartet: true, uebernommen: ergebnis.uebernommen.length, verworfen: ergebnis.verworfen }
+}
+
+// Chat-Bitte-Hook („schau nochmal drüber") — Bereich C ruft diese Funktion.
+export function starteHinweislauf(optionen = {}) {
+  return fuehreHinweislaufAus({ grund: optionen.grund || 'chat' })
 }
 
 function nextAgentInitiative(workspace) {
@@ -1853,10 +2880,53 @@ function activateInitiativeDocument(documentId) {
   }
 }
 
+function clearHinweislaufTimer() {
+  if (hinweislaufTimer) clearTimeout(hinweislaufTimer)
+  hinweislaufTimer = null
+}
+
+// Auslöser (a): dieselbe Pausen-Erkennung, die bisher nur die Attrappen-Anzeige fuetterte,
+// stoesst jetzt den echten Lauf an. Die Entscheidung (ob + nach wie viel ms) liegt PUR und
+// node-getestet in pruefePausenAusloeser (hinweislauf-model.mjs); hier werden nur die
+// ctx/DOM-gebundenen Werte eingesammelt (Muster wie fuehreHinweislaufAus). Die autoritative
+// Gate-Pruefung (inkl. Signatur, Beispielprojekt, Schluessel) bleibt zusaetzlich beim
+// tatsaechlichen Start in fuehreHinweislaufAus/versucheHinweislauf -- diese Funktion vermeidet
+// nur unnoetige Zeitgeber.
+function planeHinweislauf() {
+  clearHinweislaufTimer()
+  const doc = ctx?.activeDoc()
+  const docId = doc?.id || null
+  const inputState = initiativeInputState(docId)
+  const workspace = activeWorkspace()
+  const entscheidung = pruefePausenAusloeser({
+    hatDokument: Boolean(doc && workspace),
+    istBeispielprojekt: istBeispielDokument(doc),
+    laeuftBereits: hinweislaufAktiv,
+    hatEingabeStatus: Boolean(inputState),
+    lastInputAt: inputState?.lastInputAt,
+    editorSichtbar: editorViewIsVisibleFor(docId),
+    isComposing,
+    leseSignatur: () => seedBodySignature(baueDocText(getEditorBlocks(ctx.editor))),
+    letzteSignatur: workspace ? hinweislaufProtokoll(workspace).signatur : null,
+    idleMs: AGENT_IDLE_MS,
+  })
+  if (!entscheidung.planen) return
+
+  const scheduledGeneration = inputState.generation
+  hinweislaufTimer = setTimeout(() => {
+    hinweislaufTimer = null
+    const currentInputState = initiativeInputState(docId)
+    if (!currentInputState || currentInputState.generation !== scheduledGeneration) return
+    if (!editorViewIsVisibleFor(docId) || isComposing) return
+    fuehreHinweislaufAus({ grund: 'pause' })
+  }, entscheidung.verzoegerungMs)
+}
+
 function scheduleAgentInitiative() {
   clearAgentInitiativeTimer()
   const docId = ctx?.activeDoc()?.id || null
   activateInitiativeDocument(docId)
+  planeHinweislauf()
   const workspace = activeWorkspace()
   const message = workspace ? nextAgentInitiative(workspace) : null
   const inputState = initiativeInputState(docId)
@@ -1952,6 +3022,7 @@ export function refreshWorkspace({ reconcileEditing = false } = {}) {
     ctx.editor.view.dispatch(ctx.editor.state.tr.setMeta(activeBlockKey, activeBlockId))
   }
 
+  pruefeVerstaendnisInterview()
   renderStructureNav()
   renderProjectUnderstandingCard()
   renderMaterialEntry()
@@ -2108,6 +3179,7 @@ export function initWorkspace(context) {
     }
     activateInitiativeDocument(ctx.activeDoc()?.id || null)
     scheduleAgentInitiative()
+    fuehreHinweislaufAus({ grund: 'oeffnen' })
   }
   const onVisibilityChange = () => {
     if (document.visibilityState !== 'visible') {
@@ -2155,13 +3227,22 @@ export function initWorkspace(context) {
   listen(document.getElementById('materialSources'), 'click', event => openProjectSourcesModal(event.currentTarget))
   listen(document.getElementById('themeToggle'), 'click', toggleTheme)
   listen(document.getElementById('accentToggle'), 'click', event => openAccentMenu(event.currentTarget))
+  listen(document.getElementById('kiSettings'), 'click', event => openKiSettingsDialog(event.currentTarget))
   listenEditor('selectionUpdate', onSelectionUpdate)
   listenEditor('update', onEditorUpdate)
+
+  // Status-Abo: Statuszeile und Aura folgen dem echten Agenten-Zustand.
+  cleanups.push(beiAgentStatus(() => {
+    renderAgentStatuszeile()
+    applyAuraState()
+  }))
+  pruefeAgentVerbindung()
 
   instance.destroy = () => {
     if (instance.destroyed) return
     instance.destroyed = true
     clearAgentInitiativeTimer()
+    clearHinweislaufTimer()
     closeInsertMenu({ restoreFocus: false })
     closeOndaDialog({ restoreFocus: false })
     closeAccentMenu({ restoreFocus: false })
@@ -2169,6 +3250,8 @@ export function initWorkspace(context) {
 
     clearTimeout(hoverTimer)
     clearTimeout(typingTimer)
+    if (laufenderChatLauf?.flushTimer) clearTimeout(laufenderChatLauf.flushTimer)
+    laufenderChatLauf = null
     if (triggerFrame) cancelAnimationFrame(triggerFrame)
     if (localPositionFrame) cancelAnimationFrame(localPositionFrame)
     if (agentLiveFrame) cancelAnimationFrame(agentLiveFrame)
@@ -2208,10 +3291,18 @@ export function initWorkspace(context) {
     pendingParagraphBoundaryDocId = null
     agentLiveFrame = null
     agentPresenceFocusRequest = false
+    interviewPruefKey = null
+    interviewLaufAktiv = false
+    interviewStatus = null
+    pausierterAutomatiklauf = null
   }
 
   window.__workspaceCloseTopLayer = closeTopLayer
   refreshWorkspace({ reconcileEditing: true })
+  // Auslöser (b) beim Workspace-Aufbau selbst (z.B. Neuladen der App mitten im Dokument):
+  // onViewChange greift nur bei einem ECHTEN 'aiwt:viewchange'-Ereignis (openDoc & Co.), nicht
+  // beim initialen Aufbau der bereits aktiven Ansicht.
+  if (editorViewIsVisibleFor(ctx.activeDoc()?.id)) fuehreHinweislaufAus({ grund: 'oeffnen' })
   return instance
 }
 

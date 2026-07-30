@@ -12,6 +12,7 @@ import {
   hasUnseenInitiative,
   normalizeThread,
   reconcileEditingFinding,
+  resolveEvidenceSources,
   resolveFindingBlock,
   resolveFindingPlacement,
   shouldOpenAgentWidget,
@@ -109,6 +110,39 @@ test('workspace migration normalizes global and finding threads without losing v
   assert.equal(first.agent.activeMessageId, null)
 })
 
+test('Thread-Identität bleibt bei Normalisierung stabil, damit laufende Streams nicht in verwaiste Arrays schreiben', () => {
+  const globalThread = [{ id: 'global-1', role: 'agent', text: 'Beginn', at: 1 }]
+  const localThread = [{ id: 'local-1', role: 'agent', text: 'Beginn lokal', at: 1 }]
+  const globalMessage = globalThread[0]
+  const localMessage = localThread[0]
+  const doc = {
+    findings: [{ id: 'f-1', thread: localThread }],
+    workspace: {
+      agent: {
+        messages: [{ id: 'm-1', text: 'Frage', thread: globalThread }],
+        dismissedIds: [],
+      },
+    },
+  }
+
+  ensureWorkspaceState(doc)
+  assert.equal(doc.workspace.agent.messages[0].thread, globalThread)
+  assert.equal(doc.findings[0].thread, localThread)
+  assert.equal(globalThread[0], globalMessage)
+  assert.equal(localThread[0], localMessage)
+
+  appendThreadMessage(globalThread, 'user', 'Antwort global', 2)
+  appendThreadMessage(localThread, 'user', 'Antwort lokal', 2)
+  ensureWorkspaceState(doc)
+
+  assert.equal(doc.workspace.agent.messages[0].thread, globalThread)
+  assert.equal(doc.findings[0].thread, localThread)
+  assert.equal(globalThread[0], globalMessage)
+  assert.equal(localThread[0], localMessage)
+  assert.equal(globalThread.at(-1).text, 'Antwort global')
+  assert.equal(localThread.at(-1).text, 'Antwort lokal')
+})
+
 test('array workspace is replaced with state that survives a JSON roundtrip', () => {
   const doc = { workspace: [] }
   const migrated = ensureWorkspaceState(doc)
@@ -135,6 +169,16 @@ test('array agent is replaced with state that survives a JSON roundtrip', () => 
   assert.equal(restored.shelfOpen, true)
   assert.deepEqual(restored.agent.messages, [])
   assert.deepEqual(restored.agent.dismissedIds, [])
+})
+
+test('ensureWorkspaceState ergänzt decisionsOpen additiv und erhält gespeicherte Werte', () => {
+  const doc = { workspace: { agent: { messages: [], dismissedIds: [] } } }
+  const workspace = ensureWorkspaceState(doc)
+  assert.equal(workspace.agent.decisionsOpen, false)
+
+  workspace.agent.decisionsOpen = true
+  const wieder = ensureWorkspaceState(doc)
+  assert.equal(wieder.agent.decisionsOpen, true)
 })
 
 test('top-level editor nodes become block previews', () => {
@@ -474,4 +518,41 @@ test('structureHintMap: evidence dot beats style dot per block', () => {
   assert.equal(map.get('b-1'), 'evidence') // evidence wins over the later style finding
   assert.equal(map.get('b-2'), 'style')
   assert.equal(map.has('b-3'), false)
+})
+
+// Belegfenster-Guard (H-4): Demo-Quellen (verificationStatus 'demo') gehoeren
+// exklusiv zum Beispielprojekt. Echte Findings haben ohnehin sources: [] (H-1) --
+// diese Funktion sichert zusaetzlich jeden anderen Weg ins Belegfenster ab.
+test('resolveEvidenceSources keeps every source inside the example project, demo or not', () => {
+  const sources = [
+    { label: 'Demo-Quelle', verificationStatus: 'demo' },
+    { label: 'Gepruefte Quelle', verificationStatus: 'verified' },
+  ]
+  assert.deepEqual(resolveEvidenceSources(sources, true), sources)
+})
+
+test('resolveEvidenceSources filters demo sources out of real projects', () => {
+  const verified = { label: 'Gepruefte Quelle', verificationStatus: 'verified' }
+  const sources = [
+    { label: 'Demo-Quelle A', verificationStatus: 'demo' },
+    verified,
+    { label: 'Demo-Quelle B', verificationStatus: 'demo' },
+  ]
+  assert.deepEqual(resolveEvidenceSources(sources, false), [verified])
+})
+
+test('resolveEvidenceSources keeps sources without an explicit verification status in real projects', () => {
+  const legacy = { label: 'Quelle ohne Statusfeld' }
+  assert.deepEqual(resolveEvidenceSources([legacy], false), [legacy])
+})
+
+test('resolveEvidenceSources treats a missing or malformed source list as empty', () => {
+  assert.deepEqual(resolveEvidenceSources(undefined, false), [])
+  assert.deepEqual(resolveEvidenceSources(null, true), [])
+  assert.deepEqual(resolveEvidenceSources('kaputt', false), [])
+})
+
+test('resolveEvidenceSources never throws on a malformed entry inside an otherwise real list', () => {
+  const malformed = [null, undefined, 'x']
+  assert.deepEqual(resolveEvidenceSources(malformed, false), malformed)
 })

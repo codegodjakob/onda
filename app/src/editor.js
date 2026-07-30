@@ -16,6 +16,7 @@ import { DEFAULT_SETTINGS, normalizeSettings } from './settings-model.mjs'
 import { BlockIdentity, ensureTopLevelBlockIds, getActiveBlockId, getEditorBlocks, insertSemanticBlock, replaceFindingTarget } from './block-identity.js'
 import { buildExampleStructure, buildExampleNarrative, buildExampleCoach, buildExampleLane, buildExampleBody, buildExampleMaterial, buildExampleUnderstanding, buildExampleAgentMessages } from './example.js'
 import { EXAMPLE_PROJECT_ID, migrateExampleSeed } from './example-seed.mjs'
+import { initGateway, runTask, hatSchluessel, setzeSchluessel, loescheSchluessel } from './agent-gateway.mjs'
 
 // ---------- Sanfte Markierung (Peripherie): eine flüchtige Dekoration ----------
 // Zeigt eine Passage kurz an, OHNE das Dokument zu ändern — sie wird nicht
@@ -56,6 +57,18 @@ const TRASH_DAYS = 30
 const SCHEMA = 6
 const EX_VERSION = 9
 
+// Schmaler Rückkanal der nativen saveimg-Brücke. Der frühere Bildeditor ist
+// nicht mehr Teil der Onda-Oberfläche; die Mac-Startprobe prüft diesen
+// Infrastrukturvertrag weiterhin, damit Scheme-Handler und JS↔Swift-Rückruf
+// nicht unbemerkt veralten.
+const imgPending = Object.create(null)
+window.__imgSaved__ = function (reqId, url) {
+  const callback = imgPending[reqId]
+  if (!callback) return
+  delete imgPending[reqId]
+  callback(url)
+}
+
 export const state = { docs: [], active: null, projects: [], activeProject: null, settings: { ...DEFAULTS }, editor: null, native: NATIVE }
 
 // Schmale Test-Bridge fuer zustandsbehaftete ProseMirror-Regressionstests.
@@ -78,6 +91,7 @@ export const __blockIdentityTestBridge = {
 }
 
 export { __workspaceTestBridge }
+export { setzeTransportFuerTests } from './agent-gateway.mjs'
 
 function uid() { return 'd' + Math.random().toString(36).slice(2, 9) + Date.now().toString(36) }
 function now() { return Date.now() }
@@ -475,10 +489,15 @@ export function boot() {
 
   ensureTopLevelBlockIds(state.editor)
 
+  // KI-Verteiler: liest settings für die Verbrauchszählung, speichert über persist.
+  // Der Transport wird je Aufruf gewählt (Mac-Brücke, sonst Browser-Direktweg).
+  initGateway({ getSettings: () => state.settings, persist })
+
   const ctx = {
     editor: state.editor, state,
     ops: { newDoc, openDoc, duplicateDoc, trashDoc, restoreDoc, deleteForever, newProject, renameProject, openProject },
     persist, scheduleSave, flushSave, exportMd, docTitle, activeDoc, autoGrowTitle, activeProjectObj, showHomeView,
+    gateway: { runTask, hatSchluessel, setzeSchluessel, loescheSchluessel },
   }
   initUI(ctx)
   initWorkspace(ctx)
