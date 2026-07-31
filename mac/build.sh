@@ -1,9 +1,9 @@
 #!/bin/bash
-# Baut Schreibwerkzeug.app aus main.swift + app/index.html + Icon.
+# Baut Onda.app aus main.swift + app/index.html + Icon.
 set -euo pipefail
 cd "$(dirname "$0")"
 
-APP="../Schreibwerkzeug.app"
+APP="../Onda.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 
@@ -12,7 +12,7 @@ echo "— baue Web-Bundle …"
 test -f ../app/dist/editor.bundle.js || { echo "FEHLER: Bundle fehlt"; exit 1; }
 
 echo "— kompiliere App …"
-swiftc -O -swift-version 5 -o "$APP/Contents/MacOS/Schreibwerkzeug" main.swift
+swiftc -O -swift-version 5 -o "$APP/Contents/MacOS/Onda" main.swift
 
 echo "— kopiere Oberfläche …"
 mkdir -p "$APP/Contents/Resources/src" "$APP/Contents/Resources/dist" "$APP/Contents/Resources/fonts"
@@ -33,10 +33,10 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>CFBundleName</key><string>Schreibwerkzeug</string>
-	<key>CFBundleDisplayName</key><string>Schreibwerkzeug</string>
+	<key>CFBundleName</key><string>Onda</string>
+	<key>CFBundleDisplayName</key><string>Onda</string>
 	<key>CFBundleIdentifier</key><string>de.jakob.schreibwerkzeug</string>
-	<key>CFBundleExecutable</key><string>Schreibwerkzeug</string>
+	<key>CFBundleExecutable</key><string>Onda</string>
 	<key>CFBundleIconFile</key><string>AppIcon</string>
 	<key>CFBundlePackageType</key><string>APPL</string>
 	<key>CFBundleVersion</key><string>1.0</string>
