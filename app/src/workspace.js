@@ -20,6 +20,7 @@ import { applySettings } from './ui.js'
 import { hatSchluessel, setzeSchluessel, loescheSchluessel, runTask } from './agent-gateway.mjs'
 import { aktuellerAgentStatus, beiAgentStatus, setzeAgentStatus, statuszeileFuer } from './agent-status.mjs'
 import { EXAMPLE_PROJECT_ID, seedBodySignature } from './example-seed.mjs'
+import { MODELLE, TASK_TABLE } from './agent-tasks.mjs'
 import { baueVerstaendnisKontext } from './verstaendnis-kontext.mjs'
 import { baueDocText } from './agent-findings.mjs'
 import { pruefePausenAusloeser, versucheHinweislauf } from './hinweislauf-model.mjs'
@@ -706,6 +707,11 @@ function buildKiSettingsBody(body) {
   anleitung.append(schritte)
   body.append(anleitung)
 
+  // Welches Modell wofür (Abnahme Etappe A, Kriterium 1)
+  const modelle = createNode('section', 'ki-modelle')
+  body.append(modelle)
+  renderKiModelle(modelle)
+
   // Verbrauch (settings.usage — vom Verteiler nach jedem Lauf verbucht)
   const verbrauch = createNode('section', 'ki-verbrauch')
   body.append(verbrauch)
@@ -722,6 +728,43 @@ function buildKiSettingsBody(body) {
 
 function formatTokenZahl(wert) {
   return (Number.isFinite(+wert) ? +wert : 0).toLocaleString('de-DE')
+}
+
+// Klarnamen fuer die Aufgaben aus TASK_TABLE. Nur Beschriftung — welches Modell
+// eine Aufgabe bekommt, steht ausschliesslich in agent-tasks.mjs.
+const TASK_KLARNAMEN = Object.freeze({
+  verstaendnis: 'Projekt verstehen',
+  hinweise: 'Hinweise zum Text',
+  chat: 'Gespräch',
+  titel: 'Titelvorschlag',
+  zusammenfassung: 'Zusammenfassung',
+})
+
+// Zeigt, welches Modell welche Aufgabe uebernimmt — abgeleitet aus TASK_TABLE,
+// damit die Anzeige nicht veralten kann, wenn die Verteilung sich aendert.
+function renderKiModelle(container) {
+  container.replaceChildren()
+  container.append(createNode('span', 'onda-eyebrow', 'Modelle'))
+
+  const proModell = new Map()
+  for (const [task, eintrag] of Object.entries(TASK_TABLE)) {
+    const modellId = MODELLE[eintrag.modell]
+    if (!modellId) continue
+    if (!proModell.has(modellId)) proModell.set(modellId, [])
+    proModell.get(modellId).push(TASK_KLARNAMEN[task] || task)
+  }
+
+  const liste = createNode('dl', 'ki-modell-liste')
+  for (const [modellId, aufgaben] of proModell) {
+    liste.append(
+      createNode('dt', 'ki-modell-name', modellId),
+      createNode('dd', 'ki-modell-aufgaben', aufgaben.join(' · ')),
+    )
+  }
+  container.append(liste)
+  container.append(createNode('p', 'ki-modell-fuss',
+    'Onda wählt das Modell je Aufgabe selbst: das starke für Denkarbeit, '
+    + 'das schnelle für Routine. Das hält die Kosten niedrig.'))
 }
 
 function renderKiVerbrauch(container) {

@@ -3030,6 +3030,22 @@ button.onda-aura:focus-visible {
   font: inherit;
 }
 .ki-link:focus-visible { outline: none; box-shadow: var(--shadow-focus); border-radius: 2px; }
+/* Welches Modell wofür — Abnahme Etappe A, Kriterium 1 */
+.ki-modelle { display: flex; flex-direction: column; gap: var(--space-1); }
+.ki-modell-liste {
+  display: grid; grid-template-columns: auto 1fr;
+  gap: var(--space-1) var(--space-3); margin: 0;
+}
+.ki-modell-name {
+  font: var(--fw-medium) var(--text-sm)/1.5 var(--font-mono, var(--font-sans));
+  color: var(--text-primary); white-space: nowrap;
+}
+.ki-modell-aufgaben {
+  margin: 0; font: var(--fw-regular) var(--text-sm)/1.5 var(--font-sans);
+  color: var(--text-secondary);
+}
+.ki-modell-fuss { margin: 0; color: var(--text-tertiary); font: var(--fw-regular) var(--text-sm)/1.5 var(--font-sans); }
+
 .ki-verbrauch { display: flex; flex-direction: column; gap: var(--space-1); }
 .ki-verbrauch p { margin: 0; color: var(--text-secondary); font: var(--fw-regular) var(--text-sm)/1.5 var(--font-sans); }
 .ki-verbrauch-kosten { color: var(--text-primary); }

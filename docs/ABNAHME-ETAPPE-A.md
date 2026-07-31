@@ -20,7 +20,7 @@ allein in der Anwendung aus.
 
 | # | Kriterium | Status |
 |---|---|---|
-| 1 | Einrichtung | Größtenteils belegt — eine kleine Lücke gefunden |
+| 1 | Einrichtung | Belegt — Lücke am 31.07.2026 geschlossen |
 | 2 | Verständnis | Braucht Live-Prüfung |
 | 3 | Hinweise | Braucht Live-Prüfung |
 | 4 | Kein erfundener Anker | Belegt |
@@ -31,9 +31,9 @@ allein in der Anwendung aus.
 | 9 | Entscheidungsverlauf | Belegt |
 | 10 | Bestand | Belegt |
 
-Vier Kriterien sind vollständig belegt, eines größtenteils mit einer kleinen offenen Lücke,
-fünf brauchen deine Live-Prüfung mit einem echten Schlüssel. Das ist der ehrliche Zwischenstand
-— keines der offenen Kriterien wurde erfunden oder schöngerechnet.
+Fünf Kriterien sind vollständig belegt, fünf brauchen deine Live-Prüfung mit einem echten
+Schlüssel. Das ist der ehrliche Zwischenstand — keines der offenen Kriterien wurde erfunden
+oder schöngerechnet.
 
 ---
 
@@ -92,7 +92,7 @@ eine aufklappbare Schritt-für-Schritt-Anleitung, die ausdrücklich ein Ausgaben
 Anbieter verlangt. Außerdem sollte sichtbar sein, welches KI-Modell verwendet wird, und der
 Verbrauch dieses Monats sollte bei null stehen, solange noch nichts gelaufen ist.
 
-**Status: Größtenteils belegt — eine kleine Lücke gefunden.**
+**Status: Belegt — die zuvor gefundene Lücke ist geschlossen (31.07.2026).**
 
 **Belegt** (direkt in der laufenden Anwendung geprüft, ganz ohne Schlüssel): Die Einstellungen
 („KI-Anschluss", erreichbar über den Knopf „KI-Anschluss einrichten" in der Seitenleiste oder
@@ -104,20 +104,33 @@ und speichern" — und der Verbrauch zeigt „Diesen Monat noch keine Läufe.", 
 erwarteten Nullzustand. (Beleg: `app/src/workspace.js:1050–1144`, live nachvollzogen im
 laufenden Programm.)
 
-**Die Lücke:** Eine Anzeige, welches der beiden KI-Modelle verwendet wird, gibt es in dieser
-Ansicht nicht. Die beiden Modelle sind zwar im Programmcode fest hinterlegt
-(`app/src/agent-tasks.mjs:13–14`), werden dir aber an keiner Stelle der Oberfläche gezeigt. Das
-ist kein Fall für eine Live-Prüfung mit Schlüssel — hier fehlt schlicht ein Textbaustein in der
-Oberfläche, unabhängig davon, ob ein Schlüssel hinterlegt ist.
+**Die Lücke war:** Eine Anzeige, welches der beiden KI-Modelle verwendet wird, gab es in dieser
+Ansicht nicht — die Modelle standen nur im Programmcode.
+
+**Geschlossen am 31.07.2026:** Der Einstellungsdialog hat jetzt einen Abschnitt „Modelle"
+zwischen Anleitung und Verbrauch, der zeigt:
+
+| Modell | Aufgaben |
+|---|---|
+| `claude-opus-5` | Projekt verstehen · Hinweise zum Text · Gespräch |
+| `claude-haiku-4-5` | Titelvorschlag · Zusammenfassung |
+
+Dazu der Satz: „Onda wählt das Modell je Aufgabe selbst: das starke für Denkarbeit, das
+schnelle für Routine. Das hält die Kosten niedrig."
+
+Die Anzeige wird zur Laufzeit aus `TASK_TABLE` und `MODELLE` (`app/src/agent-tasks.mjs`)
+abgeleitet — sie kann also nicht veralten, wenn sich die Verteilung ändert. Live in der
+laufenden Anwendung nachgeprüft; 446 Tests grün.
+(Beleg: `app/src/workspace.js` — `renderKiModelle`.)
 
 **Braucht noch deine Prüfung** (Mac-App, mit deinem echten Schlüssel, einmalig):
-1. Öffne `Schreibwerkzeug.app`, dann die Einstellungen über „KI-Anschluss einrichten".
+1. Öffne `Onda.app`, dann die Einstellungen über „KI-Anschluss einrichten".
 2. Trage dort deinen eigenen Anthropic-Schlüssel ein und speichere ihn.
 3. Der Status sollte danach auf „Hinterlegt" springen, Ablageort „macOS-Schlüsselbund".
 4. Zur Kontrolle, ganz ohne dass der Wert irgendwo sichtbar wird, kannst du im Terminal
    eingeben:
    ```
-   security find-generic-password -s Schreibwerkzeug -a anthropic-api-key
+   security find-generic-password -s Onda -a anthropic-api-key
    ```
    Erwartung: Es wird ein Eintrag gefunden. Dieser Befehl zeigt dir nur, *dass* etwas
    hinterlegt ist, nie den Schlüssel selbst.
@@ -412,7 +425,7 @@ dem aktuellen Programmcode bauen und startet danach normal mit deinen vorhandene
 - `cd mac && ./build.sh`: **„BUILD OK"** — Exit-Code 0, frisch aus dem heutigen Programmcode
   gebaut.
 
-**Ein kurzer, eigener Blick genügt** (kein Schlüssel nötig): `Schreibwerkzeug.app` einmal
+**Ein kurzer, eigener Blick genügt** (kein Schlüssel nötig): `Onda.app` einmal
 öffnen und prüfen, dass sie normal mit deinen vorhandenen Projekten startet und die
 Einstellungen den Schlüssel-Status anzeigen (auch wenn er noch „Fehlt" zeigt, zählt das als
 „die Brücke antwortet"). Das ist ein einfacher Blick, kein aufwendiger Test — die eigentliche
@@ -446,8 +459,6 @@ Damit klar ist, was „Die KI zieht ein" **nicht** bedeutet:
 
 ## Bekannte kleine offene Punkte
 
-- **Modell-Anzeige fehlt in den Einstellungen** (siehe Kriterium 1) — die Information ist im
-  Programmcode vorhanden, wird dir aber nirgends angezeigt.
 - **Eine Korrektur im Verständnis-Fenster lässt sich nicht wieder zurücknehmen.** Sobald du ein
   Feld von Hand korrigierst, ist es dauerhaft vor Überschreiben durch die KI geschützt — eine
   Möglichkeit, diesen Schutz für ein Feld wieder aufzuheben, gibt es in der Oberfläche derzeit
