@@ -1,6 +1,7 @@
 import Cocoa
 
-// Erzeugt das App-Icon-Set: Papiergrund, Serifen-S, roter Faden darunter.
+// Erzeugt das App-Icon-Set für Onda: Tiefe im Hintergrund, eine ruhige Welle darin.
+// "Onda" heißt Welle — das Zeichen ist die Bewegung selbst, nicht ein Buchstabe.
 // Aufruf: swift icon.swift <ziel.iconset>
 
 let out = CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : "AppIcon.iconset"
@@ -18,34 +19,44 @@ func drawIcon(_ px: Int) -> NSBitmapImageRep {
     let m = s * 0.085
     let bg = NSRect(x: m, y: m, width: s - 2*m, height: s - 2*m)
     let radius = bg.width * 0.225
-    let path = NSBezierPath(roundedRect: bg, xRadius: radius, yRadius: radius)
-    NSColor(srgbRed: 0.984, green: 0.980, blue: 0.965, alpha: 1).setFill()   // Papier
-    path.fill()
-    NSColor(srgbRed: 0.86, green: 0.85, blue: 0.82, alpha: 1).setStroke()
-    path.lineWidth = max(1, s * 0.006)
-    path.stroke()
+    let shape = NSBezierPath(roundedRect: bg, xRadius: radius, yRadius: radius)
 
-    // Serifen-S in Tinte
-    let fontSize = s * 0.50
-    let font = NSFont(name: "Georgia-Bold", size: fontSize) ?? NSFont.boldSystemFont(ofSize: fontSize)
-    let ink = NSColor(srgbRed: 0.165, green: 0.165, blue: 0.16, alpha: 1)
-    let str = NSAttributedString(string: "S", attributes: [.font: font, .foregroundColor: ink])
-    let sz = str.size()
-    let tx = (s - sz.width) / 2
-    let ty = (s - sz.height) / 2 + s * 0.055
-    str.draw(at: NSPoint(x: tx, y: ty))
+    // Tiefer, ruhiger Grund — von unten leicht aufgehellt, wie Wasser gegen Licht.
+    let tiefe = NSGradient(colors: [
+        NSColor(srgbRed: 0.106, green: 0.129, blue: 0.161, alpha: 1),   // oben: Tinte
+        NSColor(srgbRed: 0.145, green: 0.196, blue: 0.243, alpha: 1),   // unten: Wasser
+    ])!
+    shape.addClip()
+    tiefe.draw(in: bg, angle: 90)
 
-    // Der rote Faden
-    let thread = NSBezierPath()
-    let y = s * 0.235
-    thread.move(to: NSPoint(x: s * 0.30, y: y))
-    thread.curve(to: NSPoint(x: s * 0.70, y: y),
-                 controlPoint1: NSPoint(x: s * 0.43, y: y - s * 0.045),
-                 controlPoint2: NSPoint(x: s * 0.57, y: y + s * 0.045))
-    NSColor(srgbRed: 0.847, green: 0.353, blue: 0.188, alpha: 1).setStroke()  // Koralle/Rot
-    thread.lineWidth = max(1.5, s * 0.028)
-    thread.lineCapStyle = .round
-    thread.stroke()
+    // Drei Wellen, nach hinten schwächer werdend: Bewegung ohne Unruhe.
+    func welle(y: CGFloat, amplitude: CGFloat, staerke: CGFloat, farbe: NSColor) {
+        let p = NSBezierPath()
+        let links = bg.minX + bg.width * 0.13
+        let rechts = bg.maxX - bg.width * 0.13
+        let mitte = (links + rechts) / 2
+        p.move(to: NSPoint(x: links, y: y))
+        p.curve(to: NSPoint(x: mitte, y: y),
+                controlPoint1: NSPoint(x: links + (mitte - links) * 0.42, y: y + amplitude),
+                controlPoint2: NSPoint(x: mitte - (mitte - links) * 0.42, y: y + amplitude))
+        p.curve(to: NSPoint(x: rechts, y: y),
+                controlPoint1: NSPoint(x: mitte + (rechts - mitte) * 0.42, y: y - amplitude),
+                controlPoint2: NSPoint(x: rechts - (rechts - mitte) * 0.42, y: y - amplitude))
+        farbe.setStroke()
+        p.lineWidth = max(1, s * staerke)
+        p.lineCapStyle = .round
+        p.stroke()
+    }
+
+    let mitteY = bg.minY + bg.height * 0.5
+    let a = bg.height * 0.115
+    welle(y: mitteY + bg.height * 0.175, amplitude: a * 0.7, staerke: 0.030,
+          farbe: NSColor(srgbRed: 0.55, green: 0.68, blue: 0.78, alpha: 0.34))
+    welle(y: mitteY - bg.height * 0.175, amplitude: a * 0.7, staerke: 0.030,
+          farbe: NSColor(srgbRed: 0.55, green: 0.68, blue: 0.78, alpha: 0.34))
+    // Die tragende Welle: heller, satter, klar in der Mitte.
+    welle(y: mitteY, amplitude: a, staerke: 0.055,
+          farbe: NSColor(srgbRed: 0.925, green: 0.945, blue: 0.965, alpha: 1))
 
     NSGraphicsContext.restoreGraphicsState()
     return rep

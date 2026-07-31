@@ -9,8 +9,18 @@ enum Store {
         if let o = ProcessInfo.processInfo.environment["AIWT_DATA_DIR"], !o.isEmpty {
             return URL(fileURLWithPath: o, isDirectory: true)
         }
-        return FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Schreibwerkzeug", isDirectory: true)
+        let fm = FileManager.default
+        let basis = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        let neu = basis.appendingPathComponent("Onda", isDirectory: true)
+        let frueher = basis.appendingPathComponent("Schreibwerkzeug", isDirectory: true)
+        // Die App hieß früher "Schreibwerkzeug". Existiert nur der alte Ordner, wird er
+        // einmalig umbenannt — dieselben Dateien, nur ein anderer Name. Schlägt das fehl
+        // (etwa wegen Rechten), arbeitet die App mit dem alten Ordner weiter, statt einen
+        // leeren neuen anzulegen und die Texte scheinbar zu verlieren.
+        if !fm.fileExists(atPath: neu.path), fm.fileExists(atPath: frueher.path) {
+            do { try fm.moveItem(at: frueher, to: neu) } catch { return frueher }
+        }
+        return neu
     }()
     static var dataURL: URL { dir.appendingPathComponent("data.json") }
     static var backupURL: URL { dir.appendingPathComponent("data.backup.json") }
@@ -57,7 +67,10 @@ enum Store {
 // MARK: - Schlüsselbund (API-Schlüssel verlässt nie den nativen Prozess)
 
 enum Keychain {
-    static let service = "Schreibwerkzeug"
+    static let service = "Onda"
+    /// Die App hieß früher "Schreibwerkzeug". Ein damals hinterlegter Schlüssel wird beim
+    /// ersten Lesen still auf den neuen Namen übernommen — niemand muss ihn neu eintragen.
+    static let fruehererService = "Schreibwerkzeug"
     static let account = "anthropic-api-key"
 
     private static func basisAbfrage(service: String, account: String) -> [String: Any] {
@@ -81,7 +94,19 @@ enum Keychain {
     }
 
     /// Liest den Schlüssel — nur für den nativen 'llm'-Handler, nie für JS.
+    /// Findet sich unter dem heutigen Namen nichts, wird einmalig der frühere Eintrag
+    /// übernommen (kopieren, dann alten löschen).
     static func lesen(service: String = Keychain.service, account: String = Keychain.account) -> String? {
+        if let s = roh(service: service, account: account) { return s }
+        guard service == Keychain.service,
+              let alt = roh(service: Keychain.fruehererService, account: account) else { return nil }
+        if setzen(alt, service: service, account: account) {
+            SecItemDelete(basisAbfrage(service: Keychain.fruehererService, account: account) as CFDictionary)
+        }
+        return alt
+    }
+
+    private static func roh(service: String, account: String) -> String? {
         var query = basisAbfrage(service: service, account: account)
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
@@ -94,6 +119,11 @@ enum Keychain {
     @discardableResult
     static func loeschen(service: String = Keychain.service, account: String = Keychain.account) -> Bool {
         let status = SecItemDelete(basisAbfrage(service: service, account: account) as CFDictionary)
+        // Beim Löschen auch einen eventuell verbliebenen Alt-Eintrag entfernen, damit ein
+        // gelöschter Schlüssel nicht beim nächsten Lesen wieder auftaucht.
+        if service == Keychain.service {
+            SecItemDelete(basisAbfrage(service: Keychain.fruehererService, account: account) as CFDictionary)
+        }
         return status == errSecSuccess || status == errSecItemNotFound
     }
 
@@ -154,7 +184,7 @@ func runSelfTest() -> Never {
     check("50x-schnell-speichern", ok && Store.load().contains("t49"))
 
     // 8) Schlüsselbund-Helfer (eigener Selbsttest-Eintrag — der echte bleibt unberührt)
-    let tService = "Schreibwerkzeug-Selbsttest"
+    let tService = "Onda-Selbsttest"
     _ = Keychain.loeschen(service: tService)
     check("keychain-anfangs-leer", Keychain.vorhanden(service: tService) == false)
     check("keychain-setzen", Keychain.setzen("test-schluessel-123", service: tService))
@@ -254,10 +284,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1150, height: 760),
                           styleMask: [.titled, .closable, .miniaturizable, .resizable],
                           backing: .buffered, defer: false)
-        window.title = "Schreibwerkzeug"
+        window.title = "Onda"
         window.minSize = NSSize(width: 720, height: 460)
         window.contentView = webView
-        window.setFrameAutosaveName("SchreibwerkzeugMain")
+        window.setFrameAutosaveName("OndaMain")
         if window.frame.width < 300 { window.center() }
 
         if probePath == nil {
@@ -377,7 +407,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
     func webView(_ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String,
                  initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (Bool) -> Void) {
         let a = NSAlert()
-        a.messageText = "Schreibwerkzeug"
+        a.messageText = "Onda"
         a.informativeText = message
         a.alertStyle = .warning
         a.addButton(withTitle: "OK")
@@ -390,7 +420,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
     func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String,
                  initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping () -> Void) {
         let a = NSAlert()
-        a.messageText = "Schreibwerkzeug"
+        a.messageText = "Onda"
         a.informativeText = message
         a.beginSheetModal(for: window) { _ in completionHandler() }
     }
@@ -426,13 +456,13 @@ func buildMenus(_ delegate: AppDelegate) {
 
     let appItem = NSMenuItem(); main.addItem(appItem)
     let appMenu = NSMenu()
-    appMenu.addItem(withTitle: "Über Schreibwerkzeug",
+    appMenu.addItem(withTitle: "Über Onda",
                     action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
     appMenu.addItem(.separator())
-    appMenu.addItem(withTitle: "Schreibwerkzeug ausblenden",
+    appMenu.addItem(withTitle: "Onda ausblenden",
                     action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
     appMenu.addItem(.separator())
-    appMenu.addItem(withTitle: "Schreibwerkzeug beenden",
+    appMenu.addItem(withTitle: "Onda beenden",
                     action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
     appItem.submenu = appMenu
 
