@@ -1,4 +1,5 @@
 import { isIntegrityCategory } from './reasoning-model.mjs'
+import { istFremdeInterviewNachricht } from './verstaendnis-interview.mjs'
 
 const WORKSPACE_VERSION = 2
 const IDLE_BEFORE_INITIATIVE_MS = 3000
@@ -80,7 +81,7 @@ function normalizeThreadInPlace(value) {
   return value
 }
 
-function normalizeAgentMessages(value) {
+function normalizeAgentMessages(value, docProjectId) {
   if (!Array.isArray(value)) return []
   const normalized = []
   const usedIds = new Set()
@@ -90,6 +91,9 @@ function normalizeAgentMessages(value) {
     const preferredId = typeof candidate.id === 'string' && candidate.id.trim()
       ? candidate.id.trim()
       : `agent-message-${index}`
+    // Selbstheilung: das Interview-Fenster eines FREMDEN Projekts gehoert nicht in
+    // dieses Dokument (siehe verstaendnis-interview.mjs).
+    if (istFremdeInterviewNachricht(preferredId, docProjectId)) return
     const message = candidate
     message.id = uniqueMessageId(preferredId, usedIds)
     message.thread = normalizeThreadInPlace(candidate.thread)
@@ -113,7 +117,7 @@ export function ensureWorkspaceState(doc) {
   current.riskReason = typeof current.riskReason === 'string' ? current.riskReason : ''
 
   const agent = isPlainObject(current.agent) ? current.agent : {}
-  agent.messages = normalizeAgentMessages(agent.messages)
+  agent.messages = normalizeAgentMessages(agent.messages, doc.projectId)
   agent.dismissedIds = Array.isArray(agent.dismissedIds)
     ? [...new Set(agent.dismissedIds.filter(id => typeof id === 'string' && id.trim()).map(id => id.trim()))]
     : []

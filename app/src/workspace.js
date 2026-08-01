@@ -1,5 +1,5 @@
 import { getActiveBlockId, getEditorBlocks, insertSemanticBlock, replaceAnchoredTexts, replaceFindingTarget } from './block-identity.js'
-import { decideFinding, ensureProjectUnderstanding, ensureReasoningModel, getFindingQueue, isIntegrityCategory, istEntwurfVersucht, istInterviewOffen, markiereEntwurfVersucht, markiereGeschuetzt, mergeVerstaendnis } from './reasoning-model.mjs'
+import { decideFinding, ensureProjectUnderstanding, ensureReasoningModel, getFindingQueue, isIntegrityCategory, istInterviewOffen, markiereEntwurfVersucht, markiereGeschuetzt, mergeVerstaendnis } from './reasoning-model.mjs'
 import {
   appendThreadMessage,
   completeEditingFinding,
@@ -22,6 +22,12 @@ import { aktuellerAgentStatus, beiAgentStatus, setzeAgentStatus, statuszeileFuer
 import { EXAMPLE_PROJECT_ID, seedBodySignature } from './example-seed.mjs'
 import { MODELLE, TASK_TABLE } from './agent-tasks.mjs'
 import { baueVerstaendnisKontext } from './verstaendnis-kontext.mjs'
+import {
+  interviewNachrichtId,
+  istBeispielProjekt,
+  planeInterviewNachricht,
+  projektZumDokument,
+} from './verstaendnis-interview.mjs'
 import { baueDocText } from './agent-findings.mjs'
 import { pruefePausenAusloeser, versucheHinweislauf } from './hinweislauf-model.mjs'
 import {
@@ -247,6 +253,24 @@ function scrollThreadToLatest(messages) {
 function activeWorkspace() {
   const doc = ctx?.activeDoc()
   return doc ? ensureWorkspaceState(doc) : null
+}
+
+// Das offene Dokument bestimmt sein Projekt — nicht ctx.activeProjectObj().
+//
+// ctx.activeProjectObj() folgt state.activeProject, und das ist der BROWSE-Zeiger der
+// Projektuebersicht: welches Projekt blaettert der Nutzer gerade durch. Das GELADENE
+// Dokument (state.active) ist ein zweiter, unabhaengiger Zeiger. Beide duerfen
+// auseinanderlaufen — die App startet immer in der Projektuebersicht, und ein
+// Projektwechsel dort laesst das geladene Dokument stehen. Schon nach einem frischen
+// Start zeigt der eine auf 'Meine Texte' und das andere auf das Beispiel-Dokument.
+//
+// Dieses Modul ist durchweg EDITOR-gebunden (alles haengt an refreshWorkspace bzw. an
+// Bedienelementen der Schreibansicht). Es meint also immer das Projekt des offenen
+// Dokuments und loest deshalb ueber doc.projectId auf — wie openDoc und wie
+// fuehreHinweislaufAus es bereits tun. Sonst landet der Zustand von Projekt A am
+// Dokument von Projekt B.
+function dokumentProjekt(doc = ctx?.activeDoc()) {
+  return projektZumDokument(ctx?.state.projects, doc)
 }
 
 function persistWorkspace() {
@@ -571,7 +595,7 @@ function openOndaDialog({ id, title, opener, build }) {
 function renderMaterialEntry() {
   const button = document.getElementById('materialSources')
   if (!button) return
-  const project = ctx.activeProjectObj()
+  const project = dokumentProjekt()
   const count = Array.isArray(project?.sources) ? project.sources.length : 0
   button.setAttribute('aria-haspopup', 'dialog')
   button.replaceChildren(
@@ -581,7 +605,7 @@ function renderMaterialEntry() {
 }
 
 function openProjectSourcesModal(opener) {
-  const project = ctx.activeProjectObj()
+  const project = dokumentProjekt()
   const sourceLibrary = createSourceLibraryUi({
     context: ctx,
     createNode,
@@ -966,7 +990,7 @@ function openAccentMenu(opener) {
 function renderProjectUnderstandingCard() {
   const card = document.getElementById('pvCard')
   if (!card) return
-  const project = ctx.activeProjectObj()
+  const project = dokumentProjekt()
   const understanding = project ? ensureProjectUnderstanding(project) : null
   const task = understanding?.task?.trim() || ''
   const effect = understanding?.desiredEffect?.trim() || ''
@@ -995,7 +1019,7 @@ function currentAuditUi() {
 }
 
 export function openFinalAudit(opener = null) {
-  const project = ctx?.activeProjectObj()
+  const project = dokumentProjekt()
   if (!project || !ctx?.activeDoc()) return null
   return currentAuditUi().open(project, opener || document.getElementById('pvCard'))
 }
@@ -1019,7 +1043,7 @@ function understandingField(body, label, value, onCommit, { line = false, geschu
 }
 
 function openProjectUnderstandingModal(opener) {
-  const project = ctx.activeProjectObj()
+  const project = dokumentProjekt()
   if (!project) return
   const u = ensureProjectUnderstanding(project)
   // Jede Nutzer-Korrektur im Modal ist bindend: der geschuetzt-Merker sorgt dafür,
@@ -1080,16 +1104,11 @@ function openProjectUnderstandingModal(opener) {
 // er stattdessen per runTask('verstaendnis') einen Entwurf aus dem Text ab.
 // Das Beispielprojekt bleibt Demo: dort startet nie ein Interview.
 const INTERVIEW_EROEFFNUNG = 'Bevor ich beim Schreiben helfen kann, würde ich das Projekt gern verstehen: Worum soll es in diesem Text gehen — und für wen schreibst du ihn?'
-const INTERVIEW_ENTWURF_MIN_ZEICHEN = 200
 const INTERVIEW_OFFLINE_TEXT = 'Agent ist offline — dein Text ist davon unberührt.'
 const BUDGET_PAUSE_TEXT = 'Die lokale Monatsgrenze ist erreicht. Selbst gesendete Nachrichten bleiben möglich; unter „KI-Anschluss“ kannst du genau einen automatischen Lauf bewusst freigeben.'
 
-function istBeispielProjekt(project) {
-  return Boolean(project && (project.id === EXAMPLE_PROJECT_ID || project.example === true))
-}
-
 function interviewMessageId(project) {
-  return `interview-${project.id}`
+  return interviewNachrichtId(project.id)
 }
 
 function beansprucheAutomatikKosten(typ, referenz = {}) {
@@ -1130,7 +1149,7 @@ function docPlainText() {
 }
 
 export function istInterviewAktiv() {
-  const project = ctx?.activeProjectObj()
+  const project = dokumentProjekt()
   if (!project || istBeispielProjekt(project)) return false
   return istInterviewOffen(ensureProjectUnderstanding(project))
 }
@@ -1146,7 +1165,7 @@ function ensureInterviewMessage(workspace, project) {
 }
 
 function verstaendnisEingabe(modus, nutzerText = '') {
-  const project = ctx.activeProjectObj()
+  const project = dokumentProjekt()
   const u = ensureProjectUnderstanding(project)
   const workspace = activeWorkspace()
   const message = workspace?.agent.messages.find(candidate => candidate.id === interviewMessageId(project)) || null
@@ -1199,28 +1218,32 @@ function refreshProjectUnderstandingModal() {
   openProjectUnderstandingModal(ondaDialog.opener)
 }
 
+// Duenner Aufrufer: die gesamte Entscheidung (Beispielprojekt-Sperre, offenes
+// Interview, schon vorhandene Nachricht, Kostenbremse) steckt in
+// planeInterviewNachricht (verstaendnis-interview.mjs, node-getestet — u.a. gegen
+// genau den Fall, dass die Projektuebersicht auf ein anderes Projekt zeigt als das
+// geladene Dokument). Hier wird nur noch ctx-Gebundenes eingesammelt und die
+// zurueckgegebene Absicht ausgefuehrt.
 function pruefeVerstaendnisInterview() {
   const doc = ctx?.activeDoc()
-  const project = ctx?.activeProjectObj()
   const workspace = activeWorkspace()
-  if (!doc || !project || !workspace) return
-  const pruefKey = `${project.id}:${doc.id}`
+  if (!doc || !workspace) return
+  const pruefKey = `${doc.projectId}:${doc.id}`
   if (interviewPruefKey === pruefKey) return
   interviewPruefKey = pruefKey
-  if (istBeispielProjekt(project)) return
-  const understanding = ensureProjectUnderstanding(project)
-  if (!istInterviewOffen(understanding)) return
-  if (workspace.agent.messages.some(message => message.id === interviewMessageId(project))) return
 
-  // Der bezahlte Entwurf-Lauf ist projektweit gesperrt, sobald er einmal versucht
-  // wurde (auch bei Fehlschlag — kein Wiederholungs-Sturm über mehrere Dokumente
-  // desselben Projekts). Die kostenlose feste Eröffnungsfrage bleibt frei — sie
-  // darf in jedem Dokument erscheinen, sie kostet nichts.
-  if (docPlainText().length > INTERVIEW_ENTWURF_MIN_ZEICHEN && !istEntwurfVersucht(understanding)) {
-    starteVerstaendnisEntwurf(project.id, doc.id)
+  const plan = planeInterviewNachricht({
+    doc,
+    projects: ctx.state.projects,
+    vorhandeneNachrichtIds: workspace.agent.messages.map(message => message.id),
+    docTextLaenge: docPlainText().length,
+  })
+  if (plan.art === 'nichts') return
+  if (plan.art === 'entwurf') {
+    starteVerstaendnisEntwurf(plan.projectId, plan.docId)
     return
   }
-  const message = ensureInterviewMessage(workspace, project)
+  const message = ensureInterviewMessage(workspace, dokumentProjekt(doc))
   message.text = INTERVIEW_EROEFFNUNG
   persistWorkspace()
 }
@@ -1306,7 +1329,9 @@ async function starteVerstaendnisEntwurf(projectId, docId) {
 // den entwurfVersuchtAm bremsen dürfte — der Nutzer hat aktiv geantwortet, das zählt
 // nicht als der bezahlte Automatik-Entwurf und bleibt vom Merker unberührt.
 async function sendeInterviewAntwort(message, text) {
-  const project = ctx?.activeProjectObj()
+  // Projekt VOR jedem await ueber das Dokument aufloesen: die Antwort gehoert dem
+  // Projekt, fuer das sie gestellt wurde — auch wenn danach umgeblaettert wird.
+  const project = dokumentProjekt()
   if (!project || interviewLaufAktiv) return
   appendThreadMessage(message.thread, 'user', text, Date.now())
   interviewLaufAktiv = true
@@ -1781,9 +1806,9 @@ function decideAndAdvance(finding, decision) {
   const doc = ctx.activeDoc()
   const workspace = activeWorkspace()
   decideFinding(doc, finding.id, decision)
-  const project = ctx.activeProjectObj()
+  const project = dokumentProjekt(doc)
   const recorded = doc.decisions.at(-1)
-  if (project?.id === doc.projectId && project.argumentModel && recorded) {
+  if (project?.argumentModel && recorded) {
     project.argumentModel = analyzeArgumentImpact({
       model: project.argumentModel,
       projectId: project.id,
@@ -2370,7 +2395,7 @@ async function fuehreChatLauf(thread, kontext) {
 // Pruefung hier vermeidet nur den unnoetigen Zusatzsatz in der Antwort.
 async function sendeAgentenChat(message, anfrage) {
   const doc = ctx.activeDoc()
-  const project = ctx.activeProjectObj()
+  const project = dokumentProjekt(doc)
   if (!doc || !project) return
 
   await fuehreChatVorgangAus({
@@ -2425,7 +2450,7 @@ async function sendeAgentenChat(message, anfrage) {
 // Modell entsprechend an).
 async function sendeLocalChat(finding, anfrage) {
   const doc = ctx.activeDoc()
-  const project = ctx.activeProjectObj()
+  const project = dokumentProjekt(doc)
   if (!doc || !project) return
 
   await fuehreChatVorgangAus({
@@ -2881,10 +2906,9 @@ async function fuehreHinweislaufAus({ grund = 'pause' } = {}) {
   const signatur = seedBodySignature(docText)
   if (doc) ensureReasoningModel(doc) // Selbstheilung wie decideFinding: doc.findings/decisions sicher als Arrays
   const docId = doc?.id ?? null
-  // Ueber doc.projectId aufloesen (VOR jedem await erfasst), nicht ueber ctx.activeProjectObj()
-  // -- der zeigt auf das GERADE aktive Projekt und koennte waehrend hatSchluessel() bereits
-  // auf ein anderes Projekt wechseln (Fix-Runde 1, Finding 2).
-  const project = doc?.projectId ? ctx.state.projects.find(candidate => candidate.id === doc.projectId) : null
+  // Ueber doc.projectId aufloesen (VOR jedem await erfasst), nicht ueber den
+  // Startseiten-Zeiger -- siehe dokumentProjekt (Fix-Runde 1, Finding 2).
+  const project = dokumentProjekt(doc)
   const verstaendnis = project ? ensureProjectUnderstanding(project) : null
 
   const ergebnis = await versucheHinweislauf({
@@ -3117,7 +3141,7 @@ export function refreshWorkspace({ reconcileEditing = false } = {}) {
   enforceExclusiveLayers(workspace)
 
   const ui = elements()
-  const project = ctx.activeProjectObj()
+  const project = dokumentProjekt(doc)
   const backLabel = ui.back?.querySelector('.onda-side-back-label')
   if (backLabel) backLabel.textContent = project?.name || 'Projekt'
 
