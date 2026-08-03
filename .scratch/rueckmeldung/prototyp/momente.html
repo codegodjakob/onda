@@ -1,0 +1,129 @@
+<meta charset="utf-8">
+<title>Wann würde Onda sich melden?</title>
+<style>
+  :root { color-scheme: light dark;
+    --bg:#fbfaf8; --fg:#1c1a17; --dim:#6b6a66; --line:#e3e0da; --inset:#f3f1ec;
+    --a:#8db2c9; --b:#4a7c59; --c:#b8862b; }
+  @media (prefers-color-scheme: dark) { :root {
+    --bg:#141310; --fg:#eae8e3; --dim:#95938d; --line:#33322e; --inset:#1e1c19; } }
+  body { background:var(--bg); color:var(--fg); margin:0; padding:32px 24px;
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,system-ui,sans-serif; }
+  main { max-width:900px; margin:0 auto; }
+  h1 { font-size:21px; font-weight:700; margin:0 0 6px; letter-spacing:-0.01em; }
+  .unter { color:var(--dim); margin:0 0 24px; }
+  textarea { width:100%; box-sizing:border-box; min-height:220px; padding:18px 20px;
+    background:var(--inset); color:var(--fg); border:1px solid var(--line);
+    border-radius:12px; font:16px/1.7 inherit; resize:vertical; }
+  textarea:focus { outline:none; box-shadow:0 0 0 4px color-mix(in srgb, var(--a) 30%, transparent); }
+  .regeln { display:grid; gap:10px; margin:22px 0 0; }
+  .regel { border:1px solid var(--line); border-radius:10px; padding:14px 16px; }
+  .kopf { display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }
+  .punkt { width:10px; height:10px; border-radius:50%; flex:none; }
+  .name { font-weight:600; }
+  .bed { color:var(--dim); font-size:13.5px; }
+  .zahl { margin-left:auto; font-variant-numeric:tabular-nums; color:var(--dim); font-size:13.5px; }
+  .spur { display:flex; gap:3px; flex-wrap:wrap; margin-top:10px; min-height:16px; }
+  .treffer { width:9px; height:16px; border-radius:2px; }
+  .treffer.mitten { opacity:.35; }
+  .blitz { animation: blitz .5s ease-out; }
+  @keyframes blitz { from { transform:scale(2.2); } to { transform:scale(1); } }
+  .bilanz { margin-top:22px; border-left:3px solid var(--c); padding:4px 0 4px 14px; color:var(--dim); }
+  .bilanz b { color:var(--fg); }
+  code { background:var(--inset); padding:1px 5px; border-radius:4px; font-size:13px; }
+</style>
+<main>
+  <h1>Wann würde Onda sich melden?</h1>
+  <p class="unter">Schreib hier ein paar Sätze — ganz normal, mit Denkpausen. Jede Regel meldet,
+  wann sie einen Hinweislauf starten würde. <b>Volle Balken</b> heißen: an einer Grenze.
+  <b>Blasse Balken</b> heißen: mitten im Satz erwischt.</p>
+
+  <textarea id="feld" placeholder="Fang einfach an zu schreiben …" spellcheck="false"></textarea>
+
+  <div class="regeln">
+    <div class="regel" data-r="a">
+      <div class="kopf">
+        <span class="punkt" style="background:var(--a)"></span>
+        <span class="name">A — heute</span>
+        <span class="bed">3000 ms Pause, egal wo</span>
+        <span class="zahl"></span>
+      </div>
+      <div class="spur"></div>
+    </div>
+    <div class="regel" data-r="b">
+      <div class="kopf">
+        <span class="punkt" style="background:var(--b)"></span>
+        <span class="name">B — Absatzgrenze</span>
+        <span class="bed">Enter + 300 ms · <em>existiert im Code, wird nur nicht für Hinweise benutzt</em></span>
+        <span class="zahl"></span>
+      </div>
+      <div class="spur"></div>
+    </div>
+    <div class="regel" data-r="c">
+      <div class="kopf">
+        <span class="punkt" style="background:var(--c)"></span>
+        <span class="name">C — Satzende</span>
+        <span class="bed">. ! ? + Leerzeichen + 800 ms · <em>gibt es noch nicht</em></span>
+        <span class="zahl"></span>
+      </div>
+      <div class="spur"></div>
+    </div>
+  </div>
+
+  <p class="bilanz" id="bilanz">Noch nichts geschrieben.</p>
+</main>
+
+<script>
+const feld = document.getElementById('feld')
+const bilanzEl = document.getElementById('bilanz')
+
+// Eine Regel feuert nach ihrer Ruhezeit, wenn ihre Bedingung zuletzt erfüllt war.
+const REGELN = {
+  a: { ms: 3000, bedingung: () => true },
+  b: { ms: 300,  bedingung: (t) => /\n\s*$/.test(t) },
+  c: { ms: 800,  bedingung: (t) => /[.!?]["»']?\s+$/.test(t) },
+}
+const zaehler = { a: { grenze: 0, mitten: 0 }, b: { grenze: 0, mitten: 0 }, c: { grenze: 0, mitten: 0 } }
+const timer = {}
+
+// An einer Grenze? Absatzende oder Satzende — sonst mitten im Satz.
+function anGrenze(t) {
+  return /\n\s*$/.test(t) || /[.!?]["»']?\s*$/.test(t)
+}
+
+function feuere(id) {
+  const t = feld.value
+  const grenze = anGrenze(t)
+  zaehler[id][grenze ? 'grenze' : 'mitten']++
+
+  const regel = document.querySelector(`.regel[data-r="${id}"]`)
+  const marke = document.createElement('span')
+  marke.className = 'treffer blitz' + (grenze ? '' : ' mitten')
+  marke.style.background = getComputedStyle(regel.querySelector('.punkt')).backgroundColor
+  marke.title = grenze ? 'an einer Grenze' : 'mitten im Satz'
+  regel.querySelector('.spur').append(marke)
+
+  const z = zaehler[id]
+  regel.querySelector('.zahl').textContent = `${z.grenze + z.mitten}× · ${z.mitten} mitten im Satz`
+  zeichneBilanz()
+}
+
+function zeichneBilanz() {
+  const a = zaehler.a, b = zaehler.b, c = zaehler.c
+  const gesamtA = a.grenze + a.mitten
+  if (!gesamtA && !b.grenze + b.mitten && !c.grenze + c.mitten) return
+  const anteil = gesamtA ? Math.round((a.mitten / gesamtA) * 100) : 0
+  bilanzEl.innerHTML =
+    `Regel A hat dich <b>${a.mitten} von ${gesamtA} Mal mitten im Satz</b> erwischt (${anteil}&thinsp;%). `
+    + `Regel B: ${b.mitten} von ${b.grenze + b.mitten}. Regel C: ${c.mitten} von ${c.grenze + c.mitten}. `
+    + `<br>Die Forschung fand: <b>69&thinsp;%</b> aller Pausen ab 2 Sekunden liegen mitten im Satz.`
+}
+
+feld.addEventListener('input', () => {
+  const t = feld.value
+  for (const [id, regel] of Object.entries(REGELN)) {
+    clearTimeout(timer[id])
+    if (!regel.bedingung(t)) continue
+    timer[id] = setTimeout(() => feuere(id), regel.ms)
+  }
+})
+</script>

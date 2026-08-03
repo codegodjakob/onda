@@ -11,3 +11,9 @@ app/evals/results/laeufe/
 # Wayfinder-Karte liegt jetzt in GitHub Issues; die lokalen Dateien
 # bleiben nur, solange die laufenden Recherchen hineinschreiben.
 .scratch/
+# ...ausser den Prototypen: sie tragen Entscheidungen und duerfen
+# nicht nur auf einem Laptop liegen.
+!.scratch/
+!.scratch/*/
+!.scratch/*/prototyp/
+!.scratch/*/prototyp/**
