@@ -7,3 +7,7 @@ mac/AppIcon.iconset/
 
 # Eval-Laufprotokolle: bei jedem Messlauf neu erzeugt
 app/evals/results/laeufe/
+
+# Wayfinder-Karte liegt jetzt in GitHub Issues; die lokalen Dateien
+# bleiben nur, solange die laufenden Recherchen hineinschreiben.
+.scratch/
