@@ -1,0 +1,17 @@
+<!-- @dsCard group="Motion" viewport="700x160" name="Easing & Dauer" subtitle="Schnell antworten, sanft aufsetzen — Bounce nur für die Aura" -->
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><link rel="stylesheet" href="../styles.css"><style>
+body{padding:22px 28px;background:var(--bg-app);display:flex;flex-direction:column;gap:14px}
+.r{display:flex;align-items:center;gap:16px}.n{font-family:var(--font-sans);font-size:var(--text-xs);color:var(--text-tertiary);width:190px}
+.track{flex:1;height:24px;position:relative;border-bottom:1px solid var(--border-subtle)}
+.dot{position:absolute;top:5px;left:0;width:14px;height:14px;border-radius:var(--radius-full);background:var(--ink-700)}
+@keyframes go{0%,12%{transform:translateX(0)}88%,100%{transform:translateX(420px)}}
+.a1{animation:go 2.4s var(--ease-out) infinite alternate}
+.a2{animation:go 2.4s var(--ease-standard) infinite alternate}
+.a3{animation:go 2.4s var(--ease-spring) infinite alternate;background:var(--gradient-aura)}
+</style></head>
+<body>
+<div class="r"><span class="n">--ease-out · UI-Standard</span><div class="track"><div class="dot a1"></div></div></div>
+<div class="r"><span class="n">--ease-standard · Ortswechsel</span><div class="track"><div class="dot a2"></div></div></div>
+<div class="r"><span class="n">--ease-spring · nur Aura</span><div class="track"><div class="dot a3"></div></div></div>
+</body></html>

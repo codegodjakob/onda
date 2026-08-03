@@ -1,0 +1,13 @@
+/* Onda · base. Minimal global defaults so any page starts calm and correct. */
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg-app);color:var(--text-primary);font-family:var(--font-sans);font-size:var(--text-base);line-height:var(--leading-normal);font-weight:var(--fw-regular);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+h1,h2,h3,h4,h5,h6,p,figure,blockquote{margin:0}
+a{color:var(--text-link);text-decoration:none;transition:var(--transition-colors)}
+a:hover{color:var(--accent-active);text-decoration:underline;text-underline-offset:2px}
+::selection{background:var(--accent-tint);color:var(--ink-900)}
+[data-theme="dark"] ::selection{background:var(--accent-tint);color:#f4f1ea}
+:focus-visible{outline:none;box-shadow:var(--shadow-focus)}
+:focus:not(:focus-visible){outline:none}
+code,kbd,pre{font-family:var(--font-sans);font-variant-numeric:tabular-nums}
+mark{background:transparent;color:inherit}

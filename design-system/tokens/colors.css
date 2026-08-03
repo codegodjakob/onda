@@ -1,0 +1,53 @@
+/* Onda · color tokens. EIN Akzent: Sky, gedämpft und entsättigt — keine Akzent-Varianten.
+   Components must reference ALIASES (--text-*, --bg-*, --border-*, --accent*) so dark mode works. */
+:root{
+  color-scheme:light;
+  /* Neutrals · warm paper → ink */
+  --paper:#fbfaf8; --surface:#ffffff; --surface-2:#f4f2ee; --surface-3:#ece9e3; --surface-inset:#f1efea;
+  --ink-950:#131210; --ink-900:#1c1a17; --ink-800:#2c2926; --ink-700:#423e39; --ink-600:#57524b;
+  --ink-500:#736d64; --ink-400:#948d82; --ink-300:#b6afa4; --ink-200:#d5cfc5; --ink-100:#e7e2da; --ink-50:#f2efe9;
+  --line-soft:rgba(28,26,23,0.07); --line:rgba(28,26,23,0.12); --line-strong:rgba(28,26,23,0.2);
+  /* Brand accent · sky — der einzige Akzent des Systems */
+  --sky-50:#f3f8fb; --sky-100:#e9f1f6; --sky-200:#dae7ef; --sky-300:#c1d7e5;
+  --sky-400:#a6c3d6; --sky-500:#8db2c9; --sky-600:#7ba1b9; --sky-700:#6a8fa7;
+  /* Signature aura gradient — der einzige Ort, an dem Farbe verläuft */
+  --aura-1:#eff6fa; --aura-2:#cdddea; --aura-3:#a3bfd3; --aura-4:#b2c9c4;
+  --gradient-aura:linear-gradient(115deg,var(--aura-1) 0%,var(--aura-2) 34%,var(--aura-3) 62%,var(--aura-4) 100%);
+  --gradient-aura-soft:linear-gradient(115deg,#f5f9fb 0%,#e4eef4 40%,#dde8ef 68%,#e1ebe8 100%); /* @kind color */
+  --gradient-surface:linear-gradient(180deg,#fbfaf8 0%,#f4f2ec 100%);
+  /* Semantic hues — bewusst arm: Neutrals + Sky. Rot allein für Fehler und Zerstörendes. */
+  --red-500:#b04a3f;   --red-100:#f0dcd8;
+  /* Aliases · backgrounds */
+  --bg-app:var(--paper); --bg-surface:var(--surface); --bg-raised:var(--surface); --bg-sunken:var(--surface-2);
+  --bg-inset:var(--surface-inset); --bg-hover:rgba(28,26,23,0.04); --bg-active:rgba(28,26,23,0.07);
+  /* Aliases · text */
+  --text-primary:var(--ink-900); --text-secondary:var(--ink-600); --text-tertiary:var(--ink-500);
+  --text-disabled:var(--ink-300); --text-on-accent:#16232c; --text-link:#41718c;
+  /* Aliases · borders */
+  --border-subtle:var(--line-soft); --border-default:var(--line); --border-strong:var(--line-strong);
+  /* Aliases · accent + focus */
+  --accent:var(--sky-500); --accent-hover:var(--sky-600); --accent-active:var(--sky-700);
+  --accent-tint:var(--sky-100); --accent-tint-hover:var(--sky-200); --on-accent:#16232c;
+  --focus-ring:rgba(141,178,201,0.42);
+  /* Aliases · status — KEINE Statusfarben: alles neutral. Rot bleibt allein Formfehlern und Zerstörendem. */
+  --success:var(--text-secondary); --success-tint:var(--bg-sunken);
+  --warning:var(--text-secondary); --warning-tint:var(--bg-sunken);
+  --danger:var(--red-500);         --danger-tint:var(--red-100);
+  --info:var(--text-secondary);    --info-tint:var(--bg-sunken);
+}
+[data-theme="dark"]{
+  color-scheme:dark;
+  --paper:#141310; --surface:#1d1b17; --surface-2:#242019; --surface-3:#2d2820; --surface-inset:#100f0c;
+  --line-soft:rgba(245,241,234,0.06); --line:rgba(245,241,234,0.11); --line-strong:rgba(245,241,234,0.18);
+  --gradient-surface:linear-gradient(180deg,#1d1b17 0%,#141310 100%);
+  --bg-app:var(--paper); --bg-surface:var(--surface); --bg-raised:var(--surface-2); --bg-sunken:var(--surface-inset);
+  --bg-inset:var(--surface-inset); --bg-hover:rgba(245,241,234,0.05); --bg-active:rgba(245,241,234,0.09);
+  --text-primary:#f4f1ea; --text-secondary:#c4bdb1; --text-tertiary:#8f887c;
+  --text-disabled:#5c574e; --text-on-accent:#111c24; --text-link:#b5cfe0;
+  --accent:var(--sky-400); --accent-hover:var(--sky-300); --accent-active:var(--sky-500);
+  --accent-tint:rgba(166,195,214,0.16); --accent-tint-hover:rgba(166,195,214,0.24); --on-accent:#111c24;
+  --focus-ring:rgba(166,195,214,0.45);
+  --success:var(--text-secondary); --info:var(--text-secondary); --warning:var(--text-secondary); --danger:#d98177;
+  --success-tint:var(--bg-sunken); --warning-tint:var(--bg-sunken);
+  --danger-tint:rgba(217,129,119,0.18);   --info-tint:var(--bg-sunken);
+}

@@ -1,0 +1,103 @@
+<!-- @dsCard group="Annotation" viewport="1180x1080" name="Notizmodus" subtitle="Lose Gedanken, Stichworte, Pfeile — hier korrigiert der Agent nichts, er sortiert, formuliert aus und fragt nach" -->
+<!DOCTYPE html>
+<html lang="de"><head><meta charset="utf-8"><link rel="stylesheet" href="../../styles.css">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<style>
+body{margin:0;background:var(--bg-app);font-family:var(--font-sans);color:var(--text-primary)}
+.nm{padding:10px;display:flex}
+.nm__sheet{flex:1;background:var(--bg-surface);border-radius:var(--radius-panel);padding:44px 48px 56px}
+.nm__title{font-size:var(--text-4xl);font-weight:var(--fw-bold);letter-spacing:var(--tracking-tighter);line-height:var(--leading-tight)}
+.nm__strip{display:flex;align-items:center;gap:14px;margin:20px 0 32px;padding:14px 18px;background:var(--bg-sunken);border-radius:var(--radius-panel);font:var(--type-body);color:var(--text-secondary);flex-wrap:wrap}
+.nm__strip b{font-weight:var(--fw-medium);color:var(--text-primary)}
+.nm__mode{margin-left:auto}
+.nm__grid{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:44px;align-items:start}
+.nm__notes{display:flex;flex-direction:column;gap:10px;max-width:600px}
+.nm__note{display:flex;gap:12px;align-items:flex-start;padding:11px 14px;border-radius:var(--radius-panel);font:var(--type-body);line-height:var(--leading-relaxed);color:var(--text-primary);transition:var(--transition-colors);cursor:pointer}
+.nm__note:hover{background:var(--bg-sunken)}
+.nm__note--on{background:var(--accent-tint)}
+.nm__note--group{background:var(--bg-sunken);box-shadow:var(--shadow-sm)}
+.nm__dash{flex:none;color:var(--text-tertiary)}
+.nm__arrow{color:var(--text-tertiary);padding:0 4px}
+.nm__frag{color:var(--text-primary)}
+.nm__vague{background:var(--accent-tint);border-radius:var(--radius-sm);padding:1px 4px}
+.nm__side{display:flex;flex-direction:column;gap:14px}
+.nm__hint{font:var(--type-caption);color:var(--text-tertiary);text-wrap:pretty}
+</style></head>
+<body><div id="nm-root"></div>
+<script type="text/babel">
+const {Annotation, Rewrite, Tabs, Bubble, Aura, Composer, Slot} = window.AuraDesignSystem_6ddaae;
+const noop=()=>{};
+
+const NOTES=[
+ {id:1,text:['Aufmerksamkeit = Ressource, nicht Vorrat'],kind:'ausformulieren'},
+ {id:2,text:['Morgen wichtigste Zeit ',['arrow'],' Postfach frisst sie ',['arrow'],' Rest des Tages Aufholjagd'],kind:'ausformulieren'},
+ {id:3,text:['23 min bis Konzentration zurück (Studie? Quelle suchen)'],kind:'nachfrage'},
+ {id:4,text:['Blöcke im Kalender ',['arrow'],' kostet nichts'],kind:'buendeln'},
+ {id:5,text:['Benachrichtigungen aus'],kind:'buendeln'},
+ {id:6,text:['eine Liste für alles Eingehende'],kind:'buendeln'},
+ {id:7,text:['und dann noch das mit dem ',['vague','bla bla Ding vom Montag'],' irgendwie einbauen'],kind:'nachfrage'},
+ {id:8,text:['Support/Bereitschaft: geht nicht ',['arrow'],' Einwand ernst nehmen'],kind:'aufgreifen'},
+ {id:9,text:['Schluss: zurück auf Ressourcen-Bild'],kind:'ordnen'}
+];
+
+const N={
+ ausformulieren:{scope:'Notiz',note:'Aus der Stichwortkette wird ein Satz — der Rest bleibt Notiz, bis du ihn freigibst.',to:'Am Morgen ist die Aufmerksamkeit am größten; wer dann das Postfach öffnet, verbringt den Rest des Tages mit Aufholjagd.',label:'Ausformulieren',meta:'3 Stichworte → 1 Satz'},
+ buendeln:{scope:'3 Notizen',note:'Drei Notizen zum gleichen Punkt — als Liste zusammengefasst bleibt die Reihenfolge frei.',count:3,acceptLabel:'Zu einer Liste bündeln',why:'Bündeln heißt hier nur: gemeinsam anzeigen und gemeinsam verschieben. Der Wortlaut bleibt unverändert.'},
+ nachfrage:{scope:'Notiz',note:'Was ist mit dieser Stelle gemeint? Ich formuliere erst, wenn ich es weiß.'},
+ aufgreifen:{scope:'Notiz',note:'Diese Notiz widerspricht dem Rest — als Einwand ausgebaut macht sie den Text belastbarer. Soll sie in einen eigenen Absatz?'},
+ ordnen:{scope:'Alle Notizen',note:'Reihenfolge, die trägt: Bild → Problem → Belege → Regeln → Einwand → Schluss.',acceptLabel:'Reihenfolge übernehmen',why:'Vorgeschlagen wird nur die Anordnung; keine Notiz wird umformuliert oder gelöscht.'}
+};
+
+function NoteRun({parts}){
+  return <span>{parts.map((p,i)=>{
+    if(typeof p==='string')return <React.Fragment key={i}>{p}</React.Fragment>;
+    if(p[0]==='arrow')return <span className="nm__arrow" key={i}>→</span>;
+    if(p[0]==='vague')return <span className="nm__vague" key={i}>{p[1]}</span>;
+    return null;
+  })}</span>;
+}
+
+function NoteMode(){
+  const [active,setActive]=React.useState(2);
+  const [mode,setMode]=React.useState('notiz');
+  const [answer,setAnswer]=React.useState(null);
+  const act=NOTES.find(x=>x.id===active);
+  const k=act?N[act.kind]:null;
+  const group=act&&act.kind==='buendeln'?NOTES.filter(x=>x.kind==='buendeln').map(x=>x.id):[];
+  const side=()=>{
+    if(!k)return null;
+    if(act.kind==='ausformulieren')return <Rewrite label={k.label} to={k.to} meta={k.meta} acceptLabel="Als Satz übernehmen" dismissLabel="Notiz bleiben lassen" onAccept={noop} onDismiss={noop}>{k.note}</Rewrite>;
+    if(act.kind==='nachfrage'||act.kind==='aufgreifen')return <React.Fragment>
+      <Bubble from="agent" seat="top" name="Onda" avatar={<Aura size={36}/>}>{k.note}</Bubble>
+      {answer&&<Bubble from="user">{answer}</Bubble>}
+      <Composer placeholder="Antworten …" onSubmit={setAnswer}/>
+      <span className="nm__hint">Die Antwort bleibt an dieser Notiz — der Agent formuliert erst danach.</span>
+    </React.Fragment>;
+    return <Annotation kind={act.kind} scope={k.scope} count={k.count} active why={k.why}
+      acceptLabel={k.acceptLabel} onAccept={noop} onDismiss={noop}>{k.note}</Annotation>;
+  };
+  return <div className="nm"><div className="nm__sheet">
+    <h1 className="nm__title">Notizen zum Essay</h1>
+    <div className="nm__strip">
+      <b>Notizmodus:</b> keine Rechtschreibung, keine Grammatik, kein Stil — nur sortieren, ausformulieren, nachfragen.
+      <span className="nm__mode"><Tabs variant="segmented" active={mode} onChange={setMode} items={[{id:'notiz',label:'Notiz'},{id:'text',label:'Text'}]}/></span>
+    </div>
+    <div className="nm__grid">
+      <div className="nm__notes">
+        {NOTES.map(nt=>
+          <div key={nt.id} onClick={()=>setActive(nt.id)}
+            className={`nm__note${active===nt.id?' nm__note--on':''}${group.includes(nt.id)&&active!==nt.id?' nm__note--group':''}`}>
+            <span className="nm__dash">—</span><NoteRun parts={nt.text}/>
+          </div>)}
+        {act&&act.kind==='ordnen'&&<Slot label="Schluss hierher" text="Zurück auf das Bild von der begrenzten Ressource." onAccept={noop} onDismiss={noop}/>}
+      </div>
+      <div className="nm__side">{side()}</div>
+    </div>
+  </div></div>;
+}
+const mount=document.getElementById('nm-root');
+if(mount&&Annotation&&Rewrite)ReactDOM.createRoot(mount).render(<NoteMode/>);
+</script></body></html>

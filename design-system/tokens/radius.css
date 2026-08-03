@@ -1,0 +1,11 @@
+/* Onda · radii. Runde Controls (Pillen) + weiche Flächen. Nur drei Radien im Gebrauch: Pill, Panel (24), klein (4) für Häkchen. */
+:root{
+  --radius-none:0; --radius-xs:2px; --radius-sm:4px; --radius-md:6px; --radius-lg:8px;
+  --radius-xl:12px; --radius-full:999px;
+  /* Semantic */
+  --radius-control:var(--radius-full); /* Buttons, Felder, Selects, Tabs, Chips — alles rund */
+  --radius-card:24px;     /* Karten und Widgets */
+  --radius-overlay:24px;  /* Dialoge, Menüs, Toasts */
+  --radius-panel:24px;    /* weiche Flächen: Panels, Composer, Sprechblasen */
+  --radius-pill:var(--radius-full); /* Such- und Composer-Leisten */
+}

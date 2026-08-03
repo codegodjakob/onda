@@ -1,0 +1,196 @@
+<!-- @dsCard group="Onda Write" viewport="1280x1060" name="Textansicht" subtitle="Ganzer Text, eine Anmerkung zur Zeit — mit Rangfolge, Sammelaktion, Rückgängig und stillem Modus" -->
+<!DOCTYPE html>
+<html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Onda Write — Textansicht</title>
+<link rel="stylesheet" href="../../styles.css">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<style>
+body{margin:0;background:var(--bg-app);font-family:var(--font-sans);color:var(--text-primary)}
+.tv{padding:10px;display:flex;min-height:100vh}
+.tv__sheet{flex:1;background:var(--bg-surface);border-radius:var(--radius-panel);padding:48px 0 64px}
+.tv__head{max-width:1140px;margin:0 auto 32px;padding:0 48px 22px;display:flex;flex-direction:column;gap:20px;position:relative}
+.tv__head::after{content:"";position:absolute;left:48px;right:48px;bottom:0;height:1px;background:var(--border-subtle)}
+.tv__title{font-size:var(--text-4xl);font-weight:var(--fw-bold);letter-spacing:var(--tracking-tighter);line-height:var(--leading-tight)}
+.tv__grid{max-width:1140px;margin:0 auto;padding:0 48px;display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:48px;align-items:start}
+.tv__text{font-size:var(--text-base);line-height:var(--leading-relaxed);color:var(--text-primary);text-wrap:pretty;display:flex;flex-direction:column;gap:18px;max-width:640px}
+.tv__text h2{font-size:var(--text-xl);font-weight:var(--fw-bold);letter-spacing:var(--tracking-tight);margin:12px 0 -6px}
+.tv__text p{margin:0}
+.tv__dim{opacity:.4}
+.tv__side{display:flex;flex-direction:column;gap:16px}
+.tv__nav{display:flex;align-items:center;gap:10px}
+.tv__count{font:var(--type-body);color:var(--text-tertiary);font-variant-numeric:tabular-nums;margin-left:auto}
+.tv__form{font:var(--type-body);color:var(--text-tertiary);text-wrap:pretty}
+.tv__sum{display:flex;align-items:center;gap:16px;flex-wrap:wrap;font:var(--type-body);color:var(--text-secondary)}
+.tv__sum b{font-weight:var(--fw-medium);color:var(--text-primary)}
+.tv__sumsep{color:var(--text-tertiary)}
+.tv__quiet{margin-left:auto}
+.tv__undo{display:flex;align-items:center;gap:12px;padding:13px 16px;background:var(--bg-sunken);border-radius:var(--radius-panel);font:var(--type-body);color:var(--text-secondary)}
+.tv__undo button{margin-left:auto;padding:0;border:none;background:none;font:var(--type-body);font-weight:var(--fw-medium);color:var(--text-link);cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+.tv__after{display:flex;flex-direction:column;gap:9px;padding:13px 16px;background:var(--bg-sunken);border-radius:var(--radius-panel)}
+.tv__after span{font:var(--type-caption);color:var(--text-tertiary)}
+.tv__after div{display:flex;gap:8px;flex-wrap:wrap}
+.tv__applied{animation:tv-flash 1.4s var(--ease-out)}
+@keyframes tv-flash{0%{background:var(--accent-tint)}100%{background:transparent}}
+@media (max-width:1040px){.tv__grid{grid-template-columns:minmax(0,1fr)}}
+@media (prefers-reduced-motion:reduce){.tv__applied{animation:none}}
+</style></head>
+<body><div id="tv-root"></div>
+<script type="text/babel">
+const {Annotation, Mark, Correction, Insertion, Rewrite, Slot, Region, Bubble, Aura, Composer, Button, Switch} = window.AuraDesignSystem_6ddaae;
+
+/* form: wie die Anmerkung erscheint — 'wort' (Korrektur am Wort) · 'fluss' (Einfügung im Text)
+   · 'karte' (Vorschlag rechts) · 'ziel' (Zielplatz im Text) · 'bereich' (getönter Abschnitt)
+   · 'quelle' (Beleg rechts) · 'vergleich' (zwei Stellen) · 'dialog' (Frage des Agenten) · 'titel' */
+const N={
+ rechtschreibung:{form:'wort',to:'Zeitvertreib',note:'Zusammengesetztes Substantiv.'},
+ grammatik:{form:'wort',to:'Die Ergebnisse der Studie wurden 2009 veröffentlicht',note:'Subjekt im Plural, Verb im Singular.'},
+ zeichensetzung:{form:'wort',to:'früher, weil',note:'Komma vor dem Nebensatz.'},
+ wortwahl:{form:'wort',to:'erhält',note:'Umgangssprachlich.'},
+ anglizismus:{form:'wort',to:'Abgabetermin',note:'Deutsches Wort im Text bereits benutzt.'},
+ satzstil:{form:'karte',label:'Umschreiben',to:'Am Morgen ist die Aufmerksamkeit am größten. Diese Zeit sollte man schützen.',meta:'24 → 12 Wörter',note:'Schachtelsatz mit drei Nebensätzen.'},
+ absatzstil:{form:'karte',label:'Rhythmus lösen',to:'Geplant wird montags; die Blöcke bleiben geschützt, freitags folgt die Prüfung.',meta:'4 → 1 Satz',note:'Vier Sätze, vier gleiche Anfänge.'},
+ straffen:{form:'karte',label:'Straffen',to:'Wir ändern die Reihenfolge.',meta:'9 → 4 Wörter',note:'Nominalstil und Passiv.'},
+ fluss:{form:'karte',label:'Sätze verbinden',to:'Der Tag beginnt, das Postfach ruft — und mit dem Fokus ist die Stunde weg.',meta:'4 → 1 Satz',note:'Vier kurze Sätze in Folge — der Rhythmus stockt.'},
+ uebergang:{form:'fluss',label:'Brücke einfügen',to:'Was folgt daraus für den Arbeitstag?',note:'Zwischen Problem und Lösung fehlt der Übergang.'},
+ stilmittel:{form:'fluss',label:'Bild einfügen',to:'Zwölf Unterbrechungen sind kein Sandkorn, sondern ein halber Vormittag.',note:'Korrekt, aber blass.'},
+ verstaendlichkeit:{form:'fluss',label:'Erklärung einfügen',to:'— der Teil der Aufmerksamkeit, der bei der alten Aufgabe hängen bleibt',note:'Fachbegriff ohne Erklärung.'},
+ verschieben:{form:'ziel',slotLabel:'Hierher — zu den Gegenmitteln',note:'Der Satz gehört zur Lösung, nicht zur Problemschilderung.'},
+ gliederung:{form:'ziel',slotLabel:'Zwischentitel hier',slotText:'Was hilft',note:'Zwei Themen ohne Zwischentitel.'},
+ ton:{form:'bereich',tag:'Ton wechselt',scope:'Abschnitt',suggestion:{from:'man · du gemischt',to:'durchgehend du'},acceptLabel:'Anrede vereinheitlichen',note:'Der Abschnitt wechselt zwischen zwei Anreden.'},
+ wiederholung:{form:'bereich',scope:'Absatz',count:3,suggestion:{from:'2. und 3. Stelle',to:'Konzentration · Fokus'},acceptLabel:'Beide ersetzen',note:'Dasselbe Wort in drei Sätzen.'},
+ terminologie:{form:'vergleich',scope:'Text',count:10,compare:[{ref:'Nutzer',text:'7 Stellen'},{ref:'Anwender',text:'2 Stellen'},{ref:'User',text:'1 Stelle'}],acceptLabel:'Auf ein Wort vereinheitlichen',note:'Drei Begriffe für dieselbe Sache.'},
+ beleg:{form:'quelle',scope:'Satz',source:{title:'Attention Residue and Task Switching — Journal of Applied Psychology',url:'#',excerpt:'Nach einer Unterbrechung dauert es im Mittel 23 Minuten, bis Probanden die ursprüngliche Aufgabe mit vergleichbarer Konzentration fortsetzen.'},acceptLabel:'Als Fußnote einfügen',note:'Zahl ohne Quelle. Ein passender Beleg liegt vor:'},
+ faktencheck:{form:'quelle',scope:'Satz',source:{title:'Marktbericht Q3 2026 — Branchenverband',url:'#',excerpt:'Der Gesamtmarkt legte im dritten Quartal um 4,1 Prozent zu.'},acceptLabel:'Auf 4,1 % korrigieren',note:'Weicht von der angegebenen Quelle ab.'},
+ widerspruch:{form:'vergleich',scope:'Text',compare:[{ref:'Absatz 2',text:'23 Minuten'},{ref:'Absatz 4',text:'eine ganze Stunde'}],acceptLabel:'Angabe angleichen',note:'Zwei Angaben zur gleichen Sache.'},
+ anmerkung:{form:'dialog',note:'Die Behauptung ist stark — hast du ein Beispiel aus deinem Alltag? Zwei Sätze würden sie tragen.'},
+ luecke:{form:'dialog',note:'Bereitschaftsdienste können Blöcke nicht schützen. Soll ich einen Absatz dazu vorschlagen?'},
+ faden:{form:'karte',label:'Roter Faden',note:'Die Kernaussage trägt bis Absatz 3; ab Absatz 5 dominieren die Werkzeuge. Ein Rückbezug im letzten Absatz schließt den Bogen.',dismissOnly:true},
+ ueberschrift:{form:'titel',to:'Die begrenzte Ressource',note:'Der Titel benennt das Thema, nicht die These.'}
+};
+const ORDER=['rechtschreibung','grammatik','zeichensetzung','wortwahl','anglizismus','satzstil','absatzstil','straffen','fluss','uebergang','stilmittel','verstaendlichkeit','verschieben','gliederung','ton','wiederholung','terminologie','beleg','faktencheck','widerspruch','anmerkung','luecke','faden','ueberschrift'];
+const PRIO={rechtschreibung:'muss',grammatik:'muss',zeichensetzung:'muss',beleg:'muss',faktencheck:'muss',widerspruch:'muss',satzstil:'sollte',straffen:'sollte',fluss:'sollte',uebergang:'sollte',gliederung:'sollte',faden:'sollte',verstaendlichkeit:'sollte',luecke:'sollte',terminologie:'sollte',verschieben:'sollte',wortwahl:'geschmack',absatzstil:'geschmack',wiederholung:'geschmack',ton:'geschmack',stilmittel:'geschmack',anglizismus:'geschmack',ueberschrift:'geschmack',anmerkung:'geschmack'};
+const FORMLABEL={wort:'Korrektur am Wort',fluss:'Einfügung im Textfluss',karte:'Vorschlag am Rand',ziel:'Zielplatz im Text',bereich:'Bereich + Sammelkarte',quelle:'Beleg am Rand',vergleich:'Gegenüberstellung',dialog:'Dialog mit dem Agenten',titel:'Korrektur am Titel'};
+
+/* Textbausteine: 'string' | [kind,text] | ['slot',kind] | ['ins',kind] | ['region',kind,text] */
+const T=[
+ ['Aufmerksamkeit ist eine ',['faden','begrenzte Ressource'],'. Sie lässt sich nicht sparen und nicht nachholen; was am Morgen liegen bleibt, ist am Abend nicht mehr verfügbar. Trotzdem behandeln wir sie wie einen Vorrat, aus dem man beliebig schöpfen kann — ein teurer ',['rechtschreibung','Zeit vertreib'],'.'],
+ [['satzstil','Weil die Aufmerksamkeit, die wir am Morgen haben, wenn wir noch nicht abgelenkt sind, die wertvollste Ressource ist, sollte man sie schützen.'],' Wer früh Nachrichten liest, gibt den besten Teil des Tages an Aufgaben ab, die auch später zu erledigen wären. ',['beleg','Nach jeder Unterbrechung dauert es 23 Minuten bis zur alten Konzentration.'],' ',['verschieben','Ein Kalender mit geschützten Blöcken kostet nichts und wirkt sofort.']],
+ ['Der Effekt summiert sich. ',['fluss','Der Tag beginnt. Das Postfach ruft. Der Fokus bricht. Die Stunde ist weg.'],' Wer dann noch Rückmeldung ',['wortwahl','kriegt'],', arbeitet an einem Text, den er längst abgeschlossen hätte. Die ',['wiederholung','Aufmerksamkeit'],' zerfällt in Bruchstücke, und mit der ',['wiederholung','Aufmerksamkeit'],' die Qualität der Arbeit. Der Effekt heißt ',['verstaendlichkeit','Attention Residue'],['ins','verstaendlichkeit'],' und wirkt über Stunden.'],
+ [['grammatik','Die Ergebnisse der Studie wurde 2009 veröffentlicht'],' und seither mehrfach bestätigt. Der Markt für Konzentrationstrainings wuchs im selben Zeitraum um ',['faktencheck','sechs Prozent'],'. Bis ein unterbrochener Gedanke wieder trägt, vergeht ',['widerspruch','eine ganze Stunde'],'.'],
+ ['SLOT','gliederung'],
+ ['H2','Was hilft'],
+ [['uebergang','Drei Regeln helfen'],['ins','uebergang'],': feste Blöcke am Morgen, Benachrichtigungen aus, eine einzige Liste. ',['straffen','Es wurde eine Entscheidung getroffen, die Reihenfolge zu ändern.'],' ',['region','ton','Man sollte sich daran halten, sobald du deine Woche danach planst.'],' Bis zur ',['anglizismus','Deadline'],' bleiben dann zwei ruhige Tage.'],
+ [['absatzstil','Wir planen montags. Wir schützen die Blöcke. Wir prüfen am Freitag. Wir passen an.'],' ',['stilmittel','Zwölf Unterbrechungen am Tag summieren sich.'],['ins','stilmittel'],' Im Text stehen ',['terminologie','Nutzer, Anwender und User'],' nebeneinander.'],
+ ['Er kam früher ',['zeichensetzung','weil er die Zahlen selbst sehen wollte'],'. ',['luecke','Wer im Support arbeitet, kennt den Einwand.'],' ',['anmerkung','Wer früh Nachrichten liest, verschenkt den besten Teil des Tages.'],' Der Abschnitt behandelt ',['gliederung','Ursachen und Gegenmittel'],' in einem Zug.'],
+ ['SLOT','verschieben']
+];
+
+function TextView(){
+  const [active,setActive]=React.useState('beleg');
+  const [gone,setGone]=React.useState({});
+  const [applied,setApplied]=React.useState({});
+  const [undo,setUndo]=React.useState(null);
+  const [refused,setRefused]=React.useState(null);
+  const [quiet,setQuiet]=React.useState(false);
+  const list=ORDER.filter(k=>!gone[k]);
+  React.useEffect(()=>{if(!list.includes(active)&&list.length)setActive(list[0])},[gone]);
+  const idx=list.indexOf(active);
+  const step=d=>setActive(list[(idx+d+list.length)%list.length]);
+  const n=N[active]||{};
+  const take=()=>{const k=active;setApplied(a=>({...a,[k]:true}));setGone(g=>({...g,[k]:true}));setUndo(k);setRefused(null)};
+  const drop=()=>{const k=active;setGone(g=>({...g,[k]:true}));setRefused(k);setUndo(null)};
+  const undoLast=()=>{const k=undo;setGone(g=>{const n={...g};delete n[k];return n});setApplied(a=>{const n={...a};delete n[k];return n});setUndo(null);setActive(k)};
+  const KORR=['rechtschreibung','grammatik','zeichensetzung'];
+  const openKorr=KORR.filter(k=>!gone[k]);
+  const takeAll=()=>{setGone(g=>{const n={...g};openKorr.forEach(k=>n[k]=true);return n});setApplied(a=>{const n={...a};openKorr.forEach(k=>n[k]=true);return n});setUndo('korrekturen')};
+  const undoAll=()=>{setGone(g=>{const n={...g};KORR.forEach(k=>delete n[k]);return n});setApplied(a=>{const n={...a};KORR.forEach(k=>delete n[k]);return n});setUndo(null)};
+  const count=p=>list.filter(k=>PRIO[k]===p).length;
+
+  const seg=(s,i)=>{
+    if(typeof s==='string')return <React.Fragment key={i}>{s}</React.Fragment>;
+    const [a,b,c]=s;
+    if(a==='ins'){
+      const k=N[b];
+      return active===b&&!gone[b]
+        ? <Insertion key={i} open label={k.label} text={k.to} onAccept={take} onDismiss={drop}/>
+        : null;
+    }
+    if(a==='region'){
+      const on=active===b&&!gone[b];
+      return on
+        ? <Region key={i}>{c}</Region>
+        : <React.Fragment key={i}>{c}</React.Fragment>;
+    }
+    const k=N[a];
+    if(!k||gone[a])return <span key={i} className={applied[a]?'tv__applied':undefined}>{applied[a]&&k&&k.to?k.to:b}</span>;
+    const on=active===a;
+    if(k.form==='wort'&&on)return <Correction key={i} kind={a} open to={k.to} onAccept={take} onDismiss={drop}>{b}</Correction>;
+    if(k.form==='ziel'&&on&&a==='verschieben')return <Mark key={i} kind={a} active className="tv__dim">{b}</Mark>;
+    if(k.form==='fluss'&&on&&a==='verstaendlichkeit')return <Mark key={i} kind={a} active>{b}</Mark>;
+    return <Mark key={i} kind={a} active={on} onClick={()=>setActive(a)}>{b}</Mark>;
+  };
+
+  const side=()=>{
+    if(!n.form)return null;
+    if(n.form==='wort'||n.form==='fluss'||n.form==='ziel'||n.form==='titel')
+      return <p className="tv__form">{FORMLABEL[n.form]} — {n.note}</p>;
+    if(n.form==='dialog')return <React.Fragment>
+      <Bubble from="agent" seat="top" name="Onda" avatar={<Aura size={36}/>}>{n.note}</Bubble>
+      <Composer placeholder="Antworten …"/>
+    </React.Fragment>;
+    if(n.form==='karte')return <Rewrite label={n.label} to={n.to} meta={n.meta}
+      onAccept={n.dismissOnly?undefined:take} onDismiss={drop} dismissLabel={n.dismissOnly?'Verstanden':'Original behalten'}>{n.note}</Rewrite>;
+    return <Annotation kind={active} scope={n.scope} count={n.count} active suggestion={n.suggestion}
+      source={n.source} compare={n.compare} acceptLabel={n.acceptLabel} onAccept={take} onDismiss={drop}>{n.note}</Annotation>;
+  };
+
+  return <div className="tv"><div className="tv__sheet">
+    <div className="tv__head">
+      <div className="tv__sum">
+        <span><b>{count('muss')}</b> Fehler</span><span className="tv__sumsep">·</span>
+        <span><b>{count('sollte')}</b> Empfehlungen</span><span className="tv__sumsep">·</span>
+        <span><b>{count('geschmack')}</b> Geschmack</span>
+        {openKorr.length>1&&<Button size="sm" onClick={takeAll}>{`Alle ${openKorr.length} Korrekturen übernehmen`}</Button>}
+        <span className="tv__quiet"><Switch label="Beim Schreiben still" checked={quiet} onChange={e=>setQuiet(e.target.checked)}/></span>
+      </div>
+      <h1 className="tv__title">{active==='ueberschrift'
+        ? <Correction kind="ueberschrift" open to={N.ueberschrift.to} onAccept={take} onDismiss={drop}>Über Konzentration</Correction>
+        : <span onClick={()=>setActive('ueberschrift')} style={{cursor:'pointer'}}>Über Konzentration</span>}</h1>
+    </div>
+    <div className="tv__grid">
+      <div className="tv__text">
+        {T.map((para,i)=>{
+          if(para[0]==='H2')return <h2 key={i}>{para[1]}</h2>;
+          if(para[0]==='SLOT'){
+            const k=para[1];
+            return active===k&&!gone[k]
+              ? <Slot key={i} label={N[k].slotLabel} text={N[k].slotText||(k==='verschieben'?'Ein Kalender mit geschützten Blöcken kostet nichts und wirkt sofort.':null)} onAccept={take} onDismiss={drop}/>
+              : null;
+          }
+          return <p key={i}>{para.map(seg)}</p>;
+        })}
+      </div>
+      <div className="tv__side">
+        {undo&&<div className="tv__undo">{undo==='korrekturen'?'Alle Korrekturen übernommen':'Übernommen'}<button onClick={undo==='korrekturen'?undoAll:undoLast}>Rückgängig</button></div>}
+        {refused&&<div className="tv__after"><span>Verworfen — soll das so bleiben?</span><div>
+          <Button size="sm" variant="secondary" onClick={()=>setRefused(null)}>Nur diesmal</Button>
+          <Button size="sm" variant="secondary" onClick={()=>setRefused(null)}>Nicht mehr in diesem Text</Button>
+          <Button size="sm" variant="ghost" onClick={()=>setRefused(null)}>Nie vorschlagen</Button>
+        </div></div>}
+        {!quiet&&side()}
+        {quiet&&<p className="tv__form">{`Still: ${list.length} Anmerkungen warten, bis du sie abrufst.`}</p>}
+        <div className="tv__nav">
+          <Button size="sm" variant="secondary" onClick={()=>step(-1)}>Zurück</Button>
+          <Button size="sm" variant="secondary" onClick={()=>step(1)}>Weiter</Button>
+          <span className="tv__count">{idx+1} von {list.length}</span>
+        </div>
+      </div>
+    </div>
+  </div></div>;
+}
+const mount=document.getElementById('tv-root');
+if(mount&&Annotation&&Correction&&Insertion&&Rewrite&&Slot&&Button&&Switch)ReactDOM.createRoot(mount).render(<TextView/>);
+</script></body></html>
