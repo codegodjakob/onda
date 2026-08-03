@@ -7,6 +7,7 @@ import {
   istInterviewOffen,
   markiereEntwurfVersucht,
   markiereGeschuetzt,
+  loeseSchutz,
   mergeVerstaendnis,
 } from '../src/reasoning-model.mjs'
 
@@ -187,6 +188,30 @@ test('markiereGeschuetzt setzt den Merker einmalig und ignoriert unbekannte Feld
   markiereGeschuetzt(u, 'task')
   markiereGeschuetzt(u, 'gibtEsNicht')
   assert.deepEqual(u.geschuetzt, ['task'])
+})
+
+test('loeseSchutz nimmt den Merker zurueck und ist gutmuetig', () => {
+  const u = { geschuetzt: ['task', 'audience'] }
+  loeseSchutz(u, 'task')
+  assert.deepEqual(u.geschuetzt, ['audience'], 'nur das genannte Feld wird frei')
+  loeseSchutz(u, 'task')
+  assert.deepEqual(u.geschuetzt, ['audience'], 'zweimal loesen aendert nichts')
+  loeseSchutz(u, 'gibtEsNicht')
+  assert.deepEqual(u.geschuetzt, ['audience'], 'unbekannte Felder bleiben wirkungslos')
+  assert.equal(loeseSchutz(null, 'task'), null, 'kein Objekt: unveraendert zurueck')
+})
+
+test('nach loeseSchutz darf die KI das Feld wieder schreiben', () => {
+  const alt = { task: 'Meine eigene Formulierung', audience: ['Leser'], desiredEffect: 'Wirken' }
+  const neu = { task: 'Vorschlag der KI', audience: ['Leser'], desiredEffect: 'Wirken' }
+
+  const gesperrt = mergeVerstaendnis(alt, neu, ['task'])
+  assert.equal(gesperrt.task, 'Meine eigene Formulierung', 'solange geschuetzt: Korrektur haelt')
+
+  const u = { geschuetzt: ['task'] }
+  loeseSchutz(u, 'task')
+  const frei = mergeVerstaendnis(alt, neu, u.geschuetzt)
+  assert.equal(frei.task, 'Vorschlag der KI', 'nach dem Loesen greift die KI wieder')
 })
 
 test('ensureProjectUnderstanding normalisiert geschuetzt tolerant', () => {

@@ -1,5 +1,5 @@
 import { getActiveBlockId, getEditorBlocks, insertSemanticBlock, replaceAnchoredTexts, replaceFindingTarget } from './block-identity.js'
-import { decideFinding, ensureProjectUnderstanding, ensureReasoningModel, getFindingQueue, isIntegrityCategory, istInterviewOffen, markiereEntwurfVersucht, markiereGeschuetzt, mergeVerstaendnis } from './reasoning-model.mjs'
+import { decideFinding, ensureProjectUnderstanding, ensureReasoningModel, getFindingQueue, isIntegrityCategory, istInterviewOffen, loeseSchutz, markiereEntwurfVersucht, markiereGeschuetzt, mergeVerstaendnis } from './reasoning-model.mjs'
 import {
   appendThreadMessage,
   completeEditingFinding,
@@ -1027,17 +1027,40 @@ export function openFinalAudit(opener = null) {
 // geschuetzt: dezenter Hinweis, dass dieses Feld eine bindende Nutzer-Korrektur trägt
 // (siehe openProjectUnderstandingModal) — ruhiger Onda-Ton, keine Warnfarbe, kein
 // Ausrufezeichen; nur ein zusätzliches, kleines Tag neben dem Feldlabel.
-function understandingField(body, label, value, onCommit, { line = false, geschuetzt = false } = {}) {
+//
+// Das Tag ist zugleich der Rueckweg: ein Klick gibt das Feld wieder fuer den Agenten
+// frei. Ohne ihn waere jede Handkorrektur endgueltig -- der Mensch koennte weiter
+// editieren, der Agent aber nie wieder dazulernen.
+//
+// Die Anzeige wird beim Tippen sofort nachgezogen, aber NUR am Tag, nie am Textfeld:
+// ein Neuaufbau des Textfeldes wuerde den Cursor wegspringen lassen.
+function understandingField(body, label, value, onCommit, { line = false, geschuetzt = false, onLoesen = null } = {}) {
   const row = createNode('div', 'onda-pv-field')
   const labelRow = createNode('div', 'onda-pv-label-row')
   labelRow.append(createNode('span', 'onda-pv-label', label))
-  if (geschuetzt) labelRow.append(createNode('span', 'onda-tag', 'bindend'))
-  row.append(labelRow)
+
   const field = createNode('textarea', 'onda-pv-input')
+  const tag = createNode('button', 'onda-tag onda-tag--loesbar', 'bindend')
+  tag.type = 'button'
+  tag.title = 'Wieder für den Agenten freigeben'
+  tag.setAttribute('aria-label', `${label}: bindend — freigeben, damit der Agent wieder anpassen darf`)
+
+  const zeigeSchutz = an => {
+    tag.hidden = !an
+    field.setAttribute('aria-label', an ? `${label}, bindend` : label)
+  }
+  tag.addEventListener('click', () => {
+    if (!onLoesen) return
+    onLoesen()
+    zeigeSchutz(false)
+  })
+  labelRow.append(tag)
+  row.append(labelRow)
+
   field.rows = line ? 3 : 2
   field.value = value
-  field.setAttribute('aria-label', geschuetzt ? `${label}, bindend` : label)
-  field.addEventListener('input', () => onCommit(field.value))
+  zeigeSchutz(geschuetzt)
+  field.addEventListener('input', () => { onCommit(field.value); zeigeSchutz(true) })
   row.append(field)
   body.append(row)
 }
@@ -1051,6 +1074,13 @@ function openProjectUnderstandingModal(opener) {
   // liest ihn; verstaendnisEingabe gibt ihn über baueVerstaendnisKontext mit).
   const commit = feld => {
     markiereGeschuetzt(u, feld)
+    ctx.scheduleSave()
+    renderProjectUnderstandingCard()
+  }
+  // Gegenstueck zu commit: gibt das Feld wieder fuer den Agenten frei. Der Text bleibt
+  // stehen -- nur der Schreibschutz faellt, damit der Agent dort wieder dazulernen darf.
+  const loesen = feld => {
+    loeseSchutz(u, feld)
     ctx.scheduleSave()
     renderProjectUnderstandingCard()
   }
@@ -1070,12 +1100,12 @@ function openProjectUnderstandingModal(opener) {
     applyCorrections: corrections => replaceAnchoredTexts(ctx.editor, corrections),
   })
   openOndaDialog({ id: 'pvModal', title: 'Projektverständnis', opener, build: body => {
-    understandingField(body, 'Aufgabe', u.task, value => { u.task = value; commit('task') }, { geschuetzt: istGeschuetzt('task') })
-    understandingField(body, 'Zielgruppe', u.audience.join(', '), value => { u.audience = splitList(value, false); commit('audience') }, { geschuetzt: istGeschuetzt('audience') })
-    understandingField(body, 'Beabsichtigte Wirkung', u.desiredEffect, value => { u.desiredEffect = value; commit('desiredEffect') }, { geschuetzt: istGeschuetzt('desiredEffect') })
-    understandingField(body, 'Belegstandard', u.evidenceStandard, value => { u.evidenceStandard = value; commit('evidenceStandard') }, { geschuetzt: istGeschuetzt('evidenceStandard') })
-    understandingField(body, 'Geschützte Absicht', u.protectedIntentions.join('\n'), value => { u.protectedIntentions = splitList(value, true); commit('protectedIntentions') }, { line: true, geschuetzt: istGeschuetzt('protectedIntentions') })
-    understandingField(body, 'Offene Frage', u.openQuestions.join('\n'), value => { u.openQuestions = splitList(value, true); commit('openQuestions') }, { line: true, geschuetzt: istGeschuetzt('openQuestions') })
+    understandingField(body, 'Aufgabe', u.task, value => { u.task = value; commit('task') }, { geschuetzt: istGeschuetzt('task'), onLoesen: () => loesen('task') })
+    understandingField(body, 'Zielgruppe', u.audience.join(', '), value => { u.audience = splitList(value, false); commit('audience') }, { geschuetzt: istGeschuetzt('audience'), onLoesen: () => loesen('audience') })
+    understandingField(body, 'Beabsichtigte Wirkung', u.desiredEffect, value => { u.desiredEffect = value; commit('desiredEffect') }, { geschuetzt: istGeschuetzt('desiredEffect'), onLoesen: () => loesen('desiredEffect') })
+    understandingField(body, 'Belegstandard', u.evidenceStandard, value => { u.evidenceStandard = value; commit('evidenceStandard') }, { geschuetzt: istGeschuetzt('evidenceStandard'), onLoesen: () => loesen('evidenceStandard') })
+    understandingField(body, 'Geschützte Absicht', u.protectedIntentions.join('\n'), value => { u.protectedIntentions = splitList(value, true); commit('protectedIntentions') }, { line: true, geschuetzt: istGeschuetzt('protectedIntentions'), onLoesen: () => loesen('protectedIntentions') })
+    understandingField(body, 'Offene Frage', u.openQuestions.join('\n'), value => { u.openQuestions = splitList(value, true); commit('openQuestions') }, { line: true, geschuetzt: istGeschuetzt('openQuestions'), onLoesen: () => loesen('openQuestions') })
     const tools = createNode('div', 'onda-pv-tools')
     const memory = createNode('button', 'onda-pv-memory', 'Projektgedächtnis öffnen')
     memory.id = 'memoryOpen'

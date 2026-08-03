@@ -61,6 +61,18 @@ export function markiereGeschuetzt(understanding, feld) {
   return understanding
 }
 
+// Gegenstueck zu markiereGeschuetzt: gibt ein Feld wieder fuer den Agenten frei.
+// Ohne diesen Weg waere jede Handkorrektur eine Tuer, die nur in eine Richtung geht --
+// der Mensch koennte das Feld zwar weiter selbst editieren, aber der Agent nie wieder
+// dazulernen. Das Loesen ist bewusst feldweise und ohne Seiteneffekt auf den Wert:
+// der zuletzt eingetragene Text bleibt stehen, nur der Schreibschutz faellt.
+export function loeseSchutz(understanding, feld) {
+  if (!understanding || typeof understanding !== 'object') return understanding
+  if (!Array.isArray(understanding.geschuetzt)) return understanding
+  understanding.geschuetzt = understanding.geschuetzt.filter(eintrag => eintrag !== feld)
+  return understanding
+}
+
 // Projektweite Kostenbremse für den bezahlten Entwurf-Lauf (nicht für die kostenlose
 // feste Eröffnungsfrage — die darf weiterhin pro Dokument erscheinen). Kein
 // Verständnisfeld: beeinflusst istInterviewOffen nicht und ist kein Merge-Ziel in
