@@ -76,11 +76,19 @@
 const feld = document.getElementById('feld')
 const bilanzEl = document.getElementById('bilanz')
 
-// Eine Regel feuert nach ihrer Ruhezeit, wenn ihre Bedingung zuletzt erfüllt war.
+// Eine Regel feuert nach ihrer Ruhezeit, wenn ihre Bedingung bei der LETZTEN
+// Eingabe erfüllt war.
+//
+// Wichtig — hier lag der erste Entwurf falsch: geprüft wurde, ob der Text
+// AUF eine Grenze endet (ein Zustand). Der bleibt aber wahr, während man
+// Leerzeichen tippt, also feuerte die Regel immer wieder. Der echte Code
+// macht es richtig: er merkt sich, ob die letzte EINGABE eine Grenze war
+// (workspace.js, state.pendingBoundary bei insertParagraph). Ein Ereignis,
+// kein Zustand.
 const REGELN = {
   a: { ms: 3000, bedingung: () => true },
-  b: { ms: 300,  bedingung: (t) => /\n\s*$/.test(t) },
-  c: { ms: 800,  bedingung: (t) => /[.!?]["»']?\s+$/.test(t) },
+  b: { ms: 300,  bedingung: (e) => e.absatzGrenze },
+  c: { ms: 800,  bedingung: (e) => e.satzEnde },
 }
 const zaehler = { a: { grenze: 0, mitten: 0 }, b: { grenze: 0, mitten: 0 }, c: { grenze: 0, mitten: 0 } }
 const timer = {}
@@ -118,11 +126,23 @@ function zeichneBilanz() {
     + `<br>Die Forschung fand: <b>69&thinsp;%</b> aller Pausen ab 2 Sekunden liegen mitten im Satz.`
 }
 
+// Was wurde gerade getippt? Nur DAS entscheidet, nicht wie der Text aussieht.
+let letzteEingabe = { absatzGrenze: false, satzEnde: false }
+
+feld.addEventListener('beforeinput', event => {
+  const zeichen = event.data || ''
+  letzteEingabe = {
+    absatzGrenze: event.inputType === 'insertParagraph' || event.inputType === 'insertLineBreak' || zeichen === '\n',
+    // Satzende: das Leerzeichen NACH einem Satzzeichen schliesst den Satz ab.
+    satzEnde: /\s/.test(zeichen) && /[.!?]["»']?$/.test(feld.value.slice(0, feld.selectionStart)),
+  }
+})
+
 feld.addEventListener('input', () => {
-  const t = feld.value
+  const eingabe = letzteEingabe
   for (const [id, regel] of Object.entries(REGELN)) {
     clearTimeout(timer[id])
-    if (!regel.bedingung(t)) continue
+    if (!regel.bedingung(eingabe)) continue
     timer[id] = setTimeout(() => feuere(id), regel.ms)
   }
 })
