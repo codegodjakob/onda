@@ -143,6 +143,39 @@ test('Thread-Identität bleibt bei Normalisierung stabil, damit laufende Streams
   assert.equal(localThread.at(-1).text, 'Antwort lokal')
 })
 
+// Selbstheilung fuer bestehende Installationen: das Interview-Fenster eines FREMDEN
+// Projekts wurde frueher in dieses Dokument geschrieben (Startseiten-Zeiger statt
+// doc.projectId). Der gespeicherte Zustand traegt es weiter — hier faellt es raus.
+test('ensureWorkspaceState entfernt die Interview-Nachricht eines fremden Projekts', () => {
+  const doc = {
+    projectId: 'p-example',
+    workspace: { agent: { messages: [
+      { id: 'example-agent-initiative', status: 'new', text: 'Beispiel' },
+      { id: 'interview-p-default', status: 'new', text: 'Bevor ich beim Schreiben helfen kann …' },
+    ] } },
+  }
+  const workspace = ensureWorkspaceState(doc)
+
+  assert.deepEqual(workspace.agent.messages.map(message => message.id), ['example-agent-initiative'])
+})
+
+test('ensureWorkspaceState behaelt die eigene Interview-Nachricht des Dokuments', () => {
+  const doc = {
+    projectId: 'p-zwei',
+    workspace: { agent: { messages: [{ id: 'interview-p-zwei', status: 'new', text: 'Frage' }] } },
+  }
+  const workspace = ensureWorkspaceState(doc)
+
+  assert.deepEqual(workspace.agent.messages.map(message => message.id), ['interview-p-zwei'])
+})
+
+test('ensureWorkspaceState raeumt ohne bekanntes Projekt nichts weg', () => {
+  const doc = { workspace: { agent: { messages: [{ id: 'interview-p-default', status: 'new', text: 'Frage' }] } } }
+  const workspace = ensureWorkspaceState(doc)
+
+  assert.deepEqual(workspace.agent.messages.map(message => message.id), ['interview-p-default'])
+})
+
 test('array workspace is replaced with state that survives a JSON roundtrip', () => {
   const doc = { workspace: [] }
   const migrated = ensureWorkspaceState(doc)

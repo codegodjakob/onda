@@ -1830,6 +1830,8 @@ async function runTask6DialogueAndEvidence(browser) {
   assert.equal(await evidence.getByText('Zusammenfassung', { exact: true }).count(), 1)
   assert.equal(await evidence.getByText('Demoquelle - nicht live verifiziert', { exact: true }).count(), 1)
   assert.equal(await evidence.getByText('Nicht verifiziert', { exact: true }).count(), 1)
+  assert.equal(await evidence.locator('[data-copy-citation]').nth(1).isDisabled(), true)
+  assert.match(await evidence.locator('[data-copy-citation]').nth(1).textContent(), /erst nach Prüfung/i)
   assert.equal(await evidence.getByText('Fundstelle', { exact: true }).count(), 2)
   assert.equal(await evidence.getByText('Demo-Fundstelle, Absatz 1', { exact: true }).count(), 1)
   assert.equal(

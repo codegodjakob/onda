@@ -86,12 +86,34 @@ export function getEditorBlocks(editor) {
   const blocks = []
 
   editor.state.doc.forEach((node, pos, index) => {
+    const rawText = node.textContent
+    const trimmedText = rawText.trim()
+    const sourceTextOffset = trimmedText ? rawText.indexOf(trimmedText) : 0
+    const protectedRanges = []
+    let textOffset = 0
+    node.descendants(child => {
+      if (child.isText) {
+        const start = textOffset - sourceTextOffset
+        const end = start + child.text.length
+        if (child.marks.some(mark => mark.type.name === 'link')) {
+          protectedRanges.push({ start: Math.max(0, start), end: Math.min(trimmedText.length, end), kind: 'link' })
+        }
+        textOffset += child.text.length
+        return
+      }
+      if (child.isInline && child.isLeaf) textOffset += 1
+    })
+    if (node.type.name === 'blockquote' || node.type.name === 'codeBlock') {
+      protectedRanges.push({ start: 0, end: trimmedText.length, kind: node.type.name })
+    }
     blocks.push({
       ...snapshots[index],
       pos,
       nodeSize: node.nodeSize,
       isTextblock: node.isTextblock,
       isAtom: node.isAtom,
+      sourceTextOffset,
+      protectedRanges: protectedRanges.filter(range => range.end > range.start),
     })
   })
 
@@ -181,5 +203,93 @@ export function replaceFindingTarget(editor, target, replacement, blockId = null
     : editor.state.tr.delete(ranges[0].from, ranges[0].to)
   editor.view.dispatch(tr.scrollIntoView())
   editor.view.focus()
+  return true
+}
+
+export function replaceAnchoredText(editor, {
+  blockId,
+  start,
+  end,
+  exact,
+  replacement,
+} = {}) {
+  return replaceAnchoredTexts(editor, [{
+    blockId,
+    anchor: { start, end, exact },
+    replacement,
+  }])
+}
+
+function resolveAnchoredRange(editor, correction) {
+  const {
+    blockId,
+    anchor,
+    replacement,
+    sourceTextOffset = 0,
+  } = correction || {}
+  const { start, end, exact } = anchor || {}
+  if (
+    typeof blockId !== 'string'
+    || !Number.isInteger(start)
+    || !Number.isInteger(end)
+    || !Number.isInteger(sourceTextOffset)
+    || sourceTextOffset < 0
+    || start < 0
+    || end <= start
+    || typeof exact !== 'string'
+    || end - start !== exact.length
+    || typeof replacement !== 'string'
+  ) return null
+
+  let range = null
+  editor.state.doc.forEach((topNode, topPos) => {
+    if (
+      range
+      || topNode.attrs.blockId !== blockId
+      || topNode.type.name === 'codeBlock'
+      || topNode.type.name === 'blockquote'
+    ) return
+    let text = ''
+    const positions = []
+    const protectedTextIndexes = new Set()
+    topNode.descendants((node, relativePos) => {
+      if (node.isText) {
+        const offset = text.length
+        text += node.text
+        for (let index = 0; index < node.text.length; index += 1) {
+          positions.push(topPos + 1 + relativePos + index)
+          if (node.marks.some(mark => mark.type.name === 'link')) {
+            protectedTextIndexes.add(offset + index)
+          }
+        }
+        return
+      }
+      if (node.isInline && node.isLeaf) {
+        text += '\uFFFC'
+        positions.push(topPos + 1 + relativePos)
+      }
+    })
+    const rawStart = start + sourceTextOffset
+    const rawEnd = end + sourceTextOffset
+    if (text.slice(rawStart, rawEnd) !== exact) return
+    if ([...protectedTextIndexes].some(index => index >= rawStart && index < rawEnd)) return
+    const from = positions[rawStart]
+    const last = positions[rawEnd - 1]
+    if (Number.isInteger(from) && Number.isInteger(last)) range = { from, to: last + 1 }
+  })
+  return range ? { ...range, replacement, blockId } : null
+}
+
+export function replaceAnchoredTexts(editor, corrections = []) {
+  if (!editor || !Array.isArray(corrections) || !corrections.length) return false
+  const ranges = corrections.map(correction => resolveAnchoredRange(editor, correction))
+  if (ranges.some(range => !range)) return false
+  ranges.sort((left, right) => right.from - left.from)
+  if (ranges.some((range, index) => index > 0 && range.to > ranges[index - 1].from)) return false
+  const tr = ranges.reduce(
+    (transaction, range) => transaction.insertText(range.replacement, range.from, range.to),
+    editor.state.tr,
+  )
+  editor.view.dispatch(tr.setMeta('languageOrthography', true))
   return true
 }

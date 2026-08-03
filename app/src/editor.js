@@ -9,14 +9,23 @@ import Placeholder from '@tiptap/extension-placeholder'
 import CharacterCount from '@tiptap/extension-character-count'
 import Typography from '@tiptap/extension-typography'
 import { initUI, setSaveState, refreshSidebar, applySettings, focusTitle, showEditorView, showHomeView } from './ui.js'
-import { __workspaceTestBridge, initWorkspace, refreshWorkspace } from './workspace.js'
+import { __workspaceTestBridge, initWorkspace, openFinalAudit, refreshWorkspace } from './workspace.js'
 import { ensureProjectUnderstanding, ensureReasoningModel } from './reasoning-model.mjs'
 import { ensureWorkspaceState } from './workspace-model.mjs'
 import { DEFAULT_SETTINGS, normalizeSettings } from './settings-model.mjs'
-import { BlockIdentity, ensureTopLevelBlockIds, getActiveBlockId, getEditorBlocks, insertSemanticBlock, replaceFindingTarget } from './block-identity.js'
+import { BlockIdentity, ensureTopLevelBlockIds, getActiveBlockId, getEditorBlocks, insertSemanticBlock, replaceAnchoredText, replaceAnchoredTexts, replaceFindingTarget } from './block-identity.js'
 import { buildExampleStructure, buildExampleNarrative, buildExampleCoach, buildExampleLane, buildExampleBody, buildExampleMaterial, buildExampleUnderstanding, buildExampleAgentMessages } from './example.js'
 import { EXAMPLE_PROJECT_ID, migrateExampleSeed } from './example-seed.mjs'
 import { initGateway, runTask, hatSchluessel, setzeSchluessel, loescheSchluessel } from './agent-gateway.mjs'
+import { ensureProjectEvidenceShape } from './source-model.mjs'
+import { ensureProjectResearchShape } from './research-run.mjs'
+import { ensureMemoryStore, ensureProjectMemoryShape } from './memory-model.mjs'
+import { synchronizeProjectMemory } from './memory-dossier.mjs'
+import { ensureArgumentModel } from './argument-model.mjs'
+import { ensureLanguageProfile } from './language-profile.mjs'
+import { ensureLanguageReportStore } from './language-report.mjs'
+import { ensureFinalAuditStore } from './final-audit.mjs'
+import { emptyLocalState } from './data-control.mjs'
 
 // ---------- Sanfte Markierung (Peripherie): eine flüchtige Dekoration ----------
 // Zeigt eine Passage kurz an, OHNE das Dokument zu ändern — sie wird nicht
@@ -54,7 +63,7 @@ const Cue = Extension.create({
 const NATIVE = !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.store)
 const DEFAULTS = DEFAULT_SETTINGS
 const TRASH_DAYS = 30
-const SCHEMA = 6
+const SCHEMA = 12
 const EX_VERSION = 9
 
 // Schmaler Rückkanal der nativen saveimg-Brücke. Der frühere Bildeditor ist
@@ -69,7 +78,16 @@ window.__imgSaved__ = function (reqId, url) {
   callback(url)
 }
 
-export const state = { docs: [], active: null, projects: [], activeProject: null, settings: { ...DEFAULTS }, editor: null, native: NATIVE }
+export const state = {
+  docs: [],
+  active: null,
+  projects: [],
+  activeProject: null,
+  settings: { ...DEFAULTS },
+  memoryStore: ensureMemoryStore(null),
+  editor: null,
+  native: NATIVE,
+}
 
 // Schmale Test-Bridge fuer zustandsbehaftete ProseMirror-Regressionstests.
 // Sie exportiert keine UI und bleibt ausserhalb des produktiven Bedienflusses.
@@ -87,6 +105,12 @@ export const __blockIdentityTestBridge = {
   getJSON() { return state.editor.getJSON() },
   replaceFindingTarget(target, replacement, blockId = null) {
     return replaceFindingTarget(state.editor, target, replacement, blockId)
+  },
+  replaceAnchoredText(target) {
+    return replaceAnchoredText(state.editor, target)
+  },
+  replaceAnchoredTexts(targets) {
+    return replaceAnchoredTexts(state.editor, targets)
   },
 }
 
@@ -106,6 +130,9 @@ function ensureDocShape(d) {
   if (!Array.isArray(d.coach)) d.coach = []
   if (!Array.isArray(d.lane)) d.lane = []
   if (!d.panels || typeof d.panels !== 'object') d.panels = { struct: false, coach: false, lane: false }
+  if (!d.provenance || typeof d.provenance !== 'object' || Array.isArray(d.provenance)) {
+    d.provenance = { actor: 'user', action: 'document-create', createdAt: Number.isFinite(d.updated) ? d.updated : now() }
+  }
   // Jeder Erzählfaden hat eine feste Farbe (Index in der Faden-Palette).
   d.narrative.forEach((t, i) => { if (t.color == null) t.color = i })
   // Alt-Notizen ohne Anker: den Baustein aus dem Titel „… (Baustein)" erkennen
@@ -132,6 +159,13 @@ function findBlockByTitle(list, title) {
 // Ein Projekt trägt sein Material (Canvas) — geteilt über alle Texte des Projekts.
 function ensureProjectShape(p) {
   if (!Array.isArray(p.material)) p.material = []
+  ensureProjectEvidenceShape(p)
+  ensureProjectResearchShape(p)
+  ensureProjectMemoryShape(p)
+  ensureArgumentModel(p)
+  ensureLanguageProfile(p)
+  ensureLanguageReportStore(p)
+  ensureFinalAuditStore(p)
   ensureProjectUnderstanding(p)
   return p
 }
@@ -144,7 +178,7 @@ function newDocRaw() {
 
 // ---------- Projekt-Operationen ----------
 export function newProject(name) {
-  const p = { id: 'p' + Math.random().toString(36).slice(2, 8), name: name || 'Neues Projekt', created: now() }
+  const p = ensureProjectShape({ id: 'p' + Math.random().toString(36).slice(2, 8), name: name || 'Neues Projekt', created: now() })
   state.projects.push(p)
   state.activeProject = p.id
   persist()
@@ -183,6 +217,7 @@ function load() {
   state.docs = (d && Array.isArray(d.docs)) ? d.docs : []
   state.active = d ? d.active : null
   state.settings = normalizeSettings(d && d.settings)
+  state.memoryStore = ensureMemoryStore(d && d.memoryStore)
   // Projekte: bestehende Texte wandern in ein Standard-Projekt (Migration).
   state.projects = (d && Array.isArray(d.projects) && d.projects.length) ? d.projects : []
   if (!state.projects.length) {
@@ -233,17 +268,33 @@ function buildExampleDocumentSeed() {
     id: uid(), title: 'Calm Technology', body: buildExampleBody(), updated: now(), projectId: EXAMPLE_PROJECT_ID,
     structure: struct, narrative: buildExampleNarrative(struct),
     coach: buildExampleCoach(), lane: buildExampleLane(),
+    provenance: { actor: 'demo', action: 'example-seed', createdAt: now() },
     workspace: { agent: { messages: buildExampleAgentMessages() } },
   })
 }
 
 let ackPending = false
+let replacingPersistedState = false
+function synchronizeAllProjectMemory() {
+  state.projects.forEach(project => {
+    const result = synchronizeProjectMemory({
+      project,
+      docs: state.docs,
+      store: state.memoryStore,
+    })
+    state.memoryStore = result.store
+    project.memory = result.projectMemory
+  })
+}
+
 export function persist() {
+  synchronizeAllProjectMemory()
   const payload = JSON.stringify({
     schemaVersion: SCHEMA,
     docs: state.docs, active: state.active,
     projects: state.projects, activeProject: state.activeProject,
     settings: state.settings,
+    memoryStore: state.memoryStore,
   })
   if (NATIVE) {
     ackPending = true
@@ -424,7 +475,7 @@ function blockMd(node) {
   })
   return out
 }
-export function exportMd() {
+function exportMarkdownDirect() {
   flushSave()
   const d = activeDoc(); if (!d) return
   const el = document.querySelector('#editor .ProseMirror'); if (!el) return
@@ -439,6 +490,58 @@ export function exportMd() {
   a.href = URL.createObjectURL(blob); a.download = fname
   document.body.appendChild(a); a.click(); document.body.removeChild(a)
   setTimeout(() => URL.revokeObjectURL(a.href), 1000)
+}
+
+export function exportMd() {
+  flushSave()
+  openFinalAudit(document.getElementById('pvCard'))
+}
+
+export function downloadFile(filename, content, mime = 'text/plain;charset=utf-8') {
+  const safeFilename = String(filename || 'export.txt').replace(/[\/\\\0]/g, '-')
+  const safeContent = String(content ?? '')
+  if (NATIVE && window.webkit.messageHandlers.exportmd) {
+    window.webkit.messageHandlers.exportmd.postMessage(JSON.stringify({
+      filename: safeFilename,
+      content: safeContent,
+      mime,
+    }))
+    return
+  }
+  const blob = new Blob([safeContent], { type: mime })
+  const anchor = document.createElement('a')
+  anchor.href = URL.createObjectURL(blob)
+  anchor.download = safeFilename
+  document.body.appendChild(anchor)
+  anchor.click()
+  document.body.removeChild(anchor)
+  setTimeout(() => URL.revokeObjectURL(anchor.href), 1000)
+}
+
+function replacePersistedState(nextState) {
+  replacingPersistedState = true
+  const payload = JSON.stringify(nextState)
+  if (NATIVE) {
+    window.webkit.messageHandlers.store.postMessage(payload)
+    window.__NATIVE_DATA__ = nextState
+  } else {
+    localStorage.setItem('aiwt.v2', payload)
+  }
+  setTimeout(() => window.location.reload(), NATIVE ? 250 : 0)
+}
+
+export async function importLocalState(nextState) {
+  replacePersistedState(nextState)
+}
+
+export async function deleteAllLocalData() {
+  await loescheSchluessel()
+  if (!NATIVE) {
+    localStorage.removeItem('aiwt.v2')
+    localStorage.removeItem('aiwt.docs.v1')
+    localStorage.removeItem('aiwt.active.v1')
+  }
+  replacePersistedState(emptyLocalState())
 }
 
 // ---------- Start ----------
@@ -466,6 +569,9 @@ export function boot() {
     ],
     content: (activeDoc() && activeDoc().body) || '',
     editorProps: {
+      attributes: {
+        'aria-label': 'Textinhalt bearbeiten',
+      },
       handleDrop(view, event) {
         // Baustein aus dem Struktur-Panel: Inhalt als Absatz an der Zielstelle einfügen.
         const block = event.dataTransfer && event.dataTransfer.getData('application/x-baustein')
@@ -496,7 +602,8 @@ export function boot() {
   const ctx = {
     editor: state.editor, state,
     ops: { newDoc, openDoc, duplicateDoc, trashDoc, restoreDoc, deleteForever, newProject, renameProject, openProject },
-    persist, scheduleSave, flushSave, exportMd, docTitle, activeDoc, autoGrowTitle, activeProjectObj, showHomeView,
+    persist, scheduleSave, flushSave, exportMd, downloadFile, importLocalState, deleteAllLocalData,
+    docTitle, activeDoc, autoGrowTitle, activeProjectObj, showHomeView,
     gateway: { runTask, hatSchluessel, setzeSchluessel, loescheSchluessel },
   }
   initUI(ctx)
@@ -515,8 +622,10 @@ export function boot() {
   window.__exportFromMenu__ = exportMd
 
   if (!NATIVE) {
-    window.addEventListener('beforeunload', flushSave)
-    document.addEventListener('visibilitychange', () => { if (document.hidden) flushSave() })
+    window.addEventListener('beforeunload', () => { if (!replacingPersistedState) flushSave() })
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden && !replacingPersistedState) flushSave()
+    })
   }
 
   // Selbsttest-Modus der Mac-App

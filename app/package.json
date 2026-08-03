@@ -3,7 +3,12 @@
   "private": true,
   "scripts": {
     "build": "esbuild src/editor.js --bundle --minify --format=iife --global-name=AIWT --outfile=dist/editor.bundle.js",
-    "test": "node --test test/*.test.mjs"
+    "test": "node --test test/*.test.mjs",
+    "eval:b1-quality": "node evals/run-b1-quality.mjs",
+    "eval:b2-quality": "node evals/run-b2-quality.mjs",
+    "eval:c2-quality": "node evals/run-c2-quality.mjs",
+    "eval:d1-quality": "node evals/run-d1-quality.mjs",
+    "eval:d2-quality": "node evals/run-d2-quality.mjs"
   },
   "dependencies": {
     "@tiptap/core": "2.x",
@@ -16,7 +21,8 @@
     "@tiptap/starter-kit": "2.x"
   },
   "devDependencies": {
-    "esbuild": "0.24.2",
+    "@axe-core/playwright": "^4.12.1",
+    "esbuild": "^0.28.1",
     "playwright": "^1.62.0"
   }
 }
