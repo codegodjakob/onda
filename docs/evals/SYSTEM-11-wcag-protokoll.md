@@ -76,7 +76,7 @@ Ergebnis: bestanden in Chromium, Firefox und WebKit.
 
 ## Ergänzende Nicht-Funktionsbelege
 
-- Performanceprobe: 14 Stichproben, p95 Eingabe-bis-Frame `6,7 ms`, längste beobachtete Long Task `0 ms`.
+- Performanceprobe: 15 Stichproben, p95 Eingabe-bis-Frame `8,2 ms`, längste beobachtete Long Task `0 ms`.
 - 390-Pixel-Reflow: kein horizontaler Überlauf.
 - 200-Prozent-Skalierung: kein horizontaler Überlauf.
 - Produktionsbuild: bestanden.
