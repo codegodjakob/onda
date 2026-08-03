@@ -56,4 +56,12 @@ PLIST
 echo "— signiere (lokal) …"
 codesign --force -s - "$APP" 2>/dev/null
 
+# Jeder Bau ersetzt das App-Paket. macOS merkt sich aber den alten Eintrag, und
+# `open Onda.app` scheitert danach stillschweigend — das Programm selbst startet
+# per Doppelklick auf die Binaerdatei weiterhin. Die Neuanmeldung kostet nichts
+# und erspart die Suche nach einem Fehler, der keiner ist.
+echo "— melde bei macOS an …"
+LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
+[ -x "$LSREGISTER" ] && "$LSREGISTER" -f "$(cd "$(dirname "$APP")" && pwd)/$(basename "$APP")" 2>/dev/null
+
 echo "BUILD OK → $APP"
