@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   ACCENTS,
+  DEFAULT_KI_MONATSBUDGET_CENTS,
   DEFAULT_SETTINGS,
   aktuellerMonat,
   beansprucheAutomatiklauf,
@@ -102,11 +103,36 @@ test('aktuellerMonat liefert JJJJ-MM und verbucheUsage wirft nie bei Muell', () 
   assert.equal(s.usage.kostenCents, 0)
 })
 
-test('Monatsbudget: positive Cent-Betraege bleiben erhalten, Muell bedeutet keine lokale Grenze', () => {
+test('Monatsbudget: positive Cent-Betraege bleiben erhalten', () => {
   assert.equal(normalizeSettings({ kiMonatsbudgetCents: 1250 }, '2026-07').kiMonatsbudgetCents, 1250)
   assert.equal(normalizeSettings({ kiMonatsbudgetCents: '2500' }, '2026-07').kiMonatsbudgetCents, 2500)
-  for (const wert of [0, -1, 'quatsch', Number.POSITIVE_INFINITY, null]) {
-    assert.equal(normalizeSettings({ kiMonatsbudgetCents: wert }, '2026-07').kiMonatsbudgetCents, null)
+})
+
+test('Monatsbudget: nie gesetzt bekommt die Voreinstellung, bewusst abgeschaltet bleibt abgeschaltet', () => {
+  // Der Unterschied traegt: 'undefined' heisst nie gesetzt, 'null' heisst
+  // absichtlich entfernt. Wer die Bremse geloest hat, bekommt sie nicht
+  // beim naechsten Start wieder untergeschoben.
+  assert.equal(
+    normalizeSettings({}, '2026-07').kiMonatsbudgetCents,
+    DEFAULT_KI_MONATSBUDGET_CENTS,
+    'ohne Eintrag greift die Voreinstellung',
+  )
+  assert.equal(
+    normalizeSettings({ kiMonatsbudgetCents: null }, '2026-07').kiMonatsbudgetCents,
+    null,
+    'ausdruecklich abgeschaltet bleibt abgeschaltet',
+  )
+})
+
+test('Monatsbudget: kaputte Werte fallen auf die Voreinstellung, nicht ins Bodenlose', () => {
+  // Ein negativer Betrag oder Muell ist Beschaedigung, keine Absicht. Daraus
+  // stillschweigend 'keine Grenze' zu machen, waere die gefaehrlichste Auslegung.
+  for (const wert of [0, -1, 'quatsch', Number.POSITIVE_INFINITY, Number.NaN]) {
+    assert.equal(
+      normalizeSettings({ kiMonatsbudgetCents: wert }, '2026-07').kiMonatsbudgetCents,
+      DEFAULT_KI_MONATSBUDGET_CENTS,
+      `kaputter Wert ${String(wert)} faellt auf die Voreinstellung`,
+    )
   }
 })
 
@@ -156,8 +182,11 @@ test('Monatsbudget: Freigaben gelten nie ueber einen Monatswechsel hinaus', () =
   assert.equal(beansprucheAutomatiklauf(settings, '2026-07').erlaubt, false)
 })
 
-test('Monatsbudget: ohne konfigurierte Grenze bleibt Automatik unveraendert erlaubt', () => {
+test('Monatsbudget: wer die Grenze abgeschaltet hat, laesst Automatik unbegrenzt laufen', () => {
+  // Ausdruecklich abgeschaltet (null) — nicht: nie gesetzt. Seit es eine
+  // Voreinstellung gibt, ist das der einzige Weg zu 'kein-budget'.
   const settings = normalizeSettings({
+    kiMonatsbudgetCents: null,
     usage: { monat: '2026-07', kostenCents: 999999 },
   }, '2026-07')
   assert.deepEqual(beansprucheAutomatiklauf(settings, '2026-07'), {
@@ -165,4 +194,15 @@ test('Monatsbudget: ohne konfigurierte Grenze bleibt Automatik unveraendert erla
     grund: 'kein-budget',
     freigabeVerbraucht: false,
   })
+})
+
+test('Monatsbudget: frische Einstellungen bremsen Automatik, sobald die Voreinstellung erreicht ist', () => {
+  // Der eigentliche Zweck der Aenderung: wer nie etwas gesetzt hat, faehrt
+  // nicht mehr ungebremst. Gemessen wurden 3,90-22,87 $ je Schreibstunde.
+  const settings = normalizeSettings({
+    usage: { monat: '2026-07', kostenCents: DEFAULT_KI_MONATSBUDGET_CENTS },
+  }, '2026-07')
+  const ergebnis = beansprucheAutomatiklauf(settings, '2026-07')
+  assert.equal(ergebnis.erlaubt, false, 'an der Voreinstellung ist Schluss')
+  assert.notEqual(ergebnis.grund, 'kein-budget', 'es gibt jetzt ein Budget')
 })

@@ -3,6 +3,12 @@
 
 export const ACCENTS = Object.freeze(['sky', 'sage', 'blue', 'clay', 'lavender', 'sand'])
 
+// Voreingestellte lokale Monatsgrenze: 10 US-Dollar. Sie ersetzt das verbindliche
+// Ausgabenlimit im Anbieter-Konto nicht -- sie kommt frueher. Gemessene Kosten des
+// bestehenden Automatiklaufs liegen bei 3,90-22,87 $ je Schreibstunde; ohne lokale
+// Bremse faellt das erst auf der Rechnung auf.
+export const DEFAULT_KI_MONATSBUDGET_CENTS = 1000
+
 export const DEFAULT_SETTINGS = Object.freeze({
   theme: 'auto',
   spellcheck: false,
@@ -10,9 +16,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   structWidth: 620,
   accent: 'sky',
   sidebarCollapsed: false,
-  // Null bedeutet: keine zusaetzliche lokale Grenze. Das verbindliche
-  // Ausgabenlimit wird weiterhin im Anbieter-Konto gesetzt.
-  kiMonatsbudgetCents: null,
+  kiMonatsbudgetCents: DEFAULT_KI_MONATSBUDGET_CENTS,
 })
 
 // Verbrauchszähler für echte KI-Läufe (Etappe A) — additiv, KEIN Schema-Bump.
@@ -40,9 +44,18 @@ function sichereZahl(wert) {
   return Number.isFinite(zahl) && zahl >= 0 ? zahl : 0
 }
 
+// Drei Faelle, die auseinandergehalten werden muessen:
+//   fehlt ganz  -> Voreinstellung. Wer nie etwas gesetzt hat, bekommt eine Bremse.
+//   null        -> ausdruecklich abgeschaltet. Das bleibt so; niemand bekommt eine
+//                  geloeste Bremse beim naechsten Start wieder untergeschoben.
+//   kaputt      -> Voreinstellung. Ein negativer Betrag oder Muell ist Beschaedigung,
+//                  keine Absicht -- daraus stillschweigend 'keine Grenze' zu machen
+//                  waere die gefaehrlichste aller Auslegungen.
 function normalizeKiBudget(wert) {
+  if (wert === undefined) return DEFAULT_KI_MONATSBUDGET_CENTS
+  if (wert === null) return null
   const zahl = +wert
-  return Number.isFinite(zahl) && zahl > 0 ? zahl : null
+  return Number.isFinite(zahl) && zahl > 0 ? zahl : DEFAULT_KI_MONATSBUDGET_CENTS
 }
 
 function normalizeAutomatikFreigabe(raw, monat) {
