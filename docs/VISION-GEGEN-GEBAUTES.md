@@ -107,14 +107,36 @@ Suites that would need to exist:
 These are hard to measure and easy to fake. That is exactly why they need evals rather
 than good intentions.
 
-## 7. One sentence I could not read
+## 7. Resolved: it applies to content too — and it is not a "loop"
 
-> *"Dies gilt nicht acuh für das Inhaltliche."*
+The sentence *"Dies gilt nicht acuh für das Inhaltliche"* means **it applies to content
+as well**. Confirmed 2026-08-03.
 
-From the sentences around it I take this to mean *this applies to content as well*
-(everything before it is about language and style; everything after is about content).
-But as written it says the opposite. It is load-bearing — it decides whether the
-learning loop covers content or only craft — so I would rather ask than assume.
+Jakob also corrected my word for it: not *Lernschleife*. The right words are
+**Hinweise, Anmerkungen, Erweiterungsideen**. That correction is larger than it looks.
+"Learning loop" implies a second machine that trains the writer. There is no second
+machine. **The growth happens through the remarks themselves** — the system does not
+teach alongside the writing, it teaches *by how it remarks*. One channel more, not one
+subsystem more.
+
+### The vocabulary is already occupied — and muddled
+
+`agent-findings.mjs:81` maps seven of the eight hint types to `kind: 'inhalt'`; only
+`sprache` becomes `form`. The interface then shows the tag *Inhalt*.
+
+So today **"Inhalt" means "not about wording"**, not "about substance". The slot exists
+but is filled with corrections. Hanging an expansion idea there would put *here is a
+thought you are missing* in the same bucket as *this fact may be wrong*.
+
+Two axes are being confused in one word:
+
+| Axis | Values | Question it answers |
+|---|---|---|
+| Layer (exists) | `form` · `inhalt` | which layer of the text does this touch? |
+| Stance (missing) | corrective · generative | is something wrong, or is something possible? |
+
+`Hinweis` should keep the corrective stance and its eight types. The generative stance
+needs its own word — `Erweiterung` is unused in the codebase.
 
 ---
 
