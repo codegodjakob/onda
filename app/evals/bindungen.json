@@ -1,0 +1,233 @@
+{
+  "_zweck": "Bindet jedes Eval an Pruefungen, die JETZT laufen. Ein Eval gilt nur als bestanden, wenn seine gebundenen Pruefungen in DIESEM Lauf erfolgreich waren. Ohne Bindung: ungebunden — nie stillschweigend bestanden.",
+  "_belegart": "Die Belegart je Bindung folgt der automation-Angabe des Katalogs.",
+  "bindungen": {
+    "INV-01": [
+      "test/v2-smoke.mjs",
+      "test/etappe-a-smoke.mjs"
+    ],
+    "INV-02": [
+      "test/provenance-model.test.mjs"
+    ],
+    "INV-03": [
+      "test/anchor-verify.test.mjs",
+      "test/locator-model.test.mjs"
+    ],
+    "INV-04": [
+      "test/reasoning-model.test.mjs",
+      "test/decision-log-smoke.mjs"
+    ],
+    "INV-05": [
+      "test/memory-retrieval.test.mjs"
+    ],
+    "INV-07": [
+      "test/example-seed.test.mjs"
+    ],
+    "INV-09": [
+      "test/language-patterns.test.mjs"
+    ],
+    "WORK-01": [
+      "test/etappe-a-smoke.mjs"
+    ],
+    "WORK-02": [
+      "test/etappe-a-smoke.mjs",
+      "test/verstaendnis-interview.test.mjs"
+    ],
+    "WORK-03": [
+      "test/verstaendnis-merge.test.mjs"
+    ],
+    "WORK-04": [
+      "test/anchor-verify.test.mjs",
+      "test/hinweislauf-model.test.mjs"
+    ],
+    "WORK-06": [
+      "test/chat-kontext.test.mjs"
+    ],
+    "WORK-08": [
+      "test/decision-log-smoke.mjs"
+    ],
+    "EVID-01": [
+      "test/source-model.test.mjs"
+    ],
+    "EVID-03": [
+      "test/evidence-bundle.test.mjs"
+    ],
+    "EVID-05": [
+      "test/citation-audit.test.mjs"
+    ],
+    "EVID-06": [
+      "test/source-model.test.mjs"
+    ],
+    "EVID-07": [
+      "test/citation-audit.test.mjs"
+    ],
+    "EVID-08": [
+      "test/source-model.test.mjs",
+      "test/provenance-model.test.mjs"
+    ],
+    "RESEARCH-01": [
+      "test/research-run.test.mjs"
+    ],
+    "RESEARCH-04": [
+      "test/research-run.test.mjs"
+    ],
+    "RESEARCH-06": [
+      "test/research-orchestrator.test.mjs"
+    ],
+    "RESEARCH-07": [
+      "test/research-adapter.test.mjs"
+    ],
+    "MEMORY-01": [
+      "test/memory-model.test.mjs"
+    ],
+    "MEMORY-02": [
+      "test/memory-model.test.mjs"
+    ],
+    "MEMORY-03": [
+      "test/etappe-c1-smoke.mjs"
+    ],
+    "MEMORY-04": [
+      "test/memory-retrieval.test.mjs"
+    ],
+    "MEMORY-05": [
+      "test/memory-dossier.test.mjs"
+    ],
+    "MEMORY-06": [
+      "test/memory-portability.test.mjs"
+    ],
+    "ARG-01": [
+      "test/claim-ledger.test.mjs"
+    ],
+    "ARG-02": [
+      "test/argument-graph.test.mjs",
+      "test/etappe-c2-smoke.mjs"
+    ],
+    "ARG-03": [
+      "test/argument-model.test.mjs"
+    ],
+    "ARG-05": [
+      "test/argument-projection.test.mjs"
+    ],
+    "ARG-06": [
+      "test/argument-deliberation.test.mjs"
+    ],
+    "LANG-01": [
+      "test/language-profile.test.mjs"
+    ],
+    "LANG-02": [
+      "test/language-diagnostics.test.mjs"
+    ],
+    "LANG-03": [
+      "test/language-variant.test.mjs"
+    ],
+    "LANG-04": [
+      "test/language-modality.test.mjs"
+    ],
+    "LANG-05": [
+      "test/language-patterns.test.mjs"
+    ],
+    "LANG-06": [
+      "test/language-variant.test.mjs"
+    ],
+    "LANG-07": [
+      "test/language-patterns.test.mjs"
+    ],
+    "LANG-08": [
+      "test/orthography.test.mjs"
+    ],
+    "EFFECT-04": [
+      "test/effect-analysis.test.mjs"
+    ],
+    "EFFECT-05": [
+      "test/effect-fairness.test.mjs"
+    ],
+    "AUDIT-01": [
+      "test/etappe-d2-smoke.mjs"
+    ],
+    "AUDIT-02": [
+      "test/final-audit.test.mjs"
+    ],
+    "AUDIT-03": [
+      "test/etappe-d2-smoke.mjs"
+    ],
+    "AUDIT-04": [
+      "test/authorship-proof.test.mjs"
+    ],
+    "AUDIT-05": [
+      "test/publication-export.test.mjs"
+    ],
+    "AUDIT-06": [
+      "test/authorship-proof.test.mjs"
+    ],
+    "AUDIT-07": [
+      "test/final-audit.test.mjs"
+    ],
+    "SYSTEM-01": [
+      "test/workspace-model.test.mjs"
+    ],
+    "SYSTEM-02": [
+      "test/data-control.test.mjs",
+      "test/example-seed.test.mjs"
+    ],
+    "SYSTEM-03": [
+      "evals/pruefungen/schluessel-leck.mjs"
+    ],
+    "SYSTEM-04": [
+      "test/d2-accessibility.test.mjs"
+    ],
+    "SYSTEM-07": [
+      "test/performance-smoke.mjs"
+    ],
+    "SYSTEM-08": [
+      "test/settings-model.test.mjs",
+      "test/agent-tasks.test.mjs"
+    ],
+    "SYSTEM-10": [
+      "test/data-control.test.mjs"
+    ],
+    "SYSTEM-11": [
+      "test/d2-accessibility.test.mjs"
+    ],
+    "DESIGN-01": [
+      "evals/pruefungen/gestalt.mjs"
+    ],
+    "DESIGN-02": [
+      "evals/pruefungen/gestalt.mjs"
+    ],
+    "DESIGN-03": [
+      "evals/pruefungen/gestalt.mjs"
+    ],
+    "DESIGN-04": [
+      "evals/pruefungen/gestalt.mjs"
+    ],
+    "DESIGN-05": [
+      "evals/pruefungen/gestalt.mjs"
+    ]
+  },
+  "_ungebunden_begruendung": {
+    "INV-08": "Abstention als Erfolg: kein Test prueft, dass ein Lauf ohne Fund als gelungen gilt.",
+    "WORK-05": "Ankerdrift sichtbar: braucht eine Browser-Pruefung, die einen Anker bewusst verschiebt.",
+    "WORK-07": "Globaler Dialog ruhig: 'ruhig' ist bisher nirgends messbar definiert.",
+    "EVID-02": "Sprung zum Original: braucht eine Browser-Pruefung des Klickpfads.",
+    "EVID-04": "Bewertet (1-5), kein hartes Tor — braucht begruendete Bewertung, keine Zusicherung.",
+    "RESEARCH-02": "Braucht Live-Zugang UND einen verbundenen Recherchedienst — beides fehlt.",
+    "RESEARCH-03": "Braucht Live-Zugang UND einen verbundenen Recherchedienst — beides fehlt.",
+    "RESEARCH-05": "Bewertet (1-5) — braucht begruendete Bewertung.",
+    "ARG-04": "Bewertet (1-5) — braucht begruendete Bewertung.",
+    "ARG-07": "Bewertet (1-5) — braucht begruendete Bewertung.",
+    "EFFECT-01": "Bewertet (1-5) — braucht begruendete Bewertung.",
+    "EFFECT-02": "Bewertet (1-5) — braucht begruendete Bewertung.",
+    "EFFECT-03": "Bewertet (1-5) — braucht begruendete Bewertung.",
+    "SYSTEM-05": "Schmale Viewports: braucht eine Browser-Pruefung bei mehreren Breiten.",
+    "SYSTEM-06": "Reduzierte Bewegung und kein Fokusraub: braucht Browser-Pruefung mit prefers-reduced-motion.",
+    "DESIGN-06": "Prozess-Tor: greift erst, wenn der erste Gestaltungspunkt umgesetzt wird. Solange kein DESIGN-Eval besteht, hat es nichts zu pruefen."
+  },
+  "_live_gates": {
+    "INV-06": "Offline-Wuerde am echten Dienst — braucht hinterlegten Schluessel.",
+    "RESEARCH-02": "Braucht echten KI-Zugang.",
+    "RESEARCH-03": "Braucht echten KI-Zugang.",
+    "EFFECT-06": "Nutzerstudie mit echten Leserinnen und Lesern — von niemandem automatisierbar.",
+    "SYSTEM-03": "Im Katalog als Live-Gate gefuehrt; die Export-Seite ist hier frisch geprueft.",
+    "SYSTEM-09": "Browser- und Mac-Kernlogik am laufenden Dienst vergleichen — braucht Schluessel."
+  }
+}

@@ -1,0 +1,889 @@
+{
+  "schemaVersion": 1,
+  "catalogVersion": "2026-08-03.1",
+  "stage": "FERTIGZUSTAND",
+  "iteration": 3,
+  "generatedAt": "2026-08-03T12:13:36.004Z",
+  "gitCommit": "91e4599348f75521fdd7739de47b8226c4749254",
+  "rubricScores": {
+    "truth": 3.78,
+    "authorship": 3.78,
+    "usefulness": 3.78,
+    "calm": 3.78,
+    "reliability": 3.78,
+    "access_privacy": 3.78
+  },
+  "weightedScore": 3.78,
+  "scoreRationale": "Diese Werte sind AUS DER ABDECKUNG ABGELEITET, kein Qualitätsurteil: Anteil der Evals, die in diesem Lauf durch eine frisch ausgeführte Prüfung belegt sind. Der Katalog kennt keine Zuordnung von Evals zu Rubrikdimensionen, deshalb tragen alle sechs denselben Wert. Eine echte Rubrikbewertung verlangt begründete Einschätzung mit Belegen — sie steht aus.",
+  "loops": [],
+  "evals": [
+    {
+      "id": "INV-01",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "evals/results/laeufe/test-v2-smoke-mjs.log",
+          "command": "node test/v2-smoke.mjs"
+        },
+        {
+          "kind": "browser",
+          "path": "evals/results/laeufe/test-etappe-a-smoke-mjs.log",
+          "command": "node test/etappe-a-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "INV-02",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/test-provenance-model-test-mjs.log",
+          "command": "node --test test/provenance-model.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "INV-03",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/test-anchor-verify-test-mjs.log",
+          "command": "node --test test/anchor-verify.test.mjs"
+        },
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/test-locator-model-test-mjs.log",
+          "command": "node --test test/locator-model.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "INV-04",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "evals/results/laeufe/test-reasoning-model-test-mjs.log",
+          "command": "node --test test/reasoning-model.test.mjs"
+        },
+        {
+          "kind": "browser",
+          "path": "evals/results/laeufe/test-decision-log-smoke-mjs.log",
+          "command": "node test/decision-log-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "INV-05",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/test-memory-retrieval-test-mjs.log",
+          "command": "node --test test/memory-retrieval.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "INV-06",
+      "status": "external-open",
+      "evidence": [],
+      "note": "Offline-Wuerde am echten Dienst — braucht hinterlegten Schluessel."
+    },
+    {
+      "id": "INV-07",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "evals/results/laeufe/test-example-seed-test-mjs.log",
+          "command": "node --test test/example-seed.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "INV-08",
+      "status": "failed",
+      "evidence": [],
+      "note": "Keine frische Prüfung gebunden — unbewiesen. Abstention als Erfolg: kein Test prueft, dass ein Lauf ohne Fund als gelungen gilt."
+    },
+    {
+      "id": "INV-09",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/test-language-patterns-test-mjs.log",
+          "command": "node --test test/language-patterns.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "WORK-01",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "evals/results/laeufe/test-etappe-a-smoke-mjs.log",
+          "command": "node test/etappe-a-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "WORK-02",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "evals/results/laeufe/test-etappe-a-smoke-mjs.log",
+          "command": "node test/etappe-a-smoke.mjs"
+        },
+        {
+          "kind": "browser",
+          "path": "evals/results/laeufe/test-verstaendnis-interview-test-mjs.log",
+          "command": "node --test test/verstaendnis-interview.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "WORK-03",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/test-verstaendnis-merge-test-mjs.log",
+          "command": "node --test test/verstaendnis-merge.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "WORK-04",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/test-anchor-verify-test-mjs.log",
+          "command": "node --test test/anchor-verify.test.mjs"
+        },
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/test-hinweislauf-model-test-mjs.log",
+          "command": "node --test test/hinweislauf-model.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "WORK-05",
+      "status": "failed",
+      "evidence": [],
+      "note": "Keine frische Prüfung gebunden — unbewiesen. Ankerdrift sichtbar: braucht eine Browser-Pruefung, die einen Anker bewusst verschiebt."
+    },
+    {
+      "id": "WORK-06",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "evals/results/laeufe/test-chat-kontext-test-mjs.log",
+          "command": "node --test test/chat-kontext.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "WORK-07",
+      "status": "failed",
+      "evidence": [],
+      "note": "Keine frische Prüfung gebunden — unbewiesen. Globaler Dialog ruhig: 'ruhig' ist bisher nirgends messbar definiert."
+    },
+    {
+      "id": "WORK-08",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "evals/results/laeufe/test-decision-log-smoke-mjs.log",
+          "command": "node test/decision-log-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "EVID-01",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "fixture",
+          "path": "evals/results/laeufe/test-source-model-test-mjs.log",
+          "command": "node --test test/source-model.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "EVID-02",
+      "status": "failed",
+      "evidence": [],
+      "note": "Keine frische Prüfung gebunden — unbewiesen. Sprung zum Original: braucht eine Browser-Pruefung des Klickpfads."
+    },
+    {
+      "id": "EVID-03",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/test-evidence-bundle-test-mjs.log",
+          "command": "node --test test/evidence-bundle.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "EVID-04",
+      "status": "failed",
+      "evidence": [],
+      "note": "Keine frische Prüfung gebunden — unbewiesen. Bewertet (1-5), kein hartes Tor — braucht begruendete Bewertung, keine Zusicherung."
+    },
+    {
+      "id": "EVID-05",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/test-citation-audit-test-mjs.log",
+          "command": "node --test test/citation-audit.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "EVID-06",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/test-source-model-test-mjs.log",
+          "command": "node --test test/source-model.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "EVID-07",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/test-citation-audit-test-mjs.log",
+          "command": "node --test test/citation-audit.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "EVID-08",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/test-source-model-test-mjs.log",
+          "command": "node --test test/source-model.test.mjs"
+        },
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/test-provenance-model-test-mjs.log",
+          "command": "node --test test/provenance-model.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "RESEARCH-01",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/test-research-run-test-mjs.log",
+          "command": "node --test test/research-run.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "RESEARCH-02",
+      "status": "external-open",
+      "evidence": [],
+      "note": "Braucht echten KI-Zugang."
+    },
+    {
+      "id": "RESEARCH-03",
+      "status": "external-open",
+      "evidence": [],
+      "note": "Braucht echten KI-Zugang."
+    },
+    {
+      "id": "RESEARCH-04",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "unit",
+          "path": "evals/results/laeufe/test-research-run-test-mjs.log",
+          "command": "node --test test/research-run.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "RESEARCH-05",
+      "status": "failed",
+      "evidence": [],
+      "note": "Keine frische Prüfung gebunden — unbewiesen. Bewertet (1-5) — braucht begruendete Bewertung."
+    },
+    {
+      "id": "RESEARCH-06",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/test-research-orchestrator-test-mjs.log",
+          "command": "node --test test/research-orchestrator.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "RESEARCH-07",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/test-research-adapter-test-mjs.log",
+          "command": "node --test test/research-adapter.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "MEMORY-01",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "persistence",
+          "path": "evals/results/laeufe/test-memory-model-test-mjs.log",
+          "command": "node --test test/memory-model.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "MEMORY-02",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "unit",
+          "path": "evals/results/laeufe/test-memory-model-test-mjs.log",
+          "command": "node --test test/memory-model.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "MEMORY-03",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "evals/results/laeufe/test-etappe-c1-smoke-mjs.log",
+          "command": "node test/etappe-c1-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "MEMORY-04",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "evals/results/laeufe/test-memory-retrieval-test-mjs.log",
+          "command": "node --test test/memory-retrieval.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "MEMORY-05",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/test-memory-dossier-test-mjs.log",
+          "command": "node --test test/memory-dossier.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "MEMORY-06",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "persistence",
+          "path": "evals/results/laeufe/test-memory-portability-test-mjs.log",
+          "command": "node --test test/memory-portability.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "ARG-01",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "fixture",
+          "path": "evals/results/laeufe/test-claim-ledger-test-mjs.log",
+          "command": "node --test test/claim-ledger.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "ARG-02",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "evals/results/laeufe/test-argument-graph-test-mjs.log",
+          "command": "node --test test/argument-graph.test.mjs"
+        },
+        {
+          "kind": "browser",
+          "path": "evals/results/laeufe/test-etappe-c2-smoke-mjs.log",
+          "command": "node test/etappe-c2-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "ARG-03",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "unit",
+          "path": "evals/results/laeufe/test-argument-model-test-mjs.log",
+          "command": "node --test test/argument-model.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "ARG-04",
+      "status": "failed",
+      "evidence": [],
+      "note": "Keine frische Prüfung gebunden — unbewiesen. Bewertet (1-5) — braucht begruendete Bewertung."
+    },
+    {
+      "id": "ARG-05",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/test-argument-projection-test-mjs.log",
+          "command": "node --test test/argument-projection.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "ARG-06",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/test-argument-deliberation-test-mjs.log",
+          "command": "node --test test/argument-deliberation.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "ARG-07",
+      "status": "failed",
+      "evidence": [],
+      "note": "Keine frische Prüfung gebunden — unbewiesen. Bewertet (1-5) — braucht begruendete Bewertung."
+    },
+    {
+      "id": "LANG-01",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/test-language-profile-test-mjs.log",
+          "command": "node --test test/language-profile.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "LANG-02",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "fixture",
+          "path": "evals/results/laeufe/test-language-diagnostics-test-mjs.log",
+          "command": "node --test test/language-diagnostics.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "LANG-03",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "fixture",
+          "path": "evals/results/laeufe/test-language-variant-test-mjs.log",
+          "command": "node --test test/language-variant.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "LANG-04",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/test-language-modality-test-mjs.log",
+          "command": "node --test test/language-modality.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "LANG-05",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "fixture",
+          "path": "evals/results/laeufe/test-language-patterns-test-mjs.log",
+          "command": "node --test test/language-patterns.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "LANG-06",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "fixture",
+          "path": "evals/results/laeufe/test-language-variant-test-mjs.log",
+          "command": "node --test test/language-variant.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "LANG-07",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/test-language-patterns-test-mjs.log",
+          "command": "node --test test/language-patterns.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "LANG-08",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "evals/results/laeufe/test-orthography-test-mjs.log",
+          "command": "node --test test/orthography.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "EFFECT-01",
+      "status": "failed",
+      "evidence": [],
+      "note": "Keine frische Prüfung gebunden — unbewiesen. Bewertet (1-5) — braucht begruendete Bewertung."
+    },
+    {
+      "id": "EFFECT-02",
+      "status": "failed",
+      "evidence": [],
+      "note": "Keine frische Prüfung gebunden — unbewiesen. Bewertet (1-5) — braucht begruendete Bewertung."
+    },
+    {
+      "id": "EFFECT-03",
+      "status": "failed",
+      "evidence": [],
+      "note": "Keine frische Prüfung gebunden — unbewiesen. Bewertet (1-5) — braucht begruendete Bewertung."
+    },
+    {
+      "id": "EFFECT-04",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/test-effect-analysis-test-mjs.log",
+          "command": "node --test test/effect-analysis.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "EFFECT-05",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "fixture",
+          "path": "evals/results/laeufe/test-effect-fairness-test-mjs.log",
+          "command": "node --test test/effect-fairness.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "EFFECT-06",
+      "status": "external-open",
+      "evidence": [],
+      "note": "Nutzerstudie mit echten Leserinnen und Lesern — von niemandem automatisierbar."
+    },
+    {
+      "id": "AUDIT-01",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "evals/results/laeufe/test-etappe-d2-smoke-mjs.log",
+          "command": "node test/etappe-d2-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "AUDIT-02",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/test-final-audit-test-mjs.log",
+          "command": "node --test test/final-audit.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "AUDIT-03",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "evals/results/laeufe/test-etappe-d2-smoke-mjs.log",
+          "command": "node test/etappe-d2-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "AUDIT-04",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/test-authorship-proof-test-mjs.log",
+          "command": "node --test test/authorship-proof.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "AUDIT-05",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "file-inspection",
+          "path": "evals/results/laeufe/test-publication-export-test-mjs.log",
+          "command": "node --test test/publication-export.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "AUDIT-06",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "file-inspection",
+          "path": "evals/results/laeufe/test-authorship-proof-test-mjs.log",
+          "command": "node --test test/authorship-proof.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "AUDIT-07",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "persistence",
+          "path": "evals/results/laeufe/test-final-audit-test-mjs.log",
+          "command": "node --test test/final-audit.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "SYSTEM-01",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "persistence",
+          "path": "evals/results/laeufe/test-workspace-model-test-mjs.log",
+          "command": "node --test test/workspace-model.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "SYSTEM-02",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "persistence",
+          "path": "evals/results/laeufe/test-data-control-test-mjs.log",
+          "command": "node --test test/data-control.test.mjs"
+        },
+        {
+          "kind": "persistence",
+          "path": "evals/results/laeufe/test-example-seed-test-mjs.log",
+          "command": "node --test test/example-seed.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "SYSTEM-03",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "security-inspection",
+          "path": "evals/results/laeufe/evals-pruefungen-schluessel-leck-mjs.log",
+          "command": "node evals/pruefungen/schluessel-leck.mjs"
+        }
+      ]
+    },
+    {
+      "id": "SYSTEM-04",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "evals/results/laeufe/test-d2-accessibility-test-mjs.log",
+          "command": "node --test test/d2-accessibility.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "SYSTEM-05",
+      "status": "failed",
+      "evidence": [],
+      "note": "Keine frische Prüfung gebunden — unbewiesen. Schmale Viewports: braucht eine Browser-Pruefung bei mehreren Breiten."
+    },
+    {
+      "id": "SYSTEM-06",
+      "status": "failed",
+      "evidence": [],
+      "note": "Keine frische Prüfung gebunden — unbewiesen. Reduzierte Bewegung und kein Fokusraub: braucht Browser-Pruefung mit prefers-reduced-motion."
+    },
+    {
+      "id": "SYSTEM-07",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "evals/results/laeufe/test-performance-smoke-mjs.log",
+          "command": "node test/performance-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "SYSTEM-08",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/test-settings-model-test-mjs.log",
+          "command": "node --test test/settings-model.test.mjs"
+        },
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/test-agent-tasks-test-mjs.log",
+          "command": "node --test test/agent-tasks.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "SYSTEM-09",
+      "status": "external-open",
+      "evidence": [],
+      "note": "Browser- und Mac-Kernlogik am laufenden Dienst vergleichen — braucht Schluessel."
+    },
+    {
+      "id": "SYSTEM-10",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "file-inspection",
+          "path": "evals/results/laeufe/test-data-control-test-mjs.log",
+          "command": "node --test test/data-control.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "SYSTEM-11",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "evals/results/laeufe/test-d2-accessibility-test-mjs.log",
+          "command": "node --test test/d2-accessibility.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "DESIGN-01",
+      "status": "failed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "evals/results/laeufe/evals-pruefungen-gestalt-mjs.log",
+          "command": "node evals/pruefungen/gestalt.mjs"
+        }
+      ],
+      "note": "Gebundene Prüfung in diesem Lauf fehlgeschlagen: evals/pruefungen/gestalt.mjs"
+    },
+    {
+      "id": "DESIGN-02",
+      "status": "failed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "evals/results/laeufe/evals-pruefungen-gestalt-mjs.log",
+          "command": "node evals/pruefungen/gestalt.mjs"
+        }
+      ],
+      "note": "Gebundene Prüfung in diesem Lauf fehlgeschlagen: evals/pruefungen/gestalt.mjs"
+    },
+    {
+      "id": "DESIGN-03",
+      "status": "failed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "evals/results/laeufe/evals-pruefungen-gestalt-mjs.log",
+          "command": "node evals/pruefungen/gestalt.mjs"
+        }
+      ],
+      "note": "Gebundene Prüfung in diesem Lauf fehlgeschlagen: evals/pruefungen/gestalt.mjs"
+    },
+    {
+      "id": "DESIGN-04",
+      "status": "failed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "evals/results/laeufe/evals-pruefungen-gestalt-mjs.log",
+          "command": "node evals/pruefungen/gestalt.mjs"
+        }
+      ],
+      "note": "Gebundene Prüfung in diesem Lauf fehlgeschlagen: evals/pruefungen/gestalt.mjs"
+    },
+    {
+      "id": "DESIGN-05",
+      "status": "failed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "evals/results/laeufe/evals-pruefungen-gestalt-mjs.log",
+          "command": "node evals/pruefungen/gestalt.mjs"
+        }
+      ],
+      "note": "Gebundene Prüfung in diesem Lauf fehlgeschlagen: evals/pruefungen/gestalt.mjs"
+    },
+    {
+      "id": "DESIGN-06",
+      "status": "failed",
+      "evidence": [],
+      "note": "Keine frische Prüfung gebunden — unbewiesen. Prozess-Tor: greift erst, wenn der erste Gestaltungspunkt umgesetzt wird. Solange kein DESIGN-Eval besteht, hat es nichts zu pruefen."
+    }
+  ]
+}

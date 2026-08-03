@@ -4,3 +4,6 @@ Schreibwerkzeug.app/
 mac/AppIcon.iconset/
 .DS_Store
 .superpowers/
+
+# Eval-Laufprotokolle: bei jedem Messlauf neu erzeugt
+app/evals/results/laeufe/
