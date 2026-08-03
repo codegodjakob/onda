@@ -27,6 +27,11 @@ swift icon.swift AppIcon.iconset >/dev/null
 iconutil -c icns AppIcon.iconset -o "$APP/Contents/Resources/AppIcon.icns"
 rm -rf AppIcon.iconset
 
+# CFBundleIdentifier ist de.jakob.onda, nicht mehr de.jakob.schreibwerkzeug: solange die
+# alte und die neue App dieselbe Kennung trugen, hat macOS beim Oeffnen die alte gewaehlt
+# und im Dock Name und Icon der alten angezeigt. Datenordner und Schluesselbund haengen an
+# festen Namen ("Onda", mit Rueckfall auf "Schreibwerkzeug"), nicht an dieser Kennung —
+# die Aenderung erreicht also weder Texte noch Schluessel.
 echo "— schreibe Info.plist …"
 cat > "$APP/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -35,7 +40,7 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 <dict>
 	<key>CFBundleName</key><string>Onda</string>
 	<key>CFBundleDisplayName</key><string>Onda</string>
-	<key>CFBundleIdentifier</key><string>de.jakob.schreibwerkzeug</string>
+	<key>CFBundleIdentifier</key><string>de.jakob.onda</string>
 	<key>CFBundleExecutable</key><string>Onda</string>
 	<key>CFBundleIconFile</key><string>AppIcon</string>
 	<key>CFBundlePackageType</key><string>APPL</string>
