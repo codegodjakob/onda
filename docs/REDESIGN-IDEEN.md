@@ -186,6 +186,18 @@ but not the layout language — different spacing scale, different card treatmen
 different type rhythm from the writing view. Opening a document currently feels
 like moving between two different apps.
 
+**4f — Two new controls landed while this list was open; their visual form is not settled.**
+Both were functional gaps in Etappe A, fixed on 31.07.2026, and both were styled to match
+what already exists rather than to be right:
+
+- A **"Modelle"** block in the KI settings dialog. Uses `.onda-eyebrow`, so it adds one more
+  ALL-CAPS label to the pile in section 3 — deliberately consistent, deliberately temporary.
+- The **"bindend"** tag in the understanding dialog is now a button that releases the lock.
+  It looks identical to the silent tag; only the cursor and a faint hover reveal it is
+  clickable. That is probably too quiet — a control nobody can see is a control nobody uses.
+  Worth deciding: does an affordance belong here, and what does "you can undo this" look
+  like in Onda's vocabulary?
+
 **4e — The sidebar mixes three unrelated jobs.** Project understanding, document
 structure, and material are stacked in one 264 px column with no visual hierarchy
 between them, only the caps labels (which we are removing). Once the labels go,
