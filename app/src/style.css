@@ -2745,8 +2745,22 @@ button.onda-aura:focus-visible {
   letter-spacing: var(--tracking-tight);
 }
 
-/* both are plain spans today (no tabindex) — this is forward coverage for the
-   day either becomes an interactive control, matching .onda-btn/.onda-icon-btn above */
+/* Klickbare Variante: das „bindend"-Tag im Verständnis-Fenster ist zugleich der
+   Rückweg — ein Klick gibt das Feld wieder für den Agenten frei. Optisch bleibt es
+   identisch zum stillen Tag; nur Zeiger und ein leiser Hover verraten, dass es geht. */
+.onda-tag--loesbar {
+  appearance: none;
+  cursor: pointer;
+  transition: color var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+.onda-tag--loesbar:hover {
+  color: var(--text-primary);
+  border-color: var(--border-strong, var(--border-subtle));
+}
+.onda-tag[hidden] { display: none; }
+
+/* .onda-badge is a plain span today (no tabindex); .onda-tag--loesbar is a real
+   button — this covers both, matching .onda-btn/.onda-icon-btn above */
 .onda-badge:focus-visible,
 .onda-tag:focus-visible {
   outline: none;

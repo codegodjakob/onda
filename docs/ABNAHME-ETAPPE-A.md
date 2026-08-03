@@ -459,14 +459,21 @@ Damit klar ist, was „Die KI zieht ein" **nicht** bedeutet:
 
 ## Bekannte kleine offene Punkte
 
-- **Eine Korrektur im Verständnis-Fenster lässt sich nicht wieder zurücknehmen.** Sobald du ein
-  Feld von Hand korrigierst, ist es dauerhaft vor Überschreiben durch die KI geschützt — eine
-  Möglichkeit, diesen Schutz für ein Feld wieder aufzuheben, gibt es in der Oberfläche derzeit
-  nicht. Falls sich das als störend herausstellt, lässt sich das gezielt nachrüsten.
-- **Die Anzeige „geschützt" im Verständnis-Fenster aktualisiert sich nicht während des
-  Tippens**, sondern erst, wenn das Fenster neu geöffnet wird oder eine neue Agenten-Antwort
-  eintrifft. Das ist bewusst so gebaut, damit dir beim Tippen nicht der Cursor wegspringt — kein
-  Fehler, aber erwähnenswert.
+*(Stand 31.07.2026: die beiden zuvor hier genannten Punkte zum Verständnis-Fenster sind
+erledigt — siehe unten.)*
+
+**Erledigt am 31.07.2026 — Korrekturen sind wieder lösbar:** Das kleine Zeichen „bindend"
+neben einem Feldnamen ist jetzt ein Knopf. Ein Klick gibt das Feld wieder für den Agenten
+frei; dein Text bleibt dabei unverändert stehen, nur der Schreibschutz fällt. Vorher war jede
+Handkorrektur endgültig — du konntest das Feld zwar weiter selbst ändern, der Agent aber nie
+wieder dazulernen.
+
+Gleich mitbehoben: das Zeichen erscheint jetzt **sofort beim Tippen**, statt erst beim nächsten
+Öffnen des Fensters. Der Cursor springt trotzdem nicht, weil nur das Zeichen neu gezeichnet
+wird, nie das Textfeld.
+
+Belegt im laufenden Programm: nicht geschützt → tippen → `geschuetzt: ["task"]`, Zeichen
+sichtbar → Klick → `geschuetzt: []`, Zeichen weg, Text unverändert. 470 Tests grün.
 
 ---
 
