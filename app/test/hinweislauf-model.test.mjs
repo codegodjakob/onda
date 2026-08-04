@@ -523,3 +523,45 @@ test('versucheHinweislauf: setzeAgentStatus durchlaeuft laeuft -> bereit bei Erf
   }))
   assert.deepEqual(stati, ['laeuft', 'fehler'])
 })
+
+// ---- Die Textart reicht bis ans Finding durch --------------------------------
+// Die Regel (textart-regeln.mjs) war gebaut und getestet, aber niemand uebergab je
+// eine Textart -- sie wartete auf ihr Argument. Diese Pruefungen halten die Leitung
+// offen: ohne sie waere bei einem Plakattext das Verwerfen einer Quellenfrage
+// weiterhin ein "bewusst angenommenes Risiko".
+
+test('die Textart reist bis ans Finding mit', () => {
+  const text = 'Die Stadt wuchs schneller als ihre Leitungen.'
+  const { uebernommen } = verarbeiteHinweisantwort({
+    geliefert: [{
+      kategorie: 'quelle', anker: 'wuchs schneller als ihre Leitungen',
+      beobachtung: 'ohne Beleg', relevanz: 'zaehlt', folge: 'bleibt unbelegt',
+      muster: 'Eine Zahl braucht ihre Herkunft.', vorschlag: null,
+      istGrundursache: false, integritaet: true,
+    }],
+    docText: text,
+    blocks: [{ id: 'b1', text }],
+    jetzt: 1000,
+    textart: 'campaign',
+  })
+  assert.equal(uebernommen.length, 1)
+  assert.equal(uebernommen[0].textart, 'campaign')
+})
+
+test('ohne Textart bleibt es beim vorsichtigen Fall', () => {
+  const text = 'Die Stadt wuchs schneller als ihre Leitungen.'
+  const { uebernommen } = verarbeiteHinweisantwort({
+    geliefert: [{
+      kategorie: 'quelle', anker: 'wuchs schneller als ihre Leitungen',
+      beobachtung: 'ohne Beleg', relevanz: 'zaehlt', folge: 'bleibt unbelegt',
+      muster: 'Eine Zahl braucht ihre Herkunft.', vorschlag: null,
+      istGrundursache: false, integritaet: true,
+    }],
+    docText: text,
+    blocks: [{ id: 'b1', text }],
+    jetzt: 1000,
+  })
+  assert.equal(uebernommen.length, 1)
+  // Fail-closed: eine fehlende Textart nimmt niemandem eine Sicherung.
+  assert.ok(uebernommen[0].claim, 'ohne Textart muss die Quellenfrage eine Integritaetsfrage bleiben')
+})

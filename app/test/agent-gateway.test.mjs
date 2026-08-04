@@ -13,6 +13,7 @@ const GUELTIGER_HINWEIS = {
     beobachtung: 'Zahl ohne Beleg.',
     relevanz: 'Der Leser prüft genau solche Zahlen.',
     folge: 'Vertrauensverlust bei einer falschen Zahl.',
+    muster: 'Eine Zahl, die das Argument trägt, braucht ihre Herkunft im Satz daneben.',
     vorschlag: null,
     istGrundursache: true,
     integritaet: true,
@@ -134,6 +135,11 @@ test('pruefePflichtfelder: fehlende und vorhandene Felder, auch in Array-Items',
   const schema = TASK_TABLE.hinweise.schema
   assert.equal(pruefePflichtfelder(GUELTIGER_HINWEIS, schema), true)
   assert.equal(pruefePflichtfelder({ hinweise: [{ kategorie: 'fakt' }] }, schema), false)
+  // muster ist Pflicht wie jedes andere Feld: eine Antwort ohne das Prinzip dahinter kommt
+  // gar nicht erst durch das Tor.
+  const ohneMuster = { hinweise: [{ ...GUELTIGER_HINWEIS.hinweise[0] }] }
+  delete ohneMuster.hinweise[0].muster
+  assert.equal(pruefePflichtfelder(ohneMuster, schema), false)
   assert.equal(pruefePflichtfelder({}, schema), false)
   assert.equal(pruefePflichtfelder('kein Objekt', schema), false)
 })

@@ -12,6 +12,7 @@
 // genutzt). workspace.js sammelt nur noch die Rohdaten ein (verstaendnisEingabe) und ruft
 // baueVerstaendnisKontext auf.
 import { INTERVIEW_REGELN } from './agent-prompts.mjs'
+import { baueOndaBloecke } from './onda-kontext.mjs'
 
 const MODUS_HINWEIS = {
   entwurf: 'Kontext: Es liegt bereits Dokumenttext vor. Leite daraus einen ersten Entwurf des '
@@ -44,6 +45,11 @@ function rolleFuerAnthropic(rolle) {
 // aktuelle Antwort/Frage (die kommt separat über nutzerText/anfrage). Der Aufrufer
 // (workspace.js verstaendnisEingabe) schneidet den soeben angehängten aktuellen Turn
 // vorher ab; diese Funktion geht davon aus, dass interviewVerlauf reine Vorgeschichte ist.
+//
+// onda: {project, doc, docs, memoryStore} — Textsorte, Aussagen-Speicher und Gedächtnis
+// (onda-kontext.mjs), als letzte volatile Blöcke. Für dieses Gespräch der wichtigste Gewinn:
+// wer die Textsorte bereits gesetzt hat, muss sie im Interview nicht noch einmal erklären,
+// und der Agent stellt keine Frage, deren Antwort im Projekt längst festgehalten ist.
 export function baueVerstaendnisKontext({
   modus,
   verstaendnis,
@@ -51,10 +57,12 @@ export function baueVerstaendnisKontext({
   docText = '',
   nutzerText = '',
   interviewVerlauf = [],
+  onda = null,
 } = {}) {
   const volatiles = [INTERVIEW_REGELN, modusHinweis(modus)]
   const geschuetztHinweis = geschuetzteFelderHinweis(geschuetzt)
   if (geschuetztHinweis) volatiles.push(geschuetztHinweis)
+  if (onda) volatiles.push(...baueOndaBloecke(onda))
 
   const kontext = { verstaendnis, docText, volatiles }
 

@@ -18,6 +18,7 @@ function beispielHinweis(extra = {}) {
     beobachtung: 'Die These ist absolut formuliert.',
     relevanz: 'Absolute Thesen sind leicht angreifbar.',
     folge: 'Ein einziges Gegenbeispiel entkräftet den Absatz.',
+    muster: 'Eine These ohne Einschränkung lädt zum Gegenbeispiel ein.',
     vorschlag: null,
     istGrundursache: false,
     integritaet: true,
@@ -227,4 +228,91 @@ test('Dedupe-Regressionstest: Wiederholungs-Sperre greift für alle 8 Kategorien
   const frischerAndereKategorie = beispielHinweis({ kategorie: 'methode' })
   const dedupiert4 = dedupeHinweise([frischerAndereKategorie], doc1.findings, doc1.decisions)
   assert.equal(dedupiert4.length, 1, 'Andere Kategorie sollte NICHT gefiltert werden')
+})
+
+// ---------------------------------------------------------------------------
+// Das Muster: hinter der Rueckmeldung wird das dahinterliegende System sichtbar.
+// ---------------------------------------------------------------------------
+
+test('Das Muster wandert unveraendert ins Finding', () => {
+  const hinweis = beispielHinweis()
+  const finding = hinweisZuFinding(hinweis, ankerErgebnisFuer(hinweis.anker), 'b-eins', hinweis.anker, 1000)
+  assert.equal(finding.muster, 'Eine These ohne Einschränkung lädt zum Gegenbeispiel ein.')
+})
+
+// Anders als bei einer Erweiterung, wo das Muster der ganze Ertrag ist: Ein Hinweis ohne
+// Prinzip ist immer noch ein gueltiger Hinweis. Verworfen wird er nie, nur leer gelassen.
+test('Fehlendes Muster verwirft den Hinweis NICHT, es bleibt leer', () => {
+  for (const kaputt of [undefined, null, '', '   ', 0, false]) {
+    const hinweis = beispielHinweis({ muster: kaputt })
+    const finding = hinweisZuFinding(hinweis, ankerErgebnisFuer(hinweis.anker), 'b-eins', hinweis.anker, 1000)
+    assert.ok(finding, `Muster ${String(kaputt)} haette den Hinweis nicht verwerfen duerfen`)
+    assert.equal(finding.muster, '', `Muster ${String(kaputt)} haette leer sein muessen`)
+    assert.equal(finding.short, 'Die These ist absolut formuliert.', 'der Hinweis selbst bleibt vollstaendig')
+  }
+})
+
+// ---------------------------------------------------------------------------
+// Die Textart entscheidet, was eine Integritaetsfrage ist.
+// ---------------------------------------------------------------------------
+
+test('Textart Plakat: die Quellenfrage ist dort keine Integritaetsfrage mehr', () => {
+  const hinweis = beispielHinweis({ kategorie: 'quelle' })
+  const aufDemPlakat = hinweisZuFinding(hinweis, ankerErgebnisFuer(hinweis.anker), 'b-eins', hinweis.anker, 1000, 'campaign')
+  const inDerHausarbeit = hinweisZuFinding(hinweis, ankerErgebnisFuer(hinweis.anker), 'b-eins', hinweis.anker, 1000, 'scientific')
+  assert.equal(aufDemPlakat.claim, undefined, 'ein Plakat schuldet keine Quellenangabe')
+  assert.equal(inDerHausarbeit.claim, inDerHausarbeit.target, 'eine Hausarbeit schon')
+  assert.equal(aufDemPlakat.textart, 'campaign', 'die Textart reist am Finding mit')
+})
+
+test('Die Tatsachenfrage bleibt auch beim Werbetext eine Integritaetsfrage', () => {
+  const hinweis = beispielHinweis({ kategorie: 'fakt' })
+  const finding = hinweisZuFinding(hinweis, ankerErgebnisFuer(hinweis.anker), 'b-eins', hinweis.anker, 1000, 'marketing')
+  assert.equal(finding.claim, finding.target)
+})
+
+test('Fail-closed: ohne Textart gelten dieselben vier wie vorher', () => {
+  for (const textart of [undefined, '', '   ', 'reportage', 'unbekannt', null]) {
+    for (const kategorie of ['fakt', 'quelle', 'methode', 'logik']) {
+      const hinweis = beispielHinweis({ kategorie })
+      const finding = hinweisZuFinding(hinweis, ankerErgebnisFuer(hinweis.anker), 'b-eins', hinweis.anker, 1000, textart)
+      assert.equal(finding.claim, finding.target,
+        `Textart ${String(textart)}, Kategorie ${kategorie}: die Sicherung haette bleiben muessen`)
+    }
+    const handwerk = beispielHinweis({ kategorie: 'struktur', integritaet: false })
+    const findingHandwerk = hinweisZuFinding(handwerk, ankerErgebnisFuer(handwerk.anker), 'b-eins', handwerk.anker, 1000, textart)
+    assert.equal(findingHandwerk.claim, undefined, `Textart ${String(textart)}: struktur war nie eine Integritaetsfrage`)
+  }
+})
+
+// Der Prompt legt dem Modell integritaet:true fuer quelle nahe, ohne die Textart zu kennen.
+// Bliebe das Flag allein massgeblich, haette der Plakattext seine Quellenfragen weiterhin.
+test('Das Modell-Flag darf ergaenzen, aber nichts zurueckholen', () => {
+  const abgeraeumt = beispielHinweis({ kategorie: 'quelle', integritaet: true })
+  const findingAbgeraeumt = hinweisZuFinding(abgeraeumt, ankerErgebnisFuer(abgeraeumt.anker), 'b-eins', abgeraeumt.anker, 1000, 'campaign')
+  assert.equal(findingAbgeraeumt.claim, undefined, 'die Textart schlaegt das Modell-Flag')
+
+  const ergaenzt = beispielHinweis({ kategorie: 'struktur', integritaet: true })
+  const findingErgaenzt = hinweisZuFinding(ergaenzt, ankerErgebnisFuer(ergaenzt.anker), 'b-eins', ergaenzt.anker, 1000, 'campaign')
+  assert.equal(findingErgaenzt.claim, findingErgaenzt.target, 'was die Textart nicht abgeraeumt hat, darf das Modell melden')
+})
+
+// Die Entscheidung muss dieselbe Regel anwenden wie die Umwandlung: sonst waere ein Hinweis
+// keine Integritaetsfrage, sein Verwerfen aber trotzdem ein "bewusst angenommenes Risiko".
+test('Verwerfen: beim Plakattext ein normales Verwerfen, bei der Hausarbeit ein angenommenes Risiko', () => {
+  const hinweis = beispielHinweis({ kategorie: 'quelle' })
+  const aufDemPlakat = hinweisZuFinding(hinweis, ankerErgebnisFuer(hinweis.anker), 'b-eins', hinweis.anker, 1000, 'campaign')
+  const docPlakat = ensureReasoningModel({ findings: [aufDemPlakat], decisions: [] })
+  decideFinding(docPlakat, aufDemPlakat.id, { kind: 'reject', reason: 'Auf sechs Wörtern ist kein Platz.' }, 2000)
+  assert.equal(aufDemPlakat.status, 'dismissed')
+
+  const inDerHausarbeit = hinweisZuFinding(hinweis, ankerErgebnisFuer(hinweis.anker), 'b-eins', hinweis.anker, 1000, 'scientific')
+  const docArbeit = ensureReasoningModel({ findings: [inDerHausarbeit], decisions: [] })
+  decideFinding(docArbeit, inDerHausarbeit.id, { kind: 'reject', reason: 'Quelle folgt später.' }, 2000)
+  assert.equal(inDerHausarbeit.status, 'risk-accepted')
+
+  const ohneTextart = hinweisZuFinding(hinweis, ankerErgebnisFuer(hinweis.anker), 'b-eins', hinweis.anker, 1000)
+  const docOhne = ensureReasoningModel({ findings: [ohneTextart], decisions: [] })
+  decideFinding(docOhne, ohneTextart.id, { kind: 'reject', reason: '' }, 2000)
+  assert.equal(ohneTextart.status, 'risk-accepted', 'fail-closed: ohne Textart bleibt es beim Risiko')
 })

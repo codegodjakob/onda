@@ -11,6 +11,8 @@
 // volatiles-Array und bildet den Gesprächsverlauf auf das Anthropic-Rollenschema
 // ({role:'user'|'assistant', content}) ab — exakt das, was baueAnfrage tatsächlich liest.
 
+import { baueOndaBloecke } from './onda-kontext.mjs'
+
 // Fix-Runde 2, Finding 2a (Important): ohne Wortgrenzen traf das hier auch mitten in ganz
 // anderen Woertern -- "veranschaulichen" (schau), "überprüfbar" (prüf), "Checkliste" (check).
 // Eine fuehrende \b allein reicht nicht: "Checkliste" faengt ja ebenfalls an einer Wortgrenze
@@ -246,6 +248,10 @@ function rolleFuerAnthropic(rolle) {
 //   Ergebnis — baueAnfrage wirft sonst ("anfrage fehlt bei vorhandenem verlauf", G-2-Vertrag).
 // Keine Zeitstempel/Zufallswerte im gecachten Präfix: die relative Zeit (formatiereRelativeZeit)
 // fließt nur in entscheidungsEintraege für die UI, NICHT in kurzformEntscheidungen/volatiles.
+// - onda ({project, doc, docs, memoryStore}) -> Textsorte, Aussagen-Speicher und Gedächtnis
+//   (onda-kontext.mjs) als letzte volatile Blöcke, also hinter einer Zusatzanweisung: die
+//   Zusatzanweisung sagt, worum es GERADE geht, das Projektwissen ist der Hintergrund dazu.
+//   Ohne onda bleiben die volatiles unverändert.
 export function baueChatKontext({
   verstaendnis = null,
   docText = '',
@@ -255,6 +261,7 @@ export function baueChatKontext({
   verlaufsNotiz = null,
   anfrage = '',
   zusatzAnweisung = null,
+  onda = null,
   now = Date.now(),
 } = {}) {
   const volatiles = []
@@ -273,6 +280,8 @@ export function baueChatKontext({
 
   const zusatz = typeof zusatzAnweisung === 'string' ? zusatzAnweisung.trim() : ''
   if (zusatz) volatiles.push(zusatz)
+
+  if (onda) volatiles.push(...baueOndaBloecke(onda))
 
   const kontext = { verstaendnis, docText: String(docText || ''), volatiles }
 

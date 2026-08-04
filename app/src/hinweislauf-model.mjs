@@ -38,6 +38,7 @@ export function verarbeiteHinweisantwort({
   findings = [],
   decisions = [],
   jetzt = Date.now(),
+  textart = '',
 }) {
   const geliefertListe = Array.isArray(geliefert) ? geliefert : []
   const frisch = dedupeHinweise(geliefertListe, findings, decisions)
@@ -48,7 +49,11 @@ export function verarbeiteHinweisantwort({
     const ankerErgebnis = findeAnker(docText, hinweis?.anker)
     if (!ankerErgebnis.gefunden) { verworfen += 1; return }
     const blockId = blockFuerAnkerIndex(blocks, ankerErgebnis.index)
-    const finding = hinweisZuFinding(hinweis, ankerErgebnis, blockId, docText, jetzt)
+    // Die Textart entscheidet mit, welche Arten Integritaetsfragen sind
+    // (textart-regeln.mjs). Sie reist am Finding mit, damit spaeteres Entscheiden
+    // dieselbe Regel anwendet wie diese Umwandlung -- sonst waere ein Hinweis keine
+    // Integritaetsfrage, sein Verwerfen aber trotzdem ein angenommenes Risiko.
+    const finding = hinweisZuFinding(hinweis, ankerErgebnis, blockId, docText, jetzt, textart)
     if (!finding) { verworfen += 1; return }
     uebernommen.push(finding)
   })
@@ -137,6 +142,7 @@ export async function versucheHinweislauf({
   blocks,
   findings,
   decisions,
+  textart = '',
   runTask,
   setzeAgentStatus,
 }) {
@@ -175,7 +181,7 @@ export async function versucheHinweislauf({
     setzeAgentStatus({ zustand: 'bereit' })
     const jetzt = Date.now()
     const { uebernommen, verworfen, gestartet, grundursache } = verarbeiteHinweisantwort({
-      geliefert: daten?.hinweise, docText, blocks, findings, decisions, jetzt,
+      geliefert: daten?.hinweise, docText, blocks, findings, decisions, jetzt, textart,
     })
     return { gestartet: true, erfolg: true, uebernommen, verworfen, geliefertAnzahl: gestartet, grundursache, zeit: jetzt }
   } catch (fehler) {

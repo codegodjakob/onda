@@ -1476,6 +1476,50 @@ body.zen #minimap, body.zen #lane { display: none; }
    keine Warn- oder Gefahrfarbe (nichts ist kaputt), keine Zahl (nichts ist offen),
    kein Strich zum Text (nichts wartet an einer Zeile). Der Akzentstrich links steht
    fuer ein Angebot; die Karte selbst bleibt Papier. */
+/* ---------- Erkanntes: was diese Person schon weiss ----------
+   Bewusst die leiseste Flaeche der Spalte: keine Karte, keine Umrandung, kein
+   Schatten. Das hier ist kein Angebot und keine Aufgabe, sondern ein Rueckblick.
+   Jede Zeile laesst sich mit einer Geste zuruecknehmen — ohne das wiederholte sich
+   ein falscher Satz in jedem kuenftigen Text. */
+.onda-side-erkanntes { display: flex; flex-direction: column; gap: var(--space-1); }
+.onda-erk-leer {
+  margin: 0; color: var(--text-tertiary);
+  font: var(--type-caption);
+}
+.onda-erk-zeile {
+  display: flex; align-items: baseline; gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-panel);
+  text-align: left; cursor: default;
+}
+.onda-erk-zeile:hover { background: var(--bg-hover); }
+.onda-erk-satz {
+  flex: 1; min-width: 0;
+  color: var(--text-secondary);
+  font: var(--type-caption);
+  overflow-wrap: anywhere;
+}
+/* Die Haeufigkeit steht als Zahl da, weil sie hier etwas Gutes bedeutet: was
+   wiederkam, ist im Begriff, in Fleisch und Blut ueberzugehen. Das ist kein
+   offener Posten — deshalb Tinte, keine Warnfarbe, und kein Abzeichen. */
+.onda-erk-treffer {
+  flex: none; color: var(--text-tertiary);
+  font: var(--type-caption); font-variant-numeric: tabular-nums;
+}
+.onda-erk-weg {
+  flex: none;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-control);
+  color: var(--text-tertiary);
+  font: var(--type-caption);
+  cursor: pointer;
+  opacity: 0; transition: opacity var(--dur-quick) var(--ease-out);
+}
+.onda-erk-zeile:hover .onda-erk-weg,
+.onda-erk-zeile:focus-within .onda-erk-weg { opacity: 1; }
+.onda-erk-weg:hover { color: var(--text-primary); background: var(--bg-active); }
+.onda-erk-weg:focus-visible { opacity: 1; outline: 2px solid transparent; box-shadow: var(--shadow-focus); }
+
 .onda-side-erweiterungen { display: flex; flex-direction: column; gap: var(--space-2); }
 
 .onda-erw {

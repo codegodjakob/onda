@@ -1,3 +1,7 @@
+// prosa und lyrik ergaenzt am 05.08.2026: das Abstract nennt "bis hin zu Prosatexten"
+// ausdruecklich als Bandbreite, die Liste kannte sie nicht. Ein Gedicht landete unter
+// 'other' und behielt damit alle vier Integritaetsfragen (textart-regeln.mjs) -- bei
+// einem Gedicht ist die Forderung nach einer Quellenangabe nicht streng, sondern absurd.
 export const LANGUAGE_GENRES = Object.freeze([
   'scientific',
   'essay',
@@ -5,6 +9,8 @@ export const LANGUAGE_GENRES = Object.freeze([
   'web',
   'marketing',
   'campaign',
+  'prosa',
+  'lyrik',
   'other',
 ])
 export const LANGUAGE_REGIONS = Object.freeze(['DE', 'AT', 'CH'])

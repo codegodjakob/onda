@@ -1,3 +1,5 @@
+import { istIntegritaetsfrageFuerCategory } from './textart-regeln.mjs'
+
 const UNDERSTANDING_DEFAULTS = Object.freeze({
   task: '',
   audience: [],
@@ -234,15 +236,21 @@ export function ensureReasoningModel(doc) {
   return doc
 }
 
-export function isIntegrityCategory(category) {
-  return INTEGRITY_CATEGORIES.has(category)
+// Die Textart ist zusaetzlich und optional: Wer sie nicht kennt (alle bisherigen Aufrufer),
+// bekommt exakt das Verhalten von vorher -- die fuenf Kategorien gelten dann unveraendert.
+// Wer sie kennt, kann die Liste nur ENGER machen, nie weiter: Was hier nie eine
+// Integritaetsfrage war, wird durch keine Textart zu einer (textart-regeln.mjs).
+export function isIntegrityCategory(category, textart) {
+  if (!INTEGRITY_CATEGORIES.has(category)) return false
+  return istIntegritaetsfrageFuerCategory(textart, category)
 }
 
 function compareFindings(a, b) {
   const priority = (PRIORITY_RANK[a.priority] ?? PRIORITY_RANK.normal)
     - (PRIORITY_RANK[b.priority] ?? PRIORITY_RANK.normal)
   if (priority) return priority
-  const integrity = Number(isIntegrityCategory(b.category)) - Number(isIntegrityCategory(a.category))
+  const integrity = Number(isIntegrityCategory(b.category, b.textart))
+    - Number(isIntegrityCategory(a.category, a.textart))
   if (integrity) return integrity
   const created = (a.createdAt || 0) - (b.createdAt || 0)
   if (created) return created
@@ -280,7 +288,9 @@ export function decideFinding(doc, findingId, decision, at = Date.now()) {
 
   let outcome = 'resolved'
   if (decision.kind === 'reject') {
-    outcome = isIntegrityCategory(finding.category) ? 'risk-accepted' : 'dismissed'
+    // Die Textart reist am Finding mit (agent-findings.mjs hinweisZuFinding). Ohne sie
+    // entscheidet dieselbe Vier-Arten-Regel wie bisher.
+    outcome = isIntegrityCategory(finding.category, finding.textart) ? 'risk-accepted' : 'dismissed'
   }
   finding.status = outcome
   finding.decidedAt = at

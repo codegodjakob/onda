@@ -6,6 +6,7 @@ import {
   ensureProjectUnderstanding,
   ensureReasoningModel,
   getFindingQueue,
+  isIntegrityCategory,
 } from '../src/reasoning-model.mjs'
 
 test('normalizes project understanding without discarding existing fields', () => {
@@ -128,6 +129,46 @@ test('records accepted and edited suggestions without changing text itself', () 
   assert.equal(doc.decisions[0].appliedText, 'Praeziser.')
   assert.equal(doc.decisions[0].resultingText, 'Praeziser.')
   assert.equal(finding.action, 'Kuerzer.')
+})
+
+// Die Textart ist ein zusaetzlicher, optionaler Parameter: alle bisherigen Aufrufer rufen
+// isIntegrityCategory weiterhin mit einem Argument und bekommen exakt das Verhalten von vorher.
+test('isIntegrityCategory ohne Textart entscheidet wie bisher', () => {
+  for (const category of ['fact', 'source', 'citation', 'method', 'logic']) {
+    assert.equal(isIntegrityCategory(category), true, `${category} war und bleibt eine Integritaetsfrage`)
+  }
+  for (const category of ['wording', 'structure', 'content', '', undefined, null]) {
+    assert.equal(isIntegrityCategory(category), false, `${String(category)} war und bleibt keine`)
+  }
+})
+
+test('isIntegrityCategory mit Textart macht die Liste enger, nie weiter', () => {
+  assert.equal(isIntegrityCategory('source', 'scientific'), true)
+  assert.equal(isIntegrityCategory('source', 'campaign'), false)
+  assert.equal(isIntegrityCategory('citation', 'campaign'), false)
+  assert.equal(isIntegrityCategory('method', 'essay'), false)
+  assert.equal(isIntegrityCategory('fact', 'campaign'), true)
+  // Was hier nie eine Integritaetsfrage war, wird durch keine Textart zu einer.
+  for (const textart of ['scientific', 'campaign', 'marketing', 'other']) {
+    assert.equal(isIntegrityCategory('wording', textart), false)
+    assert.equal(isIntegrityCategory('structure', textart), false)
+    assert.equal(isIntegrityCategory('content', textart), false)
+  }
+  // Fail-closed: unbekannte oder leere Textart aendert nichts.
+  for (const textart of ['reportage', 'gedicht', '', '   ', null, undefined]) {
+    assert.equal(isIntegrityCategory('source', textart), true, `Textart ${String(textart)}`)
+    assert.equal(isIntegrityCategory('method', textart), true, `Textart ${String(textart)}`)
+  }
+})
+
+// Die Textart reist am Finding mit (agent-findings.mjs), damit Entscheidung und Umwandlung
+// dieselbe Regel anwenden -- auch bei Findings, die aus einer alten Sitzung kommen.
+test('decideFinding folgt der Textart am Finding, sonst der alten Regel', () => {
+  const docPlakat = { findings: [{ id: 'source', status: 'open', category: 'source', textart: 'campaign', target: 'Sechs Wörter' }] }
+  assert.equal(decideFinding(docPlakat, 'source', { kind: 'reject' }, 42).status, 'dismissed')
+
+  const docAlt = { findings: [{ id: 'source', status: 'open', category: 'source', target: 'Eine Behauptung' }] }
+  assert.equal(decideFinding(docAlt, 'source', { kind: 'reject' }, 42).status, 'risk-accepted')
 })
 
 test('rejects unknown findings and duplicate decisions', () => {

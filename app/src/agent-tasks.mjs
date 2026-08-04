@@ -23,6 +23,13 @@ export const PREISE = Object.freeze({
   cacheWriteFaktor: 1.25,
 })
 
+// muster ist Pflicht, nicht Kür: Ein Hinweis, der nur diese eine Stelle repariert, macht
+// diesen einen Text besser. Das Prinzip dahinter macht die Autorin oder den Autor besser.
+// Ohne Pflichtfeld KANN das Modell es nicht einmal freiwillig nachreichen — die Feldliste ist
+// geschlossen (additionalProperties: false). Es steht bewusst hinter folge und vor vorschlag:
+// erst begreifen, warum es zählt, dann verallgemeinern, dann erst eine Fassung anbieten.
+// Anders als bei den Erweiterungen (ERWEITERUNGEN_SCHEMA) verwirft ein fehlendes muster den
+// Hinweis NICHT — dort ist das Muster der ganze Ertrag, hier eine Zugabe zum Hinweis.
 export const HINWEISE_SCHEMA = Object.freeze({
   type: 'object',
   properties: {
@@ -39,6 +46,11 @@ export const HINWEISE_SCHEMA = Object.freeze({
           beobachtung: { type: 'string' },
           relevanz: { type: 'string' },
           folge: { type: 'string' },
+          muster: {
+            type: 'string',
+            description: 'Das übertragbare Prinzip hinter dem Hinweis — der Satz, der beim nächsten '
+              + 'Text von allein wieder anwendbar ist. Keine Wiederholung der Beobachtung.',
+          },
           vorschlag: {
             anyOf: [
               {
@@ -53,7 +65,7 @@ export const HINWEISE_SCHEMA = Object.freeze({
           istGrundursache: { type: 'boolean' },
           integritaet: { type: 'boolean' },
         },
-        required: ['kategorie', 'anker', 'beobachtung', 'relevanz', 'folge', 'vorschlag', 'istGrundursache', 'integritaet'],
+        required: ['kategorie', 'anker', 'beobachtung', 'relevanz', 'folge', 'muster', 'vorschlag', 'istGrundursache', 'integritaet'],
         additionalProperties: false,
       },
     },

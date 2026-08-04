@@ -47,10 +47,29 @@ test('Schemata verbieten Zusatzfelder und verlangen Pflichtfelder', () => {
   assert.deepEqual(hinweis.properties.kategorie.enum,
     ['fakt', 'quelle', 'methode', 'logik', 'struktur', 'wirkung', 'erklaerung', 'sprache'])
   assert.deepEqual(hinweis.required,
-    ['kategorie', 'anker', 'beobachtung', 'relevanz', 'folge', 'vorschlag', 'istGrundursache', 'integritaet'])
+    ['kategorie', 'anker', 'beobachtung', 'relevanz', 'folge', 'muster', 'vorschlag', 'istGrundursache', 'integritaet'])
   assert.equal(VERSTAENDNIS_SCHEMA.additionalProperties, false)
   assert.deepEqual(VERSTAENDNIS_SCHEMA.required,
     ['task', 'audience', 'desiredEffect', 'evidenceStandard', 'protectedIntentions', 'openQuestions', 'antwortText'])
+})
+
+// Das Versprechen: hinter jeder Rueckmeldung wird das dahinterliegende System sichtbar.
+// Der Erweiterungs-Kanal hatte dafuer ein Pflichtfeld, die acht Hinweisarten keines -- und
+// weil die Feldliste geschlossen ist (additionalProperties: false), konnte das Modell ein
+// Prinzip nicht einmal freiwillig nachreichen. Beide Kanaele verlangen es jetzt.
+test('muster ist in BEIDEN Kanaelen Pflicht — nicht nur bei den Erweiterungen', () => {
+  const hinweis = HINWEISE_SCHEMA.properties.hinweise.items
+  const erweiterung = ERWEITERUNGEN_SCHEMA.properties.erweiterungen.items
+  for (const [name, eintrag] of [['hinweise', hinweis], ['erweiterungen', erweiterung]]) {
+    assert.ok(eintrag.required.includes('muster'), `Kanal ${name}: muster fehlt in required`)
+    assert.equal(eintrag.properties.muster.type, 'string', `Kanal ${name}: muster ist kein Text`)
+    assert.ok(eintrag.properties.muster.description.length > 20, `Kanal ${name}: muster ohne Erklaerung`)
+  }
+  // Reihenfolge zaehlt bei strukturierter Ausgabe: erst folge, dann muster, dann vorschlag --
+  // erst begreifen, warum es zaehlt, dann verallgemeinern, dann eine Fassung anbieten.
+  const felder = hinweis.required
+  assert.ok(felder.indexOf('muster') > felder.indexOf('folge'))
+  assert.ok(felder.indexOf('muster') < felder.indexOf('vorschlag'))
 })
 
 test('baueAnfrage: Wire-Format und Cache-Praefix-Ordnung exakt nach Vertrag', () => {

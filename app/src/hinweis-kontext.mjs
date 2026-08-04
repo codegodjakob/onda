@@ -8,6 +8,7 @@
 // nur den Zwischenwert prüfen. Dieses Modul übersetzt die Hinweislauf-Rohdaten auf den
 // tatsächlichen baueAnfrage-Vertrag (Vorbild: verstaendnis-kontext.mjs).
 import { HINWEIS_ANWEISUNG } from './agent-prompts.mjs'
+import { baueOndaBloecke } from './onda-kontext.mjs'
 
 function kompakteListeHinweis(label, liste) {
   const eintraege = Array.isArray(liste) ? liste : []
@@ -18,11 +19,17 @@ function kompakteListeHinweis(label, liste) {
 // verstaendnis + docText gehören ins Cache-Präfix (baueAnfrage hängt cache_control daran).
 // entscheidungen/offeneHinweise sind volatil — sie ändern sich mit jeder Autor-Entscheidung
 // und dürfen den Cache-Präfix nicht ungültig machen (Cache-Präfix-Stabilität, agent-tasks.mjs).
+//
+// onda: {project, doc, docs, memoryStore} — Textsorte, Aussagen-Speicher und Gedächtnis
+// (onda-kontext.mjs). Diese Blöcke stehen bewusst GANZ HINTEN in den volatiles: Anweisung und
+// Entscheidungslage sind der Auftrag, das Projektwissen ist der Hintergrund dazu. Ohne onda
+// entstehen keine Blöcke, und der Kontext sieht aus wie zuvor.
 export function baueHinweisKontext({
   verstaendnis = null,
   docText = '',
   entscheidungen = [],
   offeneHinweise = [],
+  onda = null,
 } = {}) {
   const volatiles = [HINWEIS_ANWEISUNG]
 
@@ -37,6 +44,8 @@ export function baueHinweisKontext({
     offeneHinweise,
   )
   if (offeneHinweiseHinweis) volatiles.push(offeneHinweiseHinweis)
+
+  if (onda) volatiles.push(...baueOndaBloecke(onda))
 
   return { verstaendnis, docText, volatiles }
 }

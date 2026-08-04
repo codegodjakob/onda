@@ -22,6 +22,8 @@ import { aktuellerAgentStatus, beiAgentStatus, setzeAgentStatus, statuszeileFuer
 import { EXAMPLE_PROJECT_ID, seedBodySignature } from './example-seed.mjs'
 import { MODELLE, TASK_TABLE } from './agent-tasks.mjs'
 import { baueVerstaendnisKontext } from './verstaendnis-kontext.mjs'
+import { ergaenzeOndaKontext } from './onda-kontext.mjs'
+import { erkanntesListe, schreibeErkanntes, ueberholeErkanntes } from './erkanntes-model.mjs'
 import {
   interviewNachrichtId,
   istBeispielProjekt,
@@ -255,6 +257,7 @@ function elements() {
     agentWidget: document.getElementById('agentWidget'),
     evidenceWindow: document.getElementById('evidenceWindow'),
     erweiterungen: document.getElementById('erweiterungen'),
+    erkanntes: document.getElementById('erkanntes'),
     zurueckgehalten: document.getElementById('zurueckgehalten'),
   }
 }
@@ -728,8 +731,12 @@ function erweiterungKarte(doc, erweiterung) {
   merken.disabled = erweiterung.status === 'gemerkt'
   merken.addEventListener('click', () => {
     merkeErweiterung(doc, erweiterung.id)
+    // Das Prinzip starb bisher auf der Karte. Es ist der einzige Teil einer
+    // Erweiterung, der beim naechsten Text von allein wieder trueggt -- also gehoert
+    // es der Person, nicht dem Dokument.
+    merkeErkanntes(erweiterung.muster, 'erweiterung', erweiterung.stellen?.[0]?.text || '')
     ctx?.scheduleSave()
-    renderErweiterungen()
+    refreshWorkspace()
   })
   const weglegen = createNode('button', 'onda-erw-geste is-still', 'Weglegen')
   weglegen.type = 'button'
@@ -783,6 +790,67 @@ function renderZurueckgehalten() {
   })
   bereich.replaceChildren(knopf)
   bereich.hidden = false
+}
+
+// Der einzige Weg, auf dem etwas in den Personen-Speicher gelangt. Bewusst EINE
+// Stelle: ein Speicher, der sich an mehreren Stellen selbst fuellt, laesst sich
+// spaeter nicht mehr ueberblicken.
+function merkeErkanntes(satz, herkunft, beleg = '') {
+  const text = String(satz || '').trim()
+  if (!text || !ctx?.state) return null
+  const doc = ctx.activeDoc()
+  const ergebnis = schreibeErkanntes(ctx.state.memoryStore, {
+    satz: text,
+    herkunft,
+    dokumentId: doc?.id || null,
+    projektId: doc?.projectId || null,
+    beleg,
+  })
+  ctx.state.memoryStore = ergebnis.store
+  return ergebnis.eintrag
+}
+
+// Die leiseste Flaeche der Spalte. Kein Angebot, keine Aufgabe — ein Rueckblick.
+// Jede Zeile ist mit einer Geste zurueckzunehmen; ohne das wiederholte sich ein
+// falscher Satz in jedem kuenftigen Text, und der Speicher vergiftete sich selbst.
+function renderErkanntes() {
+  const bereich = elements().erkanntes
+  if (!bereich || !ctx?.state) return
+  const eyebrow = bereich.querySelector('.onda-eyebrow')
+  const liste = erkanntesListe(ctx.state.memoryStore)
+  const kinder = []
+
+  if (!liste.length) {
+    kinder.push(createNode(
+      'p',
+      'onda-erk-leer',
+      'Hier sammelt sich, was du beim Schreiben erkannt hast — je ein Satz, der beim '
+      + 'naechsten Text wieder traegt. Er kommt dazu, wenn du eine Erweiterung merkst '
+      + 'oder einen Hinweis annimmst.',
+    ))
+  }
+
+  liste.forEach(gruppe => {
+    const zeile = createNode('div', 'onda-erk-zeile')
+    zeile.append(createNode('span', 'onda-erk-satz', gruppe.satz))
+    // Die Zahl bedeutet hier etwas Gutes: was wiederkam, ist im Begriff, in Fleisch
+    // und Blut ueberzugehen. Deshalb Tinte statt Warnfarbe und kein Abzeichen.
+    if (gruppe.treffer > 1) {
+      zeile.append(createNode('span', 'onda-erk-treffer', `${gruppe.treffer}×`))
+    }
+    const weg = createNode('button', 'onda-erk-weg', 'Stimmt nicht mehr')
+    weg.type = 'button'
+    weg.setAttribute('aria-label', `Zuruecknehmen: ${gruppe.satz}`)
+    weg.addEventListener('click', () => {
+      ctx.state.memoryStore = ueberholeErkanntes(ctx.state.memoryStore, gruppe.schluessel).store
+      ctx.scheduleSave()
+      renderErkanntes()
+    })
+    zeile.append(weg)
+    kinder.push(zeile)
+  })
+
+  bereich.replaceChildren(...(eyebrow ? [eyebrow, ...kinder] : kinder))
 }
 
 function renderErweiterungen() {
@@ -1477,6 +1545,20 @@ function ensureInterviewMessage(workspace, project) {
   return message
 }
 
+// Sammelt die Quellen, aus denen onda-kontext.mjs seine Wissensbloecke baut: Textsorte und
+// Stilprofil (project.languageProfile), den dokumentuebergreifenden Aussagen-Speicher
+// (project.argumentModel) und das Gedaechtnis (state.memoryStore). Rein lesend und synchron —
+// die Bloecke selbst entstehen erst im Kontext-Bauer, ohne DOM und ohne Uhr.
+function ondaQuellen(doc = ctx?.activeDoc(), project = dokumentProjekt(doc)) {
+  if (!project) return null
+  return {
+    project,
+    doc: doc || null,
+    docs: ctx?.state?.docs || [],
+    memoryStore: ctx?.state?.memoryStore || null,
+  }
+}
+
 function verstaendnisEingabe(modus, nutzerText = '') {
   const project = dokumentProjekt()
   const u = ensureProjectUnderstanding(project)
@@ -1505,6 +1587,7 @@ function verstaendnisEingabe(modus, nutzerText = '') {
     docText: docPlainText(),
     nutzerText,
     interviewVerlauf: bisherigerVerlauf.map(entry => ({ role: entry.role, text: entry.text })),
+    onda: ondaQuellen(ctx?.activeDoc(), project),
   })
 }
 
@@ -2215,6 +2298,11 @@ function decideAndAdvance(finding, decision) {
   // 45 Sekunden Ruhe abzuwarten. Gilt bis zum naechsten Tastendruck; sobald wieder
   // getippt wird, setzt recordRealEditorInput es zurueck.
   momentVonHand = true
+  // Angenommen heisst: das hat gestimmt. Dann traegt auch das Prinzip dahinter.
+  // Verworfenes wandert NICHT in den Speicher -- ein zurueckgewiesener Hinweis ist
+  // keine Erkenntnis, und ihn trotzdem zu behalten waere das Gegenteil von
+  // "Autorentscheidungen sind bindend".
+  if (decision?.kind === 'accept') merkeErkanntes(finding.muster, 'hinweis', finding.target || '')
   decideFinding(doc, finding.id, decision)
   const project = dokumentProjekt(doc)
   const recorded = doc.decisions.at(-1)
@@ -2586,6 +2674,11 @@ function renderLocalFinding() {
     if (isStale) appendDetailRow(detail, 'Anker', 'Der frühere Wortlaut ist an diesem Abschnitt nicht mehr vorhanden. Der Hinweis bleibt offen.')
     appendDetailRow(detail, 'Relevanz', finding.why || finding.gesamt || 'Die Stelle beeinflusst, wie klar die Aussage beim Lesen ankommt.')
     appendDetailRow(detail, 'Folge', findingConsequence(finding))
+    // Das Muster ist der eigentliche Ertrag: die Beobachtung hilft diesem einen Text,
+    // das Prinzip dahinter hilft beim naechsten. Es steht ZULETZT, weil man es erst
+    // versteht, wenn man den Einzelfall begriffen hat. Fehlt es, steht keine leere
+    // Zeile da — ein Hinweis ohne Prinzip ist immer noch ein gueltiger Hinweis.
+    if (finding.muster) appendDetailRow(detail, 'Muster', finding.muster)
     surface.append(detail)
   }
   const dialogue = renderLocalDialogue(finding)
@@ -2843,6 +2936,7 @@ async function sendeAgentenChat(message, anfrage) {
         zusatzAnweisung: hinweisBitte
           ? 'Der Nutzer hat um eine Durchsicht gebeten. Ein Hinweislauf über den Text wurde soeben gestartet — erwähne kurz, dass du den Text jetzt durchgehst und dass Hinweise am Rand erscheinen, sobald etwas Belastbares dabei ist.'
           : null,
+        onda: ondaQuellen(doc, project),
       })
       await fuehreChatLauf(message.thread, kontext)
     },
@@ -2880,6 +2974,7 @@ async function sendeLocalChat(finding, anfrage) {
         thread: finding.thread.slice(0, -1), // der aktuelle Nutzer-Turn geht separat als `anfrage` mit
         anfrage,
         zusatzAnweisung: baueFindingZusatzAnweisung(finding),
+        onda: ondaQuellen(doc, project),
       })
       await fuehreChatLauf(finding.thread, kontext)
     },
@@ -3320,6 +3415,8 @@ async function fuehreHinweislaufAus({ grund = 'pause' } = {}) {
   // Startseiten-Zeiger -- siehe dokumentProjekt (Fix-Runde 1, Finding 2).
   const project = dokumentProjekt(doc)
   const verstaendnis = project ? ensureProjectUnderstanding(project) : null
+  // Wie alle anderen Werte hier SYNCHRON vor dem Aufruf eingesammelt (Fix-Runde 1, Finding 2).
+  const ondaWissen = ondaQuellen(doc, project)
 
   const ergebnis = await versucheHinweislauf({
     hatDokument: Boolean(doc && workspace),
@@ -3346,7 +3443,20 @@ async function fuehreHinweislaufAus({ grund = 'pause' } = {}) {
     blocks,
     findings: doc?.findings,
     decisions: doc?.decisions,
-    runTask,
+    // Die Textart entscheidet, welche Hinweisarten Integritaetsfragen sind
+    // (textart-regeln.mjs). Bei einem Plakattext ist eine fehlende Quellenangabe keine
+    // Frage der Wahrhaftigkeit, und ihr Verwerfen kein "bewusst angenommenes Risiko".
+    // Fehlt das Profil, bleibt es beim vorsichtigen Fall: alle vier binden.
+    textart: project?.languageProfile?.genre || '',
+    // Textsorte, Aussagen-Speicher und Gedaechtnis (onda-kontext.mjs) kommen hier eine Ebene
+    // spaeter dazu als bei Interview und Chat: den Kontext dieses Kanals baut
+    // versucheHinweislauf selbst (hinweislauf-model.mjs), und diese Datei kann ihm nichts
+    // durchreichen. ergaenzeOndaKontext haengt die Bloecke HINTEN an kontext.volatiles — also
+    // hinter Anweisung und Entscheidungsliste und weit hinter den gecachten Praefix, dessen
+    // Stabilitaet damit unberuehrt bleibt. versucheHinweislauf ruft runTask genau einmal, mit
+    // genau diesem Kontext; sobald hinweislauf-model.mjs einen onda-Parameter durchreicht,
+    // faellt diese Klammer ersatzlos weg (baueHinweisKontext kennt ihn bereits).
+    runTask: (task, kontext, optionen) => runTask(task, ergaenzeOndaKontext(kontext, ondaWissen), optionen),
     setzeAgentStatus,
   })
 
@@ -3402,6 +3512,7 @@ async function fuehreErweiterungslaufAus({ vonHand = false } = {}) {
   const docId = doc?.id ?? null
   const project = dokumentProjekt(doc)
   const verstaendnis = project ? ensureProjectUnderstanding(project) : null
+  const ondaWissen = ondaQuellen(doc, project)
 
   const ergebnis = await versucheErweiterungslauf({
     hatDokument: Boolean(doc && workspace),
@@ -3417,7 +3528,12 @@ async function fuehreErweiterungslaufAus({ vonHand = false } = {}) {
     verstaendnis,
     blocks,
     doc,
-    runTask,
+    // Dieselbe Klammer wie im Hinweislauf: den Kontext baut versucheErweiterungslauf selbst
+    // (erweiterungslauf-model.mjs), die Wissensbloecke kommen an der Uebergabestelle zum
+    // Gateway hinten an die volatiles. Fuer diesen Kanal ist vor allem der Aussagen-Speicher
+    // wichtig — eine Weiterfuehrung, die in einem anderen Text des Projekts schon steht, ist
+    // keine Erweiterung, sondern eine Doppelung.
+    runTask: (task, kontext, optionen) => runTask(task, ergaenzeOndaKontext(kontext, ondaWissen), optionen),
     setzeAgentStatus,
   })
 
@@ -3676,6 +3792,7 @@ export function refreshWorkspace({ reconcileEditing = false } = {}) {
   renderStructureNav()
   renderZurueckgehalten()
   renderErweiterungen()
+  renderErkanntes()
   planeMomentwechsel()
   planeErweiterungslauf()
   renderProjectUnderstandingCard()
