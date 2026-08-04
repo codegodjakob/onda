@@ -3,17 +3,17 @@
   "catalogVersion": "2026-08-04.1",
   "stage": "FERTIGZUSTAND",
   "iteration": 1,
-  "generatedAt": "2026-08-04T21:05:39.571Z",
-  "gitCommit": "a21248ebda00d9dc327a46712317f9099072e530",
+  "generatedAt": "2026-08-04T21:20:03.736Z",
+  "gitCommit": "82a4eb95c2845f1a8234ee92d74cb0de1b05d8ac",
   "rubricScores": {
-    "truth": 4.17,
-    "authorship": 4.17,
-    "usefulness": 4.17,
-    "calm": 4.17,
-    "reliability": 4.17,
-    "access_privacy": 4.17
+    "truth": 4.22,
+    "authorship": 4.22,
+    "usefulness": 4.22,
+    "calm": 4.22,
+    "reliability": 4.22,
+    "access_privacy": 4.22
   },
-  "weightedScore": 4.17,
+  "weightedScore": 4.22,
   "scoreRationale": "Diese Werte sind AUS DER ABDECKUNG ABGELEITET, kein Qualitätsurteil: Anteil der Evals, die in diesem Lauf durch eine frisch ausgeführte Prüfung belegt sind. Der Katalog kennt keine Zuordnung von Evals zu Rubrikdimensionen, deshalb tragen alle sechs denselben Wert. Eine echte Rubrikbewertung verlangt begründete Einschätzung mit Belegen — sie steht aus.",
   "loops": [],
   "evals": [
@@ -877,9 +877,14 @@
     },
     {
       "id": "DESIGN-06",
-      "status": "failed",
-      "evidence": [],
-      "note": "Keine frische Prüfung gebunden — unbewiesen. Prozess-Tor: greift erst, wenn der erste Gestaltungspunkt umgesetzt wird. Solange kein DESIGN-Eval besteht, hat es nichts zu pruefen."
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "file-inspection",
+          "path": "evals/results/laeufe/evals-pruefungen-umgestaltung-entschieden-mjs.log",
+          "command": "node evals/pruefungen/umgestaltung-entschieden.mjs"
+        }
+      ]
     },
     {
       "id": "ERWEITERUNG-01",

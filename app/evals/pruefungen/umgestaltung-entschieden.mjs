@@ -1,0 +1,110 @@
+#!/usr/bin/env node
+// DESIGN-06 — „Die Umgestaltungsentscheidungen sind getroffen."
+//
+// Das Prozess-Tor. Es prüft nicht, wie etwas aussieht, sondern ob es überhaupt
+// gebaut werden durfte: Kein Punkt aus docs/REDESIGN-IDEEN.md wird umgesetzt,
+// solange er auf „open" steht. Die Entscheidung liegt beim Nutzer, nicht bei der
+// Umsetzung.
+//
+// Warum dieses Tor überhaupt existiert: Am 31.07.2026 lautete die Anweisung
+// ausdrücklich „erst sammeln, dann umsetzen". Ohne eine Prüfung, die das nachhält,
+// ist eine solche Anweisung nach zwei Wochen Arbeit nur noch eine Erinnerung.
+//
+// Bis zum 04.08.2026 hatte dieses Eval keine gebundene Prüfung und galt deshalb als
+// unbewiesen. Das war korrekt, solange kein Gestaltungspunkt umgesetzt war. Seit
+// DESIGN-01 bis DESIGN-05 bestehen, hat es etwas zu prüfen.
+
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const hier = dirname(fileURLToPath(import.meta.url))
+const wurzel = resolve(hier, '../../..')
+
+// Welcher Punkt der Ideensammlung wird von welchem Gestalt-Eval belegt. Diese
+// Zuordnung ist der Kern der Prüfung: ohne sie wüsste niemand, welcher Punkt als
+// „umgesetzt" gilt.
+const PUNKT_ZU_EVALS = {
+  '1': ['DESIGN-01'],
+  '2': ['DESIGN-02', 'DESIGN-03'],
+  '3': ['DESIGN-04'],
+  '4d': ['DESIGN-05'],
+}
+
+const fehler = []
+const belege = []
+
+// --- Die Statustabelle lesen -------------------------------------------------
+let ideen
+try {
+  ideen = readFileSync(resolve(wurzel, 'docs/REDESIGN-IDEEN.md'), 'utf8')
+} catch {
+  fehler.push('docs/REDESIGN-IDEEN.md ist nicht lesbar — ohne die Sammlung gibt es kein Tor.')
+}
+
+const status = new Map()
+if (ideen) {
+  // Zeilen der Form: | 4d | Thema | Wer | agreed | Datum |
+  for (const zeile of ideen.split('\n')) {
+    const spalten = zeile.split('|').map(feld => feld.trim())
+    if (spalten.length < 5) continue
+    const nummer = spalten[1].replace(/\*/g, '')
+    if (!/^[0-9]+[a-f]?$/.test(nummer)) continue
+    const rohStatus = spalten[4].replace(/\*/g, '').toLowerCase()
+    status.set(nummer, rohStatus)
+  }
+  if (!status.size) fehler.push('In docs/REDESIGN-IDEEN.md wurde keine Statustabelle gefunden.')
+}
+
+// --- Die Gestalt-Ergebnisse lesen --------------------------------------------
+let bestanden = new Set()
+try {
+  const ergebnisse = JSON.parse(readFileSync(resolve(hier, '../results/fertigzustand-latest.json'), 'utf8'))
+  const sammle = knoten => {
+    if (Array.isArray(knoten)) { knoten.forEach(sammle); return }
+    if (!knoten || typeof knoten !== 'object') return
+    if (typeof knoten.id === 'string' && knoten.status === 'passed') bestanden.add(knoten.id)
+    Object.values(knoten).forEach(sammle)
+  }
+  sammle(ergebnisse)
+} catch {
+  // Kein Ergebnisstand vorhanden: dann ist noch nichts umgesetzt, und das Tor hat
+  // nichts zu pruefen. Das ist kein Fehlschlag.
+  bestanden = new Set()
+}
+
+// --- Die eigentliche Pruefung -------------------------------------------------
+for (const [punkt, evals] of Object.entries(PUNKT_ZU_EVALS)) {
+  const umgesetzt = evals.filter(id => bestanden.has(id))
+  if (!umgesetzt.length) {
+    belege.push(`Punkt ${punkt}: nicht umgesetzt (${evals.join(', ')} bestehen nicht) — nichts zu entscheiden.`)
+    continue
+  }
+  const eintrag = status.get(punkt)
+  if (eintrag === undefined) {
+    fehler.push(`Punkt ${punkt} ist umgesetzt (${umgesetzt.join(', ')}), steht aber in keiner Statuszeile.`)
+    continue
+  }
+  if (eintrag === 'agreed' || eintrag === 'vereinbart' || eintrag === 'verworfen' || eintrag === 'rejected') {
+    belege.push(`Punkt ${punkt}: umgesetzt (${umgesetzt.join(', ')}) und entschieden ("${eintrag}").`)
+    continue
+  }
+  fehler.push(
+    `Punkt ${punkt} ist umgesetzt (${umgesetzt.join(', ')}), steht aber auf "${eintrag}". `
+    + 'Umgesetzt wird erst, was entschieden ist — die Entscheidung liegt beim Nutzer.',
+  )
+}
+
+// Gegenprobe: die Prüfung darf nicht dadurch bestehen, dass sie nichts findet.
+if (!fehler.length && !belege.some(zeile => zeile.includes('entschieden'))) {
+  fehler.push('Kein einziger umgesetzter Punkt gefunden — die Zuordnung Punkt→Eval greift nicht mehr.')
+}
+
+if (fehler.length) {
+  process.stdout.write('DESIGN-06 FEHLGESCHLAGEN:\n')
+  fehler.forEach(zeile => process.stdout.write(`  ${zeile}\n`))
+  process.exitCode = 1
+} else {
+  process.stdout.write('DESIGN-06: jeder umgesetzte Gestaltungspunkt trägt eine Entscheidung.\n')
+  belege.forEach(zeile => process.stdout.write(`  ${zeile}\n`))
+}

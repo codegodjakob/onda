@@ -242,6 +242,9 @@
     ],
     "MOMENT-07": [
       "test/momente-model.test.mjs"
+    ],
+    "DESIGN-06": [
+      "evals/pruefungen/umgestaltung-entschieden.mjs"
     ]
   },
   "_ungebunden_begruendung": {
@@ -259,8 +262,7 @@
     "EFFECT-02": "Bewertet (1-5) — braucht begruendete Bewertung.",
     "EFFECT-03": "Bewertet (1-5) — braucht begruendete Bewertung.",
     "SYSTEM-05": "Schmale Viewports: braucht eine Browser-Pruefung bei mehreren Breiten.",
-    "SYSTEM-06": "Reduzierte Bewegung und kein Fokusraub: braucht Browser-Pruefung mit prefers-reduced-motion.",
-    "DESIGN-06": "Prozess-Tor: greift erst, wenn der erste Gestaltungspunkt umgesetzt wird. Solange kein DESIGN-Eval besteht, hat es nichts zu pruefen."
+    "SYSTEM-06": "Reduzierte Bewegung und kein Fokusraub: braucht Browser-Pruefung mit prefers-reduced-motion."
   },
   "_live_gates": {
     "INV-06": "Offline-Wuerde am echten Dienst — braucht hinterlegten Schluessel.",
