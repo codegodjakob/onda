@@ -22,8 +22,8 @@
   color-scheme: light;
 
   /* Onda — Papier → Tinte */
-  --paper: #f7f6f3; --surface: #ffffff; --surface-2: #f2f0eb; --surface-inset: #efece6;
-  --ink-950: #1c1a17; --ink-900: #2a2823; --ink-800: #3a372f; --ink-700: #4a463d;
+  --paper: #fbfaf8; --surface: #ffffff; --surface-2: #f2f0eb; --surface-inset: #efece6;
+  --ink-950: #1c1a17; --ink-900: #1c1a17; --ink-800: #3a372f; --ink-700: #4a463d;
   --ink-600: #57524b; --ink-500: #6b655c; --ink-400: #847d72; --ink-300: #948d82;
   --ink-200: #b8b1a6; --ink-100: #d8d2c8; --ink-50: #efece6;
   --line-soft: rgba(28,26,23,0.07); --line: rgba(28,26,23,0.12); --line-strong: rgba(28,26,23,0.2);
@@ -47,12 +47,18 @@
   --text-primary: #1c1a17; --text-secondary: #57524b; --text-tertiary: #948d82; --text-link: #3f7ba8;
   --border-subtle: var(--line-soft); --border-default: var(--line); --border-strong: var(--line-strong);
 
-  /* Typografie */
-  --font-sans: "Hanken Grotesk", system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  /* Typografie — folgt dem Onda Design System (design-system/tokens/typography.css).
+     Diatype war hier schon geladen, wurde aber nie benutzt: --font-sans zeigte auf
+     Hanken Grotesk. Beide Schriften lagen im Paket, eine davon wirkungslos.
+     Keine Mono-Schrift: Technisches steht in Diatype mit tabular-nums. */
+  --font-sans: "Diatype", "ABC Diatype", system-ui, -apple-system, sans-serif;
+  --font-mono: var(--font-sans);
   --fw-regular: 400; --fw-medium: 500; --fw-semibold: 600; --fw-bold: 700; --fw-heavy: 800;
-  --tracking-tight: -0.015em; --tracking-wide: 0.02em; --tracking-wider: 0.08em;
+  --tracking-tighter: -0.04em;
+  --tracking-tight: -0.02em; --tracking-wide: 0.02em; --tracking-wider: 0.08em;
   --text-xs: 12px; --text-sm: 13px; --text-base: 15px; --text-md: 16px;
+  /* Titel und Seitentitel aus dem Design System — fehlten hier ganz. */
+  --text-xl: 21px; --text-4xl: 40px;
 
   /* Raum */
   --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 20px;
@@ -61,8 +67,13 @@
   --sidebar-width: 264px; --topbar-height: 56px; --container-reading: 680px;
 
   /* Radius */
-  --radius-control: 6px; --radius-card: 8px; --radius-overlay: 10px;
-  --radius-panel: 18px; --radius-pill: 999px; --radius-full: 999px;
+  /* Radien folgen dem Design System (design-system/tokens/radius.css):
+     nur drei im Gebrauch — Pille für alle Bedienelemente, 24px für alle Flächen,
+     4px für Häkchen. Die App hatte vier abweichende Werte (6/8/10/18) und wirkte
+     dadurch kantig, wo das System weich sein will. */
+  --radius-control: 999px; --radius-card: 24px; --radius-overlay: 24px;
+  --radius-panel: 24px; --radius-pill: 999px; --radius-full: 999px;
+  --radius-sm: 4px;
 
   /* Elevation */
   --shadow-xs: 0 1px 2px rgba(28,26,23,0.05);
@@ -1354,11 +1365,13 @@ body.zen #minimap, body.zen #lane { display: none; }
   font-style: italic;
 }
 
+/* Kein Versalsatz: dieses Etikett steht auf JEDER Karte. Sieben davon
+   untereinander sind Laerm, keine Rubrik (Design System: Versalien nur
+   fuer Abschnitts-Rubriken). */
 .block-preview-role {
-  color: var(--text-secondary);
-  font: var(--fw-medium) 11px/1.2 var(--font-sans);
-  letter-spacing: var(--tracking-wider);
-  text-transform: uppercase;
+  color: var(--text-tertiary);
+  font: var(--fw-medium) var(--text-xs)/1.2 var(--font-sans);
+  letter-spacing: var(--tracking-normal, 0);
 }
 
 #agentWidget[hidden],
@@ -1482,12 +1495,25 @@ body.zen #minimap, body.zen #lane { display: none; }
   overscroll-behavior: contain;
 }
 
+/* Die Lesespalte sitzt bewusst NICHT mittig. Anmerkungen leben rechts vom Text
+   (renderLocalFinding in workspace.js): sie brauchen dort 292px, sonst rutschen
+   sie unter den Absatz und zerschneiden die Spalte. Zentriert verschenkt die
+   Haelfte des freien Raums nach links, wo nichts steht — bei 1280px blieben
+   rechts nur 168px, und jeder Hinweis landete darunter.
+   Der Randraum wird deshalb reserviert statt aufgeteilt. Unterhalb von 1040px
+   (Design System) gibt es ihn nicht mehr, und die Anmerkungen rutschen wieder
+   unter den Text — so ist es dort auch vorgesehen. */
 #editorView #page {
+  --onda-anmerkungsrand: 300px;
   width: min(calc(100% - 48px), calc(var(--container-reading) + 48px));
   max-width: calc(var(--container-reading) + 48px);
   min-height: 100%;
-  margin: 0 auto;
+  margin: 0 auto 0 max(0px, calc((100% - var(--container-reading) - 48px - var(--onda-anmerkungsrand)) / 2));
   padding: 64px 24px 38vh;
+}
+
+@media (max-width: 1040px) {
+  #editorView #page { --onda-anmerkungsrand: 0px; margin-inline: auto; }
 }
 
 #editorView #title {
@@ -2943,11 +2969,12 @@ button.onda-aura:focus-visible {
 /* Trägt Label + optionales .onda-tag (V-4: bindende Nutzer-Korrektur) nebeneinander —
    derselbe ruhige Tag-Baustein wie bei Material-Kind-Chips, keine Warnfarbe. */
 .onda-pv-label-row { display: flex; align-items: center; gap: var(--space-2); }
+/* Feldnamen im Verstaendnis-Fenster: sechs auf einmal, also ebenfalls
+   wiederholte Etiketten und keine Rubriken. */
 .onda-pv-label {
   color: var(--text-secondary);
-  font: var(--fw-semibold) 11px/1.2 var(--font-sans);
-  letter-spacing: var(--tracking-wider);
-  text-transform: uppercase;
+  font: var(--fw-medium) var(--text-sm)/1.2 var(--font-sans);
+  letter-spacing: var(--tracking-normal, 0);
 }
 .onda-pv-input {
   width: 100%;
