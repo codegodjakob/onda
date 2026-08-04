@@ -483,17 +483,40 @@ function createNavBlockNode(block) {
   return { preview, excerpt, role, hint }
 }
 
+// Ueberschriften SIND die Struktur — ihr Text gehoert in die Spalte.
+// Ein Absatz-Auszug dagegen ist eine Doppelung: er wiederholt woertlich, was
+// zwei Handbreit weiter rechts schon steht. Sieben Karten mit sieben
+// Absatzanfaengen heissen, den Text zweimal zu lesen.
+// Die einzige Rolle, deren Wortlaut selbst Struktur ist. Die uebrigen Rollen
+// (paragraph, claim, evidence, counterpoint, transition, question) beschreiben
+// die Funktion eines Absatzes — ihr Text wiederholt nur den Fliesstext.
+const NAV_ROLLEN_MIT_EIGENEM_TEXT = new Set(['heading'])
+
 function updateNavBlockNode(nodes, block, activeBlockId, hintKind) {
   const roleLabel = ROLE_LABELS.get(block.role) || 'Freier Absatz'
   const excerpt = block.excerpt || 'Noch leer'
   const hintLabel = hintKind === 'evidence'
     ? ' — Beleg offen'
     : hintKind === 'style' ? ' — Formulierung offen' : ''
+  const istAktiv = block.id === activeBlockId
+  const traegtEigenenText = NAV_ROLLEN_MIT_EIGENEM_TEXT.has(block.role)
+
+  // Der Auszug erscheint nur, wo er etwas beitraegt: bei Ueberschriften immer,
+  // bei Absaetzen nur in dem, in dem gerade geschrieben wird. Damit klappt sich
+  // genau eine Karte auf, ohne dass es dafuer eine zweite Geste braucht.
+  const zeigeAuszug = traegtEigenenText || istAktiv
+
+  // Vorlesegeraete bekommen weiterhin den vollen Wortlaut — die Kuerzung ist
+  // eine Frage der Augen, nicht der Zugaenglichkeit.
   nodes.preview.setAttribute('aria-label', `${roleLabel}: ${excerpt}${hintLabel}`)
-  if (block.id === activeBlockId) nodes.preview.setAttribute('aria-current', 'true')
+  if (istAktiv) nodes.preview.setAttribute('aria-current', 'true')
   else nodes.preview.removeAttribute('aria-current')
-  nodes.excerpt.textContent = excerpt
-  nodes.excerpt.classList.toggle('is-empty', !block.excerpt)
+
+  nodes.excerpt.textContent = zeigeAuszug ? excerpt : ''
+  nodes.excerpt.hidden = !zeigeAuszug
+  nodes.excerpt.classList.toggle('is-empty', zeigeAuszug && !block.excerpt)
+  nodes.preview.classList.toggle('is-offen', zeigeAuszug)
+
   nodes.role.textContent = roleLabel
   nodes.preview.classList.toggle('has-hint', Boolean(hintKind))
   nodes.hint.dataset.hint = hintKind || ''
