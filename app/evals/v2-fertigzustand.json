@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": "2026-08-03.1",
-  "target": "Onda — vollständiger Fertigzustand A–D samt Gestalt der Arbeitsoberfläche",
+  "catalogVersion": "2026-08-04.1",
+  "target": "Onda — vollständiger Fertigzustand A–D samt Gestalt der Arbeitsoberfläche, zweitem Rückmeldungs-Kanal und Rhythmus nach Moment",
   "thresholds": {
     "allApplicableHardGatesMustPass": true,
     "minimumWeightedScore": 4.5,
@@ -1451,6 +1451,240 @@
           ],
           "source": [
             "Anweisung 2026-07-31: erst sammeln, dann umsetzen"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ERWEITERUNG",
+      "name": "Zweiter Kanal: Erweiterungen",
+      "evals": [
+        {
+          "id": "ERWEITERUNG-01",
+          "title": "Die Zahl der Stellen gehört zur Art",
+          "gate": "hard",
+          "automation": "unit",
+          "given": "Der Agent bietet eine Erweiterung an. Eine Weiterführung gehört zu genau einer Stelle im Text, ein Feld zu keiner, eine Verbindung zu genau zwei.",
+          "when": "Die Zahl der mitgelieferten Stellen nicht zur Art passt, eine Stelle im Text nicht auffindbar ist oder eine Verbindung zweimal auf dieselbe Stelle zeigt.",
+          "then": "Die Erweiterung wird verworfen. Es wird keine Stelle erfunden, damit die Form gleichmäßig aussieht, und keine weggelassen, damit sie passt. Was übernommen wird, trägt den Wortlaut des Dokuments und nicht die Schreibweise des Modells.",
+          "evidence": [
+            "Node-Test über alle drei Arten mit passender und unpassender Stellenzahl",
+            "Negativfälle: erfundene Stelle, fehlende zweite Stelle, zweimal dieselbe Stelle"
+          ],
+          "source": [
+            "Rückmeldungs-Karte 04.08.2026: drei Arten von Erweiterung",
+            "app/src/erweiterung-model.mjs",
+            "app/src/erweiterungslauf-model.mjs",
+            "app/src/erweiterung-model.mjs (ANKER_ANZAHL)"
+          ]
+        },
+        {
+          "id": "ERWEITERUNG-02",
+          "title": "Ohne übertragbares Muster keine Erweiterung",
+          "gate": "hard",
+          "automation": "unit",
+          "given": "Der Agent hat einen weiterführenden Gedanken zu diesem Text.",
+          "when": "Er nennt kein Muster — also kein Prinzip, das beim nächsten Text von allein wieder anwendbar wäre.",
+          "then": "Die Erweiterung wird verworfen. Das Muster ist Pflichtfeld der Antwortform und Bedingung für die Übernahme; ein Einfall, der nur für diesen einen Fall gilt, erreicht die Seitenspalte nie.",
+          "evidence": [
+            "Node-Test: eine Erweiterung ohne Muster wird verworfen",
+            "Prüfung der Antwortform: muster steht unter den Pflichtfeldern"
+          ],
+          "source": [
+            "Rückmeldungs-Karte 04.08.2026: drei Arten von Erweiterung",
+            "app/src/erweiterung-model.mjs",
+            "app/src/erweiterungslauf-model.mjs",
+            "Rückmeldungs-Karte 04.08.2026: das Muster benennen, nicht nur den Einzelfall",
+            "app/src/agent-tasks.mjs (ERWEITERUNGEN_SCHEMA)"
+          ]
+        },
+        {
+          "id": "ERWEITERUNG-03",
+          "title": "Weggelegtes kommt nicht wieder",
+          "gate": "hard",
+          "automation": "unit",
+          "given": "Eine Erweiterung wurde gemerkt oder weggelegt.",
+          "when": "Ein späterer Lauf zum selben Text den Agenten erneut fragt.",
+          "then": "Alles schon Angebotene liegt der Anfrage mit seinem Zustand bei, und dasselbe Angebot wird kein zweites Mal übernommen — auch nicht als neue Verkleidung derselben Stelle und desselben Gedankens. Weggelegtes verschwindet aus der Sicht und bleibt gespeichert, gerade damit es nicht wiederkommt.",
+          "evidence": [
+            "Node-Test: derselbe Vorschlag im zweiten Lauf wird verworfen statt übernommen",
+            "Node-Test: Weggelegtes ist unsichtbar, steht aber mit Zustand in der Liste des schon Angebotenen"
+          ],
+          "source": [
+            "Rückmeldungs-Karte 04.08.2026: drei Arten von Erweiterung",
+            "app/src/erweiterung-model.mjs",
+            "app/src/erweiterungslauf-model.mjs",
+            "app/src/erweiterung-kontext.mjs"
+          ]
+        },
+        {
+          "id": "ERWEITERUNG-04",
+          "title": "Ein Angebot ist kein offener Posten",
+          "gate": "hard",
+          "automation": "integration",
+          "given": "Ein Dokument trägt gleichzeitig offene Hinweise und mehrere Erweiterungen.",
+          "when": "Die Arbeitsoberfläche ihre Zahlen bildet: die Warteschlange der offenen Punkte, die Bilanzzeile und die Zähler an Coach und Randspalte.",
+          "then": "Keine dieser Zahlen zählt eine Erweiterung mit. Sie steht in keiner Warteschlange, klopft nicht von sich aus an und verlangt keine Entscheidung mit Konsequenz. Es gibt genau zwei Gesten: merken und weglegen.",
+          "evidence": [
+            "Prüfung der Warteschlange mit Hinweisen und Erweiterungen nebeneinander, samt Gegenprobe ohne Hinweise",
+            "Bauprüfung: das Modul der beiden Zähler kennt den Kanal nicht, und der Lauf ruft keinen Weg zum Anklopfen"
+          ],
+          "source": [
+            "Rückmeldungs-Karte 04.08.2026: drei Arten von Erweiterung",
+            "app/src/erweiterung-model.mjs",
+            "app/src/erweiterungslauf-model.mjs",
+            "Rückmeldungs-Karte 04.08.2026: Erweiterungen werden nicht gezählt",
+            "app/src/panels.js",
+            "app/src/workspace.js (fuehreErweiterungslaufAus)"
+          ]
+        },
+        {
+          "id": "ERWEITERUNG-05",
+          "title": "Der Kanal lässt sich von Hand ziehen",
+          "gate": "hard",
+          "automation": "unit",
+          "given": "Der Text ist kürzer als die Länge, ab der von selbst gefragt wird.",
+          "when": "Die Autorin oder der Autor den Kanal ausdrücklich abruft.",
+          "then": "Der Lauf startet trotzdem. Die Mindestlänge bremst allein die selbsttätigen Läufe, nur ein leerer Text bleibt gesperrt, und derselbe Text darf erneut angefragt werden — es gibt keine Sperre auf unveränderten Text, weil eine Erweiterung beim zweiten Mal eine andere sein kann.",
+          "evidence": [
+            "Node-Test: kurzer Text von Hand erlaubt, von selbst gesperrt",
+            "Node-Test: leerer Text bleibt auch von Hand gesperrt",
+            "Node-Test: derselbe Text darf erneut angefragt werden"
+          ],
+          "source": [
+            "Rückmeldungs-Karte 04.08.2026: drei Arten von Erweiterung",
+            "app/src/erweiterung-model.mjs",
+            "app/src/erweiterungslauf-model.mjs",
+            "Rückmeldungs-Karte 04.08.2026: jeder Moment muss auch von Hand ziehbar sein",
+            "app/src/erweiterungslauf-model.mjs (pruefeErweiterungslaufGate)"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "MOMENT",
+      "name": "Rhythmus: die drei Momente",
+      "evals": [
+        {
+          "id": "MOMENT-01",
+          "title": "Sprachliches erscheint sofort",
+          "gate": "hard",
+          "automation": "unit",
+          "given": "Beim Schreiben entsteht ein Hinweis zur Formulierung.",
+          "when": "Die Hand noch auf der Tastatur liegt.",
+          "then": "Er ist sofort zu sehen. Die Formulierung ist die einzige Art, die keinen Abstand braucht — sie ist dort am billigsten zu ändern, wo sie steht, und das Aufschauen kostet mehr als die Korrektur selbst.",
+          "evidence": [
+            "Node-Test: die Art Formulierung steht auf dem Moment sofort",
+            "Prüfung der vollständigen Zuordnung Art zu Moment"
+          ],
+          "source": [
+            "Rückmeldungs-Karte 04.08.2026: drei Momente — sofort, beim Innehalten, beim Aufschauen",
+            "app/src/momente-model.mjs"
+          ]
+        },
+        {
+          "id": "MOMENT-02",
+          "title": "Was Abstand braucht, wartet aufs Aufschauen",
+          "gate": "hard",
+          "automation": "unit",
+          "given": "Es liegen Hinweise zu Aufbau, Wirkung oder Erklärung vor sowie Erweiterungen aller drei Arten.",
+          "when": "Weitergeschrieben oder nur kurz innegehalten wird.",
+          "then": "Keiner dieser Punkte erscheint. Sie werden erst sichtbar, wenn aufgeschaut wird: nach langer Ruhe, beim Verlassen der Schreibansicht oder auf ausdrücklichen Abruf. Zurückgehalten heißt dabei nur zurückgehalten — der Punkt bleibt bestehen und erscheint, sobald sein Moment da ist.",
+          "evidence": [
+            "Node-Test: keine der drei Erweiterungsarten erscheint beim Schreiben oder beim Innehalten",
+            "Prüfung der vollständigen Zuordnung: Aufbau, Wirkung und Erklärung stehen auf dem Moment Aufschauen"
+          ],
+          "source": [
+            "Rückmeldungs-Karte 04.08.2026: drei Momente — sofort, beim Innehalten, beim Aufschauen",
+            "app/src/momente-model.mjs",
+            "app/src/workspace.js (currentPassageFinding)"
+          ]
+        },
+        {
+          "id": "MOMENT-03",
+          "title": "Integritätsfragen erscheinen beim Innehalten",
+          "gate": "hard",
+          "automation": "unit",
+          "given": "Ein Hinweis zu Tatsache, Quelle, Methode oder Logik liegt vor.",
+          "when": "Erst mitten im Satz weitergeschrieben wird und später ein Satz oder Absatz abgeschlossen ist.",
+          "then": "Mitten im Satz erscheint er nicht. Nach dem abgeschlossenen Satz erscheint er, ohne dass erst aufgeschaut werden muss. Alle vier Arten stehen auf demselben Moment; keine drängt sich vor und keine wartet länger als nötig.",
+          "evidence": [
+            "Prüfung der vollständigen Zuordnung: alle vier Integritätsarten stehen auf dem Moment Innehalten und auf keinem früheren"
+          ],
+          "source": [
+            "Rückmeldungs-Karte 04.08.2026: drei Momente — sofort, beim Innehalten, beim Aufschauen",
+            "app/src/momente-model.mjs"
+          ]
+        },
+        {
+          "id": "MOMENT-04",
+          "title": "Der Moment hängt an der Satzgrenze, nicht nur an der Uhr",
+          "gate": "hard",
+          "automation": "unit",
+          "given": "Die Hand ruht.",
+          "when": "Die Pause mitten im Satz liegt oder hinter einem abgeschlossenen Satz oder Absatz.",
+          "then": "Mitten im Satz gilt die Pause als Nachdenken und ändert nichts, bis die lange Ruhe erreicht ist. Hinter einer Grenze genügt ein Bruchteil dieser Zeit. Eine Grenze ohne jede Ruhe ist noch kein Innehalten, sonst wäre es jeder Tastendruck.",
+          "evidence": [
+            "Node-Test: gleiche Pause, einmal mitten im Satz und einmal hinter der Grenze, ergibt verschiedene Momente",
+            "Node-Test: Grenze ohne Ruhe bleibt beim Moment sofort"
+          ],
+          "source": [
+            "Rückmeldungs-Karte 04.08.2026: drei Momente — sofort, beim Innehalten, beim Aufschauen",
+            "app/src/momente-model.mjs",
+            "Rückmeldungs-Ticket 01: wann stört Rückmeldung, und wann trägt sie"
+          ]
+        },
+        {
+          "id": "MOMENT-05",
+          "title": "Jeder Moment ist auch von Hand zu ziehen",
+          "gate": "hard",
+          "automation": "unit",
+          "given": "Die Autorin oder der Autor will jetzt sehen, was da ist, statt auf eine Pause zu warten.",
+          "when": "Sie oder er ausdrücklich danach fragt oder die Schreibansicht verlässt.",
+          "then": "Der höchste Moment gilt sofort, unabhängig davon, wie kurz die letzte Pause war. Proaktiv heißt nie: warten müssen.",
+          "evidence": [
+            "Node-Test: von Hand angefordert ergibt immer den Moment Aufschauen",
+            "Node-Test: Verlassen der Schreibansicht ergibt den Moment Aufschauen"
+          ],
+          "source": [
+            "Rückmeldungs-Karte 04.08.2026: drei Momente — sofort, beim Innehalten, beim Aufschauen",
+            "app/src/momente-model.mjs",
+            "Rückmeldungs-Ticket 07: Rückmeldung von Hand anfordern"
+          ]
+        },
+        {
+          "id": "MOMENT-06",
+          "title": "Momente sind aufsteigend, nicht ausschließend",
+          "gate": "hard",
+          "automation": "unit",
+          "given": "Der Moment des Aufschauens ist erreicht und es liegen Rückmeldungen aus allen drei Momenten vor.",
+          "when": "Die Oberfläche zeigt, was jetzt erscheinen darf.",
+          "then": "Alles Niedrigere bleibt sichtbar. Ein Hinweis zur Formulierung verschwindet nicht dadurch, dass die Hand von der Tastatur genommen wurde.",
+          "evidence": [
+            "Node-Test: beim Aufschauen erscheinen auch die Arten der früheren Momente",
+            "Prüfung der vollständigen Zuordnung über alle Arten und alle drei Momente"
+          ],
+          "source": [
+            "Rückmeldungs-Karte 04.08.2026: drei Momente — sofort, beim Innehalten, beim Aufschauen",
+            "app/src/momente-model.mjs"
+          ]
+        },
+        {
+          "id": "MOMENT-07",
+          "title": "Keine Art fällt durch den Rhythmus",
+          "gate": "hard",
+          "automation": "unit",
+          "given": "Alle Rückmeldungsarten beider Kanäle: acht Hinweisarten und drei Erweiterungsarten.",
+          "when": "Der Rhythmus bestimmt, wann jede von ihnen erscheinen darf.",
+          "then": "Jede Art hat genau einen entschiedenen Moment und eine tragfähige Begründung dafür, und jeder der drei Momente trägt mindestens eine Art. Eine neue Art ohne entschiedenen Moment ist ein sichtbarer Fehlschlag und kein stiller Rückfall.",
+          "evidence": [
+            "Node-Test: jede Art aus beiden Kanälen hat einen Moment, die Tabelle hat genau elf Zeilen",
+            "Node-Test: jede Zeile trägt eine Begründung, kein Moment bleibt ohne Art"
+          ],
+          "source": [
+            "Rückmeldungs-Karte 04.08.2026: drei Momente — sofort, beim Innehalten, beim Aufschauen",
+            "app/src/momente-model.mjs",
+            "app/src/agent-prompts.mjs (die acht Hinweisarten)"
           ]
         }
       ]

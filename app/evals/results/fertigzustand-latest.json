@@ -1,25 +1,25 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": "2026-08-03.1",
+  "catalogVersion": "2026-08-04.1",
   "stage": "FERTIGZUSTAND",
-  "iteration": 3,
-  "generatedAt": "2026-08-03T12:13:36.004Z",
-  "gitCommit": "91e4599348f75521fdd7739de47b8226c4749254",
+  "iteration": 1,
+  "generatedAt": "2026-08-04T21:05:39.571Z",
+  "gitCommit": "a21248ebda00d9dc327a46712317f9099072e530",
   "rubricScores": {
-    "truth": 3.78,
-    "authorship": 3.78,
-    "usefulness": 3.78,
-    "calm": 3.78,
-    "reliability": 3.78,
-    "access_privacy": 3.78
+    "truth": 4.17,
+    "authorship": 4.17,
+    "usefulness": 4.17,
+    "calm": 4.17,
+    "reliability": 4.17,
+    "access_privacy": 4.17
   },
-  "weightedScore": 3.78,
+  "weightedScore": 4.17,
   "scoreRationale": "Diese Werte sind AUS DER ABDECKUNG ABGELEITET, kein Qualitätsurteil: Anteil der Evals, die in diesem Lauf durch eine frisch ausgeführte Prüfung belegt sind. Der Katalog kennt keine Zuordnung von Evals zu Rubrikdimensionen, deshalb tragen alle sechs denselben Wert. Eine echte Rubrikbewertung verlangt begründete Einschätzung mit Belegen — sie steht aus.",
   "loops": [],
   "evals": [
     {
       "id": "INV-01",
-      "status": "passed",
+      "status": "failed",
       "evidence": [
         {
           "kind": "browser",
@@ -31,7 +31,8 @@
           "path": "evals/results/laeufe/test-etappe-a-smoke-mjs.log",
           "command": "node test/etappe-a-smoke.mjs"
         }
-      ]
+      ],
+      "note": "Gebundene Prüfung in diesem Lauf fehlgeschlagen: test/v2-smoke.mjs"
     },
     {
       "id": "INV-02",
@@ -821,69 +822,216 @@
     },
     {
       "id": "DESIGN-01",
-      "status": "failed",
+      "status": "passed",
       "evidence": [
         {
           "kind": "browser",
           "path": "evals/results/laeufe/evals-pruefungen-gestalt-mjs.log",
           "command": "node evals/pruefungen/gestalt.mjs"
         }
-      ],
-      "note": "Gebundene Prüfung in diesem Lauf fehlgeschlagen: evals/pruefungen/gestalt.mjs"
+      ]
     },
     {
       "id": "DESIGN-02",
-      "status": "failed",
+      "status": "passed",
       "evidence": [
         {
           "kind": "browser",
           "path": "evals/results/laeufe/evals-pruefungen-gestalt-mjs.log",
           "command": "node evals/pruefungen/gestalt.mjs"
         }
-      ],
-      "note": "Gebundene Prüfung in diesem Lauf fehlgeschlagen: evals/pruefungen/gestalt.mjs"
+      ]
     },
     {
       "id": "DESIGN-03",
-      "status": "failed",
+      "status": "passed",
       "evidence": [
         {
           "kind": "browser",
           "path": "evals/results/laeufe/evals-pruefungen-gestalt-mjs.log",
           "command": "node evals/pruefungen/gestalt.mjs"
         }
-      ],
-      "note": "Gebundene Prüfung in diesem Lauf fehlgeschlagen: evals/pruefungen/gestalt.mjs"
+      ]
     },
     {
       "id": "DESIGN-04",
-      "status": "failed",
+      "status": "passed",
       "evidence": [
         {
           "kind": "browser",
           "path": "evals/results/laeufe/evals-pruefungen-gestalt-mjs.log",
           "command": "node evals/pruefungen/gestalt.mjs"
         }
-      ],
-      "note": "Gebundene Prüfung in diesem Lauf fehlgeschlagen: evals/pruefungen/gestalt.mjs"
+      ]
     },
     {
       "id": "DESIGN-05",
-      "status": "failed",
+      "status": "passed",
       "evidence": [
         {
           "kind": "browser",
           "path": "evals/results/laeufe/evals-pruefungen-gestalt-mjs.log",
           "command": "node evals/pruefungen/gestalt.mjs"
         }
-      ],
-      "note": "Gebundene Prüfung in diesem Lauf fehlgeschlagen: evals/pruefungen/gestalt.mjs"
+      ]
     },
     {
       "id": "DESIGN-06",
       "status": "failed",
       "evidence": [],
       "note": "Keine frische Prüfung gebunden — unbewiesen. Prozess-Tor: greift erst, wenn der erste Gestaltungspunkt umgesetzt wird. Solange kein DESIGN-Eval besteht, hat es nichts zu pruefen."
+    },
+    {
+      "id": "ERWEITERUNG-01",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "unit",
+          "path": "evals/results/laeufe/test-erweiterungslauf-model-test-mjs.log",
+          "command": "node --test test/erweiterungslauf-model.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "ERWEITERUNG-02",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "unit",
+          "path": "evals/results/laeufe/test-erweiterungslauf-model-test-mjs.log",
+          "command": "node --test test/erweiterungslauf-model.test.mjs"
+        },
+        {
+          "kind": "unit",
+          "path": "evals/results/laeufe/test-agent-tasks-test-mjs.log",
+          "command": "node --test test/agent-tasks.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "ERWEITERUNG-03",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "unit",
+          "path": "evals/results/laeufe/test-erweiterungslauf-model-test-mjs.log",
+          "command": "node --test test/erweiterungslauf-model.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "ERWEITERUNG-04",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/evals-pruefungen-erweiterung-kein-posten-mjs.log",
+          "command": "node evals/pruefungen/erweiterung-kein-posten.mjs"
+        }
+      ]
+    },
+    {
+      "id": "ERWEITERUNG-05",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "unit",
+          "path": "evals/results/laeufe/test-erweiterungslauf-model-test-mjs.log",
+          "command": "node --test test/erweiterungslauf-model.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "MOMENT-01",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "unit",
+          "path": "evals/results/laeufe/test-momente-model-test-mjs.log",
+          "command": "node --test test/momente-model.test.mjs"
+        },
+        {
+          "kind": "unit",
+          "path": "evals/results/laeufe/evals-pruefungen-momente-tabelle-mjs.log",
+          "command": "node evals/pruefungen/momente-tabelle.mjs"
+        }
+      ]
+    },
+    {
+      "id": "MOMENT-02",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "unit",
+          "path": "evals/results/laeufe/test-momente-model-test-mjs.log",
+          "command": "node --test test/momente-model.test.mjs"
+        },
+        {
+          "kind": "unit",
+          "path": "evals/results/laeufe/evals-pruefungen-momente-tabelle-mjs.log",
+          "command": "node evals/pruefungen/momente-tabelle.mjs"
+        }
+      ]
+    },
+    {
+      "id": "MOMENT-03",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "unit",
+          "path": "evals/results/laeufe/evals-pruefungen-momente-tabelle-mjs.log",
+          "command": "node evals/pruefungen/momente-tabelle.mjs"
+        }
+      ]
+    },
+    {
+      "id": "MOMENT-04",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "unit",
+          "path": "evals/results/laeufe/test-momente-model-test-mjs.log",
+          "command": "node --test test/momente-model.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "MOMENT-05",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "unit",
+          "path": "evals/results/laeufe/test-momente-model-test-mjs.log",
+          "command": "node --test test/momente-model.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "MOMENT-06",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "unit",
+          "path": "evals/results/laeufe/test-momente-model-test-mjs.log",
+          "command": "node --test test/momente-model.test.mjs"
+        },
+        {
+          "kind": "unit",
+          "path": "evals/results/laeufe/evals-pruefungen-momente-tabelle-mjs.log",
+          "command": "node evals/pruefungen/momente-tabelle.mjs"
+        }
+      ]
+    },
+    {
+      "id": "MOMENT-07",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "unit",
+          "path": "evals/results/laeufe/test-momente-model-test-mjs.log",
+          "command": "node --test test/momente-model.test.mjs"
+        }
+      ]
     }
   ]
 }

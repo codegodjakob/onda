@@ -202,6 +202,46 @@
     ],
     "DESIGN-05": [
       "evals/pruefungen/gestalt.mjs"
+    ],
+    "ERWEITERUNG-01": [
+      "test/erweiterungslauf-model.test.mjs"
+    ],
+    "ERWEITERUNG-02": [
+      "test/erweiterungslauf-model.test.mjs",
+      "test/agent-tasks.test.mjs"
+    ],
+    "ERWEITERUNG-03": [
+      "test/erweiterungslauf-model.test.mjs"
+    ],
+    "ERWEITERUNG-04": [
+      "evals/pruefungen/erweiterung-kein-posten.mjs"
+    ],
+    "ERWEITERUNG-05": [
+      "test/erweiterungslauf-model.test.mjs"
+    ],
+    "MOMENT-01": [
+      "test/momente-model.test.mjs",
+      "evals/pruefungen/momente-tabelle.mjs"
+    ],
+    "MOMENT-02": [
+      "test/momente-model.test.mjs",
+      "evals/pruefungen/momente-tabelle.mjs"
+    ],
+    "MOMENT-03": [
+      "evals/pruefungen/momente-tabelle.mjs"
+    ],
+    "MOMENT-04": [
+      "test/momente-model.test.mjs"
+    ],
+    "MOMENT-05": [
+      "test/momente-model.test.mjs"
+    ],
+    "MOMENT-06": [
+      "test/momente-model.test.mjs",
+      "evals/pruefungen/momente-tabelle.mjs"
+    ],
+    "MOMENT-07": [
+      "test/momente-model.test.mjs"
     ]
   },
   "_ungebunden_begruendung": {
