@@ -99,24 +99,40 @@ try {
     `${doppelung.anzahl} Textauszuege aus dem Dokument in der Spalte. Beispiel: ${JSON.stringify(doppelung.beispiele[0] || '')}`)
 
   // --- DESIGN-03: Bausteine oeffnen sich einzeln -----------------------------
+  // Geprueft wird die Eigenschaft, um die es geht: EIN Klick veraendert GENAU EINE
+  // Karte, und derselbe Klick nimmt sich zurueck. Geklickt wird deshalb eine Karte,
+  // die zugeklappt DASTEHT — Ueberschriften und der gerade bearbeitete Absatz stehen
+  // absichtlich schon offen, an ihnen liesse sich ein Aufklappen gar nicht messen.
   const aufklappen = await page.evaluate(async () => {
+    const warte = () => new Promise(r => setTimeout(r, 350))
     const spalte = document.querySelector('[class*=sidebar]')
     const karten = [...(spalte?.querySelectorAll('[class*=block-preview]') || [])]
       .filter(e => e.getBoundingClientRect().height > 20)
     if (karten.length < 2) return { fehler: `nur ${karten.length} Bausteine gefunden` }
-    const vorher = karten.map(k => Math.round(k.getBoundingClientRect().height))
-    karten[0].click()
-    await new Promise(r => setTimeout(r, 350))
-    const nachher = karten.map(k => Math.round(k.getBoundingClientRect().height))
-    return { vorher, nachher }
+    const zu = karten.findIndex(k => k.getAttribute('aria-expanded') === 'false')
+    if (zu < 0) return { fehler: 'keine zugeklappte Karte — es gibt nichts aufzuklappen' }
+
+    const hoehen = () => karten.map(k => Math.round(k.getBoundingClientRect().height))
+    const vorher = hoehen()
+    karten[zu].click()
+    await warte()
+    const nachher = hoehen()
+    karten[zu].click()
+    await warte()
+    const wiederZu = hoehen()
+    return { zu, vorher, nachher, wiederZu }
   })
   if (aufklappen.fehler) pruefe('DESIGN-03', 'Bausteine oeffnen sich einzeln', false, aufklappen.fehler)
   else {
-    const ersterWaechst = aufklappen.nachher[0] > aufklappen.vorher[0]
-    const uebrigeGleich = aufklappen.vorher.slice(1).every((h, i) => h === aufklappen.nachher[i + 1])
-    pruefe('DESIGN-03', 'Bausteine oeffnen sich einzeln', ersterWaechst && uebrigeGleich,
-      `Hoehen vorher ${aufklappen.vorher.join(',')} → nachher ${aufklappen.nachher.join(',')}. `
-      + (ersterWaechst ? '' : 'Der geklickte Baustein waechst nicht — es gibt kein Aufklappen.'))
+    const { zu, vorher, nachher, wiederZu } = aufklappen
+    const waechst = nachher[zu] > vorher[zu]
+    const uebrigeGleich = vorher.every((h, i) => i === zu || h === nachher[i])
+    const klapptZurueck = wiederZu[zu] === vorher[zu]
+    pruefe('DESIGN-03', 'Bausteine oeffnen sich einzeln', waechst && uebrigeGleich && klapptZurueck,
+      `Karte ${zu}: ${vorher[zu]} → ${nachher[zu]} → ${wiederZu[zu]}px. `
+      + (waechst ? '' : 'Der geklickte Baustein waechst nicht — es gibt kein Aufklappen. ')
+      + (uebrigeGleich ? '' : 'Andere Karten haben sich mitveraendert. ')
+      + (klapptZurueck ? '' : 'Ein zweiter Klick klappt nicht wieder zu.'))
   }
 
   // --- DESIGN-04: keine Grossbuchstaben-Beschriftungen -----------------------

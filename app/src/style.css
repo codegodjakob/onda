@@ -60,11 +60,16 @@
   /* Titel und Seitentitel aus dem Design System — fehlten hier ganz. */
   --text-xl: 21px; --text-4xl: 40px;
 
-  /* Raum */
+  /* Raum — Stufenleiter exakt wie design-system/tokens/spacing.css.
+     Die App hatte ab Stufe 7 eine eigene Leiter (28/32/40/48/64) und damit oberhalb
+     von 24px eine andere Sprache als das System (32/40/48/64/80). Genutzt war davon
+     genau eine Stufe, der Wechsel kostet also nichts. */
+  --space-0: 0; --space-px: 1px; --space-05: 2px;
   --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 20px;
-  --space-6: 24px; --space-7: 28px; --space-8: 32px; --space-9: 40px; --space-10: 48px;
-  --space-11: 64px; --space-12: 96px;
-  --sidebar-width: 264px; --topbar-height: 56px; --container-reading: 680px;
+  --space-6: 24px; --space-7: 32px; --space-8: 40px; --space-9: 48px; --space-10: 64px;
+  --space-11: 80px; --space-12: 96px;
+  --sidebar-width: 264px; --topbar-height: 56px;
+  --container-sm: 640px; --container-md: 880px; --container-lg: 1120px; --container-reading: 680px;
 
   /* Radius */
   /* Radien folgen dem Design System (design-system/tokens/radius.css):
@@ -184,29 +189,40 @@ body.view-editor #editorView { display: flex; }
   -webkit-mask-image: linear-gradient(to bottom, transparent 0, black 44px, black calc(100% - 44px), transparent 100%);
   mask-image: linear-gradient(to bottom, transparent 0, black 44px, black calc(100% - 44px), transparent 100%);
 }
-#homeInner { max-width: 620px; margin: 0 auto; padding: 72px 36px 120px; }
-.home-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
-.home-title { font-size: 21px; font-weight: 500; color: var(--txt); }
-#newBtn { color: var(--txt2); line-height: 1; padding: 6px; border-radius: 7px; }
+/* Bibliothek und Schreibansicht sprechen dieselbe Sprache: alle Maße hier stammen
+   aus den Gestaltungsmarken (design-system/tokens), keine frei gewaehlten Pixel mehr.
+   margin-inline statt der margin-Kurzform — 'margin: 0 auto' mischt eine Abstands-
+   entscheidung mit einer Zentrierung, und nur die Zentrierung ist hier gemeint. */
+#homeInner {
+  max-width: var(--container-sm);
+  margin-inline: auto;
+  padding: var(--space-10) var(--space-7) var(--space-12);
+}
+.home-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: var(--space-5);
+}
+.home-title { font-size: var(--text-xl); font-weight: var(--fw-medium); color: var(--txt); }
+#newBtn { color: var(--txt2); line-height: 1; padding: var(--space-2); border-radius: var(--radius-control); }
 #newBtn:hover { background: var(--bg3); color: var(--txt); }
 #newBtn svg, #sortBtn svg { width: 17px; height: 17px; display: block; }
 #sortBtn.on { color: var(--accent); }
-.home-tools { display: flex; gap: 6px; align-items: center; margin-bottom: 14px; }
+.home-tools { display: flex; gap: var(--space-2); align-items: center; margin-bottom: var(--space-4); }
 #search {
   flex: 1; min-width: 0;
-  background: var(--bg2); border: 0.5px solid var(--line2); border-radius: var(--r);
-  padding: 8px 12px; font-size: 13px; color: var(--txt); outline: none;
+  background: var(--bg2); border: 0.5px solid var(--line2); border-radius: var(--radius-control);
+  padding: var(--space-2) var(--space-4); font-size: var(--text-sm); color: var(--txt); outline: none;
   transition: border-color var(--dur) var(--ease);
 }
 #search:focus { border-color: var(--accent); }
 #search::placeholder { color: var(--txt3); }
-#sortBtn { color: var(--txt3); padding: 6px; border-radius: 7px; }
+#sortBtn { color: var(--txt3); padding: var(--space-2); border-radius: var(--radius-control); }
 #sortBtn:hover { background: var(--bg3); color: var(--txt2); }
 
 .doc {
-  display: flex; align-items: center; gap: 10px;
-  padding: 11px 14px; border-radius: var(--r);
-  cursor: default; margin-bottom: 2px;
+  display: flex; align-items: center; gap: var(--space-3);
+  padding: var(--space-3) var(--space-4); border-radius: var(--radius-control);
+  cursor: default; margin-bottom: var(--space-px);
   transition: background var(--dur) var(--ease);
 }
 .doc:hover,
@@ -223,31 +239,31 @@ body.view-editor #editorView { display: flex; }
   outline-offset: 4px;
 }
 .doc .dt {
-  font-size: 14.5px; color: var(--txt);
+  font-size: var(--text-base); color: var(--txt);
   overflow-wrap: anywhere;
 }
-.doc .dt mark { background: var(--accentbg); color: var(--accent); border-radius: 3px; padding: 0 1px; }
+.doc .dt mark { background: var(--accentbg); color: var(--accent); border-radius: var(--radius-sm); padding: 0 var(--space-px); }
 .doc .dd {
-  font-size: 12px; color: var(--text-secondary); margin-top: 2px;
+  font-size: var(--text-xs); color: var(--text-secondary); margin-top: var(--space-05);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .doc .trash-acts { flex: none; }
-.empty { padding: 26px 14px; font-size: 13px; color: var(--txt3); line-height: 1.6; }
+.empty { padding: var(--space-6) var(--space-4); font-size: var(--text-sm); color: var(--txt3); line-height: 1.6; }
 
-#trash { border-top: 0.5px solid var(--line); margin-top: 26px; padding-top: 8px; }
+#trash { border-top: 0.5px solid var(--line); margin-top: var(--space-6); padding-top: var(--space-2); }
 .trash-toggle {
-  width: 100%; text-align: left; font-size: 12px; color: var(--txt3);
-  padding: 7px 12px; border-radius: var(--r);
+  width: 100%; text-align: left; font-size: var(--text-xs); color: var(--txt3);
+  padding: var(--space-2) var(--space-3); border-radius: var(--radius-control);
 }
 .trash-toggle:hover { background: var(--bg3); }
 #trashCount { float: right; color: var(--txt3); font-variant-numeric: tabular-nums; }
 .trash-doc {
-  display: flex; align-items: center; gap: 6px;
-  padding: 6px 8px 6px 14px; border-radius: var(--r);
+  display: flex; align-items: center; gap: var(--space-2);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4); border-radius: var(--radius-control);
 }
 .trash-doc:hover { background: var(--bg3); }
 .trash-doc .dt {
-  flex: 1; min-width: 0; font-size: 12.5px; color: var(--txt2);
+  flex: 1; min-width: 0; font-size: var(--text-xs); color: var(--txt2);
   overflow-wrap: anywhere;
 }
 .trash-acts { display: flex; gap: 2px; flex: none; opacity: 0; transition: opacity var(--dur) var(--ease); }
@@ -256,7 +272,7 @@ body.view-editor #editorView { display: flex; }
 .doc:hover .trash-acts,
 .doc:focus-within .trash-acts { opacity: 1; }
 .tico {
-  width: 26px; height: 26px; border-radius: 6px; color: var(--txt3);
+  width: 26px; height: 26px; border-radius: var(--radius-control); color: var(--txt3);
   display: inline-flex; align-items: center; justify-content: center;
 }
 .tico:hover { background: var(--bg); color: var(--txt); }
@@ -937,11 +953,11 @@ body.zen #minimap, body.zen #lane { display: none; }
 .cv-card:hover .cv-make, .cv-card:focus-within .cv-make { opacity: 1; }
 
 /* ---------- Startseite: Projekte als Kacheln ---------- */
-#doclist.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+#doclist.grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }
 #doclist.grid .doc {
   position: relative; flex-direction: column; align-items: stretch; justify-content: flex-end;
-  min-height: 116px; padding: 16px;
-  background: var(--bg2); border: 0.5px solid var(--line2); border-radius: var(--r2);
+  min-height: 116px; padding: var(--space-4);
+  background: var(--bg2); border: 0.5px solid var(--line2); border-radius: var(--radius-card);
 }
 #doclist.grid .doc:hover { background: var(--bg3); }
 #doclist.grid .doc .doc-main {
@@ -950,9 +966,9 @@ body.zen #minimap, body.zen #lane { display: none; }
   justify-content: flex-end;
   align-items: stretch;
 }
-#doclist.grid .doc .dt { font-size: 15.5px; font-weight: 500; }
+#doclist.grid .doc .dt { font-size: var(--text-md); font-weight: var(--fw-medium); }
 #doclist.grid .doc .trash-acts {
-  position: absolute; top: 8px; right: 8px;
+  position: absolute; top: var(--space-2); right: var(--space-2);
   opacity: 0; transition: opacity var(--dur) var(--ease);
 }
 #doclist.grid .doc:hover .trash-acts,
@@ -1286,7 +1302,7 @@ body.zen #minimap, body.zen #lane { display: none; }
   .counter { display: none !important; }
   #page { padding: 38px 22px 42vh; }
   #title { font-size: 27px; }
-  #homeInner { padding: 46px 20px 90px; }
+  #homeInner { padding: var(--space-9) var(--space-5) var(--space-11); }
   #doclist.grid { grid-template-columns: 1fr; }
   .ai-overlay { align-items: stretch; padding: 8px; }
   .ai-box-finding, .ai-box-finding.ai-box-huge {
@@ -3057,7 +3073,7 @@ button.onda-aura:focus-visible {
   flex: none;
   display: inline-flex;
   align-items: center;
-  padding: 3px 8px;
+  padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-pill);
   background: var(--success-tint);
   color: var(--text-primary);
@@ -3078,7 +3094,7 @@ button.onda-aura:focus-visible {
 .source-reader-bundle-status {
   align-self: flex-start;
   display: inline-flex;
-  padding: 3px 8px;
+  padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-pill);
   background: var(--success-tint);
   color: var(--text-primary);
@@ -3353,7 +3369,7 @@ button.onda-aura:focus-visible {
 .research-candidate-access {
   display: inline-flex;
   width: fit-content;
-  padding: 3px 8px;
+  padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-pill);
   background: var(--surface-inset);
   color: var(--text-secondary);
@@ -3606,7 +3622,7 @@ button.onda-aura:focus-visible {
 .memory-sensitivity {
   display: inline-flex;
   width: fit-content;
-  padding: 3px 8px;
+  padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-pill);
   background: var(--accent-tint);
   color: var(--text-secondary);
@@ -3781,7 +3797,7 @@ button.onda-aura:focus-visible {
 .argument-tag {
   display: inline-flex;
   width: fit-content;
-  padding: 3px 8px;
+  padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-pill);
   background: var(--accent-tint);
   color: var(--text-secondary);
@@ -4369,7 +4385,7 @@ button.onda-aura:focus-visible {
   display: inline-flex;
   width: fit-content;
   max-width: 100%;
-  padding: 3px 8px;
+  padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-pill);
   background: var(--accent-tint);
   color: var(--text-secondary);

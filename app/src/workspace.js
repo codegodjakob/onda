@@ -470,6 +470,40 @@ function openInsertMenu(afterBlockId, opener) {
   menu.querySelector('button')?.focus()
 }
 
+// Auf- und Zugeklapptes der Struktur-Spalte. Bewusst NICHT im Dokument gespeichert:
+// ob eine Karte gerade offen steht, ist eine Frage des Hinschauens, keine Eigenschaft
+// des Textes -- sie gehoert nicht in eine Datei, die man exportiert oder teilt.
+// Drei Zustaende je Baustein: nichts gesetzt (Voreinstellung nach Rolle), ausdruecklich
+// offen, ausdruecklich zu. Die ausdrueckliche Wahl schlaegt die Voreinstellung.
+let strukturKlappen = { docId: null, offen: new Set(), zu: new Set() }
+
+function setzeStrukturDokument(docId) {
+  if (strukturKlappen.docId === docId) return
+  strukturKlappen = { docId, offen: new Set(), zu: new Set() }
+}
+
+// Voreinstellung: Ueberschriften stehen offen — ihr Wortlaut IST die Struktur.
+// Alles andere bleibt eine Zeile, bis jemand es anklickt.
+//
+// Der gerade bearbeitete Absatz klappt sich AUSDRUECKLICH NICHT von allein auf. Zwei
+// Gruende: erstens ist genau dieser Auszug der ueberfluessigste von allen — man sieht
+// den Absatz zwei Handbreit weiter rechts im Original. Zweitens wuerde die Spalte sich
+// dann bei jedem Cursor-Sprung selbst umbauen, waehrend man hinschaut. Wo man steht,
+// sagt die Markierung (aria-current, Akzentrand); dafuer braucht es keinen zweiten Text.
+function istKarteOffen(block) {
+  if (strukturKlappen.zu.has(block.id)) return false
+  if (strukturKlappen.offen.has(block.id)) return true
+  return NAV_ROLLEN_MIT_EIGENEM_TEXT.has(block.role)
+}
+
+function klappeKarte(block) {
+  const offen = istKarteOffen(block)
+  strukturKlappen.offen.delete(block.id)
+  strukturKlappen.zu.delete(block.id)
+  if (offen) strukturKlappen.zu.add(block.id)
+  else strukturKlappen.offen.add(block.id)
+}
+
 function createNavBlockNode(block) {
   const preview = createNode('button', 'block-preview')
   preview.type = 'button'
@@ -479,7 +513,15 @@ function createNavBlockNode(block) {
   const hint = createNode('span', 'block-preview-hint')
   hint.setAttribute('aria-hidden', 'true')
   preview.append(excerpt, role, hint)
-  preview.addEventListener('click', () => focusBlock(block.id))
+  // Ein Klick tut beides: er springt an die Stelle UND klappt die Karte um. Beides
+  // ist dieselbe Absicht ("ich will zu diesem Baustein"), also braucht es keine
+  // zweite Geste. Umklappen zuerst, damit focusBlock den Baustein aktiv setzen darf,
+  // ohne die gerade getroffene Wahl zu ueberschreiben.
+  preview.addEventListener('click', () => {
+    klappeKarte(block)
+    focusBlock(block.id)
+    renderStructureNav()
+  })
   return { preview, excerpt, role, hint }
 }
 
@@ -499,16 +541,16 @@ function updateNavBlockNode(nodes, block, activeBlockId, hintKind) {
     ? ' — Beleg offen'
     : hintKind === 'style' ? ' — Formulierung offen' : ''
   const istAktiv = block.id === activeBlockId
-  const traegtEigenenText = NAV_ROLLEN_MIT_EIGENEM_TEXT.has(block.role)
 
-  // Der Auszug erscheint nur, wo er etwas beitraegt: bei Ueberschriften immer,
-  // bei Absaetzen nur in dem, in dem gerade geschrieben wird. Damit klappt sich
-  // genau eine Karte auf, ohne dass es dafuer eine zweite Geste braucht.
-  const zeigeAuszug = traegtEigenenText || istAktiv
+  // Der Auszug erscheint nur, wo er etwas beitraegt: bei Ueberschriften und im
+  // Absatz, in dem gerade geschrieben wird, von allein -- ueberall sonst auf Klick.
+  // Ohne das wiederholt die Spalte den Fliesstext ein zweites Mal.
+  const zeigeAuszug = istKarteOffen(block)
 
   // Vorlesegeraete bekommen weiterhin den vollen Wortlaut — die Kuerzung ist
   // eine Frage der Augen, nicht der Zugaenglichkeit.
   nodes.preview.setAttribute('aria-label', `${roleLabel}: ${excerpt}${hintLabel}`)
+  nodes.preview.setAttribute('aria-expanded', zeigeAuszug ? 'true' : 'false')
   if (istAktiv) nodes.preview.setAttribute('aria-current', 'true')
   else nodes.preview.removeAttribute('aria-current')
 
@@ -523,6 +565,7 @@ function updateNavBlockNode(nodes, block, activeBlockId, hintKind) {
 }
 
 function rebuildStructureNav(list, doc, blocks) {
+  setzeStrukturDokument(doc.id)
   const blockNodes = new Map()
   const children = []
   if (!blocks.length) children.push(createNode('p', 'structure-nav-empty', 'Noch keine Textabschnitte.'))
