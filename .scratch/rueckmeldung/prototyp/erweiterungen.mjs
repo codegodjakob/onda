@@ -171,10 +171,18 @@ Gib die behaltenen unverändert zurück, in derselben Struktur.`,
 const key = schluessel()
 const text = await readFile(resolve(hier, 'pruefstueck.md'), 'utf8')
 
-process.stdout.write('Erzeuge Erweiterungen auf drei Wegen …\n')
+// Sparsam: standardmäßig laufen nur die beiden billigen Wege (je ein Aufruf).
+// Weg C erzeugt neun Ideen und sortiert in einem zweiten Aufruf aus — er kostet
+// gut das Dreifache. Er lohnt nur, wenn A und B sich nicht unterscheiden; dann
+// mit ALLE_WEGE=1 nachlegen.
+const wegListe = process.env.ALLE_WEGE
+  ? [wegNackt, wegAngewiesen, wegZweiDurchgaenge]
+  : [wegNackt, wegAngewiesen]
+
+process.stdout.write(`Erzeuge Erweiterungen auf ${wegListe.length} Wegen …\n`)
 const wege = []
-for (const [i, weg] of [wegNackt, wegAngewiesen, wegZweiDurchgaenge].entries()) {
-  process.stdout.write(`  [${i + 1}/3] …\n`)
+for (const [i, weg] of wegListe.entries()) {
+  process.stdout.write(`  [${i + 1}/${wegListe.length}] …\n`)
   try {
     wege.push(await weg(key, text))
   } catch (fehler) {
