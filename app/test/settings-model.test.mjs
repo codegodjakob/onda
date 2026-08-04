@@ -136,6 +136,25 @@ test('Monatsbudget: kaputte Werte fallen auf die Voreinstellung, nicht ins Boden
   }
 })
 
+test('Monatsbudget: eine bewusst geloeste Bremse bleibt geloest, auch bei hohem Verbrauch', () => {
+  // Diese Zusicherung stand frueher unter 'ohne konfigurierte Grenze bleibt Automatik
+  // unveraendert erlaubt'. Mit der Voreinstellung hat sie ihren Fall gewechselt: nicht
+  // mehr 'kein Eintrag', sondern 'ausdruecklich auf null gesetzt'. Der Test wurde beim
+  // Einbau der Voreinstellung geloescht statt umgeschrieben — die Zusicherung war
+  // seither ungeschuetzt. Sie zaehlt: Wer die Bremse loest, tut das absichtlich und
+  // darf sie nicht durch die Hintertuer zurueckbekommen.
+  const settings = normalizeSettings({
+    kiMonatsbudgetCents: null,
+    usage: { monat: '2026-07', kostenCents: 999999 },
+  }, '2026-07')
+  assert.equal(settings.kiMonatsbudgetCents, null, 'null ueberlebt die Normalisierung')
+  assert.deepEqual(beansprucheAutomatiklauf(settings, '2026-07'), {
+    erlaubt: true,
+    grund: 'kein-budget',
+    freigabeVerbraucht: false,
+  })
+})
+
 test('Monatsbudget: unter der Grenze darf Automatik laufen, an und ueber der Grenze nicht', () => {
   const settings = normalizeSettings({
     kiMonatsbudgetCents: 500,
