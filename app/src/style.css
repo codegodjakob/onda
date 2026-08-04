@@ -1403,6 +1403,150 @@ body.zen #minimap, body.zen #lane { display: none; }
   letter-spacing: var(--tracking-normal, 0);
 }
 
+/* Zurueckgehaltenes. Bewusst kein Warnton und kein Ausrufezeichen: es ist eine
+   Auskunft, keine Mahnung. Ein Klick hebt die Zurueckhaltung auf, bis wieder
+   geschrieben wird. */
+.onda-side-zurueck[hidden] { display: none; }
+.onda-zurueck-knopf {
+  display: flex; align-items: baseline; gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  text-align: left; cursor: pointer;
+}
+.onda-zurueck-knopf:hover { background: var(--bg-hover); }
+.onda-zurueck-knopf:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
+.onda-zurueck-zahl {
+  flex: none;
+  color: var(--text-primary);
+  font: var(--fw-medium) var(--text-sm)/1.35 var(--font-sans);
+  font-variant-numeric: tabular-nums;
+}
+.onda-zurueck-text {
+  color: var(--text-secondary);
+  font: var(--fw-regular) var(--text-xs)/1.45 var(--font-sans);
+}
+
+/* ---------- Erweiterungen: der zweite Kanal ----------
+   Sichtbar anders als eine Korrektur, und zwar an drei Stellen:
+   keine Warn- oder Gefahrfarbe (nichts ist kaputt), keine Zahl (nichts ist offen),
+   kein Strich zum Text (nichts wartet an einer Zeile). Der Akzentstrich links steht
+   fuer ein Angebot; die Karte selbst bleibt Papier. */
+.onda-side-erweiterungen { display: flex; flex-direction: column; gap: var(--space-2); }
+
+.onda-erw {
+  position: relative;
+  border: 1px solid var(--border-subtle);
+  border-left: 2px solid var(--accent);
+  border-radius: var(--radius-card);
+  background: var(--bg-surface);
+  overflow: hidden;
+  transition: border-color var(--dur-quick) var(--ease-out), box-shadow var(--dur-quick) var(--ease-out);
+}
+.onda-erw:hover { border-color: var(--border-default); border-left-color: var(--accent); box-shadow: var(--shadow-sm); }
+/* Gemerktes traegt einen vollen Strich statt eines Haekchens: ein Haken ist die
+   Sprache erledigter Aufgaben, und eine Erweiterung war nie eine Aufgabe. */
+.onda-erw.is-gemerkt { border-left-width: 4px; background: var(--accent-tint); }
+
+.onda-erw-kopf {
+  display: flex; flex-direction: column; gap: var(--space-1);
+  width: 100%; min-width: 0;
+  padding: var(--space-3);
+  text-align: left; cursor: pointer;
+}
+.onda-erw-kopf:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
+.onda-erw-art {
+  color: var(--text-secondary);
+  font: var(--fw-medium) var(--text-xs)/1.2 var(--font-sans);
+}
+.onda-erw-anriss {
+  color: var(--text-primary);
+  font: var(--fw-regular) var(--text-sm)/1.45 var(--font-sans);
+  overflow-wrap: anywhere;
+}
+
+.onda-erw-koerper {
+  display: flex; flex-direction: column; gap: var(--space-3);
+  padding: 0 var(--space-3) var(--space-3);
+}
+.onda-erw-was {
+  margin: 0; color: var(--text-tertiary);
+  font: var(--fw-regular) var(--text-xs)/1.4 var(--font-sans);
+}
+.onda-erw-gedanke {
+  margin: 0; color: var(--text-primary);
+  font: var(--fw-regular) var(--text-sm)/1.55 var(--font-sans);
+}
+.onda-erw-muster {
+  margin: 0; display: flex; flex-direction: column; gap: var(--space-1);
+  padding: var(--space-3);
+  border-radius: var(--radius-card);
+  background: var(--surface-2);
+}
+.onda-erw-muster-label {
+  color: var(--text-secondary);
+  font: var(--fw-medium) var(--text-xs)/1.2 var(--font-sans);
+}
+.onda-erw-muster-text {
+  color: var(--text-primary);
+  font: var(--fw-regular) var(--text-sm)/1.5 var(--font-sans);
+}
+
+.onda-erw-stellen { display: flex; flex-direction: column; gap: var(--space-1); }
+.onda-erw-stelle {
+  display: flex; flex-direction: column; gap: var(--space-05);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  text-align: left; cursor: pointer;
+}
+.onda-erw-stelle:hover:not(:disabled) { background: var(--bg-hover); }
+.onda-erw-stelle:disabled { cursor: default; opacity: 0.55; }
+.onda-erw-stelle:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
+.onda-erw-stelle-label {
+  color: var(--text-secondary);
+  font: var(--fw-medium) var(--text-xs)/1.2 var(--font-sans);
+}
+.onda-erw-stelle-zitat {
+  color: var(--text-primary);
+  font: var(--fw-regular) var(--text-sm)/1.45 var(--font-sans);
+  font-style: italic;
+  overflow-wrap: anywhere;
+}
+
+.onda-erw-gesten { display: flex; gap: var(--space-2); }
+.onda-erw-geste {
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-control);
+  color: var(--text-primary);
+  font: var(--fw-medium) var(--text-sm)/1.2 var(--font-sans);
+  cursor: pointer;
+}
+.onda-erw-geste:hover:not(:disabled) { background: var(--bg-hover); }
+.onda-erw-geste:disabled { cursor: default; color: var(--text-secondary); border-color: var(--border-subtle); }
+.onda-erw-geste.is-still { border-color: transparent; color: var(--text-secondary); }
+.onda-erw-geste:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
+
+.onda-erw-leer {
+  margin: 0;
+  color: var(--text-secondary);
+  font: var(--fw-regular) var(--text-xs)/1.55 var(--font-sans);
+}
+.onda-erw-fragen {
+  align-self: flex-start;
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-control);
+  color: var(--text-secondary);
+  font: var(--fw-medium) var(--text-sm)/1.2 var(--font-sans);
+  cursor: pointer;
+}
+.onda-erw-fragen:hover:not(:disabled) { background: var(--bg-hover); color: var(--text-primary); }
+.onda-erw-fragen:disabled { cursor: default; opacity: 0.5; }
+.onda-erw-fragen:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
+
 #agentWidget[hidden],
 #evidenceWindow[hidden] {
   display: none;

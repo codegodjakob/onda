@@ -56,6 +56,16 @@
           <!-- Struktur-Karten (.block-preview) werden von workspace.js gerendert (Area C) -->
         </nav>
 
+        <!-- Zurückgehaltenes: was auf seinen Moment wartet, bleibt auffindbar.
+             Gerendert von workspace.js. -->
+        <div id="zurueckgehalten" class="onda-side-zurueck" hidden></div>
+
+        <!-- Zweiter Kanal. Bewusst ohne Zähler: eine Zahl neben "offen" macht aus
+             einem Angebot eine Hausaufgabe. Gerendert von workspace.js. -->
+        <section id="erweiterungen" class="onda-side-section onda-side-erweiterungen" aria-label="Erweiterungen">
+          <span class="onda-eyebrow">Erweiterungen</span>
+        </section>
+
         <section class="onda-side-section onda-side-material">
           <span class="onda-eyebrow">Material</span>
           <button id="materialSources" class="onda-material-btn">

@@ -30,6 +30,24 @@ import {
 } from './verstaendnis-interview.mjs'
 import { baueDocText } from './agent-findings.mjs'
 import { pruefePausenAusloeser, versucheHinweislauf } from './hinweislauf-model.mjs'
+import { versucheErweiterungslauf } from './erweiterungslauf-model.mjs'
+import {
+  ART_ERKLAERUNG,
+  ART_LABEL,
+  ensureErweiterungen,
+  legeErweiterungWeg,
+  merkeErweiterung,
+  sichtbareErweiterungen,
+} from './erweiterung-model.mjs'
+import {
+  AUFSCHAUEN_MS,
+  INNEHALTEN_AN_GRENZE_MS,
+  INNEHALTEN_MS,
+  aktuellerMoment,
+  artVon,
+  darfErscheinen,
+  istSatzende,
+} from './momente-model.mjs'
 import {
   baueChatKontext,
   baueFindingZusatzAnweisung,
@@ -92,6 +110,19 @@ let agentInitiativeTimer = null
 // der Zeitgeber-Griff fuer den Pausen-Ausloeser (planeHinweislauf/clearHinweislaufTimer, H-3).
 let hinweislaufAktiv = false
 let hinweislaufTimer = null
+// Zweiter Kanal (Erweiterungen): eigene Sperre, damit ein Erweiterungslauf und ein
+// Hinweislauf einander nicht ausschliessen -- es sind zwei verschiedene Fragen an
+// denselben Text, und der Cache-Praefix ist derselbe, also kostet der zweite wenig.
+let erweiterungslaufAktiv = false
+let erweiterungslaufTimer = null
+// Zeitgeber fuer den Momentwechsel: wenn genug Ruhe vergangen ist, darf mehr sichtbar
+// werden. Ohne diesen Zeitgeber erschiene das Zurueckgehaltene erst beim naechsten
+// Tastendruck -- also genau dann nicht, wenn man aufschaut.
+let momentTimer = null
+// Von Hand aufgeschaut: gilt bis zum naechsten Tastendruck. Ohne diesen Griff hiesse
+// 'zurueckgehalten' in der Praxis 'unauffindbar' -- wer nie 45 Sekunden Pause macht,
+// bekaeme eine Strukturfrage nie zu sehen.
+let momentVonHand = false
 let agentLiveFrame = null
 let agentPresenceFocusRequest = false
 let pendingParagraphBoundaryDocId = null
@@ -210,6 +241,8 @@ function elements() {
     agentPresence: document.getElementById('ondaAura'),
     agentWidget: document.getElementById('agentWidget'),
     evidenceWindow: document.getElementById('evidenceWindow'),
+    erweiterungen: document.getElementById('erweiterungen'),
+    zurueckgehalten: document.getElementById('zurueckgehalten'),
   }
 }
 
@@ -599,6 +632,177 @@ function renderStructureNav() {
     const nodes = structureNavState.blockNodes.get(block.id)
     if (nodes) updateNavBlockNode(nodes, block, workspace.activeBlockId, hints.get(block.id) || null)
   })
+}
+
+// --- Erweiterungen in der Seitenspalte --------------------------------------
+// Warum hier und nicht am Text: eine Erweiterung ist kein offener Posten. Sie darf
+// nicht neben der Zeile stehen und darauf warten, entschieden zu werden -- dann waere
+// sie eine Forderung wie jede Korrektur. Sie liegt in der Peripherie, findbar, ohne
+// sich aufzudraengen, und wer sie anklickt, kommt an die Stelle, um die es geht.
+const offeneErweiterungsKarten = new Set()
+
+function erweiterungAnriss(text) {
+  const satz = String(text || '').split(/(?<=[.!?])\s/)[0] || ''
+  return satz.length > 96 ? `${satz.slice(0, 95).trimEnd()}…` : satz
+}
+
+function erweiterungStelleNode(erweiterung, stelle, index) {
+  const label = erweiterung.art === 'verbindung'
+    ? (index === 0 ? 'Erste Stelle' : 'Zweite Stelle')
+    : 'Zur Stelle'
+  const knopf = createNode('button', 'onda-erw-stelle')
+  knopf.type = 'button'
+  knopf.append(
+    createNode('span', 'onda-erw-stelle-label', label),
+    createNode('span', 'onda-erw-stelle-zitat', erweiterungAnriss(stelle.text) || stelle.text),
+  )
+  knopf.disabled = !stelle.blockId
+  if (stelle.blockId) knopf.addEventListener('click', () => focusBlock(stelle.blockId))
+  return knopf
+}
+
+function erweiterungKarte(doc, erweiterung) {
+  const karte = createNode('article', 'onda-erw')
+  karte.dataset.art = erweiterung.art
+  karte.dataset.erweiterungId = erweiterung.id
+  if (erweiterung.status === 'gemerkt') karte.classList.add('is-gemerkt')
+
+  const offen = offeneErweiterungsKarten.has(erweiterung.id)
+  const kopf = createNode('button', 'onda-erw-kopf')
+  kopf.type = 'button'
+  kopf.setAttribute('aria-expanded', offen ? 'true' : 'false')
+  kopf.append(createNode('span', 'onda-erw-art', ART_LABEL[erweiterung.art]))
+  // Zugeklappt traegt der Kopf den ersten Satz, aufgeklappt nur noch die Art:
+  // sonst stuende derselbe Satz zweimal untereinander -- derselbe Fehler wie
+  // vorher in der Struktur-Spalte, nur an einer anderen Stelle.
+  if (!offen) kopf.append(createNode('span', 'onda-erw-anriss', erweiterungAnriss(erweiterung.gedanke)))
+  // Vorlesegeraete bekommen den Anriss immer, auch aufgeklappt — dort ist die
+  // Wiederholung keine Doppelung, sondern die Beschriftung des Knopfes.
+  kopf.setAttribute('aria-label', `${ART_LABEL[erweiterung.art]}: ${erweiterungAnriss(erweiterung.gedanke)}`)
+  kopf.addEventListener('click', () => {
+    if (offeneErweiterungsKarten.has(erweiterung.id)) offeneErweiterungsKarten.delete(erweiterung.id)
+    else offeneErweiterungsKarten.add(erweiterung.id)
+    renderErweiterungen()
+  })
+  karte.append(kopf)
+
+  if (!offen) return karte
+
+  const koerper = createNode('div', 'onda-erw-koerper')
+  koerper.append(createNode('p', 'onda-erw-was', ART_ERKLAERUNG[erweiterung.art]))
+  koerper.append(createNode('p', 'onda-erw-gedanke', erweiterung.gedanke))
+
+  // Das Muster ist der eigentliche Ertrag: der Einzelfall hilft einmal, das Prinzip
+  // beim naechsten Text von allein.
+  const muster = createNode('p', 'onda-erw-muster')
+  muster.append(
+    createNode('span', 'onda-erw-muster-label', 'Muster'),
+    createNode('span', 'onda-erw-muster-text', erweiterung.muster),
+  )
+  koerper.append(muster)
+
+  if (erweiterung.stellen.length) {
+    const stellen = createNode('div', 'onda-erw-stellen')
+    erweiterung.stellen.forEach((stelle, index) => {
+      stellen.append(erweiterungStelleNode(erweiterung, stelle, index))
+    })
+    koerper.append(stellen)
+  }
+
+  const gesten = createNode('div', 'onda-erw-gesten')
+  const merken = createNode('button', 'onda-erw-geste', erweiterung.status === 'gemerkt' ? 'Gemerkt' : 'Merken')
+  merken.type = 'button'
+  merken.disabled = erweiterung.status === 'gemerkt'
+  merken.addEventListener('click', () => {
+    merkeErweiterung(doc, erweiterung.id)
+    ctx?.scheduleSave()
+    renderErweiterungen()
+  })
+  const weglegen = createNode('button', 'onda-erw-geste is-still', 'Weglegen')
+  weglegen.type = 'button'
+  weglegen.addEventListener('click', () => {
+    legeErweiterungWeg(doc, erweiterung.id)
+    offeneErweiterungsKarten.delete(erweiterung.id)
+    ctx?.scheduleSave()
+    renderErweiterungen()
+  })
+  gesten.append(merken, weglegen)
+  koerper.append(gesten)
+
+  karte.append(koerper)
+  return karte
+}
+
+// Was auf seinen Moment wartet, bleibt auffindbar. Ohne diese Zeile waere die
+// Zurueckhaltung eine Unterschlagung: wer nie lange genug pausiert, saehe eine
+// Strukturfrage nie. Die Zeile drueckt nicht — sie steht da und laesst sich ziehen.
+function renderZurueckgehalten() {
+  const ui = elements()
+  const bereich = ui.zurueckgehalten
+  const doc = ctx?.activeDoc()
+  if (!bereich) return
+  if (!doc) { bereich.hidden = true; return }
+
+  const moment = momentJetzt(doc.id)
+  const wartend = (doc.findings || []).filter(finding => (
+    finding?.status === 'open'
+    && finding.placement === 'passage'
+    && !darfErscheinen(artVon(finding), moment)
+  ))
+
+  if (!wartend.length) { bereich.hidden = true; bereich.replaceChildren(); return }
+
+  const knopf = createNode('button', 'onda-zurueck-knopf')
+  knopf.type = 'button'
+  knopf.append(
+    createNode('span', 'onda-zurueck-zahl', String(wartend.length)),
+    createNode(
+      'span',
+      'onda-zurueck-text',
+      wartend.length === 1
+        ? 'Hinweis wartet aufs Aufschauen — jetzt zeigen'
+        : 'Hinweise warten aufs Aufschauen — jetzt zeigen',
+    ),
+  )
+  knopf.addEventListener('click', () => {
+    momentVonHand = true
+    refreshWorkspace()
+  })
+  bereich.replaceChildren(knopf)
+  bereich.hidden = false
+}
+
+function renderErweiterungen() {
+  const ui = elements()
+  const bereich = ui.erweiterungen
+  const doc = ctx?.activeDoc()
+  if (!bereich || !doc) return
+  ensureErweiterungen(doc)
+
+  const eyebrow = bereich.querySelector('.onda-eyebrow')
+  const liste = sichtbareErweiterungen(doc)
+  const kinder = []
+
+  if (!liste.length) {
+    kinder.push(createNode(
+      'p',
+      'onda-erw-leer',
+      'Hier sammelt sich, was der Text noch hergibt: Weiterführungen, Nachbargebiete, '
+      + 'Verbindungen. Es kommt beim Aufschauen, nicht beim Schreiben.',
+    ))
+  } else {
+    liste.forEach(erweiterung => kinder.push(erweiterungKarte(doc, erweiterung)))
+  }
+
+  // Jeder Moment kann auch von Hand gezogen werden — proaktiv heisst nicht,
+  // warten zu muessen.
+  const fragen = createNode('button', 'onda-erw-fragen', 'Was fällt dir noch ein?')
+  fragen.type = 'button'
+  fragen.disabled = erweiterungslaufAktiv || istBeispielDokument(doc)
+  fragen.addEventListener('click', () => { starteErweiterungslauf() })
+  kinder.push(fragen)
+
+  bereich.replaceChildren(...(eyebrow ? [eyebrow, ...kinder] : kinder))
 }
 
 function closeOndaDialog({ restoreFocus = true } = {}) {
@@ -1550,8 +1754,11 @@ function initiativeInputState(docId = ctx?.activeDoc()?.id) {
       lastInputAt: Number.NaN,
       boundaryAt: Number.NaN,
       boundaryGeneration: null,
+      satzendeAt: Number.NaN,
+      satzendeGeneration: null,
       pendingUpdateGeneration: null,
       pendingBoundary: false,
+      pendingSatzende: false,
     })
   }
   return controller.inputByDocument.get(docId)
@@ -1565,21 +1772,28 @@ function clearAgentInitiativeTimer() {
 function invalidateAgentInitiative({ requireNewInput = false } = {}) {
   clearAgentInitiativeTimer()
   clearHinweislaufTimer()
+  clearErweiterungslaufTimer()
+  clearMomentTimer()
   pendingParagraphBoundaryDocId = null
   const state = initiativeInputState()
   if (!state) return
   state.generation += 1
   state.boundaryAt = Number.NaN
   state.boundaryGeneration = null
+  state.satzendeAt = Number.NaN
+  state.satzendeGeneration = null
   state.pendingBoundary = false
+  state.pendingSatzende = false
   state.pendingUpdateGeneration = null
   if (requireNewInput) state.lastInputAt = Number.NaN
 }
 
-function recordRealEditorInput({ paragraphBoundary = false } = {}) {
+function recordRealEditorInput({ paragraphBoundary = false, satzende = false } = {}) {
   const docId = ctx?.activeDoc()?.id
   const state = initiativeInputState(docId)
   if (!state || controller.activeDocumentId !== docId) return
+  // Wer wieder schreibt, schaut nicht mehr auf.
+  momentVonHand = false
   clearAgentInitiativeTimer()
   state.generation += 1
   state.lastInputAt = Date.now()
@@ -1587,6 +1801,10 @@ function recordRealEditorInput({ paragraphBoundary = false } = {}) {
   state.boundaryGeneration = null
   state.pendingUpdateGeneration = state.generation
   state.pendingBoundary = paragraphBoundary && !isComposing
+  // Das Satzende zaehlt NUR fuer den Moment, nie fuer den Hinweislauf. Wuerde es
+  // pendingBoundary mitsetzen, liefe nach jedem Punkt 300 ms spaeter ein bezahlter
+  // Lauf an -- aus einer Frage des Hinschauens waere eine Frage der Rechnung geworden.
+  state.pendingSatzende = satzende && !isComposing
 }
 
 function completeRealEditorUpdate() {
@@ -1598,8 +1816,13 @@ function completeRealEditorUpdate() {
     state.boundaryAt = at
     state.boundaryGeneration = state.generation
   }
+  if ((state.pendingSatzende || state.pendingBoundary) && !isComposing) {
+    state.satzendeAt = at
+    state.satzendeGeneration = state.generation
+  }
   state.pendingUpdateGeneration = null
   state.pendingBoundary = false
+  state.pendingSatzende = false
   scheduleAgentInitiative()
   return true
 }
@@ -1624,8 +1847,14 @@ function handleBeforeInput(event) {
     event?.inputType === 'insertParagraph'
     || pendingParagraphBoundaryDocId === docId
   )
+  // Ein EREIGNIS, kein Zustand: geprueft wird das gerade eingegebene Zeichen, nicht,
+  // ob der Text zufaellig auf einen Punkt endet. Sonst zaehlte jeder weitere
+  // Tastendruck hinter dem Punkt erneut als Satzende (Lehre aus dem Prototyp #4).
+  const satzende = !isComposing
+    && event?.inputType === 'insertText'
+    && istSatzende(event.data)
   pendingParagraphBoundaryDocId = null
-  recordRealEditorInput({ paragraphBoundary })
+  recordRealEditorInput({ paragraphBoundary, satzende })
   markTyping()
 }
 
@@ -1643,10 +1872,70 @@ function endComposition() {
   markTyping()
 }
 
+// Welcher Moment ist gerade erreicht (momente-model.mjs)? Liest nur die ohnehin
+// gefuehrten Eingabezeiten -- kein eigener Zustand, damit es keine zweite Wahrheit
+// darueber gibt, wann zuletzt getippt wurde.
+function momentJetzt(docId = ctx?.activeDoc()?.id) {
+  const inputState = initiativeInputState(docId)
+  // Eine Grenze ist beides: das Absatzende (Enter) und das Satzende (Punkt, Frage-,
+  // Ausrufezeichen). Beide sind der Augenblick, in dem ein Gedanke fertig ist.
+  const anGrenze = Boolean(
+    inputState
+    && inputState.satzendeGeneration === inputState.generation
+    && Number.isFinite(inputState.satzendeAt),
+  )
+  return aktuellerMoment({
+    jetzt: Date.now(),
+    lastInputAt: inputState?.lastInputAt,
+    anGrenze,
+    editorSichtbar: editorViewIsVisibleFor(docId),
+    vonHand: momentVonHand,
+  })
+}
+
+function clearMomentTimer() {
+  if (momentTimer) { clearTimeout(momentTimer); momentTimer = null }
+}
+
+// Plant die naechste Neuzeichnung auf den naechsten Schwellenwert. Ohne das bliebe
+// ein zurueckgehaltener Hinweis liegen, bis zufaellig etwas anderes neu zeichnet.
+function planeMomentwechsel() {
+  clearMomentTimer()
+  const docId = ctx?.activeDoc()?.id || null
+  const inputState = initiativeInputState(docId)
+  if (!docId || !inputState || !Number.isFinite(inputState.lastInputAt)) return
+  if (!editorViewIsVisibleFor(docId)) return
+
+  const ruhe = Date.now() - inputState.lastInputAt
+  const anGrenze = inputState.boundaryGeneration === inputState.generation
+    && Number.isFinite(inputState.boundaryAt)
+  const schwellen = [anGrenze ? INNEHALTEN_AN_GRENZE_MS : INNEHALTEN_MS, AUFSCHAUEN_MS]
+  const naechste = schwellen.find(schwelle => schwelle > ruhe)
+  if (naechste === undefined) return
+
+  const generation = inputState.generation
+  momentTimer = setTimeout(() => {
+    momentTimer = null
+    const aktuell = initiativeInputState(docId)
+    if (!aktuell || aktuell.generation !== generation) return
+    if (!editorViewIsVisibleFor(docId)) return
+    renderLocalFinding()
+    renderErweiterungen()
+    planeErweiterungslauf()
+    planeMomentwechsel()
+  }, Math.max(24, naechste - ruhe))
+}
+
 function currentPassageFinding(doc, blocks) {
   const queue = getFindingQueue(doc)
+  const moment = momentJetzt(doc?.id)
   let migrated = false
   for (const finding of [queue.current, ...queue.upcoming]) {
+    // Der Rhythmus folgt der Art, nicht dem Kanal (momente-model.mjs): eine
+    // Formulierung darf sofort erscheinen, eine Strukturfrage erst beim Aufschauen.
+    // Zurueckgehalten heisst nur zurueckgehalten -- der Hinweis bleibt bestehen und
+    // erscheint, sobald sein Moment da ist.
+    if (!darfErscheinen(artVon(finding), moment)) continue
     if (finding?.placement !== 'passage' || !finding.target) continue
     const hadBlockId = Boolean(finding.blockId)
     const placement = resolveFindingPlacement(finding, blocks)
@@ -1659,7 +1948,9 @@ function currentPassageFinding(doc, blocks) {
 
 function unplacedPassageFindings(doc, blocks) {
   const queue = getFindingQueue(doc)
+  const moment = momentJetzt(doc?.id)
   return [queue.current, ...queue.upcoming]
+    .filter(finding => darfErscheinen(artVon(finding), moment))
     .filter(finding => finding?.placement === 'passage' && finding.target)
     .map(finding => ({ finding, placement: resolveFindingPlacement(finding, blocks) }))
     .filter(item => item.placement.kind === 'ambiguous' || item.placement.kind === 'unplaced')
@@ -3075,6 +3366,94 @@ export function starteHinweislauf(optionen = {}) {
   return fuehreHinweislaufAus({ grund: optionen.grund || 'chat' })
 }
 
+// --- Zweiter Kanal: Erweiterungen -------------------------------------------
+// Dieselbe duenne ctx/DOM-Klammer wie fuehreHinweislaufAus: alle Werte SYNCHRON vor
+// dem Aufruf einsammeln, die Ablauflogik steckt in versucheErweiterungslauf
+// (erweiterungslauf-model.mjs, node-getestet).
+async function fuehreErweiterungslaufAus({ vonHand = false } = {}) {
+  const doc = ctx?.activeDoc()
+  const workspace = activeWorkspace()
+  if (doc) ensureErweiterungen(doc)
+  const blocks = doc ? getEditorBlocks(ctx.editor) : []
+  const docText = doc ? baueDocText(blocks) : ''
+  const docId = doc?.id ?? null
+  const project = dokumentProjekt(doc)
+  const verstaendnis = project ? ensureProjectUnderstanding(project) : null
+
+  const ergebnis = await versucheErweiterungslauf({
+    hatDokument: Boolean(doc && workspace),
+    istBeispielprojekt: istBeispielDokument(doc),
+    verstaendnisOffen: verstaendnis ? istInterviewOffen(verstaendnis) : false,
+    laeuftBereits: erweiterungslaufAktiv,
+    docText,
+    vonHand,
+    sperreSetzen: wert => { erweiterungslaufAktiv = wert },
+    hatSchluessel,
+    istNochDasselbeDokument: () => ctx.activeDoc()?.id === docId,
+    beansprucheKostenfreigabe: () => beansprucheAutomatikKosten('erweiterung', { docId, grund: vonHand ? 'hand' : 'aufschauen' }),
+    verstaendnis,
+    blocks,
+    doc,
+    runTask,
+    setzeAgentStatus,
+  })
+
+  if (!ergebnis.gestartet) {
+    if (ergebnis.grund === 'monatsbudget-erreicht') {
+      zeigeBudgetPause(workspace)
+      persistWorkspace()
+      refreshWorkspace()
+    }
+    return ergebnis
+  }
+  if (!ergebnis.erfolg) return ergebnis
+
+  ergebnis.uebernommen.forEach(erweiterung => doc.erweiterungen.push(erweiterung))
+  // Bewusst KEIN ergaenzeEchteInitiative und keine Zahl irgendwo: eine Erweiterung
+  // klopft nicht an. Sie liegt in der Seitenspalte, bis jemand hinschaut.
+  ctx.scheduleSave()
+  refreshWorkspace()
+  return { gestartet: true, uebernommen: ergebnis.uebernommen.length, verworfen: ergebnis.verworfen }
+}
+
+function clearErweiterungslaufTimer() {
+  if (erweiterungslaufTimer) { clearTimeout(erweiterungslaufTimer); erweiterungslaufTimer = null }
+}
+
+// Der Erweiterungslauf gehoert zum Moment des Aufschauens (momente-model.mjs).
+// Er wird deshalb genau dann geplant, wenn die lange Ruhe erreicht ist -- nicht bei
+// jeder Schreibpause. Ein Lauf je Textstand: die Signatur merkt sich, wozu schon
+// gefragt wurde, damit dieselbe Ruhe nicht zweimal bezahlt wird.
+let letzteErweiterungsSignatur = null
+
+function planeErweiterungslauf() {
+  clearErweiterungslaufTimer()
+  const docId = ctx?.activeDoc()?.id || null
+  const inputState = initiativeInputState(docId)
+  if (!docId || !inputState || !Number.isFinite(inputState.lastInputAt)) return
+  if (erweiterungslaufAktiv || isComposing || !editorViewIsVisibleFor(docId)) return
+
+  const restzeit = AUFSCHAUEN_MS - (Date.now() - inputState.lastInputAt)
+  const generation = inputState.generation
+  erweiterungslaufTimer = setTimeout(() => {
+    erweiterungslaufTimer = null
+    const aktuell = initiativeInputState(docId)
+    if (!aktuell || aktuell.generation !== generation) return
+    if (!editorViewIsVisibleFor(docId) || isComposing) return
+    const signatur = `${docId}:${seedBodySignature(baueDocText(getEditorBlocks(ctx.editor)))}`
+    if (signatur === letzteErweiterungsSignatur) return
+    letzteErweiterungsSignatur = signatur
+    fuehreErweiterungslaufAus({ vonHand: false })
+  }, Math.max(24, restzeit))
+}
+
+// Von Hand: „Was faellt dir noch ein?" Jeder Moment muss auch gezogen werden koennen —
+// proaktiv darf nicht heissen, warten zu muessen.
+export function starteErweiterungslauf() {
+  letzteErweiterungsSignatur = null
+  return fuehreErweiterungslaufAus({ vonHand: true })
+}
+
 function nextAgentInitiative(workspace) {
   return workspace.agent.messages.find(message => (
     message.status === 'new'
@@ -3261,6 +3640,10 @@ export function refreshWorkspace({ reconcileEditing = false } = {}) {
 
   pruefeVerstaendnisInterview()
   renderStructureNav()
+  renderZurueckgehalten()
+  renderErweiterungen()
+  planeMomentwechsel()
+  planeErweiterungslauf()
   renderProjectUnderstandingCard()
   renderMaterialEntry()
   syncThemeToggle()
@@ -3480,6 +3863,8 @@ export function initWorkspace(context) {
     instance.destroyed = true
     clearAgentInitiativeTimer()
     clearHinweislaufTimer()
+    clearErweiterungslaufTimer()
+    clearMomentTimer()
     closeInsertMenu({ restoreFocus: false })
     closeOndaDialog({ restoreFocus: false })
     closeAccentMenu({ restoreFocus: false })

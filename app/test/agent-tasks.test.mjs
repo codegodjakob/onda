@@ -1,13 +1,13 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  MODELLE, TASK_TABLE, PREISE, HINWEISE_SCHEMA, VERSTAENDNIS_SCHEMA,
+  MODELLE, TASK_TABLE, PREISE, HINWEISE_SCHEMA, VERSTAENDNIS_SCHEMA, ERWEITERUNGEN_SCHEMA,
   API_URL, baueAnfrage, schaetzeKostenCents,
 } from '../src/agent-tasks.mjs'
 import { SYSTEM_COACH } from '../src/agent-prompts.mjs'
 
 test('TASK_TABLE ist vollstaendig und zeigt auf gueltige Modelle', () => {
-  const tasks = ['verstaendnis', 'hinweise', 'chat', 'titel', 'zusammenfassung']
+  const tasks = ['verstaendnis', 'hinweise', 'erweiterungen', 'chat', 'titel', 'zusammenfassung']
   assert.deepEqual(Object.keys(TASK_TABLE).sort(), tasks.slice().sort())
   for (const name of tasks) {
     const eintrag = TASK_TABLE[name]
@@ -18,6 +18,7 @@ test('TASK_TABLE ist vollstaendig und zeigt auf gueltige Modelle', () => {
   assert.equal(TASK_TABLE.chat.stream, true)
   assert.equal(TASK_TABLE.verstaendnis.schema, VERSTAENDNIS_SCHEMA)
   assert.equal(TASK_TABLE.hinweise.schema, HINWEISE_SCHEMA)
+  assert.equal(TASK_TABLE.erweiterungen.schema, ERWEITERUNGEN_SCHEMA)
   assert.equal(TASK_TABLE.titel.maxTokens, 256)
   assert.equal(TASK_TABLE.zusammenfassung.maxTokens, 2000)
   assert.equal(MODELLE.stark, 'claude-opus-5')
@@ -31,7 +32,7 @@ test('TASK_TABLE ist vollstaendig und zeigt auf gueltige Modelle', () => {
 // 'max_tokens: Lauf wird verworfen'). Die drei Opus-Aufgaben brauchen darum deutlich mehr Luft
 // als vorher; chat streamt sichtbar und darf grosszuegiger sein als die beiden JSON-Aufgaben.
 test('Fix-Runde 2, Finding 5: die drei Opus-Aufgaben haben deutlich mehr Budget als die frühere 16000-Grenze', () => {
-  for (const name of ['verstaendnis', 'hinweise', 'chat']) {
+  for (const name of ['verstaendnis', 'hinweise', 'erweiterungen', 'chat']) {
     assert.equal(TASK_TABLE[name].modell, 'stark', `Task ${name} sollte auf dem starken Modell laufen`)
     assert.ok(TASK_TABLE[name].maxTokens >= 32000, `Task ${name}: maxTokens (${TASK_TABLE[name].maxTokens}) sollte deutlich über der früheren 16000-Grenze liegen`)
   }
@@ -156,4 +157,22 @@ test('schaetzeKostenCents rechnet mit den Preiskonstanten', () => {
 test('baueAnfrage wirft bei unbekanntem Task und leerem Kontext', () => {
   assert.throws(() => baueAnfrage('quatsch', { docText: 'x' }), /Unbekannter Task/)
   assert.throws(() => baueAnfrage('chat', {}), /ohne Inhalt/)
+})
+
+// Der Wert des Erweiterungs-Kanals haengt ganz daran, das Naheliegende zu erkennen und zu
+// verwerfen. Genau das kann ein Routine-Modell nicht -- es liefert zuverlaessig den
+// erwartbaren Gedanken, also den einen, den die Autorin oder der Autor schon hatte.
+test('Erweiterungen laufen auf dem starken Modell', () => {
+  assert.equal(TASK_TABLE.erweiterungen.modell, 'stark')
+  assert.equal(TASK_TABLE.erweiterungen.stream, false)
+})
+
+test('ERWEITERUNGEN_SCHEMA kennt genau die drei Arten und verlangt alle vier Felder', () => {
+  const eintrag = ERWEITERUNGEN_SCHEMA.properties.erweiterungen.items
+  assert.deepEqual(eintrag.properties.art.enum, ['weiterfuehrung', 'feld', 'verbindung'])
+  assert.deepEqual(eintrag.required.slice().sort(), ['anker', 'art', 'gedanke', 'muster'])
+  assert.equal(eintrag.additionalProperties, false)
+  // anker ist eine LISTE: die Zahl der Stellen gehoert zur Art. Ein einzelnes Feld wuerde
+  // das Modell einladen, fuer 'feld' eine Stelle zu erfinden.
+  assert.equal(eintrag.properties.anker.type, 'array')
 })

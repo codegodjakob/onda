@@ -62,6 +62,38 @@ export const HINWEISE_SCHEMA = Object.freeze({
   additionalProperties: false,
 })
 
+// Der zweite Kanal (Erweiterungen). anker ist hier eine LISTE, weil die Zahl der Stellen
+// zur Art gehoert: weiterfuehrung eine, verbindung zwei, feld keine. Ein einzelnes
+// anker-Feld wuerde alle drei in dieselbe Form pressen und das Modell dazu einladen,
+// fuer feld eine Stelle zu erfinden. Die Zahl wird beim Verarbeiten geprueft, nicht
+// geraten (erweiterungslauf-model.mjs).
+export const ERWEITERUNGEN_SCHEMA = Object.freeze({
+  type: 'object',
+  properties: {
+    erweiterungen: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          art: { type: 'string', enum: ['weiterfuehrung', 'feld', 'verbindung'] },
+          anker: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Wörtliche Zitate aus dem Text. weiterfuehrung: genau eines. '
+              + 'verbindung: genau zwei. feld: leer — es gehört zum Text als Ganzes.',
+          },
+          gedanke: { type: 'string', description: 'Der weiterführende Gedanke selbst, in zwei bis vier Sätzen.' },
+          muster: { type: 'string', description: 'Das Prinzip dahinter, damit es beim nächsten Text von allein wieder anwendbar ist.' },
+        },
+        required: ['art', 'anker', 'gedanke', 'muster'],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ['erweiterungen'],
+  additionalProperties: false,
+})
+
 // Feldnamen exakt wie das Understanding-Modell (reasoning-model.mjs ensureProjectUnderstanding).
 // Achtung fuer den Konsumenten: im gespeicherten Modell ist audience eine LISTE —
 // der Verteiler zerlegt den String beim Uebernehmen (Vertrag: audience:string).
@@ -91,6 +123,11 @@ export const VERSTAENDNIS_SCHEMA = Object.freeze({
 export const TASK_TABLE = Object.freeze({
   verstaendnis: Object.freeze({ modell: 'stark', maxTokens: 32000, stream: false, schema: VERSTAENDNIS_SCHEMA }),
   hinweise: Object.freeze({ modell: 'stark', maxTokens: 32000, stream: false, schema: HINWEISE_SCHEMA }),
+  // Erweiterungen laufen bewusst auf dem starken Modell: der ganze Wert dieses Kanals
+  // haengt daran, das Naheliegende zu erkennen und zu verwerfen. Genau das ist die
+  // Faehigkeit, die ein Routine-Modell nicht hat -- es liefert zuverlaessig den
+  // erwartbaren Gedanken, also den einen, den die Autorin oder der Autor schon hatte.
+  erweiterungen: Object.freeze({ modell: 'stark', maxTokens: 32000, stream: false, schema: ERWEITERUNGEN_SCHEMA }),
   chat: Object.freeze({ modell: 'stark', maxTokens: 64000, stream: true }),
   titel: Object.freeze({ modell: 'routine', maxTokens: 256, stream: false }),
   zusammenfassung: Object.freeze({ modell: 'routine', maxTokens: 2000, stream: false }),

@@ -11,6 +11,7 @@ import Typography from '@tiptap/extension-typography'
 import { initUI, setSaveState, refreshSidebar, applySettings, focusTitle, showEditorView, showHomeView } from './ui.js'
 import { __workspaceTestBridge, initWorkspace, openFinalAudit, refreshWorkspace } from './workspace.js'
 import { ensureProjectUnderstanding, ensureReasoningModel } from './reasoning-model.mjs'
+import { ensureErweiterungen } from './erweiterung-model.mjs'
 import { ensureWorkspaceState } from './workspace-model.mjs'
 import { DEFAULT_SETTINGS, normalizeSettings } from './settings-model.mjs'
 import { BlockIdentity, ensureTopLevelBlockIds, getActiveBlockId, getEditorBlocks, insertSemanticBlock, replaceAnchoredText, replaceAnchoredTexts, replaceFindingTarget } from './block-identity.js'
@@ -146,6 +147,7 @@ function ensureDocShape(d) {
   // Anmerkungen: Standard-Art ist Formulierung.
   d.lane.forEach(c => { if (!c.kind) c.kind = 'form' })
   ensureReasoningModel(d)
+  ensureErweiterungen(d)
   ensureWorkspaceState(d)
   return d
 }
