@@ -78,7 +78,11 @@
           <span class="onda-avatar" aria-hidden="true">J</span>
           <span class="onda-side-user">Jakob</span>
           <button id="themeToggle" class="onda-icon-btn" title="Erscheinung wechseln" aria-label="Erscheinung wechseln">☾</button>
-          <button id="accentToggle" class="onda-icon-btn" title="Akzentfarbe wechseln" aria-label="Akzentfarbe wechseln"><span class="onda-accent-dot" aria-hidden="true"></span></button>
+          <!-- Der Akzentwechsler ist ausgeblendet: das Design System kennt genau EINEN
+               Akzent (Sky) und sagt ausdrücklich "Keine Akzent-Varianten". Der Knopf
+               bleibt im Markup stehen, damit die Entscheidung mit einem Wort rückgängig
+               zu machen ist — er zeigt nur nichts mehr an. -->
+          <button id="accentToggle" class="onda-icon-btn" title="Akzentfarbe wechseln" aria-label="Akzentfarbe wechseln" hidden><span class="onda-accent-dot" aria-hidden="true"></span></button>
           <button id="kiSettings" class="onda-icon-btn" title="KI-Anschluss" aria-label="KI-Anschluss einrichten" aria-haspopup="dialog" aria-controls="kiModal">⚙︎</button>
         </div>
       </aside>

@@ -190,3 +190,18 @@ test('nach einem Satzende genuegt die kurze Ruhe -- wie nach einem Absatzende', 
     'innehalten',
   )
 })
+
+// Gefunden vom Rauchtest v2-smoke: eine sichtbare Karte verschwand, sobald wieder
+// getippt wurde -- der Moment fiel von 'aufschauen' auf 'sofort' zurueck und der
+// Filter raeumte sie weg. Etwas anzusehen und es dabei weggezogen zu bekommen ist
+// das Gegenteil von Ruhe.
+
+test('was einmal gezeigt wurde, bleibt sichtbar -- auch beim Weitertippen', () => {
+  assert.equal(darfErscheinen('struktur', 'sofort'), false)
+  assert.ok(darfErscheinen('struktur', 'sofort', true))
+})
+
+test('schonGezeigt hebt die Zurueckhaltung nur fuer diesen einen Eintrag auf', () => {
+  assert.equal(darfErscheinen('weiterfuehrung', 'innehalten', false), false)
+  assert.ok(darfErscheinen('weiterfuehrung', 'innehalten', true))
+})

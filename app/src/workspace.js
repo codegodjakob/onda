@@ -123,6 +123,19 @@ let momentTimer = null
 // 'zurueckgehalten' in der Praxis 'unauffindbar' -- wer nie 45 Sekunden Pause macht,
 // bekaeme eine Strukturfrage nie zu sehen.
 let momentVonHand = false
+// Was einmal auf dem Schirm stand, bleibt stehen. Der Moment entscheidet ueber das
+// ERSTE Erscheinen, nicht ueber das Bleiben — sonst verschwindet eine Karte, die man
+// gerade liest, sobald man wieder tippt. Wird mit dem Dokument zurueckgesetzt.
+let gezeigteHinweise = { docId: null, ids: new Set() }
+
+function merkeGezeigt(docId, findingId) {
+  if (gezeigteHinweise.docId !== docId) gezeigteHinweise = { docId, ids: new Set() }
+  if (findingId) gezeigteHinweise.ids.add(findingId)
+}
+
+function schonGezeigt(docId, findingId) {
+  return gezeigteHinweise.docId === docId && gezeigteHinweise.ids.has(findingId)
+}
 let agentLiveFrame = null
 let agentPresenceFocusRequest = false
 let pendingParagraphBoundaryDocId = null
@@ -747,7 +760,7 @@ function renderZurueckgehalten() {
   const wartend = (doc.findings || []).filter(finding => (
     finding?.status === 'open'
     && finding.placement === 'passage'
-    && !darfErscheinen(artVon(finding), moment)
+    && !darfErscheinen(artVon(finding), moment, schonGezeigt(doc.id, finding.id))
   ))
 
   if (!wartend.length) { bereich.hidden = true; bereich.replaceChildren(); return }
@@ -1938,13 +1951,14 @@ function currentPassageFinding(doc, blocks) {
     // Der Rhythmus folgt der Art, nicht dem Kanal (momente-model.mjs): eine
     // Formulierung darf sofort erscheinen, eine Strukturfrage erst beim Aufschauen.
     // Zurueckgehalten heisst nur zurueckgehalten -- der Hinweis bleibt bestehen und
-    // erscheint, sobald sein Moment da ist.
-    if (!darfErscheinen(artVon(finding), moment)) continue
+    // erscheint, sobald sein Moment da ist. Was einmal stand, bleibt stehen.
+    if (!darfErscheinen(artVon(finding), moment, schonGezeigt(doc?.id, finding?.id))) continue
     if (finding?.placement !== 'passage' || !finding.target) continue
     const hadBlockId = Boolean(finding.blockId)
     const placement = resolveFindingPlacement(finding, blocks)
     if (placement.kind !== 'anchored' && placement.kind !== 'stale') continue
     if (!hadBlockId && finding.blockId) migrated = true
+    merkeGezeigt(doc?.id, finding.id)
     return { finding, block: placement.block, placementKind: placement.kind, migrated }
   }
   return { finding: null, block: null, placementKind: null, migrated }
@@ -1954,7 +1968,7 @@ function unplacedPassageFindings(doc, blocks) {
   const queue = getFindingQueue(doc)
   const moment = momentJetzt(doc?.id)
   return [queue.current, ...queue.upcoming]
-    .filter(finding => darfErscheinen(artVon(finding), moment))
+    .filter(finding => darfErscheinen(artVon(finding), moment, schonGezeigt(doc?.id, finding?.id)))
     .filter(finding => finding?.placement === 'passage' && finding.target)
     .map(finding => ({ finding, placement: resolveFindingPlacement(finding, blocks) }))
     .filter(item => item.placement.kind === 'ambiguous' || item.placement.kind === 'unplaced')
@@ -2196,6 +2210,11 @@ function targetDocumentRange(blockId, target) {
 function decideAndAdvance(finding, decision) {
   const doc = ctx.activeDoc()
   const workspace = activeWorkspace()
+  // Ueber einen Hinweis zu entscheiden IST ein Aufschauen. Wer gerade Rueckmeldung
+  // durcharbeitet, schreibt nicht — der naechste Hinweis darf sofort folgen, statt
+  // 45 Sekunden Ruhe abzuwarten. Gilt bis zum naechsten Tastendruck; sobald wieder
+  // getippt wird, setzt recordRealEditorInput es zurueck.
+  momentVonHand = true
   decideFinding(doc, finding.id, decision)
   const project = dokumentProjekt(doc)
   const recorded = doc.decisions.at(-1)

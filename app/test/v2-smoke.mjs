@@ -233,8 +233,24 @@ async function runDesktop(browser) {
   assert.equal(await page.locator('#sidebarReopen').isHidden(), true)
   assert.equal(await page.evaluate(() => AIWT.state.settings.sidebarCollapsed), false)
 
-  const previewText = await shelf.locator('.block-preview-excerpt').first().textContent()
-  assert.ok(previewText.trim().length > 20)
+  // Seit 04.08.2026 klappen Struktur-Karten nur auf Klick auf; von allein steht nur
+  // die Ueberschrift offen. Der Auszug eines ZUGEKLAPPTEN Absatzes ist deshalb leer,
+  // und das ist Absicht: er wiederholte woertlich, was zwei Handbreit weiter rechts
+  // schon steht. Geprueft wird darum, was die Zusage tatsaechlich ist -- eine Karte,
+  // die aufgeklappt einen lesbaren Auszug traegt.
+  // Die ID VOR dem Klick festhalten: ein Playwright-Locator loest sich bei jedem
+  // Zugriff neu auf, und nach dem Klick passt die Karte nicht mehr auf
+  // [aria-expanded="false"] -- der Locator zeigte sonst auf die naechste, noch
+  // zugeklappte Karte und maesse deren leeren Auszug.
+  const zuklapptId = await shelf.locator('.block-preview[aria-expanded="false"]').first().getAttribute('data-block-id')
+  assert.ok(zuklapptId, 'keine zugeklappte Struktur-Karte gefunden')
+  await shelf.locator(`.block-preview[data-block-id="${zuklapptId}"]`).click()
+  const previewText = await shelf.locator(`.block-preview[data-block-id="${zuklapptId}"] .block-preview-excerpt`).textContent()
+  assert.ok(previewText.trim().length > 20, `Auszug zu kurz: ${JSON.stringify(previewText)}`)
+  // Vorlesegeraete bekommen den Wortlaut in JEDEM Zustand, auch zugeklappt.
+  const zugeklapptesLabel = await shelf.locator('.block-preview[aria-expanded="false"]').first().getAttribute('aria-label')
+  assert.ok((zugeklapptesLabel || '').trim().length > 20, 'zugeklappte Karte ohne Wortlaut fuer Vorlesegeraete')
+
   const previewTargetId = await shelf.locator('.block-preview').nth(1).getAttribute('data-block-id')
   await shelf.locator('.block-preview').nth(1).click()
   assert.equal(await page.locator('#editor .ProseMirror').evaluate(node => node.contains(document.activeElement)), true)
@@ -771,12 +787,17 @@ async function runTask4InteractionRegressions(browser) {
   assert.deepEqual(afterSelectionIdentity, { previewsStable: true })
 
   await page.evaluate(() => window.AIWT.state.editor.commands.insertContent('Neu '))
+  // Der Wortlaut wird am aria-label geprueft, nicht am sichtbaren Auszug: seit dem
+  // 04.08.2026 steht ein Absatz-Auszug nur offen, wenn jemand die Karte angeklickt
+  // hat. Das aria-label traegt ihn IMMER -- die Kuerzung ist eine Frage der Augen,
+  // nicht der Zugaenglichkeit. Geprueft wird damit dieselbe Zusage wie vorher: die
+  // Karte folgt dem Text beim Tippen, ohne dass die Knoten neu gebaut werden.
   const afterTextIdentity = await page.evaluate(() => ({
     previewsStable: window.__task4ShelfNodes.previews.every((node, index) => node === document.querySelectorAll('#structureNav .block-preview')[index]),
-    excerpt: window.__task4ShelfNodes.previews.at(-1).querySelector('.block-preview-excerpt')?.textContent,
+    wortlaut: window.__task4ShelfNodes.previews.at(-1).getAttribute('aria-label'),
   }))
   assert.equal(afterTextIdentity.previewsStable, true)
-  assert.match(afterTextIdentity.excerpt || '', /Neu Absatz danach/)
+  assert.match(afterTextIdentity.wortlaut || '', /Neu Absatz danach/)
 
   // Das Trigger-Menü schließt beim Öffnen des Agenten
   await page.locator('#blockInsertTrigger').evaluate(node => node.click())

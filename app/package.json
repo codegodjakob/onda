@@ -3,12 +3,14 @@
   "private": true,
   "scripts": {
     "build": "esbuild src/editor.js --bundle --minify --format=iife --global-name=AIWT --outfile=dist/editor.bundle.js",
-    "test": "node --test test/*.test.mjs",
+    "test": "npm run test:unit && npm run test:smoke",
     "eval:b1-quality": "node evals/run-b1-quality.mjs",
     "eval:b2-quality": "node evals/run-b2-quality.mjs",
     "eval:c2-quality": "node evals/run-c2-quality.mjs",
     "eval:d1-quality": "node evals/run-d1-quality.mjs",
-    "eval:d2-quality": "node evals/run-d2-quality.mjs"
+    "eval:d2-quality": "node evals/run-d2-quality.mjs",
+    "test:unit": "node --test test/*.test.mjs",
+    "test:smoke": "for f in test/*smoke*.mjs; do echo \"— $f\"; node \"$f\" || exit 1; done"
   },
   "dependencies": {
     "@tiptap/core": "2.x",

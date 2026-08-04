@@ -106,7 +106,15 @@ export function aktuellerMoment({
   return 'sofort'
 }
 
-export function darfErscheinen(art, moment) {
+// Der Moment regelt, wann etwas ZUM ERSTEN MAL erscheint — nicht, ob es bleibt.
+//
+// Ohne die Ausnahme fuer schonGezeigt verschwindet eine Karte, die man gerade liest,
+// in dem Augenblick, in dem man wieder zu tippen anfaengt: der Moment faellt von
+// 'aufschauen' zurueck auf 'sofort', und der Filter raeumt sie weg. Etwas, das man
+// ansieht, darf einem nicht unter den Haenden weggezogen werden. Zurueckhalten ist
+// Ruhe; Wegnehmen ist Unruhe.
+export function darfErscheinen(art, moment, schonGezeigt = false) {
+  if (schonGezeigt) return true
   const gebraucht = RANG[momentFuerArt(art)]
   const erreicht = RANG[String(moment || '')] ?? RANG.sofort
   return gebraucht <= erreicht

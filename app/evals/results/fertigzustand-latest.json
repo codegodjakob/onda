@@ -3,23 +3,23 @@
   "catalogVersion": "2026-08-04.1",
   "stage": "FERTIGZUSTAND",
   "iteration": 1,
-  "generatedAt": "2026-08-04T21:23:33.438Z",
-  "gitCommit": "486b74accfdca70cf039568ac0dd68045dd105df",
+  "generatedAt": "2026-08-04T22:23:36.040Z",
+  "gitCommit": "a46c9395af6a3c73de0db5548a99ee56937a989d",
   "rubricScores": {
-    "truth": 4.22,
-    "authorship": 4.22,
-    "usefulness": 4.22,
-    "calm": 4.22,
-    "reliability": 4.22,
-    "access_privacy": 4.22
+    "truth": 4.28,
+    "authorship": 4.28,
+    "usefulness": 4.28,
+    "calm": 4.28,
+    "reliability": 4.28,
+    "access_privacy": 4.28
   },
-  "weightedScore": 4.22,
+  "weightedScore": 4.28,
   "scoreRationale": "Diese Werte sind AUS DER ABDECKUNG ABGELEITET, kein Qualitätsurteil: Anteil der Evals, die in diesem Lauf durch eine frisch ausgeführte Prüfung belegt sind. Der Katalog kennt keine Zuordnung von Evals zu Rubrikdimensionen, deshalb tragen alle sechs denselben Wert. Eine echte Rubrikbewertung verlangt begründete Einschätzung mit Belegen — sie steht aus.",
   "loops": [],
   "evals": [
     {
       "id": "INV-01",
-      "status": "failed",
+      "status": "passed",
       "evidence": [
         {
           "kind": "browser",
@@ -31,8 +31,7 @@
           "path": "evals/results/laeufe/test-etappe-a-smoke-mjs.log",
           "command": "node test/etappe-a-smoke.mjs"
         }
-      ],
-      "note": "Gebundene Prüfung in diesem Lauf fehlgeschlagen: test/v2-smoke.mjs"
+      ]
     },
     {
       "id": "INV-02",
