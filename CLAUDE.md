@@ -35,6 +35,7 @@ Einzelner Kontext — `CONTEXT.md` und `docs/adr/` im Projektwurzelverzeichnis. 
 | `docs/VISION-GEGEN-GEBAUTES.md` | Der Abstract gegen den Code geprüft |
 | `docs/REDESIGN-IDEEN.md` | Gesammelte Umgestaltungsideen, noch nichts entschieden |
 | `docs/ABNAHME-ETAPPE-A.md` | Abnahme der zehn Kriterien für den KI-Anschluss |
+| `docs/rueckmeldung/` | Jakobs Rückmeldungs-Karten (Quelle des Eval-Katalogs). Regel: Was der Eval-Katalog zitiert, ist versioniert |
 | `app/evals/v2-fertigzustand.json` | 83 Evals, die den Fertigzustand definieren |
 
 ## Prüfen

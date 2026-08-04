@@ -1,7 +1,7 @@
 # Die drei Momente
 
 Antwort auf das Ticket *Die drei Momente am echten Text*
-(`.scratch/rueckmeldung/issues/03-die-drei-momente-am-echten-text.md`).
+(`docs/rueckmeldung/karten/03-die-drei-momente-am-echten-text.md`).
 
 Die Frage war: Welche der elf Rückmeldungsarten gehört in welchen Moment? Sie ist
 inzwischen im Programmcode beantwortet. Dieses Dokument schreibt die Antwort auf und
