@@ -108,6 +108,7 @@ export const direktTransport = {
     const decoder = new TextDecoder('utf-8')
     const reader = res.body.getReader()
     let text = ''; let usage = mischeUsage(null, null); let stopReason = null
+    let usageGemeldet = false
     const verarbeite = events => {
       for (const ev of events) {
         if (ev.typ === 'delta') {
@@ -119,7 +120,7 @@ export const direktTransport = {
             try { handlers.onDelta(ev.text) } catch (fehler) { meldeOnDeltaFehler(fehler) }
           }
         }
-        else if (ev.typ === 'usage') usage = mischeUsage(usage, ev.usage)
+        else if (ev.typ === 'usage') { usage = mischeUsage(usage, ev.usage); usageGemeldet = true }
         else if (ev.typ === 'stop') stopReason = ev.stopReason
       }
     }
@@ -132,7 +133,12 @@ export const direktTransport = {
       verarbeite(parseSseZeilen(puffer, decoder.decode()))
       if (puffer.rest) verarbeite(parseSseZeilen(puffer, '\n'))
     } catch (e) {
-      handlers.onFehler({ typ: 'offline', nachricht: 'Die Verbindung ist während des Streamens abgerissen.' }); return
+      // Netzabriss-Prüfung (Issue #17): der Lauf war bezahlt, sobald message_start
+      // seinen Verbrauch gemeldet hat. Dieser Verbrauch reist im Fehler mit, damit
+      // der Verteiler ihn zählen kann — sonst log der Kostenzähler zu niedrig.
+      const fehler = { typ: 'offline', nachricht: 'Die Verbindung ist während des Streamens abgerissen.' }
+      if (usageGemeldet) fehler.usage = usage
+      handlers.onFehler(fehler); return
     }
     handlers.onFertig({ text, usage, stopReason })
   },
@@ -164,7 +170,7 @@ function llmRueckruf(nachricht) {
           try { eintrag.handlers.onDelta(ev.text) } catch (fehler) { meldeOnDeltaFehler(fehler) }
         }
       }
-      else if (ev.typ === 'usage') eintrag.usage = mischeUsage(eintrag.usage, ev.usage)
+      else if (ev.typ === 'usage') { eintrag.usage = mischeUsage(eintrag.usage, ev.usage); eintrag.usageGemeldet = true }
       else if (ev.typ === 'stop') eintrag.stopReason = ev.stopReason
     }
     return
@@ -184,8 +190,13 @@ function llmRueckruf(nachricht) {
   }
   if (nachricht.typ === 'fehler') {
     offen.delete(nachricht.id)
-    if (typeof nachricht.status === 'number' && nachricht.status > 0) eintrag.handlers.onFehler(mapHttpStatus(nachricht.status))
-    else eintrag.handlers.onFehler({ typ: 'offline', nachricht: nachricht.fehler || 'Keine Verbindung zum Dienst.' })
+    const fehler = (typeof nachricht.status === 'number' && nachricht.status > 0)
+      ? mapHttpStatus(nachricht.status)
+      : { typ: 'offline', nachricht: nachricht.fehler || 'Keine Verbindung zum Dienst.' }
+    // Netzabriss-Prüfung (Issue #17), gleicher Grund wie im Direktweg: hat der Stream
+    // schon Verbrauch gemeldet, war der Lauf bezahlt — der Verbrauch reist im Fehler mit.
+    if (eintrag.usageGemeldet) fehler.usage = eintrag.usage
+    eintrag.handlers.onFehler(fehler)
   }
 }
 
@@ -231,7 +242,7 @@ export const brueckenTransport = {
     const id = neueId('llm')
     offen.set(id, {
       handlers, stream: !!anfrage.stream, puffer: { rest: '' },
-      text: '', usage: mischeUsage(null, null), stopReason: null,
+      text: '', usage: mischeUsage(null, null), usageGemeldet: false, stopReason: null,
     })
     try {
       // headers OHNE Schlüssel — Swift setzt x-api-key aus der Keychain ein.

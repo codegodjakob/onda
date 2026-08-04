@@ -2752,6 +2752,18 @@ async function fuehreChatLauf(thread, kontext) {
   try {
     setzeAgentStatus({ zustand: 'laeuft' })
     const { daten } = await runTask('chat', kontext, {
+      // Netzabriss-Prüfung (Issue #17): wiederholt der Verteiler einen mitten im
+      // Stream abgerissenen Lauf, beginnt die Antwort von vorn — der Puffer muss
+      // leer sein, sonst klebt der Text des abgerissenen Versuchs davor.
+      onNeustart: () => {
+        lauf.puffer = ''
+        if (lauf.flushTimer) { clearTimeout(lauf.flushTimer); lauf.flushTimer = null }
+        if (lauf.agentMessage) {
+          lauf.agentMessage.text = ''
+          const node = chatNachrichtenTextKnoten(lauf.agentMessage.id)
+          if (node) node.textContent = ''
+        }
+      },
       onDelta: text => {
         lauf.puffer += String(text || '')
         if (!lauf.agentMessage) {
