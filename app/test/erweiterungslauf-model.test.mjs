@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   MINDESTZEICHEN,
+  darfAutomatischLaufen,
   erweiterungAusAntwort,
   pruefeErweiterungslaufGate,
   verarbeiteErweiterungsantwort,
@@ -348,4 +349,32 @@ test('Gemerktes steht oben, Neues sammelt sich darunter', () => {
   }
   merkeErweiterung(doc, 'b', 9)
   assert.deepEqual(sichtbareErweiterungen(doc).map(e => e.id), ['b', 'a'])
+})
+
+// ---- Kein Textstand wird zweimal bezahlt -------------------------------------
+// Befund der Durchsicht von a21248e (Kritisch): Ein Lauf von Hand setzte die
+// Signatur auf null zurück. Der Zeitgeber sah 24 ms später denselben, unveränderten
+// Text mit unbekannter Signatur -- und bezahlte ihn ein zweites Mal auf dem starken
+// Modell. Diese Prüfungen halten die Regel fest, die das verhindert.
+
+test('unveraenderter Textstand laeuft nicht noch einmal automatisch an', () => {
+  assert.equal(darfAutomatischLaufen('doc1:abc', 'doc1:abc'), false)
+})
+
+test('geaenderter Text darf automatisch anlaufen', () => {
+  assert.ok(darfAutomatischLaufen('doc1:xyz', 'doc1:abc'))
+})
+
+test('ein anderes Dokument ist ein anderer Stand, auch bei gleichem Text', () => {
+  assert.ok(darfAutomatischLaufen('doc2:abc', 'doc1:abc'))
+})
+
+test('der allererste Lauf darf anlaufen', () => {
+  assert.ok(darfAutomatischLaufen('doc1:abc', null))
+})
+
+test('ohne Signatur laeuft nichts automatisch an -- im Zweifel nicht bezahlen', () => {
+  assert.equal(darfAutomatischLaufen('', null), false)
+  assert.equal(darfAutomatischLaufen(null, null), false)
+  assert.equal(darfAutomatischLaufen(undefined, 'doc1:abc'), false)
 })

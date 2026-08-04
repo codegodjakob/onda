@@ -30,7 +30,7 @@ import {
 } from './verstaendnis-interview.mjs'
 import { baueDocText } from './agent-findings.mjs'
 import { pruefePausenAusloeser, versucheHinweislauf } from './hinweislauf-model.mjs'
-import { versucheErweiterungslauf } from './erweiterungslauf-model.mjs'
+import { darfAutomatischLaufen, versucheErweiterungslauf } from './erweiterungslauf-model.mjs'
 import {
   ART_ERKLAERUNG,
   ART_LABEL,
@@ -1920,6 +1920,10 @@ function planeMomentwechsel() {
     if (!aktuell || aktuell.generation !== generation) return
     if (!editorViewIsVisibleFor(docId)) return
     renderLocalFinding()
+    // Muss mit: sonst behauptet die Zeile weiter "1 Hinweis wartet", waehrend der
+    // Hinweis daneben schon sichtbar ist. Ausgerechnet der wahrscheinlichste Weg
+    // zum Aufschauen -- Nichtstun -- war der nicht abgedeckte.
+    renderZurueckgehalten()
     renderErweiterungen()
     planeErweiterungslauf()
     planeMomentwechsel()
@@ -3408,6 +3412,12 @@ async function fuehreErweiterungslaufAus({ vonHand = false } = {}) {
   }
   if (!ergebnis.erfolg) return ergebnis
 
+  // Nach JEDEM erfolgreichen Lauf, gleich welcher Ausloeser ihn startete -- genau wie
+  // beim Hinweislauf, wo protokoll.signatur in fuehreHinweislaufAus selbst gesetzt wird.
+  // Vorher stand die Fortschreibung nur im automatischen Zweig, und ein Lauf von Hand
+  // setzte sie sogar auf null zurueck: dann sah der Zeitgeber 24 ms spaeter einen
+  // unveraenderten Text mit unbekannter Signatur und bezahlte ihn ein zweites Mal.
+  letzteErweiterungsSignatur = erweiterungsSignatur(docId, docText)
   ergebnis.uebernommen.forEach(erweiterung => doc.erweiterungen.push(erweiterung))
   // Bewusst KEIN ergaenzeEchteInitiative und keine Zahl irgendwo: eine Erweiterung
   // klopft nicht an. Sie liegt in der Seitenspalte, bis jemand hinschaut.
@@ -3426,6 +3436,10 @@ function clearErweiterungslaufTimer() {
 // gefragt wurde, damit dieselbe Ruhe nicht zweimal bezahlt wird.
 let letzteErweiterungsSignatur = null
 
+function erweiterungsSignatur(docId, docText) {
+  return `${docId}:${seedBodySignature(docText)}`
+}
+
 function planeErweiterungslauf() {
   clearErweiterungslaufTimer()
   const docId = ctx?.activeDoc()?.id || null
@@ -3440,9 +3454,8 @@ function planeErweiterungslauf() {
     const aktuell = initiativeInputState(docId)
     if (!aktuell || aktuell.generation !== generation) return
     if (!editorViewIsVisibleFor(docId) || isComposing) return
-    const signatur = `${docId}:${seedBodySignature(baueDocText(getEditorBlocks(ctx.editor)))}`
-    if (signatur === letzteErweiterungsSignatur) return
-    letzteErweiterungsSignatur = signatur
+    const signatur = erweiterungsSignatur(docId, baueDocText(getEditorBlocks(ctx.editor)))
+    if (!darfAutomatischLaufen(signatur, letzteErweiterungsSignatur)) return
     fuehreErweiterungslaufAus({ vonHand: false })
   }, Math.max(24, restzeit))
 }
@@ -3450,7 +3463,9 @@ function planeErweiterungslauf() {
 // Von Hand: „Was faellt dir noch ein?" Jeder Moment muss auch gezogen werden koennen —
 // proaktiv darf nicht heissen, warten zu muessen.
 export function starteErweiterungslauf() {
-  letzteErweiterungsSignatur = null
+  // Kein Zuruecksetzen der Signatur: der Weg von Hand fragt sie ohnehin nie ab
+  // (nur der Zeitgeber tut das). Sie auf null zu setzen hiess, dem Zeitgeber
+  // direkt danach denselben Text als unbekannt zu praesentieren.
   return fuehreErweiterungslaufAus({ vonHand: true })
 }
 

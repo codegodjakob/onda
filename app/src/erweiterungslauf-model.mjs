@@ -37,6 +37,17 @@ export function pruefeErweiterungslaufGate({
   return { erlaubt: true }
 }
 
+// Die Regel gegen doppelte Bezahlung desselben Textstands — als reine Funktion, damit
+// sie pruefbar ist. Sie gilt NUR fuer den zeitgesteuerten Lauf: wer von Hand fragt, hat
+// ausdruecklich gefragt und darf denselben Text erneut vorlegen.
+//
+// Ohne Signatur (leerer Text, kein Dokument) laeuft nichts automatisch an. Fail-closed:
+// im Zweifel nicht bezahlen.
+export function darfAutomatischLaufen(signatur, letzteSignatur) {
+  if (!signatur) return false
+  return signatur !== letzteSignatur
+}
+
 function einfacherHash(value) {
   let hash = 2166136261
   const text = String(value || '')
