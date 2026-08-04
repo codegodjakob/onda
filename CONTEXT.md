@@ -68,6 +68,14 @@ _Avoid_: Hauptfehler, oberster Hinweis
 Ein als Agentenbeitrag gekennzeichneter moeglicher Gedanke, Argumentationsweg oder Wortlaut, der erst durch bewusste Uebernahme Teil des Textes wird.
 _Avoid_: Antwort, Generierung
 
+**Erweiterung**:
+Ein Angebot des Agenten ohne offenen Posten: Der Text ist nicht kaputt, es gibt mehr zu holen. Drei Arten mit fester Stellenzahl im Text — Weiterfuehrung (1), Feld (0), Verbindung (2). Die Arten und Regeln leben in `app/src/erweiterung-model.mjs`; Gestalt und Belege in `docs/DIE-GESTALT-EINER-ERWEITERUNG.md`.
+_Avoid_: Fehler, Hinweis, Aufgabe
+
+**Moment**:
+Der Zeitpunkt, zu dem eine Rueckmeldung sichtbar werden darf: sofort, beim Innehalten, beim Aufschauen — getrennt von der Frage, wann der Agent laeuft. Tabelle, Begruendungen und Ausloesebedingungen leben an einer einzigen Stelle in `app/src/momente-model.mjs`; Herleitung in `docs/DIE-DREI-MOMENTE.md`.
+_Avoid_: Timing, Benachrichtigung
+
 **Risikoannahme**:
 Die bewusste Entscheidung des Nutzers, einen sachlichen, logischen, methodischen oder quellenbezogenen Hinweis vorerst nicht zu beheben; sie bleibt im Schlussaudit sichtbar.
 _Avoid_: Verwerfen, Erledigen
@@ -101,7 +109,9 @@ Der interaktive V2-Stand ist eine fokussierte Schreiboberflaeche aus Vanilla Jav
 - `app/src/workspace.js` orchestriert Strukturablage, passagegebundene Hinweise, Vorschlaege, lokalen Dialog, allgemeines Agenten-Widget und Belegfenster.
 - `app/src/agent-gateway.mjs`, `agent-tasks.mjs` und `agent-transport.mjs` bilden den echten KI-Pfad: validierte Schemas, Streaming, Retry, Nutzungserfassung und denselben Transportvertrag fuer Browser und Mac-Bruecke.
 - `app/src/settings-model.mjs` besitzt Verbrauch und lokale Monatsgrenze. Automatische Laeufe stoppen an der Grenze; genau ein weiterer Lauf kann bewusst freigegeben werden.
-- `app/src/eval-catalog.mjs` und `app/evals/v2-fertigzustand.json` machen den vollstaendigen Zielzustand mit 77 beobachtbaren Evals maschinenlesbar.
+- `app/src/momente-model.mjs` besitzt die vollstaendige Tabelle, in welchem Moment eine Rueckmeldung sichtbar werden darf, samt Begruendungen und Ausloesebedingungen — bewusst an einer einzigen Stelle, damit Dokumentation und Programm nicht getrennt voneinander altern. Herleitung: `docs/DIE-DREI-MOMENTE.md`.
+- `app/src/erweiterung-model.mjs` und `app/src/erweiterungslauf-model.mjs` besitzen die drei Erweiterungsarten samt fester Stellenzahl, den zwei Gesten und der Verankerung; ungueltige Anker verwerfen die ganze Erweiterung. Gestalt und Belege: `docs/DIE-GESTALT-EINER-ERWEITERUNG.md`.
+- `app/src/eval-catalog.mjs` und `app/evals/v2-fertigzustand.json` machen den vollstaendigen Zielzustand als beobachtbare Evals maschinenlesbar; Anzahl und aktuellen Stand liefert der frische Messlauf (`node evals/run-fertigzustand.mjs`, Ergebnis in `app/evals/results/fertigzustand-latest.json`).
 - `app/src/source-model.mjs` besitzt typisierte Projektquellen, unveraenderliche Herkunftsreferenzen, SHA-256-Pruefsummen, feldweise Metadatenzustaende und eine Ereignishistorie fuer Korrekturen, Ruecknahmen und neue Versionen.
 - `app/src/locator-model.mjs` und `app/src/evidence-bundle.mjs` bilden exakte Seiten-, Abschnitts-, Text- und Zeitanker sowie claim-spezifische Belegbuendel mit Gegenbelegen, Grenzen, Reichweite, Unsicherheit und erlaubter Formulierungsstaerke.
 - `app/src/citation-audit.mjs` prueft direkte Zitate, Paraphrasen, bibliografische Identitaet und Verzeichniskonsistenz. `app/src/provenance-model.mjs` trennt Nutzertext, Agenteneinordnung, Recherchematerial, Fundstellen, belegtes Wissen und Evidenzentwuerfe.
@@ -217,7 +227,7 @@ Die D1-Eval beweist ein explizites Sprachprofil, getrennte Diagnoseklassen, regi
 
 Die D2-Eval beweist die feste Auditstatusmatrix, harte wissenschaftliche Integritaetsblocker, bewusste Risikoexporte, beobachtbare Autorschaft, optionale KI-Nutzungserklaerung, strukturtreue und UI-freie Publikationsformate sowie vollstaendige lokale Datenkontrolle. Der feste Abschlusskorpus erreicht in Runde 2 in allen fuenf Dimensionen 5,0 von 5,0; der kontextsensitive Ablauf schlaegt die stilgetriebene Scheinfertigstellung mit 5 zu 0.
 
-Der frische Gesamtlauf umfasst 446 bestandene Tests, den Produktionsbuild, den vollständigen V2-Lauf, alle Etappen-Smokes und 17 native Selbsttests. Die D1- und D2-Browserfluesse bestehen in Chromium, Firefox und WebKit. Axe meldet in sieben Kernzustaenden null WCAG-2.1-A/AA-Verstoesse; das manuelle Protokoll belegt Tastatur, Fokus, Escape-Rueckkehr, Zielgroessen, Fehlererholung, 390-Pixel-Reflow und 200-Prozent-Skalierung in allen drei Engines. Die Performanceprobe misst 15 Eingaben mit einer p95-Zeit bis zum naechsten Frame von 8,2 ms und ohne Long Task. `app/evals/results/etappe-d2-latest.json` fuehrt alle 77 Ziel-Evals: 71 bestanden und genau 6 externe Live-Gates offen; kein Eval bleibt einer spaeteren Entwicklungsstufe zugeordnet. Der gewichtete D2-Exitwert betraegt 5,0 von 5,0.
+Der Gesamtlauf zum D2-Abschluss (gemessen am 31. Juli 2026) umfasste 446 bestandene Tests, den Produktionsbuild, den vollständigen V2-Lauf, alle Etappen-Smokes und 17 native Selbsttests. Die D1- und D2-Browserfluesse bestanden in Chromium, Firefox und WebKit. Axe meldete in sieben Kernzustaenden null WCAG-2.1-A/AA-Verstoesse; das manuelle Protokoll belegt Tastatur, Fokus, Escape-Rueckkehr, Zielgroessen, Fehlererholung, 390-Pixel-Reflow und 200-Prozent-Skalierung in allen drei Engines. Die Performanceprobe mass 15 Eingaben mit einer p95-Zeit bis zum naechsten Frame von 8,2 ms und ohne Long Task. Das D2-Ergebnis (Messlauf vom 30. Juli 2026, archiviert unter `app/evals/results/archiv/etappe-d2-latest.json`) fuehrte alle 77 Ziel-Evals: 71 bestanden und genau 6 externe Live-Gates offen; kein Eval blieb einer spaeteren Entwicklungsstufe zugeordnet. Der gewichtete D2-Exitwert betrug 5,0 von 5,0. Den aktuellen Gesamtstand liefert nicht dieses Dokument, sondern der frische Messlauf: `node evals/run-fertigzustand.mjs` (Ergebnis in `app/evals/results/fertigzustand-latest.json`).
 
 Vom Repository-Wurzelverzeichnis muss ausserdem `git diff --check` ohne Ausgabe enden. Der lokale Prototyp ist unter `http://127.0.0.1:4173/` erreichbar, solange der vorhandene statische Server laeuft.
 

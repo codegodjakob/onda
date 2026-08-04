@@ -1,6 +1,6 @@
 # Onda — das ganze System erklärt
 
-Stand: 31. Juli 2026 · Etappe A abgeschlossen · 266 Tests grün
+Stand: 31. Juli 2026 · Etappe A abgeschlossen · Teststand frisch messen: `cd app && npm test`
 
 Dieses Dokument beschreibt Onda vollständig: was es ist, wie es aufgebaut ist, wie der
 Agent denkt, wo deine Daten liegen, was geprüft ist und was noch fehlt. Es ist so
@@ -430,7 +430,7 @@ nichts mehr geladen. Ein Test wacht darüber, dass sie nicht versehentlich zurü
 
 ### Vier Ebenen
 
-1. **266 Unit-Tests** (`npm test`) — prüfen die reinen Module einzeln
+1. **Unit-Tests** (`npm test`) — prüfen die reinen Module einzeln; die aktuelle Anzahl zeigt der Lauf selbst
 2. **Ketten-Tests** — bauen einen Kontext und sehen in der **fertigen Anfrage** nach, ob
    die Inhalte wirklich ankommen. Diese Ebene existiert, weil die Unit-Tests dreimal einen
    Nahtstellen-Fehler durchgelassen haben.
@@ -466,7 +466,7 @@ und getestet, der Fehler lebte dazwischen.
 Alle Befehle im Ordner `app/`, sofern nicht anders angegeben.
 
 ```bash
-npm test          # 266 Unit-Tests
+npm test          # alle Unit- und Smoke-Tests
 npm run build     # Weboberfläche bündeln (dist/editor.bundle.js)
 ```
 

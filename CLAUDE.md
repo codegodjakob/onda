@@ -35,12 +35,12 @@ Einzelner Kontext — `CONTEXT.md` und `docs/adr/` im Projektwurzelverzeichnis. 
 | `docs/VISION-GEGEN-GEBAUTES.md` | Der Abstract gegen den Code geprüft |
 | `docs/REDESIGN-IDEEN.md` | Gesammelte Umgestaltungsideen, noch nichts entschieden |
 | `docs/ABNAHME-ETAPPE-A.md` | Abnahme der zehn Kriterien für den KI-Anschluss |
-| `app/evals/v2-fertigzustand.json` | 83 Evals, die den Fertigzustand definieren |
+| `app/evals/v2-fertigzustand.json` | Der Eval-Katalog, der den Fertigzustand definiert — Anzahl und Stand frisch messen: `node evals/run-fertigzustand.mjs` |
 
 ## Prüfen
 
 ```
-cd app && npm test          # 470 Tests
+cd app && npm test          # alle Tests; die Anzahl zeigt der Lauf selbst
 cd app && npm run build     # Bundle bauen
 cd mac && ./build.sh        # Mac-App bauen
 node evals/run-fertigzustand.mjs   # Fertigzustand frisch messen
