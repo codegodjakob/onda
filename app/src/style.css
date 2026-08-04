@@ -1369,8 +1369,10 @@ body.zen #minimap, body.zen #lane { display: none; }
    untereinander sind Laerm, keine Rubrik (Design System: Versalien nur
    fuer Abschnitts-Rubriken). */
 .block-preview-role {
-  color: var(--text-tertiary);
-  font: var(--fw-medium) var(--text-xs)/1.2 var(--font-sans);
+  /* Farbe bleibt secondary: tertiary reisst bei dieser Groesse den Kontrast
+     (axe: color-contrast, 4.5:1). Entkapitalisiert wird trotzdem — darum ging es. */
+  color: var(--text-secondary);
+  font: var(--fw-medium) var(--text-sm)/1.2 var(--font-sans);
   letter-spacing: var(--tracking-normal, 0);
 }
 
