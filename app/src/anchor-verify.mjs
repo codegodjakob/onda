@@ -18,15 +18,26 @@ const QUOTE_MAP = Object.freeze({
   '›': "'", // ›
 })
 
+// Unsichtbare Darstellungszeichen, die beim Kopieren aus dem Netz im Text landen:
+// weicher Trennstrich, Nullbreite-Leerzeichen, BOM. Fremdtext-Prüfung (Issue #17):
+// sie ließen jeden Anker über der betroffenen Stelle lautlos scheitern — dabei sind
+// sie kein Inhalt, sondern Satzanweisungen. Die Normalisierung übergeht sie wie
+// sie Anführungszeichen vereinheitlicht; was WIRKLICH nicht im Text steht
+// (z. B. Gedankenstrich vs. Bindestrich), wird weiterhin verworfen.
+const UNSICHTBAR = new Set(['\u00AD', '\u200B', '\uFEFF'])
+const UNSICHTBAR_REGEX = /[\u00AD\u200B\uFEFF]/g
+
 // Baut die normalisierte Fassung eines Texts plus eine Karte
 // normalisierter Index -> Original-Index. Whitespace-Läufe kollabieren zu
-// einem Leerzeichen, das auf das erste Original-Whitespace-Zeichen zeigt.
+// einem Leerzeichen, das auf das erste Original-Whitespace-Zeichen zeigt;
+// unsichtbare Zeichen tauchen in der normalisierten Fassung gar nicht auf.
 function normalisiereMitKarte(text) {
   let norm = ''
   const karte = []
   let inWhitespace = false
   for (let i = 0; i < text.length; i += 1) {
     const zeichen = text[i]
+    if (UNSICHTBAR.has(zeichen)) continue // laesst einen laufenden Whitespace-Lauf unberuehrt
     if (/\s/.test(zeichen)) {
       if (!inWhitespace) {
         norm += ' '
@@ -52,16 +63,23 @@ export function findeAnker(docText, anker) {
   if (typeof docText !== 'string' || typeof anker !== 'string' || !anker.trim()) {
     return { gefunden: false, index: null, normalisiert: false, laenge: null }
   }
+  // Erst um Unsichtbares bereinigen, dann trimmen: ein Anker, der danach leer ist,
+  // hat keinen Inhalt — der darf auch nicht wörtlich auf ein unsichtbares Zeichen
+  // im Dokument treffen. Und nur so bleibt garantiert, dass das letzte Zeichen des
+  // normalisierten Ankers ein echtes, 1:1-gemapptes Zeichen ist (siehe unten).
+  const bereinigt = anker.replace(UNSICHTBAR_REGEX, '').trim()
+  if (!bereinigt) return { gefunden: false, index: null, normalisiert: false, laenge: null }
 
   const exakt = docText.indexOf(anker)
   if (exakt >= 0) return { gefunden: true, index: exakt, normalisiert: false, laenge: anker.length }
 
   const doc = normalisiereMitKarte(docText)
-  const gesucht = normalisiereMitKarte(anker.trim())
+  const gesucht = normalisiereMitKarte(bereinigt)
   const treffer = doc.norm.indexOf(gesucht.norm)
   if (treffer < 0) return { gefunden: false, index: null, normalisiert: false, laenge: null }
   const startIndex = doc.karte[treffer]
-  // gesucht stammt aus anker.trim() -- das letzte Zeichen von gesucht.norm ist darum GARANTIERT
+  // gesucht stammt aus bereinigt (Unsichtbares entfernt, dann getrimmt) -- das letzte Zeichen
+  // von gesucht.norm ist darum GARANTIERT
   // kein kollabierter Whitespace-Lauf, sondern ein normales 1:1-gemapptes Zeichen (Buchstabe
   // oder ein via QUOTE_MAP vereinheitlichtes Anfuehrungszeichen). doc.karte an dieser Stelle
   // zeigt deshalb exakt auf den letzten Original-Index des Treffers, kein Schaetzwert.
