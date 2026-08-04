@@ -90,11 +90,11 @@ _Avoid_: Wirkungsscore, garantierte Leserreaktion
 
 ## Implementierte Arbeitsoberflaeche
 
-Der erste interaktive V2-Bauabschnitt ist eine fokussierte Schreiboberflaeche aus Vanilla JavaScript, Tiptap 2/ProseMirror und CSS. Er verwendet weiterhin die lokale Persistenz unter `aiwt.v2`; sichtbarer Arbeitszustand, Dialoge und Autorentscheidungen werden mit dem Text gespeichert.
+Der interaktive V2-Stand ist eine fokussierte Schreiboberflaeche aus Vanilla JavaScript, Tiptap 2/ProseMirror und CSS. Er verwendet weiterhin die lokale Persistenz unter `aiwt.v2`; sichtbarer Arbeitszustand, Dialoge, Autorentscheidungen, Audits und Datenkontrollzustaende werden lokal gespeichert.
 
 ### Architektur
 
-- `app/src/editor.js` migriert Dokumente auf Schema 11, initialisiert das inhaltlich reduzierte Tiptap-Schema und verbindet Bibliothek, Persistenz, Projektgedaechtnis, Argumentationsmodell, Sprachprofil und Workspace.
+- `app/src/editor.js` migriert Dokumente auf Schema 12, initialisiert das inhaltlich reduzierte Tiptap-Schema und verbindet Bibliothek, Persistenz, Projektgedaechtnis, Argumentationsmodell, Sprachprofil, Schlussaudit und Workspace.
 - `app/src/example-seed.mjs` besitzt die konservative Beispielmigration. Seed-Texte tragen stabile Marker und eine normalisierte Body-Signatur.
 - `app/src/workspace-model.mjs` besitzt die reinen Workspace-Zustaende, Block-Snapshots, Finding-Zielaufloesung, Threads und Regeln fuer Agenteninitiativen.
 - `app/src/block-identity.js` vergibt stabile IDs an semantische Tiptap-Bloecke und kapselt Einfuegen, aktive Blockauswahl und bewusste Textuebernahmen.
@@ -118,6 +118,10 @@ Der erste interaktive V2-Bauabschnitt ist eine fokussierte Schreiboberflaeche au
 - `app/src/language-profile.mjs` besitzt das sichtbare Kontextprofil und eine fehlertolerante Migration. `app/src/language-diagnostics.mjs`, `language-modality.mjs` und `language-patterns.mjs` trennen Norm, Grammatik, Register, Modalität und Oberflächenmuster mit genauen Textankern.
 - `app/src/language-variant.mjs`, `orthography-rules.mjs` und `orthography.mjs` schützen Bedeutung, Faktenbezüge, Zitate, Links, Struktur, Eigennamen und geschützte Absichten. Die kleine Normautomatik ist opt-in, revalidiert den gesamten Plan und wendet ihn atomar in einer Undo-Transaktion an.
 - `app/src/effect-analysis.mjs` und `effect-fairness.mjs` modellieren Publikumszustand, Passagefunktion, rhetorische Mittel und persuasive Integritätsrisiken als begrenzte Hypothesen. `language-report.mjs` bewahrt vollständige, textisolierte Versionen und Nutzerentscheidungen; `language-ui.mjs` bildet das korrigierbare Sprach- und Wirkungsdossier.
+- `app/src/final-audit.mjs` vereinheitlicht alle Hinweisstatus, ordnet Integrität vor Stil ein und blockiert kritische offene wissenschaftliche Fakten-, Quellen-, Zitations-, Methoden- und Logikbefunde. Der Audit ist versioniert, zeitunabhaengig fingerprintbar und erteilt selbst keine Publikationsfreigabe.
+- `app/src/authorship-proof.mjs` beschreibt private Autorschafts- und KI-Beitraege ausschliesslich aus lokalen beobachtbaren Ereignissen. Die optionale KI-Nutzungserklaerung nennt belegte Taetigkeiten, aber keine Herkunfts-, Aufmerksamkeits- oder Verstaendniswahrscheinlichkeit.
+- `app/src/publication-export.mjs` erzeugt aus einem UI-freien kanonischen Publikationsbaum strukturtreue Markdown-, HTML- und JATS-Ausgaben. Ueberschriften, Listen, Zitate, Links, Fussnoten, Zitationen und Literatur bleiben erhalten; Editorattribute und hostile Markup werden nicht durchgereicht.
+- `app/src/data-control.mjs` besitzt den vollstaendigen lokalen Gesamtexport mit Domaenenmanifest, strukturellem Fingerprint, rekursiver Geheimnisredaktion, geschlossener Validierung, atomarem Wiederimport und leerem Loeschzustand. `audit-ui.mjs` orchestriert Audit, Risikoexport, Publikation, Sicherung, Import und zweistufige Loeschung.
 - `app/src/ui.js` besitzt Bibliothek, Titel, Auswahl-Bubble, Slash-Menue und globale Tastaturregeln. Die alten Rails und Panel-Initialisierungen sind nicht mehr Teil des erreichbaren Oberflaechenpfads.
 - `app/src/example.js` liefert den aktuellen Beispieldatensatz. Seine Agentenantworten und Rechercheangaben sind Demo-Fixtures, keine Ergebnisse produktiver Agentenlaeufe.
 
@@ -158,6 +162,10 @@ Die alten Module `app/src/panels.js` und `app/src/structure.js` duerfen vorerst 
 - Das Sprach- und Wirkungsdossier prüft Integrität vor Stil. Es trennt Normfehler, grammatische und registerbezogene Beobachtungen, Wirkungshypothesen und Integritätsrisiken und nennt jeweils Grund, Sicherheit, genaue Passage und Prüffrage.
 - D-A-CH- und Hausstilvarianten bleiben legitim. URLs, Links, Zitate, Blockzitate, Code und unsichere Eigennamen werden nicht automatisch korrigiert. Eindeutige Normfälle werden nur nach bewusstem Opt-in gemeinsam angewendet und lassen sich mit genau einem Undo vollständig zurücknehmen.
 - Passagefunktionen und rhetorische Zuordnungen können als Nutzerkorrektur oder bewusste Enthaltung gespeichert werden. Frühere Vollanalysen, ursprüngliche Hypothesen und Entscheidungen bleiben im textbezogenen JSON-Dossier rekonstruierbar; Exporte enthalten keine Inhalte anderer Texte oder Projekte.
+- Der Schlussaudit zeigt Integritaet, Belege, Zitation, angenommene Risiken, weitere Hinweise und Stil in fester Reihenfolge. Ein kritischer wissenschaftlicher Blocker oder ein angenommenes Risiko verlangt vor jedem Publikationsexport eine ausdrueckliche Bestaetigung und veraendert den Auditstatus nicht.
+- Der private Autorschaftsnachweis und die optionale KI-Nutzungserklaerung beruhen nur auf lokal beobachtbaren Vorschlags-, Uebernahme-, Ablehnungs-, Analyse- und Nutzerentscheidungsereignissen. Nicht beobachtete Beitraege werden nicht geschaetzt.
+- Markdown-, HTML- und JATS-Export enthalten nur Publikationsinhalt und auf Wunsch die belegbare KI-Nutzungserklaerung. Der Gesamtdatenexport ist davon getrennt und umfasst alle lokalen Projekte, Texte, Quellen, Belegbuendel, Recherchelaeufe, Entscheidungen, Audits, Erinnerungen und Einstellungen ohne Geheimnisse.
+- Vollstaendige lokale Loeschung bleibt gesperrt, bis eine frisch erzeugte und validierte Gesamtsicherung vorliegt. Danach verlangt sie einen zweiten sichtbaren Schritt und die Eingabe `LÖSCHEN`; ein ungueltiger Import veraendert den bestehenden Zustand nicht.
 - Der Live-Editor besitzt keine Schriftgroessen-, Farb-, Highlight-, Ausrichtungs-, Unterstreichungs-, Bild- oder grafischen Anmerkungsbefehle. Links bleiben als inhaltliche Referenzen, Listen und Ueberschriften als Struktur erhalten.
 - Agenten- und Belegfenster liegen mobil mit 12 Pixel Abstand im Viewport und belegen hoechstens 70 Prozent der Hoehe.
 - Zwischen 761 und 1199 Pixel reservieren Agenten- und Belegfenster einen kollisionsfreien rechten Layouttrack; ab 1200 Pixel bleibt derselbe Abstand erhalten.
@@ -181,13 +189,18 @@ node test/etappe-c2-smoke.mjs
 AIWT_BROWSER=chromium node test/etappe-d1-smoke.mjs
 AIWT_BROWSER=firefox node test/etappe-d1-smoke.mjs
 AIWT_BROWSER=webkit node test/etappe-d1-smoke.mjs
+AIWT_BROWSER=chromium node test/etappe-d2-smoke.mjs
+AIWT_BROWSER=firefox node test/etappe-d2-smoke.mjs
+AIWT_BROWSER=webkit node test/etappe-d2-smoke.mjs
+node test/d2-accessibility.test.mjs
 node test/decision-log-smoke.mjs
 node test/performance-smoke.mjs
 npm run eval:b1-quality
 npm run eval:b2-quality
 npm run eval:c2-quality
 npm run eval:d1-quality
-node evals/run-v2-evals.mjs --result evals/results/etappe-d1-latest.json
+npm run eval:d2-quality
+node evals/run-v2-evals.mjs --result evals/results/etappe-d2-latest.json
 ```
 
 Der Haupt-Smoke prueft die Zustaende `base`, `shelf`, `finding`, `suggestion`, `local-dialogue`, `agent` und `evidence` bei Desktop, Mobile und relevanten Zwischenbreiten. Er deckt Seed-Erhalt, Klartext-Patches, expliziten Own-Version-Abschluss, Integritaetsbestaetigung, stale/mehrdeutige Anker, Fokus, Escape-Kaskade, Reduced Motion, ARIA-Beziehungen, horizontalen Overflow, Streaming und die lokale Monatsgrenze ab.
@@ -202,7 +215,9 @@ Die C2-Eval beweist atomare Claims, fünf explizite Relationstypen, bindende Cla
 
 Die D1-Eval beweist ein explizites Sprachprofil, getrennte Diagnoseklassen, regionale und hausinterne Varianten, vorsichtige Modalitätskalibrierung, beweisbar bedeutungstreue Sprachvarianten, geschützte Struktur und eine atomare opt-in Normkorrektur. Publikumszustand, Passagefunktion, rhetorische Mittel und Fairness bleiben begründete, korrigier- oder enthaltbare Hypothesen. Der feste Mehrgenre-Korpus erreicht 5,0 von 5,0; die kontextsensitive Lösung schlägt den vollständig abgeleiteten pauschalen Humanizer mit 5 zu 0.
 
-Der frische Gesamtlauf umfasst 419 bestandene Tests, den Produktionsbuild, den vollständigen V2-Lauf, alle Etappen-Smokes und 17 native Selbsttests. Der D1-Browserfluss besteht in Chromium, Firefox und WebKit. Der WCAG-orientierte Browseraudit belegt Dialogsemantik, sichtbare Labels, Tastaturbedienung, Fokuswiederherstellung, Zielgrößen, Metadatenkontrast, mobile Geometrie und 200-Prozent-Reflow. Die Performanceprobe misst während eines langsamen Agentenlaufs 14 Eingaben mit einer p95-Zeit bis zum nächsten Frame von 7,5 ms und ohne Long Task. `app/evals/results/etappe-d1-latest.json` führt alle 77 Ziel-Evals: 62 bestanden, 9 ehrlich D2 zugeordnet und 6 externe Live-Gates offen. Der gewichtete D1-Exitwert beträgt 4,99 von 5,0.
+Die D2-Eval beweist die feste Auditstatusmatrix, harte wissenschaftliche Integritaetsblocker, bewusste Risikoexporte, beobachtbare Autorschaft, optionale KI-Nutzungserklaerung, strukturtreue und UI-freie Publikationsformate sowie vollstaendige lokale Datenkontrolle. Der feste Abschlusskorpus erreicht in Runde 2 in allen fuenf Dimensionen 5,0 von 5,0; der kontextsensitive Ablauf schlaegt die stilgetriebene Scheinfertigstellung mit 5 zu 0.
+
+Der frische Gesamtlauf umfasst 446 bestandene Tests, den Produktionsbuild, den vollständigen V2-Lauf, alle Etappen-Smokes und 17 native Selbsttests. Die D1- und D2-Browserfluesse bestehen in Chromium, Firefox und WebKit. Axe meldet in sieben Kernzustaenden null WCAG-2.1-A/AA-Verstoesse; das manuelle Protokoll belegt Tastatur, Fokus, Escape-Rueckkehr, Zielgroessen, Fehlererholung, 390-Pixel-Reflow und 200-Prozent-Skalierung in allen drei Engines. Die Performanceprobe misst 15 Eingaben mit einer p95-Zeit bis zum naechsten Frame von 8,2 ms und ohne Long Task. `app/evals/results/etappe-d2-latest.json` fuehrt alle 77 Ziel-Evals: 71 bestanden und genau 6 externe Live-Gates offen; kein Eval bleibt einer spaeteren Entwicklungsstufe zugeordnet. Der gewichtete D2-Exitwert betraegt 5,0 von 5,0.
 
 Vom Repository-Wurzelverzeichnis muss ausserdem `git diff --check` ohne Ausgabe enden. Der lokale Prototyp ist unter `http://127.0.0.1:4173/` erreichbar, solange der vorhandene statische Server laeuft.
 
@@ -214,7 +229,8 @@ Noch nicht produktiv verbunden sind:
 
 - ein produktiver Live-Rechercheadapter fuer echte Web-, Bibliotheks- oder Datenbankanbieter sowie automatische Volltextextraktion;
 - Multi-Agent-, Debatten- oder stochastischer Consensus;
-- redaktionelle Literaturverzeichnisbearbeitung und das vollstaendige Schlussaudit trotz bereits deterministisch vorhandener Zitationspruefungen;
-- der zustandsbasierte Schlussaudit, strukturtreue Publikationsexporte, vollständiger lokaler Datenexport mit Löschung und das finale manuelle WCAG-Protokoll.
+- eine redaktionelle Literaturverzeichnisbearbeitung jenseits des vorhandenen Audits und der strukturtreuen Ausgabe;
+- externe Live-Abnahmen fuer Offline-Mac-Nutzung, echte Providertransporte, DOI-, Web-, Bibliotheks- und Paywall-Sitzungen, reale Leser- und Autorenstudien sowie Langzeittelemetrie;
+- moderierte Nutzungssitzungen mit VoiceOver, NVDA, JAWS und individuellen assistiven Setups. Diese sind im WCAG-Protokoll bewusst nicht als automatisiert bestanden markiert.
 
-Echte Chat- und Hinweislauf-Antworten sind keine Fixtures, aber auch keine automatisch verifizierten Forschungsergebnisse. Quellen und Rechercheangaben im Beispiel bleiben Demo. Quellen-, Evidenz-, Recherche-, Gedaechtnis-, Argumentations-, Sprach- und Wirkungsvertraege sind mit B1/B2/C1/C2/D1 gebaut; reale Provider- und Nutzerstudien bleiben extern, waehrend der Schlussaudit in D2 gegen den festgeschriebenen Eval-Katalog folgt.
+Echte Chat- und Hinweislauf-Antworten sind keine Fixtures, aber auch keine automatisch verifizierten Forschungsergebnisse. Quellen und Rechercheangaben im Beispiel bleiben Demo. Alle lokal automatisierbaren V2-Vertraege von Quellen und Evidenz bis Schlussaudit und Datenkontrolle sind gebaut; die sechs im Katalog festgeschriebenen realen Provider-, Nutzungs- und Langzeitgates bleiben ehrlich extern offen.
