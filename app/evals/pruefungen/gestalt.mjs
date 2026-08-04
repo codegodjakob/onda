@@ -49,10 +49,12 @@ try {
       const t = (e.textContent || '').trim()
       return t.length > 12 && t.length < 200 && !e.querySelector('.ProseMirror')
     }
-    const kandidaten = [...document.querySelectorAll('aside, .anno-bubble, [class*=hinweis], [class*=finding]')]
+    // Die Traegerebene (#localAgentLayer) ist selbst ein <aside> ueber die volle
+    // Breite. Sie mitzumessen ergab 1016px und damit ein falsches 'zu breit'.
+    // Gemessen wird die Karte DARIN — das kleinste passende Element gewinnt.
+    const kandidaten = [...document.querySelectorAll('.local-finding, .anno-bubble, [class*=hinweis]')]
       .filter(e => e.offsetParent && e.getBoundingClientRect().height > 10 && traegt(e))
-      // Das aeusserste passende Element gewinnt: es traegt die tatsaechliche Kastenbreite.
-      .sort((a, b) => b.getBoundingClientRect().width - a.getBoundingClientRect().width)
+      .sort((a, b) => a.getBoundingClientRect().width - b.getBoundingClientRect().width)
     if (!kandidaten.length) return { fehler: 'kein sichtbarer Hinweis gefunden' }
     const hinweis = kandidaten[0].getBoundingClientRect()
     const ed = editor.getBoundingClientRect()
@@ -82,7 +84,10 @@ try {
     const absaetze = [...(editor?.children || [])].map(e => e.textContent.trim()).filter(t => t.length >= 20)
     const spalte = document.querySelector('[class*=sidebar]')
     if (!spalte) return { fehler: 'keine Seitenspalte' }
-    const texte = [...spalte.querySelectorAll('*')]
+    // Nur zugeklappte Karten pruefen. Eine Ueberschrift traegt ihren Wortlaut
+    // als Struktur, und die Karte, in der gerade geschrieben wird, ist offen —
+    // beides ist Absicht, keine Doppelung.
+    const texte = [...spalte.querySelectorAll('.block-preview:not(.is-offen) *, [class*=kicker], p')]
       .filter(e => !e.children.length && e.offsetParent)
       .map(e => e.textContent.trim())
       .filter(t => t.length >= 20)
@@ -116,9 +121,15 @@ try {
 
   // --- DESIGN-04: keine Grossbuchstaben-Beschriftungen -----------------------
   const versalien = await page.evaluate(() => {
+    // Das Design System erlaubt Versalien ausdruecklich fuer 11-12px-Rubriken
+    // ('ALL-CAPS nur fuer Eyebrow-Labels mit --tracking-wider'). Verboten sind
+    // sie fuer Etiketten, die sich je Element WIEDERHOLEN — davon standen zehn
+    // gleichzeitig auf dem Schirm.
+    const istRubrik = e => e.matches('[class*=eyebrow], [class*=kicker]')
     const treffer = [...document.querySelectorAll('*')].filter(e => {
       if (e.children.length || !e.offsetParent) return false
       if (getComputedStyle(e).textTransform !== 'uppercase') return false
+      if (istRubrik(e)) return false
       return e.getBoundingClientRect().width > 0
     })
     return { anzahl: treffer.length, beispiele: treffer.slice(0, 4).map(e => e.textContent.trim().slice(0, 22)) }
