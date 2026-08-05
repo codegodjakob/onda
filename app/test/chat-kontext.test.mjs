@@ -520,6 +520,27 @@ test('fuehreChatVorgangAus: Sperre wird in JEDEM Pfad zurueckgesetzt (Erfolg, Fe
   assert.deepEqual(sperrenVerlauf, [true, false, true, false, true, false], 'jeder Vorgang muss die Sperre setzen und wieder loesen')
 })
 
+// Task 6 (Chat-Kanal durchs Tor): fuehreChatVorgangAus reichte den Rueckgabewert von
+// chatte() bisher NICHT durch (der try-Block endete immer mit dem festen { gestartet: true }).
+// Das Lauf-Tor (lauf-tor.mjs) liest genau dieses laufFn-Ergebnis, um im Journal zwischen
+// 'geliefert' und 'fehler' zu unterscheiden (bewerteLaufErgebnis prueft ergebnis.erfolg ===
+// false) -- chatte() (in workspace.js: fuehreChatLauf) faengt Chat-Fehler intern ab und
+// kehrt normal (nicht werfend) mit { erfolg: false, fehler } zurueck. Ohne Durchreichen saehe
+// das Tor JEDEN Chat-Lauf als 'geliefert', auch einen, der an einem Gateway-Fehler scheiterte.
+test('fuehreChatVorgangAus reicht ein Fehlschlag-Ergebnis von chatte() durch', async () => {
+  const ergebnis = await fuehreChatVorgangAus(chatVorgangEingabe({
+    chatte: async () => ({ erfolg: false, fehler: 'schema' }),
+  }))
+  assert.deepEqual(ergebnis, { gestartet: true, erfolg: false, fehler: 'schema' })
+})
+
+test('fuehreChatVorgangAus bleibt bei { gestartet: true }, wenn chatte() nichts zurueckgibt', async () => {
+  const ergebnis = await fuehreChatVorgangAus(chatVorgangEingabe({
+    chatte: async () => {},
+  }))
+  assert.deepEqual(ergebnis, { gestartet: true })
+})
+
 test('fuehreChatVorgangAus: bereits laufender Vorgang blockiert sofort, ohne Sperre/Status/Callbacks anzufassen', async () => {
   let sperreAufrufe = 0
   let statusAufrufe = 0

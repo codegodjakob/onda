@@ -215,8 +215,13 @@ export async function fuehreChatVorgangAus({ laeuftBereits, sperreSetzen, setzeS
     sperreSetzen(true)
     setzeStatus({ zustand: 'laeuft' })
     await verdichte()
-    await chatte()
-    return { gestartet: true }
+    // Task 6 (Chat-Kanal durchs Tor): das Ergebnis von chatte() (in workspace.js:
+    // fuehreChatLauf) wird durchgereicht statt verworfen -- das Lauf-Tor liest genau dieses
+    // laufFn-Ergebnis, um im Journal zwischen 'geliefert' und 'fehler' zu unterscheiden
+    // (bewerteLaufErgebnis, lauf-tor.mjs). chatte() faengt seine Fehler selbst ab und kehrt
+    // normal mit { erfolg: false, fehler } zurueck statt zu werfen.
+    const chatErgebnis = await chatte()
+    return { gestartet: true, ...(chatErgebnis && typeof chatErgebnis === 'object' ? chatErgebnis : {}) }
   } catch (fehler) {
     setzeStatus({ zustand: 'fehler', fehlerTyp: fehler?.typ })
     return { gestartet: true, erfolg: false }

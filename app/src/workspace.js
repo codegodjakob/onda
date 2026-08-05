@@ -19,9 +19,11 @@ import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import { applySettings } from './ui.js'
 import { hatSchluessel, setzeSchluessel, loescheSchluessel, runTask } from './agent-gateway.mjs'
 // Das Lauf-Tor (Issue #12): Sperre, Signatur, Buchung und Journal fuer jeden bezahlten
-// Lauf. Der Interview-Kanal ist der erste, der ausschliesslich hierueber laeuft — sein
-// eigenes runTask kommt nicht mehr aus agent-gateway.mjs, sondern als Parameter von
-// fuehreLaufAus' laufFn (siehe starteVerstaendnisEntwurf/sendeInterviewAntwort unten).
+// Lauf. Interview- und Chat-Kanal laufen bereits ausschliesslich hierueber — ihr eigenes
+// runTask kommt nicht mehr aus agent-gateway.mjs, sondern als Parameter von fuehreLaufAus'
+// laufFn (siehe starteVerstaendnisEntwurf/sendeInterviewAntwort, sendeAgentenChat/
+// sendeLocalChat unten). Der modulweite runTask-Import bleibt vorerst fuer Hinweis- und
+// Erweiterungslauf bestehen (noch nicht ans Tor angeschlossen).
 import { fuehreLaufAus, kanalGesperrt } from './lauf-tor.mjs'
 import { aktuellerAgentStatus, beiAgentStatus, setzeAgentStatus, statuszeileFuer } from './agent-status.mjs'
 import { EXAMPLE_PROJECT_ID, seedBodySignature } from './example-seed.mjs'
@@ -155,9 +157,11 @@ let accentMenu = null
 let interviewPruefKey = null
 let interviewStatus = null // null | 'laeuft' | ruhiger Fehlertext für die Statuszeile
 let pausierterAutomatiklauf = null
-// Echter Chat (Etappe A, Bereich C): genau ein Lauf gleichzeitig, app-weit (Panel und,
-// ab Task C-3, auch die Randkarten-Gespraeche teilen sich dieses Feld ueber fuehreChatLauf).
-let laufenderChatLauf = null
+// Echter Chat (Etappe A, Bereich C; Tor-Anschluss Task 6): die SPERRE wohnt jetzt im Tor
+// (lauf-tor.mjs, kanalGesperrt('chat')/fuehreLaufAus) — hier lebt nur noch der
+// Stream-Zustand, app-weit EIN Feld (Panel und Randkarten-Gespraeche teilen es sich
+// weiterhin ueber fuehreChatLauf).
+let chatStream = null
 const ONDA_ACCENTS = ['sky', 'sage', 'blue', 'clay', 'lavender', 'sand']
 const ONDA_ACCENT_LABELS = { sky: 'Himmel', sage: 'Salbei', blue: 'Blau', clay: 'Ton', lavender: 'Lavendel', sand: 'Sand' }
 
@@ -2084,12 +2088,12 @@ function renderLocalDialogue(finding) {
   send.type = 'submit'
   send.title = 'Senden'
   send.setAttribute('aria-label', 'Nachricht senden')
-  send.disabled = Boolean(laufenderChatLauf)
+  send.disabled = kanalGesperrt('chat') // Sperre wohnt im Tor (Task 6), nicht mehr in einem lokalen Feld
   form.append(input, send)
   form.addEventListener('submit', event => {
     event.preventDefault()
     const text = input.value.trim()
-    if (!text || laufenderChatLauf) return
+    if (!text || kanalGesperrt('chat')) return
     // Echter, gestreamter Chat mit Finding-Kontext (Bereich C, Task C-3) — die Kulisse ist weg.
     input.value = ''
     appendThreadMessage(finding.thread, 'user', text, Date.now())
@@ -2769,13 +2773,21 @@ function chatNachrichtenTextKnoten(messageId) {
 // modulintern fuer Task C-3 (Randkarten-Gespräch, keine Verdichtung dort).
 //
 // Fix-Runde 1, Finding 1 (Critical): erzeugt KEIN eigenes Sperr-Objekt mehr, sondern
-// uebernimmt ein von sendeAgentenChat bereits gesetztes (laufenderChatLauf ist zu diesem
+// uebernimmt ein von sendeAgentenChat bereits gesetztes (chatStream ist zu diesem
 // Zeitpunkt schon non-null, siehe dort) — bei einem direkten Aufruf (C-3) erzeugt es weiterhin
 // selbst eins. Zwei verschiedene Sperr-Objekte fuer denselben Lauf waren die Ueberschreib-
 // Luecke, durch die ein dritter Submit moeglich wurde.
-async function fuehreChatLauf(thread, kontext) {
-  const lauf = laufenderChatLauf || { agentMessage: null, puffer: '', flushTimer: null }
-  laufenderChatLauf = lauf
+//
+// Tor-Anschluss (Task 6): runTask kommt jetzt als DRITTER Parameter vom Lauf-Tor
+// (fuehreLaufAus' laufFn, siehe sendeAgentenChat/sendeLocalChat) statt aus dem modulweiten
+// Import — die Sperre selbst wohnt im Tor (kanalGesperrt('chat')), hier bleibt chatStream nur
+// noch fuer den Streaming-Zustand. Der Rueckgabewert ({erfolg:true} bzw. {erfolg:false,
+// fehler}) reicht bis zu fuehreChatVorgangAus (chat-kontext.mjs) und von dort als
+// laufFn-Ergebnis ins Tor, das daraus den Journal-Eintrag 'geliefert'/'fehler' bildet
+// (bewerteLaufErgebnis, lauf-tor.mjs).
+async function fuehreChatLauf(thread, kontext, runTask) {
+  const lauf = chatStream || { agentMessage: null, puffer: '', flushTimer: null }
+  chatStream = lauf
   const flush = () => {
     lauf.flushTimer = null
     if (!lauf.agentMessage) return
@@ -2808,31 +2820,37 @@ async function fuehreChatLauf(thread, kontext) {
     setzeAgentStatus({ zustand: 'bereit' })
     if (lauf.flushTimer) clearTimeout(lauf.flushTimer)
     const antwort = typeof daten === 'string' && daten.trim() ? daten : lauf.puffer
-    if (!antwort.trim()) return
+    if (!antwort.trim()) return { erfolg: true }
     if (lauf.agentMessage) lauf.agentMessage.text = antwort
     else appendThreadMessage(thread, 'agent', antwort)
     announceAgentStatus(antwort)
+    return { erfolg: true }
   } catch (fehler) {
     if (lauf.flushTimer) clearTimeout(lauf.flushTimer)
     setzeAgentStatus({ zustand: 'fehler', fehlerTyp: fehler?.typ })
-    if (fehler?.typ === 'abgebrochen') return
+    if (fehler?.typ === 'abgebrochen') return { erfolg: false, fehler: 'abgebrochen' }
     const meldung = chatFehlerText(fehler)
     if (lauf.agentMessage) lauf.agentMessage.text = meldung
     else appendThreadMessage(thread, 'agent', meldung)
     announceAgentStatus(meldung)
+    return { erfolg: false, fehler: fehler?.typ }
   } finally {
-    laufenderChatLauf = null
+    chatStream = null
     ctx?.persist()
     refreshWorkspace()
   }
 }
 
 // Baut den Chat-Kontext aus dem Live-Zustand und startet fuehreChatLauf — orchestriert ueber
-// fuehreChatVorgangAus (chat-kontext.mjs, Fix-Runde 1), das die Sperre SYNCHRON vor jedem
-// await setzt (Finding 1) und den ganzen Vorgang inklusive Verdichtung als 'laeuft' meldet
-// (Finding 2). doc/project werden VOR der Sperre gelesen (reiner, synchroner Zugriff ohne
-// Risiko) und in den Callbacks weiterverwendet, damit chatte() IMMER fuehreChatLauf erreicht
-// — kein frueher Return mehr, der die Sperre/den Status haengen lassen koennte.
+// fuehreChatVorgangAus (chat-kontext.mjs, Fix-Runde 1) UND, aussenherum, ueber das Lauf-Tor
+// (lauf-tor.mjs, Task 6): fuehreLaufAus prueft/setzt kanalGesperrt('chat') SYNCHRON vor jedem
+// await und reicht dem laufFn das einzig legale runTask — fuehreChatVorgangAus'
+// laeuftBereits gibt darum nur noch konstant false zurueck (das Tor hat den Kanal bereits
+// geprueft und gesperrt), sperreSetzen pflegt nur noch chatStream (Streaming-Zustand) +
+// refreshWorkspace. doc/project werden VOR dem Tor-Aufruf gelesen (reiner, synchroner Zugriff
+// ohne Risiko) und in den Callbacks weiterverwendet, damit chatte() IMMER fuehreChatLauf
+// erreicht — kein frueher Return mehr, der die Sperre/den Status haengen lassen koennte.
+// Kein einmalJeSignatur: jede Chat-Frage ist gewollt, auch eine wortgleiche Wiederholung.
 //
 // Der Chat selbst ist ueberall echt, auch im Beispielprojekt (Spec) — istBeispielProjekt
 // sperrt hier NUR den automatischen Hinweislauf, den eine Chat-Bitte sonst ausloesen wuerde
@@ -2844,82 +2862,100 @@ async function sendeAgentenChat(message, anfrage) {
   const project = dokumentProjekt(doc)
   if (!doc || !project) return
 
-  await fuehreChatVorgangAus({
-    laeuftBereits: () => Boolean(laufenderChatLauf),
-    sperreSetzen: wert => {
-      laufenderChatLauf = wert ? (laufenderChatLauf || { agentMessage: null, puffer: '', flushTimer: null }) : null
-      refreshWorkspace() // Senden-Knopf sofort sichtbar deaktivieren (schliesst die Luecke aus Finding 1)
-    },
-    setzeStatus: setzeAgentStatus,
-    verdichte: async () => {
-      const plan = planVerlaufVerdichtung(message.thread, message.verlaufsNotiz || null)
-      if (!plan) return
-      try {
-        const { daten } = await runTask('zusammenfassung', { anfrage: plan.verdichtungsEingabe })
-        if (typeof daten === 'string' && daten.trim()) {
-          message.verlaufsNotiz = { text: daten.trim(), bisMessageId: plan.bisMessageId, erstelltAt: Date.now() }
-          ctx?.persist()
+  await fuehreLaufAus(
+    { kanal: 'chat', ausloeser: 'gespraech', signatur: fnvSignatur(anfrage) },
+    ({ runTask }) => fuehreChatVorgangAus({
+      laeuftBereits: () => false, // die Kanal-Sperre prueft und haelt das Tor (fuehreLaufAus)
+      sperreSetzen: wert => {
+        chatStream = wert ? (chatStream || { agentMessage: null, puffer: '', flushTimer: null }) : null
+        refreshWorkspace() // Senden-Knopf sofort sichtbar deaktivieren (schliesst die Luecke aus Finding 1)
+      },
+      setzeStatus: setzeAgentStatus,
+      verdichte: async () => {
+        const plan = planVerlaufVerdichtung(message.thread, message.verlaufsNotiz || null)
+        if (!plan) return
+        try {
+          const { daten } = await runTask('zusammenfassung', { anfrage: plan.verdichtungsEingabe })
+          if (typeof daten === 'string' && daten.trim()) {
+            message.verlaufsNotiz = { text: daten.trim(), bisMessageId: plan.bisMessageId, erstelltAt: Date.now() }
+            ctx?.persist()
+          }
+        } catch {
+          // Die Verdichtung ist Komfort: scheitert sie, läuft der Chat mit vollem Verlauf weiter.
         }
-      } catch {
-        // Die Verdichtung ist Komfort: scheitert sie, läuft der Chat mit vollem Verlauf weiter.
-      }
-    },
-    chatte: async () => {
-      const hinweisBitte = !istBeispielProjekt(project) && erkenneHinweisBitte(anfrage)
-      if (hinweisBitte) starteHinweislauf({ grund: 'chat' })
+      },
+      chatte: async () => {
+        const hinweisBitte = !istBeispielProjekt(project) && erkenneHinweisBitte(anfrage)
+        if (hinweisBitte) starteHinweislauf({ grund: 'chat' })
 
-      const kontext = baueChatKontext({
-        verstaendnis: ensureProjectUnderstanding(project),
-        docText: dokumentText(),
-        findings: doc.findings,
-        doc,
-        thread: message.thread.slice(0, -1), // der aktuelle Nutzer-Turn geht separat als `anfrage` mit
-        verlaufsNotiz: message.verlaufsNotiz || null,
-        anfrage,
-        zusatzAnweisung: hinweisBitte
-          ? 'Der Nutzer hat um eine Durchsicht gebeten. Ein Hinweislauf über den Text wurde soeben gestartet — erwähne kurz, dass du den Text jetzt durchgehst und dass Hinweise am Rand erscheinen, sobald etwas Belastbares dabei ist.'
-          : null,
-      })
-      await fuehreChatLauf(message.thread, kontext)
-    },
-  })
+        const kontext = baueChatKontext({
+          verstaendnis: ensureProjectUnderstanding(project),
+          docText: dokumentText(),
+          findings: doc.findings,
+          doc,
+          thread: message.thread.slice(0, -1), // der aktuelle Nutzer-Turn geht separat als `anfrage` mit
+          verlaufsNotiz: message.verlaufsNotiz || null,
+          anfrage,
+          zusatzAnweisung: hinweisBitte
+            ? 'Der Nutzer hat um eine Durchsicht gebeten. Ein Hinweislauf über den Text wurde soeben gestartet — erwähne kurz, dass du den Text jetzt durchgehst und dass Hinweise am Rand erscheinen, sobald etwas Belastbares dabei ist.'
+            : null,
+        })
+        return await fuehreChatLauf(message.thread, kontext, runTask)
+      },
+    }),
+  )
+  // Das Tor loest kanalGesperrt('chat') in SEINEM EIGENEN finally (lauf-tor.mjs) — das laeuft
+  // NACH sperreSetzen(false) oben, das noch waehrend der Sperre rendert. Ohne diesen
+  // Nachrender bliebe der Senden-Knopf (send.disabled = kanalGesperrt('chat')) optisch UND
+  // funktional deaktiviert: ein Formular mit nur einem deaktivierten Submit-Button feuert kein
+  // implizites Submit mehr auf Enter — die Eingabe wirkt eingefroren, bis irgendein anderes
+  // Ereignis zufaellig neu rendert.
+  if (ctx) refreshWorkspace()
 }
 
 // Startet den echten Chat-Lauf FÜR EIN FINDING an der Randkarte (Task C-3) — dieselbe
-// Sperr-/Status-Disziplin wie sendeAgentenChat: fuehreChatVorgangAus setzt die Sperre SYNCHRON
-// vor jedem await (kein zweiter, ungesicherter Pfad, kein doppelter bezahlter Lauf — siehe
-// Fix-Runde 1 zu C-2, chat-kontext.mjs). laufenderChatLauf ist app-weit EIN Feld (siehe
-// Deklaration oben) — ein laufendes Panel-Gespräch blockiert ein Randkarten-Gespräch und
-// umgekehrt. Anders als sendeAgentenChat: keine Verlaufs-Verdichtung (Randkarten-Gespräche
-// bleiben kurz, Findings kennen kein verlaufsNotiz-Feld) und keine Hinweisbitte-Erkennung —
-// das Gespräch soll bei GENAU dieser Stelle bleiben (baueFindingZusatzAnweisung weist das
-// Modell entsprechend an).
+// Sperr-/Status-Disziplin wie sendeAgentenChat: das Lauf-Tor (Task 6) prueft/setzt
+// kanalGesperrt('chat') SYNCHRON vor jedem await (kein zweiter, ungesicherter Pfad, kein
+// doppelter bezahlter Lauf — siehe Fix-Runde 1 zu C-2, chat-kontext.mjs). chatStream ist
+// app-weit EIN Feld (siehe Deklaration oben) — ein laufendes Panel-Gespräch blockiert ein
+// Randkarten-Gespräch und umgekehrt (derselbe Kanal 'chat' im Tor). Anders als
+// sendeAgentenChat: keine Verlaufs-Verdichtung (Randkarten-Gespräche bleiben kurz, Findings
+// kennen kein verlaufsNotiz-Feld) und keine Hinweisbitte-Erkennung — das Gespräch soll bei
+// GENAU dieser Stelle bleiben (baueFindingZusatzAnweisung weist das Modell entsprechend an).
 async function sendeLocalChat(finding, anfrage) {
   const doc = ctx.activeDoc()
   const project = dokumentProjekt(doc)
   if (!doc || !project) return
 
-  await fuehreChatVorgangAus({
-    laeuftBereits: () => Boolean(laufenderChatLauf),
-    sperreSetzen: wert => {
-      laufenderChatLauf = wert ? (laufenderChatLauf || { agentMessage: null, puffer: '', flushTimer: null }) : null
-      refreshWorkspace() // Senden-Knopf an der Randkarte sofort sichtbar deaktivieren
-    },
-    setzeStatus: setzeAgentStatus,
-    verdichte: async () => {},
-    chatte: async () => {
-      const kontext = baueChatKontext({
-        verstaendnis: ensureProjectUnderstanding(project),
-        docText: dokumentText(),
-        findings: doc.findings,
-        doc,
-        thread: finding.thread.slice(0, -1), // der aktuelle Nutzer-Turn geht separat als `anfrage` mit
-        anfrage,
-        zusatzAnweisung: baueFindingZusatzAnweisung(finding),
-      })
-      await fuehreChatLauf(finding.thread, kontext)
-    },
-  })
+  await fuehreLaufAus(
+    { kanal: 'chat', ausloeser: 'randkarte', signatur: fnvSignatur(anfrage) },
+    ({ runTask }) => fuehreChatVorgangAus({
+      laeuftBereits: () => false, // die Kanal-Sperre prueft und haelt das Tor (fuehreLaufAus)
+      sperreSetzen: wert => {
+        chatStream = wert ? (chatStream || { agentMessage: null, puffer: '', flushTimer: null }) : null
+        refreshWorkspace() // Senden-Knopf an der Randkarte sofort sichtbar deaktivieren
+      },
+      setzeStatus: setzeAgentStatus,
+      verdichte: async () => {},
+      chatte: async () => {
+        const kontext = baueChatKontext({
+          verstaendnis: ensureProjectUnderstanding(project),
+          docText: dokumentText(),
+          findings: doc.findings,
+          doc,
+          thread: finding.thread.slice(0, -1), // der aktuelle Nutzer-Turn geht separat als `anfrage` mit
+          anfrage,
+          zusatzAnweisung: baueFindingZusatzAnweisung(finding),
+        })
+        return await fuehreChatLauf(finding.thread, kontext, runTask)
+      },
+    }),
+  )
+  // Siehe sendeAgentenChat: das Tor loest kanalGesperrt('chat') NACH dem letzten Rendern
+  // innerhalb von fuehreChatVorgangAus/fuehreChatLauf — ohne diesen Nachrender bliebe der
+  // Senden-Knopf an der Randkarte deaktiviert stehen und Enter faende kein aktives Submit
+  // mehr (implizite Formularabsendung verlangt einen aktivierten Submit-Button).
+  if (ctx) refreshWorkspace()
 }
 
 // Echte Initiative-Quelle, additiv zum bestehenden Aura-/Pausen-Mechanismus: eine Nachricht
@@ -3058,12 +3094,12 @@ function renderAgentWidget() {
   send.type = 'submit'
   send.title = 'Senden'
   send.setAttribute('aria-label', 'Nachricht senden')
-  send.disabled = Boolean(laufenderChatLauf)
+  send.disabled = kanalGesperrt('chat') // Sperre wohnt im Tor (Task 6), nicht mehr in einem lokalen Feld
   form.append(input, send)
   form.addEventListener('submit', event => {
     event.preventDefault()
     const text = input.value.trim()
-    if (!text || laufenderChatLauf) return
+    if (!text || kanalGesperrt('chat')) return
     if (istInterviewAktiv()) {
       if (kanalGesperrt('interview')) return // ein Lauf zur Zeit; die Eingabe bleibt stehen
       input.value = ''
@@ -3942,8 +3978,8 @@ export function initWorkspace(context) {
 
     clearTimeout(hoverTimer)
     clearTimeout(typingTimer)
-    if (laufenderChatLauf?.flushTimer) clearTimeout(laufenderChatLauf.flushTimer)
-    laufenderChatLauf = null
+    if (chatStream?.flushTimer) clearTimeout(chatStream.flushTimer)
+    chatStream = null
     if (triggerFrame) cancelAnimationFrame(triggerFrame)
     if (localPositionFrame) cancelAnimationFrame(localPositionFrame)
     if (agentLiveFrame) cancelAnimationFrame(agentLiveFrame)
