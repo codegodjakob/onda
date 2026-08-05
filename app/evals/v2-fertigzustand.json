@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": "2026-08-05.1",
+  "catalogVersion": "2026-08-05.2",
   "target": "Onda — vollständiger Fertigzustand A–D samt Gestalt der Arbeitsoberfläche, zweitem Rückmeldungs-Kanal, Rhythmus nach Moment, dem Wissen im Anfragekontext, dem Prinzip als Pflicht, der Textart als Maßstab und dem Ort, der einer Person gehört",
   "thresholds": {
     "allApplicableHardGatesMustPass": true,
@@ -1452,6 +1452,23 @@
           "source": [
             "Anweisung 2026-07-31: erst sammeln, dann umsetzen"
           ]
+        },
+        {
+          "id": "DESIGN-07",
+          "title": "Lernen bleibt Rückblick statt Leistungsdashboard",
+          "gate": "hard",
+          "automation": "browser",
+          "given": "Im Personenbereich liegen wiederkehrende Muster, ein möglicher Stimmenzug und eine Rückkopplung vor.",
+          "when": "Die schreibende Person diesen Bereich betrachtet und bedient.",
+          "then": "Dimension, Wiederkehr, Stimmenfreigabe und Rückkopplung sind ruhig lesbar und vollständig rücknehmbar. Es gibt weder Fortschrittsbalken noch Punktestand noch eine Erfolgsquote, die Optimierung auf Klicks statt auf Schreiben nahelegt.",
+          "evidence": [
+            "Browser-Prüfung: Personenbereich bei leerem, wiederkehrendem, vorgeschlagenem und freigegebenem Zustand",
+            "Datei-Prüfung: keine Score-, Progress- oder Erfolgsquoten-Komponente im Personenbereich"
+          ],
+          "source": [
+            "docs/VISION-GEGEN-GEBAUTES.md",
+            "app/src/workspace.js (renderErkanntes)"
+          ]
         }
       ]
     },
@@ -1556,6 +1573,41 @@
             "app/src/erweiterungslauf-model.mjs",
             "Rückmeldungs-Karte 04.08.2026: jeder Moment muss auch von Hand ziehbar sein",
             "app/src/erweiterungslauf-model.mjs (pruefeErweiterungslaufGate)"
+          ]
+        },
+        {
+          "id": "ERWEITERUNG-06",
+          "title": "Eine Verbindung in einen Nachbartext ist sichtbar und anspringbar",
+          "gate": "hard",
+          "automation": "integration",
+          "given": "Eine Verbindung trägt eine Stelle im offenen Text und eine sichtbare Stelle in einem anderen Text desselben Projekts.",
+          "when": "Sie geprüft, angezeigt und angeklickt wird.",
+          "then": "Nur Wortlaut, den das Modell tatsächlich sehen konnte, wird als Anker akzeptiert. Der Klick öffnet den benannten Text und fokussiert genau die dort einmal vorkommende Stelle; verborgener, mehrdeutiger oder inzwischen driftender Wortlaut wird nicht geraten.",
+          "evidence": [
+            "Node-Test: unsichtbarer und mehrdeutiger Fremdanker wird verworfen",
+            "Browser-Prüfung: Klick öffnet den Nachbartext und fokussiert die eindeutige Fundstelle"
+          ],
+          "source": [
+            "Abstract: Cross-Pollination von Ideen",
+            "app/src/erweiterungslauf-model.mjs",
+            "app/src/workspace.js"
+          ]
+        },
+        {
+          "id": "ERWEITERUNG-07",
+          "title": "Projektgrenzen öffnen sich nur über ausdrückliche Freigabe",
+          "gate": "hard",
+          "automation": "integration",
+          "given": "Ein Gedanke stammt aus einem anderen Projekt.",
+          "when": "Er für eine Erweiterung im aktiven Projekt in Betracht kommt.",
+          "then": "Der fremde Projekttext bleibt unsichtbar. Erst eine ausdrücklich bestätigte, zielgebundene Übertragung macht den freigegebenen Wissenseintrag im neuen Projekt verfügbar; Ablehnung und Rücknahme halten ihn fern.",
+          "evidence": [
+            "Node-Test: fremdes Projektwissen wird ohne Transfer nicht abgerufen",
+            "Node-Test: nur eine Nutzerfreigabe erzeugt einen zielgebundenen Eintrag"
+          ],
+          "source": [
+            "app/src/memory-retrieval.mjs",
+            "app/src/onda-kontext.mjs"
           ]
         }
       ]
@@ -1795,6 +1847,40 @@
             "app/src/onda-kontext.mjs",
             "app/src/claim-ledger.mjs (der einzige dokumentübergreifende Speicher)"
           ]
+        },
+        {
+          "id": "KONTEXT-07",
+          "title": "Das Arbeitsdossier umfasst alle gebauten Wissensarten",
+          "gate": "hard",
+          "automation": "integration",
+          "given": "Zum offenen Text liegen Quellen, Belegbündel, Argumentbeziehungen sowie Sprach-, Wirkungs-, Rhetorik- und Fairnessbefunde vor.",
+          "when": "Ein Hinweis-, Erweiterungs-, Chat- oder Verständnislauf gebaut wird.",
+          "then": "Alle sieben Wissensarten erreichen jeden Kanal gemeinsam, mit Geltungsbereich, Unsicherheit und Herkunft. Wirkungsannahmen bleiben Hypothesen und Belegstände werden nicht hochgestuft.",
+          "evidence": [
+            "Node-Test: markierte Werte aller Wissensarten erscheinen im Arbeitsdossier",
+            "Integrationstest: dasselbe Dossier erreicht alle vier echten Anfragekörper"
+          ],
+          "source": [
+            "Abstract: vollständiger Kontext",
+            "app/src/arbeitskontext-model.mjs",
+            "app/src/onda-kontext.mjs"
+          ]
+        },
+        {
+          "id": "KONTEXT-08",
+          "title": "Arbeitswissen ist isoliert, dedupliziert und budgetiert",
+          "gate": "hard",
+          "automation": "unit",
+          "given": "Das Projekt enthält doppelte, fremde, zurückgezogene, veraltete und sehr umfangreiche Arbeitsdaten.",
+          "when": "Das Arbeitsdossier projiziert wird.",
+          "then": "Nur aktive projektzugehörige Daten werden einmal aufgenommen. Ein festes Zeichen- und Mengenbudget begrenzt die Auswahl deterministisch, und das Manifest zählt jeden Ausschlussgrund, ohne ausgeschlossene Inhalte preiszugeben.",
+          "evidence": [
+            "Node-Test: Fremd-, Inaktiv-, Duplikat- und Budgetfälle",
+            "Node-Test: gleicher Eingang ergibt bytegleichen Ausgang und bleibt unter dem Zeichenbudget"
+          ],
+          "source": [
+            "app/src/arbeitskontext-model.mjs"
+          ]
         }
       ]
     },
@@ -1993,6 +2079,41 @@
             "app/src/hinweislauf-model.mjs",
             "app/src/workspace.js (Textart aus dem Sprachprofil des Projekts)"
           ]
+        },
+        {
+          "id": "TEXTART-07",
+          "title": "Jede Textart bekommt ihr eigenes Handwerk",
+          "gate": "hard",
+          "automation": "unit",
+          "given": "Derselbe Textteil wird als wissenschaftlicher Text, Essay oder Prosa geführt.",
+          "when": "Onda Ziel, Prioritäten, Prüffragen und typische Fehlformen projiziert.",
+          "then": "Die drei Projektionen unterscheiden sich sachlich: Wissenschaft prüft Beleg und Methode, Essay Gedankengang und Gegenposition, Prosa Szene, Figur und Perspektive. Jede bekannte Textart hat eine vollständige Zeile; die unbestimmte rät nichts.",
+          "evidence": [
+            "Node-Test: vollständige Tabelle über alle Textarten",
+            "Kontrasttest: Wissenschaft, Essay und Prosa erhalten verschiedene Prüffragen"
+          ],
+          "source": [
+            "app/src/handwerk-model.mjs",
+            "docs/research/2026-08-05-feld-komposition-ueberarbeitung.md"
+          ]
+        },
+        {
+          "id": "TEXTART-08",
+          "title": "Stilmittelregeln sind ein Laufzeit-Gate",
+          "gate": "hard",
+          "automation": "integration",
+          "given": "Das Modell schlägt ein Stilmittel mit strukturierter ID vor.",
+          "when": "Die Antwort in Hinweise umgewandelt wird.",
+          "then": "Unbekannte IDs, fehlende Textarten, unpassende Textarten und widersprüchliche Vorschlagsformen werden verworfen. Nur eine kanonische ID, die in dieser Textart trägt, erreicht den Text; gewöhnliche Formulierungsvorschläge bleiben davon unabhängig möglich.",
+          "evidence": [
+            "Node-Test: unbekannt, textartlos und wissenschaftliche Alliteration fallen geschlossen",
+            "Node-Test: Kampagnen-Alliteration und normaler Formulierungsvorschlag bleiben möglich"
+          ],
+          "source": [
+            "app/src/stilmittel.mjs",
+            "app/src/hinweislauf-model.mjs",
+            "app/src/agent-tasks.mjs"
+          ]
         }
       ]
     },
@@ -2099,12 +2220,103 @@
           ]
         }
       ]
+    },
+    {
+      "id": "LERNEN",
+      "name": "Persönliche Entwicklung ohne Goodhart-Falle",
+      "evals": [
+        {
+          "id": "LERNEN-01",
+          "title": "Muster behalten Dimension und jede Begegnung",
+          "gate": "hard",
+          "automation": "unit",
+          "given": "Dasselbe übertragbare Prinzip begegnet der Person in mehreren Texten und Projekten.",
+          "when": "Die persönliche Entwicklung projiziert wird.",
+          "then": "Es erscheint als ein wortgleiches Muster mit fachlicher Dimension und getrennten Begegnungen. Jede Begegnung behält Dokument, Projekt, Anker, Zeitpunkt und Herkunft; kein Zähler verschluckt den Weg dorthin.",
+          "evidence": [
+            "Node-Test: zwei Begegnungen eines Belegmusters bewahren beide Fundstellen und Projekte",
+            "Node-Test: fachliche Dimensionen sind in der Personenliste sichtbar"
+          ],
+          "source": [
+            "app/src/autorentwicklung-model.mjs",
+            "app/src/erkanntes-model.mjs"
+          ]
+        },
+        {
+          "id": "LERNEN-02",
+          "title": "Ähnliche Muster verschmelzen nur nach Zustimmung",
+          "gate": "hard",
+          "automation": "unit",
+          "given": "Zwei verschiedene Prinzipien könnten zu einer größeren Fähigkeit gehören.",
+          "when": "Onda eine Verbindung vorschlägt.",
+          "then": "Der Vorschlag bleibt zunächst wirkungslos. Nur die Person kann ihn bestätigen; ein Agent kann weder verbinden noch umbenennen. Die Einzelmuster und ihre Herkunft bleiben auch in der bestätigten Gruppe erhalten.",
+          "evidence": [
+            "Node-Test: offener Vorschlag gruppiert nichts",
+            "Node-Test: Agentenfreigabe scheitert, Nutzerfreigabe gruppiert ohne Datenverlust"
+          ],
+          "source": [
+            "app/src/autorentwicklung-model.mjs"
+          ]
+        },
+        {
+          "id": "LERNEN-03",
+          "title": "Schreibstimme entsteht aus mehreren eigenen Textstellen",
+          "gate": "hard",
+          "automation": "integration",
+          "given": "Ein möglicher persönlicher Stimmenzug taucht in mindestens zwei verschiedenen eigenen Textstellen auf.",
+          "when": "Er als Schreibstimme vorgemerkt und bestätigt wird.",
+          "then": "Ein einzelner oder agentengeschriebener Anker reicht nicht. Der Vorschlag beeinflusst vor der Bestätigung keinen Lauf; nach Nutzerfreigabe erreicht er den Stilkontext als unverbindliche persönliche Präferenz und lässt sich vollständig zurücknehmen.",
+          "evidence": [
+            "Node-Test: mindestens zwei verschiedene Nutzeranker sind Pflicht",
+            "Node-Test: Freigabe schreibt eine reversible persönliche Stimmenpräferenz",
+            "Browser-Prüfung: Vormerken, bestätigen und zurücknehmen im Personenbereich"
+          ],
+          "source": [
+            "app/src/autorentwicklung-model.mjs",
+            "app/src/workspace.js",
+            "app/src/memory-retrieval.mjs"
+          ]
+        },
+        {
+          "id": "LERNEN-04",
+          "title": "Kompetenzsignale brauchen beobachtbare Handlungen",
+          "gate": "hard",
+          "automation": "unit",
+          "given": "Wiederkehr, Selbstkorrektur, eine eigene Fassung, eine bestätigte Wirkung und bloße Ablehnungen liegen nebeneinander.",
+          "when": "Onda Entwicklungssignale bildet.",
+          "then": "Nur Wiederkehr mit Fundstellen sowie ausdrücklich protokollierte Selbstkorrektur, eigene Fassung und bestätigte Wirkung zählen. Eine Ablehnung wird nie als Kompetenz, Wahrheit oder Erfolg umgedeutet.",
+          "evidence": [
+            "Node-Test: beobachtbare Ereignisse erzeugen benannte Signale",
+            "Negativtest: suggestion-rejected erzeugt kein Entwicklungssignal"
+          ],
+          "source": [
+            "app/src/autorentwicklung-model.mjs"
+          ]
+        },
+        {
+          "id": "LERNEN-05",
+          "title": "Rückkopplung ist versioniert, eng begrenzt und zustimmungspflichtig",
+          "gate": "hard",
+          "automation": "integration",
+          "given": "Über mehrere eigene, nicht gelöschte Texte zeigt sich ein auffälliges Verhältnis von angenommenen zu verworfenen Hinweisen.",
+          "when": "Onda daraus eine mögliche Anpassung ableitet.",
+          "then": "Doppelte Findings und Papierkorbtexte zählen nicht. Die Statistik allein und ein offener Vorschlag verändern keinen Prompt. Nur die Person kann genau die Darreichung freigeben; Integritätsfragen und Hinweisarten bleiben unangetastet. Geänderte Daten erzeugen eine neue offene Version statt still die alte Zustimmung zu erben.",
+          "evidence": [
+            "Node-Test: Deduplizierung, Papierkorbfilter und neue Versionskennung",
+            "Node-Test: offen ist wirkungslos, nur Nutzerfreigabe erreicht den Prompt",
+            "Browser-Prüfung: Freigabe und Rücknahme sind im Personenbereich sichtbar"
+          ],
+          "source": [
+            "app/src/rueckkopplung-model.mjs",
+            "app/src/hinweis-kontext.mjs",
+            "app/src/workspace.js"
+          ]
+        }
+      ]
     }
   ],
   "externalLiveGateIds": [
     "INV-06",
-    "RESEARCH-02",
-    "RESEARCH-03",
     "EFFECT-06",
     "SYSTEM-03",
     "SYSTEM-09"

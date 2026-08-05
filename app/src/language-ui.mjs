@@ -11,11 +11,10 @@ import {
   LANGUAGE_REGIONS,
   activeWritingStyle,
   buildLanguageContext,
-  defineWritingStyle,
   ensureLanguageProfile,
+  saveLanguageProfileWithStyle,
   selectWritingStyle,
   setOrthographyAutomation,
-  updateLanguageProfile,
 } from './language-profile.mjs'
 import {
   applyOrthographyCorrections,
@@ -331,7 +330,7 @@ export function createLanguageUi({
       event.preventDefault()
       try {
         const at = Date.now()
-        let next = updateLanguageProfile({
+        const next = saveLanguageProfileWithStyle({
           profile: project.languageProfile,
           projectId: project.id,
           changes: {
@@ -348,26 +347,14 @@ export function createLanguageUi({
               resistances: cleanList(resistances.value),
               commonGround: cleanList(commonGround.value),
             },
-            houseStyle: cleanList(houseStyle.value),
+          },
+          style: {
+            name: styleName.value.trim(),
+            purpose: stylePurpose.value.trim(),
+            rules: cleanList(houseStyle.value),
           },
           at,
         })
-        // Ein neuer Name legt einen neuen Stil an, statt den alten umzubenennen. Damit
-        // bleibt der bisherige Stil erhalten, wenn jemand einen zweiten daneben aufmacht —
-        // und genau darum geht es bei mehreren Stilen.
-        const gewuenschterName = styleName.value.trim()
-        const gewuenschterZweck = stylePurpose.value.trim()
-        const bisher = activeWritingStyle(next)
-        if (gewuenschterName && (gewuenschterName !== bisher.name || gewuenschterZweck !== bisher.purpose)) {
-          next = defineWritingStyle({
-            profile: next,
-            projectId: project.id,
-            name: gewuenschterName,
-            purpose: gewuenschterZweck,
-            rules: cleanList(houseStyle.value),
-            at,
-          })
-        }
         project.languageProfile = next
         persist(project)
         render(body, project, 'Kontextprofil gespeichert. Die Angaben gelten bindend für diese Sprachprüfung.')

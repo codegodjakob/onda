@@ -5,6 +5,7 @@
 // (x-api-key + anthropic-dangerous-direct-browser-access) bzw. Swift aus der Keychain.
 
 import { SYSTEM_COACH } from './agent-prompts.mjs'
+import { STILMITTEL } from './stilmittel.mjs'
 
 export const API_URL = 'https://api.anthropic.com/v1/messages'
 export const API_VERSION = '2023-06-01'
@@ -28,8 +29,8 @@ export const PREISE = Object.freeze({
 // Ohne Pflichtfeld KANN das Modell es nicht einmal freiwillig nachreichen — die Feldliste ist
 // geschlossen (additionalProperties: false). Es steht bewusst hinter folge und vor vorschlag:
 // erst begreifen, warum es zählt, dann verallgemeinern, dann erst eine Fassung anbieten.
-// Anders als bei den Erweiterungen (ERWEITERUNGEN_SCHEMA) verwirft ein fehlendes muster den
-// Hinweis NICHT — dort ist das Muster der ganze Ertrag, hier eine Zugabe zum Hinweis.
+// Der Schema-Vertrag verlangt das Muster bei beiden Kanälen. Ältere persistierte Antworten
+// bleiben im Verarbeitungsmodell tolerant, neue Modellantworten passieren das Tor nur vollständig.
 export const HINWEISE_SCHEMA = Object.freeze({
   type: 'object',
   properties: {
@@ -51,6 +52,18 @@ export const HINWEISE_SCHEMA = Object.freeze({
             description: 'Das übertragbare Prinzip hinter dem Hinweis — der Satz, der beim nächsten '
               + 'Text von allein wieder anwendbar ist. Keine Wiederholung der Beobachtung.',
           },
+          vorschlagsart: {
+            type: 'string',
+            enum: ['keiner', 'formulierung', 'stilmittel'],
+            description: 'keiner bei vorschlag:null; formulierung bei einer normalen Fassung; stilmittel nur bei einem bewusst vorgeschlagenen Stilmittel.',
+          },
+          stilmittelId: {
+            anyOf: [
+              { type: 'string', enum: STILMITTEL.map(mittel => mittel.id) },
+              { type: 'null' },
+            ],
+            description: 'Nur bei vorschlagsart:stilmittel die ID aus der vorgegebenen Stilmitteltabelle, sonst null.',
+          },
           vorschlag: {
             anyOf: [
               {
@@ -65,7 +78,7 @@ export const HINWEISE_SCHEMA = Object.freeze({
           istGrundursache: { type: 'boolean' },
           integritaet: { type: 'boolean' },
         },
-        required: ['kategorie', 'anker', 'beobachtung', 'relevanz', 'folge', 'muster', 'vorschlag', 'istGrundursache', 'integritaet'],
+        required: ['kategorie', 'anker', 'beobachtung', 'relevanz', 'folge', 'muster', 'vorschlagsart', 'stilmittelId', 'vorschlag', 'istGrundursache', 'integritaet'],
         additionalProperties: false,
       },
     },

@@ -25,6 +25,8 @@
 import { buildLanguageContext } from './language-profile.mjs'
 import { buildStyleMemoryContext, retrieveMemoryContext } from './memory-retrieval.mjs'
 import { ERKANNTES_TYP, erkanntesFuerPrompt } from './erkanntes-model.mjs'
+import { formatiereHandwerk, projiziereHandwerk } from './handwerk-model.mjs'
+import { baueArbeitskontext, formatiereArbeitskontext } from './arbeitskontext-model.mjs'
 
 // 'other'/'Sonstig' ist eine bewusste Wahl der Autorin oder des Autors, sagt dem Modell aber
 // nichts ueber den Text — leerer Label heisst: dieses Feld erzeugt keinen Eintrag.
@@ -33,19 +35,6 @@ import { ERKANNTES_TYP, erkanntesFuerPrompt } from './erkanntes-model.mjs'
 // Stilmittel-Zuordnung (stilmittel.mjs) und die Integritaetsregeln (textart-regeln.mjs)
 // laufen dann fail-closed leer. Genau das war fuer prosa und lyrik der Fall, nachdem sie
 // zur Genre-Liste dazukamen. Der Test darunter haelt die beiden Listen zusammen.
-const TEXTSORTEN = Object.freeze({
-  scientific: 'wissenschaftlicher Text',
-  essay: 'Essay',
-  project: 'Projekttext',
-  web: 'Webtext',
-  marketing: 'Marketingtext',
-  campaign: 'Kampagnentext',
-  prosa: 'Prosatext',
-  lyrik: 'Gedicht',
-  // 'other' bleibt bewusst leer: eine unbestimmte Textart ist keine Auskunft, und
-  // "Textsorte: sonstiges" waere eine Behauptung, die niemand aufgestellt hat.
-  other: '',
-})
 const MEDIEN = Object.freeze({
   screen: 'Bildschirm',
   print: 'Druck',
@@ -167,11 +156,7 @@ function textsorteBlock(project) {
   const herkunft = kontext.sources || {}
   const teile = []
 
-  const textsorte = TEXTSORTEN[bekannt.genre] || ''
-  if (textsorte) teile.push(`Textsorte: ${textsorte}`)
-
   const funktion = sauber(bekannt.passageFunction)
-  if (funktion) teile.push(`Funktion dieses Textteils: ${kuerze(funktion, 120)}`)
 
   const fach = sauber(bekannt.domain)
   if (fach) teile.push(`Fach oder Markt: ${kuerze(fach, 120)}`)
@@ -201,7 +186,20 @@ function textsorteBlock(project) {
   const hausstil = liste(bekannt.houseStyle, MAX_HAUSSTIL_REGELN)
     .map(regel => kuerze(regel, 140))
 
-  if (!teile.length && !publikumsWissen.length && !hausstil.length) return null
+  const handwerk = bekannt.genre
+    ? projiziereHandwerk({
+      genre: bekannt.genre,
+      passageFunction: funktion,
+      activeStyle: {
+        name: bekannt.styleName,
+        purpose: bekannt.stylePurpose,
+      },
+    })
+    : null
+  const handwerkText = handwerk ? formatiereHandwerk(handwerk) : ''
+  if (handwerk?.name) teile.unshift(`Textsorte: ${handwerk.name}`)
+
+  if (!teile.length && !publikumsWissen.length && !hausstil.length && !handwerkText) return null
 
   const zeilen = []
   if (teile.length) {
@@ -214,6 +212,7 @@ function textsorteBlock(project) {
   if (publikumsWissen.length) {
     zeilen.push(`Über das Publikum ist festgehalten — ${satzEnde(publikumsWissen.join('; '))}`)
   }
+  if (handwerkText) zeilen.push(handwerkText)
   if (hausstil.length) {
     zeilen.push(`Hausstil dieses Projekts, verbindlich:\n${hausstil.map(regel => `- ${regel}`).join('\n')}`)
   }
@@ -303,6 +302,16 @@ function aussagenBlock(project, doc, docs) {
     ? `\nErfasst sind ${sortiert.length} solcher Aussagen; hier stehen die ${gezeigt.length} wichtigsten.`
     : ''
   return `${kopf}\n${zeilen.join('\n')}${fuss}`
+}
+
+// Ein bezahlter Block statt mehrerer konkurrierender Wissensanhaenge. Der bestehende
+// Aussagen-Speicher bleibt darin das argumentierende Rueckgrat; Quellen, Belegbuendel,
+// Relationen und die aktuelle Sprach-/Wirkungsanalyse kommen aus der budgetierten,
+// projektisolierten Arbeitskontext-Projektion. So erhalten alle vier Kanaele dieselbe Sicht.
+function arbeitsdossierBlock(project, doc, docs) {
+  const aussagen = aussagenBlock(project, doc, docs)
+  const zusaetze = formatiereArbeitskontext(baueArbeitskontext({ project, doc }))
+  return [aussagen, zusaetze].filter(Boolean).join('\n') || null
 }
 
 // --- 3. Die anderen Texte desselben Projekts ---------------------------------------------
@@ -430,12 +439,19 @@ export function baueNachbartexte(quellen = {}) {
     if (gefunden.length >= MAX_NACHBARTEXTE) break
     const volltext = textAusKoerper(kandidat.body)
     if (volltext.length < MIN_NACHBAR_ZEICHEN) continue
+    const gliederung = ueberschriften(kandidat.body).slice(0, MAX_NACHBAR_GLIEDERUNG)
+    const anfang = kuerze(textAusKoerper(kandidat.body, { ohneUeberschriften: true }), MAX_NACHBAR_ZEICHEN)
     gefunden.push({
       docId: sauber(kandidat.id),
       titel: sauber(kandidat.title),
       volltext,
-      gliederung: ueberschriften(kandidat.body).slice(0, MAX_NACHBAR_GLIEDERUNG),
-      anfang: kuerze(textAusKoerper(kandidat.body, { ohneUeberschriften: true }), MAX_NACHBAR_ZEICHEN),
+      gliederung,
+      anfang,
+      // Nur diese wortgetreuen Teile sieht das Modell. Die Verankerung darf spaeter im
+      // Volltext den echten Index suchen, aber zuerst muss der Anker in genau einem dieser
+      // sichtbaren Ausschnitte vorkommen. Sonst wuerde ein geratenes Zitat aus einem
+      // verborgenen spaeten Absatz nachtraeglich als echt bestaetigt.
+      sichtbareTeile: [...gliederung, anfang].filter(Boolean),
     })
   }
   return gefunden
@@ -565,7 +581,7 @@ export function baueOndaBloecke(quellen = {}) {
   } = istObjekt(quellen) ? quellen : {}
   return [
     textsorteBlock(project),
-    aussagenBlock(project, doc, docs),
+    arbeitsdossierBlock(project, doc, docs),
     // Die beiden Bloecke ueber die anderen Texte ergaenzen einander und doppeln sich nicht:
     // der Aussagen-Speicher sagt, WAS anderswo behauptet wird (abgeleitet, gekuerzt, damit
     // nicht zitierfaehig), die Nachbartexte sagen, WORUM es dort geht (woertlich, damit

@@ -47,7 +47,10 @@ test('Schemata verbieten Zusatzfelder und verlangen Pflichtfelder', () => {
   assert.deepEqual(hinweis.properties.kategorie.enum,
     ['fakt', 'quelle', 'methode', 'logik', 'struktur', 'wirkung', 'erklaerung', 'sprache'])
   assert.deepEqual(hinweis.required,
-    ['kategorie', 'anker', 'beobachtung', 'relevanz', 'folge', 'muster', 'vorschlag', 'istGrundursache', 'integritaet'])
+    ['kategorie', 'anker', 'beobachtung', 'relevanz', 'folge', 'muster', 'vorschlagsart', 'stilmittelId', 'vorschlag', 'istGrundursache', 'integritaet'])
+  assert.deepEqual(hinweis.properties.vorschlagsart.enum, ['keiner', 'formulierung', 'stilmittel'])
+  assert.ok(hinweis.properties.stilmittelId.anyOf[0].enum.includes('alliteration'))
+  assert.deepEqual(hinweis.properties.stilmittelId.anyOf[1], { type: 'null' })
   assert.equal(VERSTAENDNIS_SCHEMA.additionalProperties, false)
   assert.deepEqual(VERSTAENDNIS_SCHEMA.required,
     ['task', 'audience', 'desiredEffect', 'evidenceStandard', 'protectedIntentions', 'openQuestions', 'antwortText'])
@@ -69,7 +72,8 @@ test('muster ist in BEIDEN Kanaelen Pflicht — nicht nur bei den Erweiterungen'
   // erst begreifen, warum es zaehlt, dann verallgemeinern, dann eine Fassung anbieten.
   const felder = hinweis.required
   assert.ok(felder.indexOf('muster') > felder.indexOf('folge'))
-  assert.ok(felder.indexOf('muster') < felder.indexOf('vorschlag'))
+  assert.ok(felder.indexOf('muster') < felder.indexOf('vorschlagsart'))
+  assert.ok(felder.indexOf('stilmittelId') < felder.indexOf('vorschlag'))
 })
 
 test('baueAnfrage: Wire-Format und Cache-Praefix-Ordnung exakt nach Vertrag', () => {

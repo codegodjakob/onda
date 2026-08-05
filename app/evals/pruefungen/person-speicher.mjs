@@ -104,26 +104,28 @@ for (const [name, text] of schreiber) {
     fehler.push(`PERSON-02, ${name}: der eine Schreibweg ist nicht auffindbar — die Prüfung misst nicht mehr, was sie soll.`)
     continue
   }
-  const aufrufe = text
-    .split('\n')
-    .filter(zeile => new RegExp(`\\b${wrapper}\\s*\\(`).test(zeile))
-    .filter(zeile => !new RegExp(`function\\s+${wrapper}\\b`).test(zeile))
+  const zeilen = text.split('\n')
+  const aufrufe = zeilen
+    .map((zeile, index) => ({ zeile, index }))
+    .filter(({ zeile }) => new RegExp(`\\b${wrapper}\\s*\\(`).test(zeile))
+    .filter(({ zeile }) => !new RegExp(`function\\s+${wrapper}\\b`).test(zeile))
 
   if (!aufrufe.length) {
     fehler.push(`PERSON-02, ${name}: der Schreibweg ${wrapper} wird nirgends benutzt — dann füllt sich der Speicher nie.`)
   }
-  for (const zeile of aufrufe) {
+  for (const { zeile, index } of aufrufe) {
     // Eine Rückmeldung, über die entschieden wird, darf nur beim Annehmen hineinwandern.
     // Ein Prinzip aus etwas, das die schreibende Person gerade zurückgewiesen hat, wäre ihr
     // in den Mund gelegt.
+    const kontext = zeilen.slice(Math.max(0, index - 8), index + 2).join('\n')
     const ueberEntscheidung = /\bfinding\b|\bhinweis\b/i.test(zeile)
-    if (ueberEntscheidung && !/accept/i.test(zeile)) {
+    if (ueberEntscheidung && !/decision\?*\.kind\s*===\s*['"]accept['"]/i.test(kontext)) {
       fehler.push(
         `PERSON-02, ${name}: ein Hinweis wandert in den Personen-Speicher, ohne dass er angenommen wurde `
         + `(${zeile.trim().slice(0, 100)}).`,
       )
     }
-    if (/reject|verwerfen|dismiss/i.test(zeile)) {
+    if (/reject|verwerfen|dismiss/i.test(kontext)) {
       fehler.push(`PERSON-02, ${name}: Verworfenes wandert in den Personen-Speicher (${zeile.trim().slice(0, 100)}).`)
     }
   }

@@ -2,7 +2,11 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { pruefeHinweislaufGate, pruefePausenAusloeser, verarbeiteHinweisantwort, versucheHinweislauf } from '../src/hinweislauf-model.mjs'
 import { baueDocText } from '../src/agent-findings.mjs'
-import { bilanziereRueckmeldung } from '../src/rueckkopplung-model.mjs'
+import {
+  bilanziereRueckmeldung,
+  entscheideRueckkopplung,
+  erstelleRueckkopplungsvorschlag,
+} from '../src/rueckkopplung-model.mjs'
 
 // ---- pruefeHinweislaufGate ---------------------------------------------------
 // Reihenfolge laut Task-Brief: kein Dokument -> Beispielprojekt -> Lauf schon aktiv ->
@@ -567,6 +571,69 @@ test('ohne Textart bleibt es beim vorsichtigen Fall', () => {
   assert.ok(uebernommen[0].claim, 'ohne Textart muss die Quellenfrage eine Integritaetsfrage bleiben')
 })
 
+test('Stilmittelvorschlag ohne bekannte Textart wird fail-closed verworfen', () => {
+  const text = 'Klarer Kurs, kluge Köpfe.'
+  const { uebernommen, verworfen } = verarbeiteHinweisantwort({
+    geliefert: [beispielHinweis({
+      kategorie: 'sprache', anker: 'Klarer Kurs', integritaet: false,
+      vorschlagsart: 'stilmittel', stilmittelId: 'alliteration',
+      vorschlag: { bisher: 'Klarer Kurs', neu: 'Klarer Kurs, kluge Köpfe' },
+    })],
+    docText: text,
+    blocks: [{ id: 'b1', text }],
+    jetzt: 1000,
+  })
+  assert.equal(uebernommen.length, 0)
+  assert.equal(verworfen, 1)
+})
+
+test('Stilmittelvorschlag wird in unpassender Textart verworfen und in tragender Textart angenommen', () => {
+  const text = 'Klarer Kurs für die Methode.'
+  const hinweis = beispielHinweis({
+    kategorie: 'sprache', anker: 'Klarer Kurs', integritaet: false,
+    vorschlagsart: 'stilmittel', stilmittelId: 'alliteration',
+    vorschlag: { bisher: 'Klarer Kurs', neu: 'Klarer Kurs, kluge Köpfe' },
+  })
+  const wissenschaftlich = verarbeiteHinweisantwort({
+    geliefert: [hinweis], docText: text, blocks: [{ id: 'b1', text }], jetzt: 1000,
+    textart: 'scientific',
+  })
+  const kampagne = verarbeiteHinweisantwort({
+    geliefert: [hinweis], docText: text, blocks: [{ id: 'b1', text }], jetzt: 1000,
+    textart: 'campaign',
+  })
+  assert.equal(wissenschaftlich.uebernommen.length, 0)
+  assert.equal(wissenschaftlich.verworfen, 1)
+  assert.equal(kampagne.uebernommen.length, 1)
+  assert.equal(kampagne.uebernommen[0].stilmittelId, 'alliteration')
+  assert.equal(kampagne.uebernommen[0].vorschlagsart, 'stilmittel')
+})
+
+test('unbekanntes Stilmittel wird verworfen, normaler Formulierungsvorschlag bleibt möglich', () => {
+  const text = 'Klarer Kurs für die Methode.'
+  const unbekannt = verarbeiteHinweisantwort({
+    geliefert: [beispielHinweis({
+      kategorie: 'sprache', anker: 'Klarer Kurs', integritaet: false,
+      vorschlagsart: 'stilmittel', stilmittelId: 'erfundene-figur',
+      vorschlag: { bisher: 'Klarer Kurs', neu: 'Klarer Kurs, kluge Köpfe' },
+    })],
+    docText: text, blocks: [{ id: 'b1', text }], jetzt: 1000, textart: 'campaign',
+  })
+  const formulierung = verarbeiteHinweisantwort({
+    geliefert: [beispielHinweis({
+      kategorie: 'sprache', anker: 'Klarer Kurs', integritaet: false,
+      vorschlagsart: 'formulierung', stilmittelId: null,
+      vorschlag: { bisher: 'Klarer Kurs', neu: 'Ein klarer Kurs' },
+    })],
+    docText: text, blocks: [{ id: 'b1', text }], jetzt: 1000,
+  })
+  assert.equal(unbekannt.uebernommen.length, 0)
+  assert.equal(unbekannt.verworfen, 1)
+  assert.equal(formulierung.uebernommen.length, 1)
+  assert.equal(formulierung.uebernommen[0].vorschlagsart, 'formulierung')
+  assert.equal(formulierung.uebernommen[0].stilmittelId, null)
+})
+
 // ---- Die Rueckkopplung reicht bis in die echte Anfrage durch ------------------
 // Dieselbe Lehre wie bei der Textart: Ein Parameter, den niemand uebergibt, ist eine
 // Leitung ohne Strom. versucheHinweislauf baut den Kontext selbst; wenn die Bilanz dort
@@ -588,8 +655,12 @@ test('die Rueckkopplungsbilanz erreicht den Kontext, den versucheHinweislauf an 
   anlegen('fakt', 'dismissed', 3)
 
   let gesehenerKontext = null
+  const vorschlag = erstelleRueckkopplungsvorschlag(
+    bilanziereRueckmeldung({ dokumente: [{ findings, decisions }] }),
+  )
+  const freigegeben = entscheideRueckkopplung(vorschlag, { approved: true, actor: 'user', at: 1 })
   await versucheHinweislauf(basisVersuch({
-    rueckkopplung: bilanziereRueckmeldung({ dokumente: [{ findings, decisions }] }),
+    rueckkopplung: freigegeben,
     runTask: async (task, kontext) => {
       gesehenerKontext = kontext
       return { daten: { hinweise: [] } }

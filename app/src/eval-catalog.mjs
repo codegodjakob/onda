@@ -265,6 +265,15 @@ export function validiereEvalErgebnisse(katalog, ergebnis) {
     if (eintrag.status === 'passed' && (!Array.isArray(eintrag.evidence) || eintrag.evidence.length === 0)) {
       fehler.push(`Eval ${eintrag.id}: bestandener Status benötigt mindestens einen Beleg.`)
     }
+    const katalogEintrag = katalogNachId.get(eintrag.id)
+    if (eintrag.status === 'passed' && katalogEintrag?.gate === 'scored') {
+      if (!Number.isFinite(eintrag.score) || eintrag.score < 0 || eintrag.score > 5) {
+        fehler.push(`Eval ${eintrag.id}: bestandenes Scored-Gate benötigt einen Score zwischen 0 und 5.`)
+      }
+      if (!nichtLeererString(eintrag.scoreRationale)) {
+        fehler.push(`Eval ${eintrag.id}: bestandenes Scored-Gate benötigt eine Begründung.`)
+      }
+    }
     if (eintrag.status === 'external-open') {
       if (!externeIds.has(eintrag.id)) fehler.push(`Eval ${eintrag.id} ist kein externes Live-Gate.`)
       if (!nichtLeererString(eintrag.note)) fehler.push(`Eval ${eintrag.id}: external-open benötigt eine Begründung.`)

@@ -125,6 +125,10 @@ function fremdeStelle(anker, nachbartexte) {
     const volltext = String(nachbar?.volltext || '')
     const docId = String(nachbar?.docId || '')
     if (!volltext || !docId) continue
+    const sichtbar = Array.isArray(nachbar?.sichtbareTeile) ? nachbar.sichtbareTeile : []
+    // Rueckwaertskompatibel fuer handgebaute alte Fixtures, aber bei echten Nachbartexten
+    // fail-closed: Nur Wortlaut, der im Prompt sichtbar war, darf als Anker gelten.
+    if (sichtbar.length && !sichtbar.some(teil => findeAnker(String(teil || ''), anker).gefunden)) continue
     const treffer = findeAnker(volltext, anker)
     if (!treffer.gefunden) continue
     if (gefunden) return null // mehrdeutig
@@ -171,9 +175,13 @@ export function erweiterungAusAntwort(rohe, docText, blocks, jetzt = Date.now(),
 
   const stellen = []
   for (const anker of roheAnker) {
-    // Der offene Text zuerst: was hier steht, ist die naechstliegende und die pruefbarste
-    // Stelle. Erst wenn er den Anker nicht hat, kommen die Nachbartexte in Frage.
-    const stelle = eigeneStelle(anker, docText, blocks) || fremdeStelle(anker, nachbartexte)
+    const eigene = eigeneStelle(anker, docText, blocks)
+    const fremde = fremdeStelle(anker, nachbartexte)
+    // Das Schema liefert noch keine Dokumentkennung je Anker. Steht derselbe Wortlaut im
+    // offenen und in einem sichtbaren Nachbartext, waere jede Wahl eine erfundene Herkunft.
+    // Deshalb gilt auch hier: Mehrdeutigkeit verwerfen, nie den ersten Treffer nehmen.
+    if (eigene && fremde) return null
+    const stelle = eigene || fremde
     if (!stelle) return null
     // Dieselbe Stelle heisst jetzt: derselbe Text UND derselbe Index. Ohne den Textvergleich
     // gaelte eine echte Verbindung zwischen Zeichen 40 hier und Zeichen 40 dort als Doppelung.

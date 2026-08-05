@@ -72,6 +72,7 @@ export function ensureMemoryStore(raw) {
   if (!Array.isArray(store.entries)) store.entries = []
   if (!Array.isArray(store.transfers)) store.transfers = []
   if (!Array.isArray(store.consents)) store.consents = []
+  if (!Array.isArray(store.voiceProposals)) store.voiceProposals = []
   if (!isObject(store.index)) store.index = {}
   return store
 }

@@ -4,6 +4,7 @@ import {
   analyzeCommunicationEffect,
   analyzeRhetoricalDevices,
 } from '../src/effect-analysis.mjs'
+import { stilmittel } from '../src/stilmittel.mjs'
 
 function context(overrides = {}) {
   return {
@@ -116,6 +117,7 @@ test('EFFECT-03/04: rhetorische Mittel nennen Gewinn, Fehlvorstellung und Sicher
     at: 100,
   })
   assert.deepEqual(report.devices.map(item => item.kind), ['example', 'analogy'])
+  assert.deepEqual(report.devices.map(item => item.stilmittelId), [null, 'vergleich'])
   assert.equal(report.devices.every(item => item.function), true)
   assert.equal(report.devices.every(item => item.expectedGain), true)
   assert.equal(report.devices.every(item => item.possibleMisconception), true)
@@ -142,6 +144,8 @@ test('EFFECT-03: Kontrast, Metapher, Frame und Direktheit werden als begrenzte S
     'frame',
     'directness',
   ])
+  assert.deepEqual(report.devices.map(item => item.stilmittelId), ['antithese', 'metapher', null, null])
+  assert.equal(report.devices.filter(item => item.stilmittelId).every(item => stilmittel(item.stilmittelId)), true)
   assert.equal(report.devices.every(item => item.effectStatus === 'hypothesis'), true)
   assert.equal(report.devices.every(item => item.expectedGain && item.possibleMisconception), true)
   assert.ok(report.coveredStrategies.includes('directness'))

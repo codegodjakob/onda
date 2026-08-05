@@ -6,7 +6,7 @@
 //
 // Eine Integritätsfrage ist eine, die durch bloßes Verwerfen nicht verschwindet: Wer sie
 // wegklickt, nimmt ein Risiko bewusst an (reasoning-model.mjs decideFinding -> 'risk-accepted',
-// panels.js beschriftet den Knopf dann auch so), und das Finding trägt die zu belegende
+// workspace.js beschriftet den Knopf dann auch so), und das Finding trägt die zu belegende
 // Aussage als claim mit (agent-findings.mjs hinweisZuFinding).
 //
 // Vorher waren es vier feste Arten — fakt, quelle, methode, logik — für jeden Text, egal
@@ -18,11 +18,6 @@
 // Die Regel dahinter: Eine Integritätsfrage ist die Frage danach, was ein Text seinem
 // Publikum SCHULDET. Was er schuldet, hängt an der Textart.
 //
-// Offen: Die Textartenliste kennt keine Prosa und keine Lyrik. Ein Gedicht landet deshalb
-// unter 'other' und behält die strengen vier. Das ist die vorsichtige, nicht die richtige
-// Antwort — sie zu verbessern heißt, LANGUAGE_GENRES zu erweitern, nicht hier daneben eine
-// zweite Liste zu erfinden.
-
 import { LANGUAGE_GENRES } from './language-profile.mjs'
 
 // Die Textarten sind KEINE eigene Liste: es sind die des Sprachprofils, unverändert
@@ -34,9 +29,9 @@ export const TEXTARTEN = LANGUAGE_GENRES
 // Sicherung, weil ein Feld leer geblieben ist.
 export const STANDARD_INTEGRITAET = Object.freeze(['fakt', 'quelle', 'methode', 'logik'])
 
-// Die vollständige Tabelle: sieben Textarten, je eine Auswahl aus den acht Hinweisarten.
+// Die vollständige Tabelle: neun Textarten, je eine Auswahl aus den acht Hinweisarten.
 // Die acht Arten stammen aus dem Schema (agent-tasks.mjs HINWEISE_SCHEMA, kategorie.enum);
-// die sieben Textarten aus dem Sprachprofil (language-profile.mjs LANGUAGE_GENRES).
+// die neun Textarten aus dem Sprachprofil (language-profile.mjs LANGUAGE_GENRES).
 export const TEXTART_INTEGRITAET = Object.freeze({
   scientific: Object.freeze(['fakt', 'quelle', 'methode', 'logik']),
   essay: Object.freeze(['fakt', 'quelle', 'logik']),

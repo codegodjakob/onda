@@ -117,6 +117,8 @@ export function hinweisZuFinding(hinweis, ankerErgebnis, blockId, docText, jetzt
     kategorie: String(hinweis.kategorie || ''),
     kiKategorie: String(hinweis.kategorie || ''),
     textart: String(textart || ''),
+    vorschlagsart: String(hinweis.vorschlagsart || (vorschlag ? 'formulierung' : 'keiner')),
+    stilmittelId: hinweis.stilmittelId == null ? null : String(hinweis.stilmittelId),
     istGrundursache: hinweis.istGrundursache === true,
     priority: hinweis.istGrundursache === true ? 'high' : 'normal',
     createdAt: jetzt,

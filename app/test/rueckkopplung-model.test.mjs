@@ -8,7 +8,10 @@ import {
   MINDESTZAHL_VERGLEICH,
   MINDESTZAHL_ZUGESTELLT,
   artVonFinding,
+  aktiveRueckkopplung,
   bilanziereRueckmeldung,
+  entscheideRueckkopplung,
+  erstelleRueckkopplungsvorschlag,
   formuliereRueckkopplung,
   rueckkopplungTabelle,
 } from '../src/rueckkopplung-model.mjs'
@@ -92,6 +95,17 @@ test('Findings mehrerer Dokumente werden zu EINER Bilanz addiert', () => {
   assert.equal(logik.angenommen, 3)
   assert.equal(logik.verworfen, 7)
   assert.equal(logik.bewertbar, 10)
+})
+
+test('Papierkorb und kopierte Finding-IDs erzeugen keine kuenstliche Lernmenge', () => {
+  const original = machDokument(macheArt('logik', { angenommen: 3, verworfen: 2 }))
+  const kopie = JSON.parse(JSON.stringify(original))
+  const papierkorb = machDokument(macheArt('logik', { verworfen: 9 }))
+  papierkorb.trashed = true
+  const bilanz = bilanziereRueckmeldung({ dokumente: [original, kopie, papierkorb] })
+  const logik = zeileFuer(bilanz, 'logik')
+  assert.equal(logik.angeboten, 5, 'die Kopie darf dieselben Autorakte nicht verdoppeln')
+  assert.equal(logik.verworfen, 2, 'Papierkorb-Entscheidungen sind keine aktuelle Lernbasis')
 })
 
 test('ohne kiKategorie faellt die Art auf die englische category zurueck; content bleibt ungezaehlt', () => {
@@ -339,6 +353,42 @@ test('formuliereRueckkopplung ist robust und gibt bei nichts Sagbarem null zurue
   assert.equal(formuliereRueckkopplung(bilanziereRueckmeldung({
     dokumente: [machDokument(macheArt('sprache', { angenommen: 3, verworfen: 2 }), macheArt('fakt', { angenommen: 6, verworfen: 4 }))],
   })), null, 'unauffaellige Lage sagt nichts')
+})
+
+test('eine Bilanz veraendert den Prompt erst nach ausdruecklicher Zustimmung', () => {
+  const bilanz = bilanziereRueckmeldung(AUFFAELLIG)
+  const vorschlag = erstelleRueckkopplungsvorschlag(bilanz)
+  assert.equal(vorschlag.status, 'pending')
+  assert.equal(aktiveRueckkopplung(vorschlag), null, 'Statistik allein darf keine Policy aendern')
+
+  const freigegeben = entscheideRueckkopplung(vorschlag, { approved: true, actor: 'user', at: 100 })
+  assert.equal(aktiveRueckkopplung(freigegeben).gesamt.bewertbar, bilanz.gesamt.bewertbar)
+  assert.equal(vorschlag.status, 'pending', 'die Entscheidung mutiert den Vorschlag nicht')
+
+  const abgelehnt = entscheideRueckkopplung(vorschlag, { approved: false, actor: 'user', at: 101 })
+  assert.equal(aktiveRueckkopplung(abgelehnt), null)
+})
+
+test('nur die Autorin oder der Autor darf eine Kalibrierung freigeben', () => {
+  const vorschlag = erstelleRueckkopplungsvorschlag(bilanziereRueckmeldung(AUFFAELLIG))
+  assert.throws(
+    () => entscheideRueckkopplung(vorschlag, { approved: true, actor: 'agent', at: 100 }),
+    /user|Autor/i,
+  )
+})
+
+test('aendert sich die Datengrundlage, ist eine alte Freigabe nicht still fuer die neue gueltig', () => {
+  const alt = erstelleRueckkopplungsvorschlag(bilanziereRueckmeldung(AUFFAELLIG))
+  const freigegeben = entscheideRueckkopplung(alt, { approved: true, actor: 'user', at: 100 })
+  const neu = erstelleRueckkopplungsvorschlag(bilanziereRueckmeldung({
+    dokumente: [machDokument(
+      macheArt('struktur', { angenommen: 3, verworfen: 18 }),
+      macheArt('fakt', { angenommen: 9, verworfen: 3 }),
+    )],
+  }))
+  assert.notEqual(neu.id, freigegeben.id)
+  assert.equal(neu.status, 'pending')
+  assert.equal(aktiveRueckkopplung(neu), null)
 })
 
 // ---- Die Tabelle für Oberfläche und Dokumentation ------------------------------

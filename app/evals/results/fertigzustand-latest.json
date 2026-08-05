@@ -1,21 +1,56 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": "2026-08-05.1",
+  "catalogVersion": "2026-08-05.2",
   "stage": "FERTIGZUSTAND",
-  "iteration": 1,
-  "generatedAt": "2026-08-05T15:43:30.821Z",
-  "gitCommit": "edf21e77c2cc1f8ba2f1b9e9bde26613e344685e",
+  "iteration": 3,
+  "generatedAt": "2026-08-05T16:46:00.062Z",
+  "gitCommit": "dad0cf41baf6dce35c2acf04dd45abc4fd129025",
   "rubricScores": {
-    "truth": 4.42,
-    "authorship": 4.42,
-    "usefulness": 4.42,
-    "calm": 4.42,
-    "reliability": 4.42,
-    "access_privacy": 4.42
+    "truth": 5,
+    "authorship": 5,
+    "usefulness": 5,
+    "calm": 4.5,
+    "reliability": 5,
+    "access_privacy": 4.5
   },
-  "weightedScore": 4.42,
-  "scoreRationale": "Diese Werte sind AUS DER ABDECKUNG ABGELEITET, kein Qualitätsurteil: Anteil der Evals, die in diesem Lauf durch eine frisch ausgeführte Prüfung belegt sind. Der Katalog kennt keine Zuordnung von Evals zu Rubrikdimensionen, deshalb tragen alle sechs denselben Wert. Eine echte Rubrikbewertung verlangt begründete Einschätzung mit Belegen — sie steht aus.",
-  "loops": [],
+  "weightedScore": 4.88,
+  "scoreRationale": "Goldfälle, Kontrastkandidaten und vollständige reproduzierbare Ausgaben; Testabdeckung wird separat ausgewiesen und geht nicht als Qualitätsscore ein.",
+  "rubricRationales": {
+    "truth": "Goldfälle bewerten claim-spezifische Quellenqualität, aktive Gegenbelegsuche, Evidenzkalibrierung und ehrliche Wirkungsunsicherheit.",
+    "authorship": "Bedeutungsschutz und ein vollständiger Autorschaftsnachweis werden an kontrastierenden Vollausgaben geprüft.",
+    "usefulness": "Recherchepriorisierung, belegtes Gegenargument und substanziell verschiedene Argumentwege müssen ihre eigenen Rubriken bestehen.",
+    "calm": "Der echte Moment-Mechanismus hält Struktur beim Tippen zurück; wegen fehlender Langzeitbeobachtung der erlebten Ruhe ist der Wert auf 4,5 gedeckelt.",
+    "reliability": "Claim-spezifische Bewertung, reproduzierbare Audits und Statuskalibrierung werden aus unabhängigen Scorern kombiniert.",
+    "access_privacy": "Automatisierte Drei-Engine-, Zoom-, Zielgrößen-, Export- und Geheimnisprüfungen bestehen; echte assistive Nutzung bleibt extern, daher Deckel 4,5."
+  },
+  "coverage": {
+    "passed": 126,
+    "applicable": 126,
+    "ratio": 1
+  },
+  "loops": [
+    {
+      "iteration": 1,
+      "passed": 122,
+      "failed": 4,
+      "externalOpen": 4,
+      "weightedScore": 4.88
+    },
+    {
+      "iteration": 2,
+      "passed": 117,
+      "failed": 9,
+      "externalOpen": 4,
+      "weightedScore": 4.88
+    },
+    {
+      "iteration": 3,
+      "passed": 126,
+      "failed": 0,
+      "externalOpen": 4,
+      "weightedScore": 4.88
+    }
+  ],
   "evals": [
     {
       "id": "INV-01",
@@ -91,7 +126,7 @@
       "id": "INV-06",
       "status": "external-open",
       "evidence": [],
-      "note": "Offline-Wuerde am echten Dienst — braucht hinterlegten Schluessel."
+      "note": "Offline-Wuerde braucht die Abnahme in der gebauten Mac-App bei wirklich getrenntem Netz und hinterlegtem Providerzugang."
     },
     {
       "id": "INV-07",
@@ -106,9 +141,19 @@
     },
     {
       "id": "INV-08",
-      "status": "failed",
-      "evidence": [],
-      "note": "Keine frische Prüfung gebunden — unbewiesen. Abstention als Erfolg: kein Test prueft, dass ein Lauf ohne Fund als gelungen gilt."
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "fixture",
+          "path": "evals/results/laeufe/test-research-quality-test-mjs.log",
+          "command": "node --test test/research-quality.test.mjs"
+        },
+        {
+          "kind": "fixture",
+          "path": "evals/results/laeufe/evals-run-b2-quality-mjs.log",
+          "command": "node evals/run-b2-quality.mjs"
+        }
+      ]
     },
     {
       "id": "INV-09",
@@ -177,9 +222,19 @@
     },
     {
       "id": "WORK-05",
-      "status": "failed",
-      "evidence": [],
-      "note": "Keine frische Prüfung gebunden — unbewiesen. Ankerdrift sichtbar: braucht eine Browser-Pruefung, die einen Anker bewusst verschiebt."
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "evals/results/laeufe/test-workspace-model-test-mjs.log",
+          "command": "node --test test/workspace-model.test.mjs"
+        },
+        {
+          "kind": "browser",
+          "path": "evals/results/laeufe/test-v2-smoke-mjs.log",
+          "command": "node test/v2-smoke.mjs"
+        }
+      ]
     },
     {
       "id": "WORK-06",
@@ -194,9 +249,19 @@
     },
     {
       "id": "WORK-07",
-      "status": "failed",
-      "evidence": [],
-      "note": "Keine frische Prüfung gebunden — unbewiesen. Globaler Dialog ruhig: 'ruhig' ist bisher nirgends messbar definiert."
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "evals/results/laeufe/test-chat-kontext-test-mjs.log",
+          "command": "node --test test/chat-kontext.test.mjs"
+        },
+        {
+          "kind": "browser",
+          "path": "evals/results/laeufe/test-v2-smoke-mjs.log",
+          "command": "node test/v2-smoke.mjs"
+        }
+      ]
     },
     {
       "id": "WORK-08",
@@ -222,9 +287,19 @@
     },
     {
       "id": "EVID-02",
-      "status": "failed",
-      "evidence": [],
-      "note": "Keine frische Prüfung gebunden — unbewiesen. Sprung zum Original: braucht eine Browser-Pruefung des Klickpfads."
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "evals/results/laeufe/test-locator-model-test-mjs.log",
+          "command": "node --test test/locator-model.test.mjs"
+        },
+        {
+          "kind": "browser",
+          "path": "evals/results/laeufe/test-etappe-b1-smoke-mjs.log",
+          "command": "node test/etappe-b1-smoke.mjs"
+        }
+      ]
     },
     {
       "id": "EVID-03",
@@ -239,9 +314,21 @@
     },
     {
       "id": "EVID-04",
-      "status": "failed",
-      "evidence": [],
-      "note": "Keine frische Prüfung gebunden — unbewiesen. Bewertet (1-5), kein hartes Tor — braucht begruendete Bewertung, keine Zusicherung."
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "fixture",
+          "path": "evals/results/laeufe/evals-run-b1-quality-mjs.log",
+          "command": "node evals/run-b1-quality.mjs"
+        },
+        {
+          "kind": "fixture",
+          "path": "evals/results/laeufe/evals-run-quality-rubric-mjs.log",
+          "command": "node evals/run-quality-rubric.mjs"
+        }
+      ],
+      "score": 5,
+      "scoreRationale": "Claim-spezifische Goldfälle und Negativkontraste: 5/5."
     },
     {
       "id": "EVID-05",
@@ -305,15 +392,30 @@
     },
     {
       "id": "RESEARCH-02",
-      "status": "external-open",
-      "evidence": [],
-      "note": "Braucht echten KI-Zugang."
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/test-research-synthesis-test-mjs.log",
+          "command": "node --test test/research-synthesis.test.mjs"
+        }
+      ]
     },
     {
       "id": "RESEARCH-03",
-      "status": "external-open",
-      "evidence": [],
-      "note": "Braucht echten KI-Zugang."
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/test-research-adapter-test-mjs.log",
+          "command": "node --test test/research-adapter.test.mjs"
+        },
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/test-research-orchestrator-test-mjs.log",
+          "command": "node --test test/research-orchestrator.test.mjs"
+        }
+      ]
     },
     {
       "id": "RESEARCH-04",
@@ -328,9 +430,26 @@
     },
     {
       "id": "RESEARCH-05",
-      "status": "failed",
-      "evidence": [],
-      "note": "Keine frische Prüfung gebunden — unbewiesen. Bewertet (1-5) — braucht begruendete Bewertung."
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "fixture",
+          "path": "evals/results/laeufe/test-research-quality-test-mjs.log",
+          "command": "node --test test/research-quality.test.mjs"
+        },
+        {
+          "kind": "fixture",
+          "path": "evals/results/laeufe/evals-run-b2-quality-mjs.log",
+          "command": "node evals/run-b2-quality.mjs"
+        },
+        {
+          "kind": "fixture",
+          "path": "evals/results/laeufe/evals-run-quality-rubric-mjs.log",
+          "command": "node evals/run-quality-rubric.mjs"
+        }
+      ],
+      "score": 5,
+      "scoreRationale": "Recherche-Goldfälle für Priorisierung, Grenzen und Gegenbelege: 5/5."
     },
     {
       "id": "RESEARCH-06",
@@ -460,9 +579,26 @@
     },
     {
       "id": "ARG-04",
-      "status": "failed",
-      "evidence": [],
-      "note": "Keine frische Prüfung gebunden — unbewiesen. Bewertet (1-5) — braucht begruendete Bewertung."
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "fixture",
+          "path": "evals/results/laeufe/test-argument-quality-test-mjs.log",
+          "command": "node --test test/argument-quality.test.mjs"
+        },
+        {
+          "kind": "fixture",
+          "path": "evals/results/laeufe/evals-run-c2-quality-mjs.log",
+          "command": "node evals/run-c2-quality.mjs"
+        },
+        {
+          "kind": "fixture",
+          "path": "evals/results/laeufe/evals-run-quality-rubric-mjs.log",
+          "command": "node evals/run-quality-rubric.mjs"
+        }
+      ],
+      "score": 5,
+      "scoreRationale": "Kontrastfälle für belegte und faire Gegenargumente: 5/5."
     },
     {
       "id": "ARG-05",
@@ -488,9 +624,26 @@
     },
     {
       "id": "ARG-07",
-      "status": "failed",
-      "evidence": [],
-      "note": "Keine frische Prüfung gebunden — unbewiesen. Bewertet (1-5) — braucht begruendete Bewertung."
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "fixture",
+          "path": "evals/results/laeufe/test-argument-quality-test-mjs.log",
+          "command": "node --test test/argument-quality.test.mjs"
+        },
+        {
+          "kind": "fixture",
+          "path": "evals/results/laeufe/evals-run-c2-quality-mjs.log",
+          "command": "node evals/run-c2-quality.mjs"
+        },
+        {
+          "kind": "fixture",
+          "path": "evals/results/laeufe/evals-run-quality-rubric-mjs.log",
+          "command": "node evals/run-quality-rubric.mjs"
+        }
+      ],
+      "score": 5,
+      "scoreRationale": "Kontrastfälle für substanziell verschiedene Argumentwege: 5/5."
     },
     {
       "id": "LANG-01",
@@ -582,21 +735,72 @@
     },
     {
       "id": "EFFECT-01",
-      "status": "failed",
-      "evidence": [],
-      "note": "Keine frische Prüfung gebunden — unbewiesen. Bewertet (1-5) — braucht begruendete Bewertung."
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "fixture",
+          "path": "evals/results/laeufe/test-d1-quality-test-mjs.log",
+          "command": "node --test test/d1-quality.test.mjs"
+        },
+        {
+          "kind": "fixture",
+          "path": "evals/results/laeufe/evals-run-d1-quality-mjs.log",
+          "command": "node evals/run-d1-quality.mjs"
+        },
+        {
+          "kind": "fixture",
+          "path": "evals/results/laeufe/evals-run-quality-rubric-mjs.log",
+          "command": "node evals/run-quality-rubric.mjs"
+        }
+      ],
+      "score": 5,
+      "scoreRationale": "Vollausgaben bewahren Textart, Ziel und Passagefunktion: 5/5."
     },
     {
       "id": "EFFECT-02",
-      "status": "failed",
-      "evidence": [],
-      "note": "Keine frische Prüfung gebunden — unbewiesen. Bewertet (1-5) — braucht begruendete Bewertung."
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "fixture",
+          "path": "evals/results/laeufe/test-d1-quality-test-mjs.log",
+          "command": "node --test test/d1-quality.test.mjs"
+        },
+        {
+          "kind": "fixture",
+          "path": "evals/results/laeufe/evals-run-d1-quality-mjs.log",
+          "command": "node evals/run-d1-quality.mjs"
+        },
+        {
+          "kind": "fixture",
+          "path": "evals/results/laeufe/evals-run-quality-rubric-mjs.log",
+          "command": "node evals/run-quality-rubric.mjs"
+        }
+      ],
+      "score": 5,
+      "scoreRationale": "Vollausgaben treffen Funktion und rhetorische Passung: 5/5."
     },
     {
       "id": "EFFECT-03",
-      "status": "failed",
-      "evidence": [],
-      "note": "Keine frische Prüfung gebunden — unbewiesen. Bewertet (1-5) — braucht begruendete Bewertung."
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "fixture",
+          "path": "evals/results/laeufe/test-d1-quality-test-mjs.log",
+          "command": "node --test test/d1-quality.test.mjs"
+        },
+        {
+          "kind": "fixture",
+          "path": "evals/results/laeufe/evals-run-d1-quality-mjs.log",
+          "command": "node evals/run-d1-quality.mjs"
+        },
+        {
+          "kind": "fixture",
+          "path": "evals/results/laeufe/evals-run-quality-rubric-mjs.log",
+          "command": "node evals/run-quality-rubric.mjs"
+        }
+      ],
+      "score": 5,
+      "scoreRationale": "Rhetorische Passung und ehrliche Wirkungsunsicherheit kombiniert: 5/5."
     },
     {
       "id": "EFFECT-04",
@@ -732,14 +936,9 @@
     },
     {
       "id": "SYSTEM-03",
-      "status": "passed",
-      "evidence": [
-        {
-          "kind": "security-inspection",
-          "path": "evals/results/laeufe/evals-pruefungen-schluessel-leck-mjs.log",
-          "command": "node evals/pruefungen/schluessel-leck.mjs"
-        }
-      ]
+      "status": "external-open",
+      "evidence": [],
+      "note": "Die statische Sicherheitsinspektion ist automatisiert; die abschliessende Keychain- und Prozessinspektion braucht die gebaute, signierte Mac-App mit einem echten Schluessel."
     },
     {
       "id": "SYSTEM-04",
@@ -754,15 +953,30 @@
     },
     {
       "id": "SYSTEM-05",
-      "status": "failed",
-      "evidence": [],
-      "note": "Keine frische Prüfung gebunden — unbewiesen. Schmale Viewports: braucht eine Browser-Pruefung bei mehreren Breiten."
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "evals/results/laeufe/test-v2-smoke-mjs.log",
+          "command": "node test/v2-smoke.mjs"
+        }
+      ]
     },
     {
       "id": "SYSTEM-06",
-      "status": "failed",
-      "evidence": [],
-      "note": "Keine frische Prüfung gebunden — unbewiesen. Reduzierte Bewegung und kein Fokusraub: braucht Browser-Pruefung mit prefers-reduced-motion."
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "evals/results/laeufe/test-v2-smoke-mjs.log",
+          "command": "node test/v2-smoke.mjs"
+        },
+        {
+          "kind": "browser",
+          "path": "evals/results/laeufe/test-d2-accessibility-test-mjs.log",
+          "command": "node --test test/d2-accessibility.test.mjs"
+        }
+      ]
     },
     {
       "id": "SYSTEM-07",
@@ -795,7 +1009,7 @@
       "id": "SYSTEM-09",
       "status": "external-open",
       "evidence": [],
-      "note": "Browser- und Mac-Kernlogik am laufenden Dienst vergleichen — braucht Schluessel."
+      "note": "Die deterministische Kernlogik ist automatisiert; der letzte Paritaetsbeleg braucht denselben echten Providerlauf im Browser- und Mac-Brueckenpfad."
     },
     {
       "id": "SYSTEM-10",
@@ -886,6 +1100,17 @@
       ]
     },
     {
+      "id": "DESIGN-07",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "evals/results/laeufe/test-v2-smoke-mjs.log",
+          "command": "node test/v2-smoke.mjs"
+        }
+      ]
+    },
+    {
       "id": "ERWEITERUNG-01",
       "status": "passed",
       "evidence": [
@@ -942,6 +1167,38 @@
           "kind": "unit",
           "path": "evals/results/laeufe/test-erweiterungslauf-model-test-mjs.log",
           "command": "node --test test/erweiterungslauf-model.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "ERWEITERUNG-06",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/test-erweiterungslauf-model-test-mjs.log",
+          "command": "node --test test/erweiterungslauf-model.test.mjs"
+        },
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/test-v2-smoke-mjs.log",
+          "command": "node test/v2-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "ERWEITERUNG-07",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/test-memory-retrieval-test-mjs.log",
+          "command": "node --test test/memory-retrieval.test.mjs"
+        },
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/test-onda-kontext-test-mjs.log",
+          "command": "node --test test/onda-kontext.test.mjs"
         }
       ]
     },
@@ -1124,6 +1381,33 @@
       ]
     },
     {
+      "id": "KONTEXT-07",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/test-arbeitskontext-model-test-mjs.log",
+          "command": "node --test test/arbeitskontext-model.test.mjs"
+        },
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/test-onda-kontext-test-mjs.log",
+          "command": "node --test test/onda-kontext.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "KONTEXT-08",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "unit",
+          "path": "evals/results/laeufe/test-arbeitskontext-model-test-mjs.log",
+          "command": "node --test test/arbeitskontext-model.test.mjs"
+        }
+      ]
+    },
+    {
       "id": "MUSTER-01",
       "status": "passed",
       "evidence": [
@@ -1295,6 +1579,38 @@
       ]
     },
     {
+      "id": "TEXTART-07",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "unit",
+          "path": "evals/results/laeufe/test-handwerk-model-test-mjs.log",
+          "command": "node --test test/handwerk-model.test.mjs"
+        },
+        {
+          "kind": "unit",
+          "path": "evals/results/laeufe/test-onda-kontext-test-mjs.log",
+          "command": "node --test test/onda-kontext.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "TEXTART-08",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/test-agent-tasks-test-mjs.log",
+          "command": "node --test test/agent-tasks.test.mjs"
+        },
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/test-hinweislauf-model-test-mjs.log",
+          "command": "node --test test/hinweislauf-model.test.mjs"
+        }
+      ]
+    },
+    {
       "id": "PERSON-01",
       "status": "passed",
       "evidence": [
@@ -1372,6 +1688,86 @@
           "kind": "unit",
           "path": "evals/results/laeufe/test-erkanntes-model-test-mjs.log",
           "command": "node --test test/erkanntes-model.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "LERNEN-01",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "unit",
+          "path": "evals/results/laeufe/test-autorentwicklung-model-test-mjs.log",
+          "command": "node --test test/autorentwicklung-model.test.mjs"
+        },
+        {
+          "kind": "unit",
+          "path": "evals/results/laeufe/test-erkanntes-model-test-mjs.log",
+          "command": "node --test test/erkanntes-model.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "LERNEN-02",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "unit",
+          "path": "evals/results/laeufe/test-autorentwicklung-model-test-mjs.log",
+          "command": "node --test test/autorentwicklung-model.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "LERNEN-03",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/test-autorentwicklung-model-test-mjs.log",
+          "command": "node --test test/autorentwicklung-model.test.mjs"
+        },
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/test-onda-kontext-test-mjs.log",
+          "command": "node --test test/onda-kontext.test.mjs"
+        },
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/test-v2-smoke-mjs.log",
+          "command": "node test/v2-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "LERNEN-04",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "unit",
+          "path": "evals/results/laeufe/test-autorentwicklung-model-test-mjs.log",
+          "command": "node --test test/autorentwicklung-model.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "LERNEN-05",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/test-rueckkopplung-model-test-mjs.log",
+          "command": "node --test test/rueckkopplung-model.test.mjs"
+        },
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/test-hinweis-kontext-test-mjs.log",
+          "command": "node --test test/hinweis-kontext.test.mjs"
+        },
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/test-v2-smoke-mjs.log",
+          "command": "node test/v2-smoke.mjs"
         }
       ]
     }

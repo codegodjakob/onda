@@ -25,6 +25,13 @@ import { baueVerstaendnisKontext } from './verstaendnis-kontext.mjs'
 import { ergaenzeOndaKontext } from './onda-kontext.mjs'
 import { erkanntesListe, schreibeErkanntes, ueberholeErkanntes } from './erkanntes-model.mjs'
 import {
+  entscheideStimmenmerkmal,
+  projiziereAutorentwicklung,
+  schlageStimmenmerkmalVor,
+  speichereStimmenmerkmal,
+  ueberholeStimmenmerkmal,
+} from './autorentwicklung-model.mjs'
+import {
   interviewNachrichtId,
   istBeispielProjekt,
   planeInterviewNachricht,
@@ -32,7 +39,12 @@ import {
 } from './verstaendnis-interview.mjs'
 import { baueDocText } from './agent-findings.mjs'
 import { pruefePausenAusloeser, versucheHinweislauf } from './hinweislauf-model.mjs'
-import { bilanziereRueckmeldung } from './rueckkopplung-model.mjs'
+import {
+  bilanziereRueckmeldung,
+  entscheideRueckkopplung,
+  erstelleRueckkopplungsvorschlag,
+  rueckkopplungTabelle,
+} from './rueckkopplung-model.mjs'
 import { darfAutomatischLaufen, versucheErweiterungslauf } from './erweiterungslauf-model.mjs'
 import {
   ART_ERKLAERUNG,
@@ -666,10 +678,9 @@ function erweiterungAnriss(text) {
 function erweiterungStelleNode(erweiterung, stelle, index) {
   // Eine Stelle liegt entweder im offenen Text oder in einem anderen Text desselben
   // Projekts (erweiterung-model.mjs). Der zweite Fall traegt einen docTitel und KEINE
-  // blockId -- der Knopf kann dort nicht hinspringen, weil der Baustein im gerade
-  // offenen Editor nicht existiert. Ohne den Titel stuende dort ein stiller Knopf mit
-  // einem Zitat, das im sichtbaren Text nirgends vorkommt: die Karte saehe kaputt aus,
-  // obwohl sie recht hat. Der Titel ist die Erklaerung dafuer.
+  // blockId. Der fremde Text wird deshalb zuerst geoeffnet und die Stelle danach aus dem
+  // gespeicherten Wortlaut neu aufgeloest. Der alte Index ist nur Historie; geraten wird
+  // auch beim Sprung nicht.
   const ausFremdemText = Boolean(stelle.docId)
   const grundLabel = erweiterung.art === 'verbindung'
     ? (index === 0 ? 'Erste Stelle' : 'Zweite Stelle')
@@ -685,8 +696,21 @@ function erweiterungStelleNode(erweiterung, stelle, index) {
     createNode('span', 'onda-erw-stelle-label', label),
     createNode('span', 'onda-erw-stelle-zitat', erweiterungAnriss(stelle.text) || stelle.text),
   )
-  knopf.disabled = !stelle.blockId
-  if (stelle.blockId) knopf.addEventListener('click', () => focusBlock(stelle.blockId))
+  knopf.disabled = !stelle.blockId && !stelle.docId
+  if (stelle.blockId) {
+    knopf.addEventListener('click', () => focusBlock(stelle.blockId))
+  } else if (stelle.docId) {
+    knopf.addEventListener('click', () => {
+      const ziel = ctx?.state?.docs?.find(doc => doc?.id === stelle.docId && !doc.trashed)
+      if (!ziel || typeof ctx?.ops?.openDoc !== 'function') return
+      ctx.ops.openDoc(stelle.docId)
+      requestAnimationFrame(() => {
+        const treffer = getEditorBlocks(ctx.editor)
+          .filter(block => String(block.text || '').includes(String(stelle.text || '')))
+        if (treffer.length === 1 && treffer[0].id) focusBlock(treffer[0].id)
+      })
+    })
+  }
   return knopf
 }
 
@@ -747,7 +771,7 @@ function erweiterungKarte(doc, erweiterung) {
     // Das Prinzip starb bisher auf der Karte. Es ist der einzige Teil einer
     // Erweiterung, der beim naechsten Text von allein wieder trueggt -- also gehoert
     // es der Person, nicht dem Dokument.
-    merkeErkanntes(erweiterung.muster, 'erweiterung', erweiterung.stellen?.[0]?.text || '')
+    merkeErkanntes(erweiterung.muster, 'erweiterung', erweiterung.stellen?.[0]?.text || '', 'idee')
     ctx?.scheduleSave()
     refreshWorkspace()
   })
@@ -808,7 +832,7 @@ function renderZurueckgehalten() {
 // Der einzige Weg, auf dem etwas in den Personen-Speicher gelangt. Bewusst EINE
 // Stelle: ein Speicher, der sich an mehreren Stellen selbst fuellt, laesst sich
 // spaeter nicht mehr ueberblicken.
-function merkeErkanntes(satz, herkunft, beleg = '') {
+function merkeErkanntes(satz, herkunft, beleg = '', dimension = 'allgemein') {
   const text = String(satz || '').trim()
   if (!text || !ctx?.state) return null
   const doc = ctx.activeDoc()
@@ -818,6 +842,7 @@ function merkeErkanntes(satz, herkunft, beleg = '') {
     dokumentId: doc?.id || null,
     projektId: doc?.projectId || null,
     beleg,
+    dimension,
   })
   ctx.state.memoryStore = ergebnis.store
   return ergebnis.eintrag
@@ -831,7 +856,14 @@ function renderErkanntes() {
   if (!bereich || !ctx?.state) return
   const eyebrow = bereich.querySelector('.onda-eyebrow')
   const liste = erkanntesListe(ctx.state.memoryStore)
+  const entwicklung = projiziereAutorentwicklung(ctx.state.memoryStore)
+  if (!Array.isArray(ctx.state.memoryStore.voiceProposals)) ctx.state.memoryStore.voiceProposals = []
   const kinder = []
+
+  const dimensionLabel = {
+    fakt: 'Fakt', beleg: 'Beleg', methode: 'Methode', logik: 'Logik', struktur: 'Struktur',
+    wirkung: 'Wirkung', erklaerung: 'Erklärung', sprache: 'Sprache', idee: 'Idee', allgemein: 'Allgemein',
+  }
 
   if (!liste.length) {
     kinder.push(createNode(
@@ -846,10 +878,84 @@ function renderErkanntes() {
   liste.forEach(gruppe => {
     const zeile = createNode('div', 'onda-erk-zeile')
     zeile.append(createNode('span', 'onda-erk-satz', gruppe.satz))
+    const dimensionen = (gruppe.dimensionen || []).filter(wert => wert !== 'allgemein')
+    if (dimensionen.length) {
+      zeile.append(createNode(
+        'span',
+        'onda-erk-dimension',
+        dimensionen.map(wert => dimensionLabel[wert] || wert).join(' · '),
+      ))
+    }
     // Die Zahl bedeutet hier etwas Gutes: was wiederkam, ist im Begriff, in Fleisch
     // und Blut ueberzugehen. Deshalb Tinte statt Warnfarbe und kein Abzeichen.
     if (gruppe.treffer > 1) {
       zeile.append(createNode('span', 'onda-erk-treffer', `${gruppe.treffer}×`))
+    }
+    const stimmenEintrag = ctx.state.memoryStore.entries.find(eintrag => (
+      eintrag?.status === 'active'
+      && eintrag.type === 'voice'
+      && eintrag.level === 'personal'
+      && eintrag.content === gruppe.satz
+      && eintrag.provenance?.action === 'voice-trait-approve'
+    ))
+    const stimmenVorschlag = ctx.state.memoryStore.voiceProposals.find(vorschlag => (
+      vorschlag?.trait === gruppe.satz && vorschlag.status === 'pending'
+    ))
+    const anker = [...new Map((gruppe.occurrences || [])
+      .filter(begegnung => begegnung.projectId && begegnung.documentId && begegnung.anchor)
+      .map(begegnung => [
+        `${begegnung.projectId}:${begegnung.documentId}:${begegnung.anchor}`,
+        { projectId: begegnung.projectId, textId: begegnung.documentId, exact: begegnung.anchor, actor: 'user' },
+      ])).values()]
+    if (stimmenEintrag) {
+      const stimmeWeg = createNode('button', 'onda-erk-stimme is-active', 'Teil deiner Stimme')
+      stimmeWeg.type = 'button'
+      stimmeWeg.title = 'Klicken, um dieses Stimmenmerkmal zurückzunehmen'
+      stimmeWeg.addEventListener('click', () => {
+        ctx.state.memoryStore = ueberholeStimmenmerkmal(ctx.state.memoryStore, stimmenEintrag.id, Date.now())
+        ctx.scheduleSave()
+        renderErkanntes()
+      })
+      zeile.append(stimmeWeg)
+    } else if (stimmenVorschlag) {
+      const bestaetigen = createNode('button', 'onda-erk-stimme', 'Als Stimme bestätigen')
+      bestaetigen.type = 'button'
+      bestaetigen.addEventListener('click', () => {
+        const freigegeben = entscheideStimmenmerkmal(stimmenVorschlag, {
+          approved: true, actor: 'user', at: Date.now(),
+        })
+        const index = ctx.state.memoryStore.voiceProposals.findIndex(vorschlag => vorschlag.id === stimmenVorschlag.id)
+        ctx.state.memoryStore.voiceProposals[index] = freigegeben
+        ctx.state.memoryStore = speichereStimmenmerkmal(ctx.state.memoryStore, freigegeben)
+        ctx.scheduleSave()
+        renderErkanntes()
+      })
+      const nichtStimme = createNode('button', 'onda-erk-stimme is-still', 'Nicht als Stimme')
+      nichtStimme.type = 'button'
+      nichtStimme.addEventListener('click', () => {
+        const abgelehnt = entscheideStimmenmerkmal(stimmenVorschlag, {
+          approved: false, actor: 'user', at: Date.now(),
+        })
+        const index = ctx.state.memoryStore.voiceProposals.findIndex(vorschlag => vorschlag.id === stimmenVorschlag.id)
+        ctx.state.memoryStore.voiceProposals[index] = abgelehnt
+        ctx.scheduleSave()
+        renderErkanntes()
+      })
+      zeile.append(bestaetigen, nichtStimme)
+    } else if (anker.length >= 2) {
+      const pruefen = createNode('button', 'onda-erk-stimme is-still', 'Als Stimme prüfen')
+      pruefen.type = 'button'
+      pruefen.title = 'Aus mindestens zwei eigenen Textstellen als mögliches Stimmenmerkmal vormerken'
+      pruefen.addEventListener('click', () => {
+        ctx.state.memoryStore.voiceProposals.push(schlageStimmenmerkmalVor({
+          trait: gruppe.satz,
+          anchors: anker,
+          at: Date.now(),
+        }))
+        ctx.scheduleSave()
+        renderErkanntes()
+      })
+      zeile.append(pruefen)
     }
     const weg = createNode('button', 'onda-erk-weg', 'Stimmt nicht mehr')
     weg.type = 'button'
@@ -862,6 +968,86 @@ function renderErkanntes() {
     zeile.append(weg)
     kinder.push(zeile)
   })
+
+  if (entwicklung.masterySignals.length) {
+    const wiederkehr = entwicklung.masterySignals.filter(signal => signal.kind === 'recurrence').length
+    const selbst = entwicklung.masterySignals.filter(signal => signal.kind === 'self-correction').length
+    const eigene = entwicklung.masterySignals.filter(signal => signal.kind === 'own-version').length
+    const teile = [
+      wiederkehr ? `${wiederkehr} wiederholt erkannt` : '',
+      selbst ? `${selbst} selbst korrigiert` : '',
+      eigene ? `${eigene} eigene Fassung` : '',
+    ].filter(Boolean)
+    if (teile.length) kinder.push(createNode('p', 'onda-erk-entwicklung', `Beobachtbare Entwicklung: ${teile.join(' · ')}.`))
+  }
+
+  const kalibrierung = synchronisiereRueckkopplungsvorschlag()
+  if (kalibrierung) {
+    const details = createNode('details', 'onda-rueckkopplung')
+    const summary = document.createElement('summary')
+    summary.textContent = kalibrierung.status === 'approved'
+      ? 'Wie Onda seine Hinweise anpasst'
+      : 'Onda hat ein Muster in seiner Rückmeldung bemerkt'
+    details.append(summary)
+    details.append(createNode(
+      'p',
+      'onda-rueckkopplung-hinweis',
+      'Diese Bilanz misst, welche Hinweise zu Änderungen führten — nicht, welche wahr '
+        + 'waren. Sie verändert ohne deine Zustimmung nichts und darf weder Integritätsfragen '
+        + 'noch Hinweisarten abschalten.',
+    ))
+
+    const auffaellige = rueckkopplungTabelle(kalibrierung.bilanz)
+      .filter(zeile => zeile.lage === 'traegt' || zeile.lage === 'traegt-selten')
+    if (auffaellige.length) {
+      const listeNode = createNode('ul', 'onda-rueckkopplung-liste')
+      auffaellige.forEach(zeile => {
+        listeNode.append(createNode(
+          'li',
+          '',
+          `${zeile.art}: ${zeile.lageLabel} (${zeile.angenommen} angenommen, ${zeile.verworfen} verworfen)`,
+        ))
+      })
+      details.append(listeNode)
+    }
+
+    const gesten = createNode('div', 'onda-rueckkopplung-gesten')
+    const zustimmen = createNode(
+      'button',
+      'onda-erw-geste',
+      kalibrierung.status === 'approved' ? 'Wird berücksichtigt' : 'Bei der Darreichung berücksichtigen',
+    )
+    zustimmen.type = 'button'
+    zustimmen.disabled = kalibrierung.status === 'approved'
+    zustimmen.addEventListener('click', () => {
+      ctx.state.rueckkopplung = entscheideRueckkopplung(kalibrierung, {
+        approved: true,
+        actor: 'user',
+        at: Date.now(),
+      })
+      ctx.scheduleSave()
+      renderErkanntes()
+    })
+    const ablehnen = createNode(
+      'button',
+      'onda-erw-geste is-still',
+      kalibrierung.status === 'approved' ? 'Nicht mehr berücksichtigen' : 'Nicht verwenden',
+    )
+    ablehnen.type = 'button'
+    ablehnen.disabled = kalibrierung.status === 'rejected'
+    ablehnen.addEventListener('click', () => {
+      ctx.state.rueckkopplung = entscheideRueckkopplung(kalibrierung, {
+        approved: false,
+        actor: 'user',
+        at: Date.now(),
+      })
+      ctx.scheduleSave()
+      renderErkanntes()
+    })
+    gesten.append(zustimmen, ablehnen)
+    details.append(gesten)
+    kinder.push(details)
+  }
 
   bereich.replaceChildren(...(eyebrow ? [eyebrow, ...kinder] : kinder))
 }
@@ -2327,7 +2513,10 @@ function decideAndAdvance(finding, decision) {
   // Verworfenes wandert NICHT in den Speicher -- ein zurueckgewiesener Hinweis ist
   // keine Erkenntnis, und ihn trotzdem zu behalten waere das Gegenteil von
   // "Autorentscheidungen sind bindend".
-  if (decision?.kind === 'accept') merkeErkanntes(finding.muster, 'hinweis', finding.target || '')
+  if (decision?.kind === 'accept') {
+    const dimension = finding.kiKategorie === 'quelle' ? 'beleg' : (finding.kiKategorie || 'allgemein')
+    merkeErkanntes(finding.muster, 'hinweis', finding.target || '', dimension)
+  }
   decideFinding(doc, finding.id, decision)
   const project = dokumentProjekt(doc)
   const recorded = doc.decisions.at(-1)
@@ -3414,12 +3603,27 @@ function hinweislaufProtokoll(workspace) {
 // Protokoll ist kein Fehler, sondern ein Dokument, in dem noch kein Lauf stattfand.
 function rueckkopplungsDaten() {
   return (ctx?.state?.docs || [])
-    .filter(doc => doc && doc.projectId !== EXAMPLE_PROJECT_ID)
+    .filter(doc => doc && !doc.trashed && doc.projectId !== EXAMPLE_PROJECT_ID)
     .map(doc => ({
+      id: doc.id,
+      trashed: doc.trashed === true,
       findings: doc.findings,
       decisions: doc.decisions,
       hinweislauf: doc.workspace?.hinweislauf || null,
     }))
+}
+
+function synchronisiereRueckkopplungsvorschlag() {
+  if (!ctx?.state) return null
+  const bilanz = bilanziereRueckmeldung({ dokumente: rueckkopplungsDaten() })
+  const neu = erstelleRueckkopplungsvorschlag(bilanz)
+  if (!neu) return null
+  const bisher = ctx.state.rueckkopplung
+  if (bisher?.id === neu.id) return bisher
+  // Neue Daten bedeuten eine neue Entscheidung. Eine alte Zustimmung wird nie still auf
+  // eine veraenderte Statistik uebertragen.
+  ctx.state.rueckkopplung = neu
+  return neu
 }
 
 // Echte Initiative-Quelle: nach einem Lauf mit Grundursache oder Integritätsthema
@@ -3471,7 +3675,7 @@ async function fuehreHinweislaufAus({ grund = 'pause' } = {}) {
   const ondaWissen = ondaQuellen(doc, project)
   // Die Rueckkopplung: was bei dieser Person bisher getragen hat. Dokumentuebergreifend --
   // deshalb hier und nicht in versucheHinweislauf, das nur das aktuelle Dokument sieht.
-  const rueckkopplung = bilanziereRueckmeldung({ dokumente: rueckkopplungsDaten() })
+  const rueckkopplung = synchronisiereRueckkopplungsvorschlag()
 
   const ergebnis = await versucheHinweislauf({
     hatDokument: Boolean(doc && workspace),

@@ -4,6 +4,26 @@
 import { dedupeHinweise, findeAnker } from './anchor-verify.mjs'
 import { blockFuerAnkerIndex, fasseEntscheidungenZusammen, fasseOffeneHinweiseZusammen, hinweisZuFinding } from './agent-findings.mjs'
 import { baueHinweisKontext } from './hinweis-kontext.mjs'
+import { darfVorgeschlagenWerden, stilmittel } from './stilmittel.mjs'
+
+// Echte Modellantworten tragen die beiden strukturierten Felder, weil das JSON-Schema sie
+// verlangt. Aeltere lokale Fixtures und gespeicherte Antworten bleiben lesbar: Fehlen BEIDE,
+// wird aus der Form des Vorschlags die harmlose alte Bedeutung abgeleitet. Sobald eines der
+// Felder vorhanden ist, gilt der neue Vertrag vollstaendig und widerspruechliche Kombinationen
+// werden verworfen. Das verhindert, dass eine blosse Prompt-Regel als vermeintliches Gate gilt.
+function pruefeVorschlag(hinweis, textart) {
+  const hatArt = Object.prototype.hasOwnProperty.call(hinweis || {}, 'vorschlagsart')
+  const hatId = Object.prototype.hasOwnProperty.call(hinweis || {}, 'stilmittelId')
+  if (!hatArt && !hatId) return true
+
+  const art = String(hinweis?.vorschlagsart || '')
+  const id = hinweis?.stilmittelId == null ? null : String(hinweis.stilmittelId)
+  const hatVorschlag = Boolean(hinweis?.vorschlag && typeof hinweis.vorschlag === 'object')
+  if (art === 'keiner') return id === null && !hatVorschlag
+  if (art === 'formulierung') return id === null && hatVorschlag
+  if (art !== 'stilmittel' || hinweis?.kategorie !== 'sprache' || !hatVorschlag) return false
+  return Boolean(stilmittel(id)) && darfVorgeschlagenWerden(id, textart)
+}
 
 // Reihenfolge bewusst: kein Dokument -> Beispielprojekt -> Lauf schon aktiv -> leerer Text ->
 // unveränderter Text seit dem letzten Lauf. Der Schlüssel-Check (hatSchluessel) bleibt bewusst
@@ -46,6 +66,7 @@ export function verarbeiteHinweisantwort({
   const uebernommen = []
 
   frisch.forEach(hinweis => {
+    if (!pruefeVorschlag(hinweis, textart)) { verworfen += 1; return }
     const ankerErgebnis = findeAnker(docText, hinweis?.anker)
     if (!ankerErgebnis.gefunden) { verworfen += 1; return }
     const blockId = blockFuerAnkerIndex(blocks, ankerErgebnis.index)

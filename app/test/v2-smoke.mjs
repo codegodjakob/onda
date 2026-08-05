@@ -2769,9 +2769,145 @@ async function runSystem8BudgetGate(browser) {
   await page.close()
 }
 
+async function runFinalStateLearningAndCrossDocument(browser) {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 900 } })
+  const errors = []
+  page.on('console', message => {
+    if (message.type() === 'error') errors.push(message.text())
+  })
+  page.on('pageerror', error => errors.push(error.message))
+  await openExample(page)
+
+  const fixture = await page.evaluate(() => {
+    window.AIWT.newProject('Fertigzustand: Lernen und Verbindungen')
+    window.AIWT.newDoc()
+    window.AIWT.__blockIdentityTestBridge.setContent([{
+      type: 'paragraph',
+      content: [{
+        type: 'text',
+        text: 'Die Instandhaltung der Leitungen wurde über Jahrzehnte aufgeschoben.',
+      }],
+    }])
+    window.AIWT.flushSave()
+    const target = window.AIWT.state.docs.find(doc => doc.id === window.AIWT.state.active)
+    target.title = 'Instandhaltung'
+    const targetBlockId = window.AIWT.__blockIdentityTestBridge.getBlocks()[0].id
+
+    window.AIWT.newDoc()
+    window.AIWT.__blockIdentityTestBridge.setContent([{
+      type: 'paragraph',
+      content: [{ type: 'text', text: 'Die Stadt wuchs schneller als ihre Leitungen.' }],
+    }])
+    window.AIWT.flushSave()
+    const source = window.AIWT.state.docs.find(doc => doc.id === window.AIWT.state.active)
+    source.title = 'Wachstum'
+    const projectId = source.projectId
+
+    source.erweiterungen = [{
+      id: 'eval-verbindung',
+      art: 'verbindung',
+      status: 'neu',
+      createdAt: 1,
+      gedanke: 'Wachstum und aufgeschobene Instandhaltung gehören zusammen.',
+      muster: 'Wo ein Text Tempo nennt, lohnt der Blick auf dessen Rechnung.',
+      stellen: [
+        { text: 'Die Stadt wuchs schneller als ihre Leitungen.', blockId: window.AIWT.__blockIdentityTestBridge.getBlocks()[0].id },
+        {
+          text: 'Die Instandhaltung der Leitungen wurde über Jahrzehnte aufgeschoben.',
+          blockId: null,
+          docId: target.id,
+          docTitel: target.title,
+        },
+      ],
+    }]
+
+    const prinzip = 'Ein ruhiger Satz trägt den Gedanken ohne ihn auszurufen.'
+    window.AIWT.state.memoryStore.entries.push(...[
+      { id: 'eval-prinzip-1', createdAt: 10, documentId: source.id, anchor: 'Die Stadt wuchs schneller als ihre Leitungen.' },
+      { id: 'eval-prinzip-2', createdAt: 20, documentId: target.id, anchor: 'Die Instandhaltung der Leitungen wurde über Jahrzehnte aufgeschoben.' },
+    ].map(eintrag => ({
+      id: eintrag.id,
+      level: 'personal',
+      type: 'prinzip',
+      content: prinzip,
+      scope: { ownerId: 'local-author', allProjects: true },
+      provenance: { actor: 'user', action: 'erkanntes-hand', originEventIds: [eintrag.documentId] },
+      sensitivity: 'personal',
+      deletionRule: 'manual',
+      createdAt: eintrag.createdAt,
+      status: 'active',
+      person: {
+        dimension: 'sprache',
+        occurrence: { projectId, documentId: eintrag.documentId, anchor: eintrag.anchor },
+      },
+    })))
+
+    const findings = []
+    const decisions = []
+    for (let index = 0; index < 5; index += 1) {
+      const id = `eval-sprache-${index}`
+      findings.push({ id, kiKategorie: 'sprache', status: 'dismissed' })
+      decisions.push({ id: `entscheidung-${id}`, findingId: id, action: 'reject', outcome: 'dismissed', at: 100 + index })
+    }
+    for (let index = 0; index < 10; index += 1) {
+      const id = `eval-struktur-${index}`
+      findings.push({ id, kiKategorie: 'struktur', status: 'resolved' })
+      decisions.push({ id: `entscheidung-${id}`, findingId: id, action: 'accept', outcome: 'resolved', at: 200 + index })
+    }
+    source.findings = findings
+    source.decisions = decisions
+    window.AIWT.persist()
+    window.AIWT.__workspaceTestBridge.reinitialize()
+    return { sourceId: source.id, targetId: target.id, targetBlockId, prinzip }
+  })
+
+  const erkanntes = page.locator('#erkanntes')
+  await erkanntes.getByRole('button', { name: 'Als Stimme prüfen', exact: true }).waitFor()
+  assert.match(await erkanntes.textContent(), /Sprache/)
+  assert.match(await erkanntes.textContent(), /2×/)
+  assert.match(await erkanntes.textContent(), /Beobachtbare Entwicklung/)
+  assert.equal(await erkanntes.locator('progress, meter, [role="progressbar"]').count(), 0)
+  assert.doesNotMatch(await erkanntes.textContent(), /Punktestand|Erfolgsquote/i)
+
+  await erkanntes.getByRole('button', { name: 'Als Stimme prüfen', exact: true }).click()
+  await erkanntes.getByRole('button', { name: 'Als Stimme bestätigen', exact: true }).click()
+  const aktiveStimme = erkanntes.getByRole('button', { name: 'Teil deiner Stimme', exact: true })
+  await aktiveStimme.waitFor()
+  assert.equal(await page.evaluate(prinzip => window.AIWT.state.memoryStore.entries.some(eintrag => (
+    eintrag.type === 'voice' && eintrag.status === 'active' && eintrag.content === prinzip
+  )), fixture.prinzip), true)
+  await aktiveStimme.click()
+  assert.equal(await page.evaluate(prinzip => window.AIWT.state.memoryStore.entries.some(eintrag => (
+    eintrag.type === 'voice' && eintrag.status === 'active' && eintrag.content === prinzip
+  )), fixture.prinzip), false)
+
+  const rueckkopplung = erkanntes.locator('details.onda-rueckkopplung')
+  await rueckkopplung.waitFor()
+  await rueckkopplung.locator('summary').click()
+  await rueckkopplung.getByRole('button', { name: 'Bei der Darreichung berücksichtigen', exact: true }).click()
+  assert.equal(await page.evaluate(() => window.AIWT.state.rueckkopplung?.status), 'approved')
+  await rueckkopplung.locator('summary').click()
+  await rueckkopplung.getByRole('button', { name: 'Nicht mehr berücksichtigen', exact: true }).click()
+  assert.equal(await page.evaluate(() => window.AIWT.state.rueckkopplung?.status), 'rejected')
+
+  const erweiterungen = page.locator('#erweiterungen')
+  await erweiterungen.locator('.onda-erw-kopf').click()
+  await erweiterungen.getByRole('button', { name: /Zweite Stelle.*Instandhaltung/ }).click()
+  await page.waitForFunction(targetId => window.AIWT.state.active === targetId, fixture.targetId)
+  await page.waitForFunction(targetBlockId => (
+    window.AIWT.__blockIdentityTestBridge.getActiveBlockId() === targetBlockId
+  ), fixture.targetBlockId)
+
+  assert.equal(await page.evaluate(() => window.AIWT.state.active), fixture.targetId)
+  assert.deepEqual(errors, [])
+  await page.close()
+}
+
 const browser = await chromium.launch({ headless: true })
 try {
-  if (process.env.AIWT_SYSTEM8_ONLY === '1') {
+  if (process.env.AIWT_FINALSTATE_ONLY === '1') {
+    await runFinalStateLearningAndCrossDocument(browser)
+  } else if (process.env.AIWT_SYSTEM8_ONLY === '1') {
     await runSystem8BudgetGate(browser)
   } else {
     if (process.env.AIWT_TASK7_ONLY !== '1') {
@@ -2791,6 +2927,7 @@ try {
       await runTask6Mobile(browser)
       await runTask6InitiativeAndLifecycle(browser)
       await runSystem8BudgetGate(browser)
+      await runFinalStateLearningAndCrossDocument(browser)
     }
     await runTask7Scenarios(browser, false)
     await runTask7Scenarios(browser, true)

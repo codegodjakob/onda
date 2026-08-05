@@ -127,8 +127,32 @@ enum Keychain {
         return status == errSecSuccess || status == errSecItemNotFound
     }
 
+    /// Beantwortet "gibt es einen Schlüssel?" OHNE ihn zu lesen.
+    ///
+    /// Vorher rief das hier schlicht `lesen()` — und damit `SecItemCopyMatching` mit
+    /// `kSecReturnData: true`. Um eine Ja/Nein-Frage zu beantworten, wurde also jedes Mal
+    /// das Geheimnis selbst entschlüsselt, und JEDE Entschlüsselung fragt den
+    /// Schlüsselbund um Erlaubnis. Diese Frage stellt Onda vor jedem Hinweislauf, vor
+    /// jedem Erweiterungslauf und bei jedem Öffnen der Einstellungen: die Passwortabfrage
+    /// kam deshalb dauernd wieder, ganz unabhängig von der Signatur.
+    ///
+    /// Ohne `kSecReturnData` prüft das Betriebssystem nur, ob der Eintrag EXISTIERT. Dafür
+    /// muss es nichts entschlüsseln, also fragt es auch niemanden. Nebenbei ist es das
+    /// sauberere Verhalten: das Geheimnis wird nur noch gelesen, wenn es benutzt wird.
     static func vorhanden(service: String = Keychain.service, account: String = Keychain.account) -> Bool {
-        lesen(service: service, account: account) != nil
+        if existiert(service: service, account: account) { return true }
+        // Derselbe Alt-Eintrag, den `lesen` still übernimmt — auch hier nur nachsehen,
+        // nicht lesen. Die Übernahme selbst passiert weiterhin erst beim echten Lesen.
+        if service == Keychain.service, existiert(service: Keychain.fruehererService, account: account) { return true }
+        return false
+    }
+
+    private static func existiert(service: String, account: String) -> Bool {
+        var query = basisAbfrage(service: service, account: account)
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
+        // Bewusst KEIN kSecReturnData: sonst wird entschlüsselt, und Entschlüsseln fragt.
+        query[kSecReturnAttributes as String] = true
+        return SecItemCopyMatching(query as CFDictionary, nil) == errSecSuccess
     }
 }
 

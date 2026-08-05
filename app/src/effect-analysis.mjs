@@ -1,3 +1,5 @@
+import { stilmittel } from './stilmittel.mjs'
+
 function isObject(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
@@ -227,6 +229,20 @@ function rhetoricDevice(block) {
   return null
 }
 
+// Wirkung kennt auch Strategien, die keine Stilfigur sind (Beispiel, Rahmung,
+// Direktheit). Wo es aber eine Figur ist, zeigt die Analyse auf dieselbe kanonische ID wie
+// Hinweis-Gate und Handwerksprojektion. Damit gibt es nicht laenger zwei Figurenlisten.
+const STRATEGIE_ZU_STILMITTEL = Object.freeze({
+  analogy: 'vergleich',
+  contrast: 'antithese',
+  metaphor: 'metapher',
+})
+
+function stilmittelIdFuerStrategie(kind) {
+  const id = STRATEGIE_ZU_STILMITTEL[kind] || null
+  return id && stilmittel(id) ? id : null
+}
+
 export function analyzeRhetoricalDevices({
   projectId,
   textId,
@@ -246,6 +262,7 @@ export function analyzeRhetoricalDevices({
       blockId: block.id,
       text: block.text,
       ...device,
+      stilmittelId: stilmittelIdFuerStrategie(device.kind),
       effectStatus: 'hypothesis',
       evidenceCertainty: 'context-dependent',
       reason: 'Die erwartete Wirkung ist aus Form und Kontext abgeleitet, nicht durch reale Leserreaktionen belegt.',

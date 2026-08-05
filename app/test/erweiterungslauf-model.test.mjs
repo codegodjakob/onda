@@ -254,6 +254,38 @@ test('ein erfundener Anker wird auch mit Nachbartexten verworfen', () => {
   assert.equal(erweiterungAusAntwort(erfunden, LANGER_TEXT, BLOCKS, 1000, []), null)
 })
 
+test('ein Anker aus einem nicht gezeigten spaeten Teil des Nachbartexts wird verworfen', () => {
+  const verborgen = 'Diese verborgene Wendung steht erst weit hinter dem gezeigten Anfang.'
+  const body = `<h2>Sichtbarer Titel</h2><p>${'Sichtbarer Vorlauf ohne die gesuchte Stelle. '.repeat(14)}</p><p>${verborgen}</p>`
+  const [nachbar] = nachbarn({ id: 'doc-lang', body })
+  assert.equal(nachbar.anfang.includes(verborgen), false, 'die Fixture muss den Anker wirklich verbergen')
+
+  const eintrag = erweiterungAusAntwort({
+    art: 'verbindung',
+    anker: ['wuchs schneller als ihre Leitungen', verborgen],
+    gedanke: 'Etwas.',
+    muster: 'Etwas.',
+  }, LANGER_TEXT, BLOCKS, 1000, [nachbar])
+  assert.equal(eintrag, null, 'das Modell darf keinen Wortlaut bestaetigt bekommen, den es nie sah')
+})
+
+test('ein Anker im offenen UND im Nachbartext ist ohne Dokumentkennung mehrdeutig', () => {
+  const gemeinsam = 'Dieselbe lange Formulierung steht in beiden Texten.'
+  const nurOffen = 'Nur der offene Text enthaelt diese zweite eindeutige Stelle.'
+  const offen = `${gemeinsam} ${nurOffen}`
+  const [nachbar] = nachbarn({
+    id: 'doc-doppelt',
+    body: `<h2>Nachbar</h2><p>${gemeinsam} Der Rest macht den Nachbartext lang genug fuer den Kontext.</p>`,
+  })
+  const eintrag = erweiterungAusAntwort({
+    art: 'verbindung',
+    anker: [gemeinsam, nurOffen],
+    gedanke: 'Etwas.',
+    muster: 'Etwas.',
+  }, offen, [{ id: 'offen-block', text: offen }], 1000, [nachbar])
+  assert.equal(eintrag, null, 'ohne docId darf die Herkunft nicht still auf den offenen Text umgedeutet werden')
+})
+
 test('ein Anker, der in ZWEI Nachbartexten steht, ist mehrdeutig und wird verworfen', () => {
   const doppelt = 'Leitungen und Personal muessen ueber Jahrzehnte erhalten werden.'
   const eintrag = erweiterungAusAntwort({

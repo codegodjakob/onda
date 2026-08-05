@@ -51,19 +51,39 @@ export function buildResearchReview({ run, candidates = [], searchOutcomes = [] 
   const support = []
   const counterEvidence = []
   const limitations = []
+  const researchMaterial = []
   const duplicates = []
 
+  const jeQuelle = new Map()
   candidates.forEach(candidate => {
     if (candidate?.projectId !== run.projectId) throw new TypeError('Research candidate project mismatch')
     if (candidate?.runId !== run.id) throw new TypeError('Research candidate run mismatch')
     if (candidate?.claimId !== run.claimId) throw new TypeError('Research candidate claim mismatch')
     const inspected = inspectResearchCandidate(candidate)
     const key = sourceKey(inspected) || `candidate:${inspected.id}`
-    if (seen.has(key)) {
-      duplicates.push(inspected)
+    if (!seen.has(key)) {
+      seen.add(key)
+      jeQuelle.set(key, inspected)
       return
     }
-    seen.add(key)
+    const vorhanden = jeQuelle.get(key)
+    const rang = eintrag => (eintrag.usableAsEvidence ? 3 : eintrag.accessLevel === 'abstract' ? 2 : eintrag.accessLevel === 'metadata' ? 1 : 0)
+    // Dieselbe Quelle kann erst als Metadatentreffer und spaeter als echte Fundstelle
+    // auftauchen. Dann gewinnt die hoehere Zugangsstufe; sonst wuerde ein frueher,
+    // schwacher Treffer den spaeteren Originalbeleg als Duplikat verdraengen.
+    if (rang(inspected) > rang(vorhanden)) {
+      duplicates.push(vorhanden)
+      jeQuelle.set(key, inspected)
+    } else {
+      duplicates.push(inspected)
+    }
+  })
+
+  jeQuelle.values().forEach(inspected => {
+    if (!inspected.usableAsEvidence) {
+      researchMaterial.push(inspected)
+      return
+    }
     if (inspected.relation === 'counters') counterEvidence.push(inspected)
     else if (inspected.relation === 'limits') limitations.push(inspected)
     else support.push(inspected)
@@ -92,6 +112,7 @@ export function buildResearchReview({ run, candidates = [], searchOutcomes = [] 
     support,
     counterEvidence,
     limitations,
+    researchMaterial,
     duplicates,
     notes,
     openGaps,

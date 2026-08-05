@@ -27,6 +27,7 @@ import { ensureLanguageProfile } from './language-profile.mjs'
 import { ensureLanguageReportStore } from './language-report.mjs'
 import { ensureFinalAuditStore } from './final-audit.mjs'
 import { emptyLocalState } from './data-control.mjs'
+import { pruefeNativeBruecken } from './native-probe-model.mjs'
 
 // ---------- Sanfte Markierung (Peripherie): eine flüchtige Dekoration ----------
 // Zeigt eine Passage kurz an, OHNE das Dokument zu ändern — sie wird nicht
@@ -276,6 +277,7 @@ function buildExampleDocumentSeed() {
 }
 
 let ackPending = false
+let nativeProbeAck = null
 let replacingPersistedState = false
 function synchronizeAllProjectMemory() {
   state.projects.forEach(project => {
@@ -307,8 +309,36 @@ export function persist() {
     catch (e) { setSaveState('error') }
   }
 }
-window.__nativeSaveOk__ = function () { ackPending = false; setSaveState('saved') }
-window.__nativeSaveFail__ = function () { ackPending = false; setSaveState('error') }
+function meldeNativeSpeicherung(ok) {
+  ackPending = false
+  setSaveState(ok ? 'saved' : 'error')
+  if (nativeProbeAck) {
+    const rueckruf = nativeProbeAck
+    nativeProbeAck = null
+    rueckruf(ok)
+  }
+}
+window.__nativeSaveOk__ = function () { meldeNativeSpeicherung(true) }
+window.__nativeSaveFail__ = function () { meldeNativeSpeicherung(false) }
+
+function speichereProbeZustand() {
+  return new Promise(resolve => {
+    nativeProbeAck = resolve
+    persist()
+  })
+}
+
+function speichereProbeBild() {
+  return new Promise(resolve => {
+    const reqId = `probe-img-${uid()}`
+    imgPending[reqId] = resolve
+    window.webkit.messageHandlers.saveimg.postMessage(JSON.stringify({
+      id: reqId,
+      ext: 'png',
+      dataBase64: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+    }))
+  })
+}
 
 let saveTimer = null
 export function scheduleSave() {
@@ -632,31 +662,27 @@ export function boot() {
 
   // Selbsttest-Modus der Mac-App
   if (NATIVE && window.__PROBE__ && window.webkit.messageHandlers.probe) {
-    setTimeout(() => {
-      let imgBridge = false
-      const done = () => {
-        persist()
-        setTimeout(() => {
-          window.webkit.messageHandlers.probe.postMessage(JSON.stringify({
-            docCount: state.docs.length,
-            firstTitle: docTitle(state.docs[0]),
-            activeOk: !!activeDoc(),
-            ackOk: !ackPending,
-            editorOk: !!state.editor && state.editor.isEditable,
-            imgBridge,
-            storageOk: true,
-          }))
-        }, 500)
-      }
-      if (window.webkit.messageHandlers.saveimg) {
-        const reqId = 'probe-img'
-        imgPending[reqId] = (url) => { imgBridge = !!(url && url.indexOf('aiwt-img://') === 0); done() }
-        window.webkit.messageHandlers.saveimg.postMessage(JSON.stringify({
-          id: reqId, ext: 'png',
-          dataBase64: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
-        }))
-        setTimeout(() => { if (imgPending[reqId]) { delete imgPending[reqId]; done() } }, 1500)
-      } else { done() }
-    }, 300)
+    // boot() hat Editor und UI an dieser Stelle vollstaendig aufgebaut. Die Probe
+    // startet deshalb sofort: Timer eines unsichtbaren kalten WKWebViews koennen
+    // minutenlang gedrosselt werden und sind kein verlaessliches Startsignal.
+    void (async () => {
+      const { imgBridge, ackOk } = await pruefeNativeBruecken({
+        bildSpeichern: window.webkit.messageHandlers.saveimg
+          ? speichereProbeBild
+          : async () => null,
+        zustandSpeichern: speichereProbeZustand,
+      })
+      window.webkit.messageHandlers.probe.postMessage(JSON.stringify({
+        docCount: state.docs.length,
+        firstTitle: docTitle(state.docs[0]),
+        activeOk: !!activeDoc(),
+        ackOk,
+        editorOk: !!state.editor && state.editor.isEditable,
+        imgBridge,
+        // Kein behauptetes Gruen: dieselbe echte native Quittung belegt auch,
+        // dass der serialisierte Zustand die Swift-Speicherschicht erreicht hat.
+        storageOk: ackOk,
+      }))
+    })()
   }
 }

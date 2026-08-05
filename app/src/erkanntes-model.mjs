@@ -17,6 +17,9 @@
 import { createMemoryEntry, ensureMemoryStore } from './memory-model.mjs'
 
 export const ERKANNTES_TYP = 'prinzip'
+export const ERKANNTES_DIMENSIONEN = Object.freeze([
+  'fakt', 'beleg', 'methode', 'logik', 'struktur', 'wirkung', 'erklaerung', 'sprache', 'idee', 'allgemein',
+])
 
 // Die Obergrenze für den Prompt. Begründung, damit sie später jemand mit Gründen
 // ändern kann statt mit Gefühl: ein Prinzip ist ein Satz, rund zwanzig Token. 25 davon
@@ -49,7 +52,15 @@ function istPrinzip(eintrag) {
 // Jede Begegnung ist ein eigener Eintrag. Die Häufigkeit ergibt sich aus der Gruppe,
 // sie steht nirgends als Zahl — so bleibt zu jeder Begegnung erhalten, woher sie kam
 // und wann sie war. Ein Zähler hätte diese Herkunft verschluckt.
-export function schreibeErkanntes(store, { satz, herkunft = 'hand', dokumentId = null, projektId = null, beleg = '', at = Date.now() } = {}) {
+export function schreibeErkanntes(store, {
+  satz,
+  herkunft = 'hand',
+  dokumentId = null,
+  projektId = null,
+  beleg = '',
+  dimension = 'allgemein',
+  at = Date.now(),
+} = {}) {
   const sicher = ensureMemoryStore(store)
   const text = String(satz || '').trim()
   if (!text) return { store: sicher, eintrag: null, grund: 'leer' }
@@ -76,6 +87,17 @@ export function schreibeErkanntes(store, { satz, herkunft = 'hand', dokumentId =
     deletionRule: 'manual',
     createdAt: at,
   })
+  // Personenbezogene Metadaten bleiben bewusst ausserhalb des generischen Memory-Schemas:
+  // Dieses kennt Inhalt und Geltung, aber keine Schreibdimension oder konkrete Begegnung.
+  // Keine Heuristik: Die Dimension kommt vom angenommenen Hinweis/der gemerkten Erweiterung.
+  eintrag.person = {
+    dimension: ERKANNTES_DIMENSIONEN.includes(String(dimension)) ? String(dimension) : 'allgemein',
+    occurrence: {
+      documentId: dokumentId ? String(dokumentId) : null,
+      projectId: projektId ? String(projektId) : null,
+      anchor: String(beleg || '').trim(),
+    },
+  }
   sicher.entries.push(eintrag)
   return { store: sicher, eintrag }
 }
@@ -92,6 +114,14 @@ export function erkanntesListe(store) {
     if (vorhanden) {
       vorhanden.treffer += 1
       vorhanden.ids.push(eintrag.id)
+      vorhanden.dimensionen.add(eintrag.person?.dimension || 'allgemein')
+      vorhanden.occurrences.push({
+        entryId: eintrag.id,
+        documentId: eintrag.person?.occurrence?.documentId || null,
+        projectId: eintrag.person?.occurrence?.projectId || null,
+        anchor: eintrag.person?.occurrence?.anchor || '',
+        at: eintrag.createdAt,
+      })
       if (eintrag.createdAt > vorhanden.zuletzt) vorhanden.zuletzt = eintrag.createdAt
     } else {
       gruppen.set(schluessel, {
@@ -100,10 +130,20 @@ export function erkanntesListe(store) {
         treffer: 1,
         zuletzt: eintrag.createdAt,
         ids: [eintrag.id],
+        dimensionen: new Set([eintrag.person?.dimension || 'allgemein']),
+        occurrences: [{
+          entryId: eintrag.id,
+          documentId: eintrag.person?.occurrence?.documentId || null,
+          projectId: eintrag.person?.occurrence?.projectId || null,
+          anchor: eintrag.person?.occurrence?.anchor || '',
+          at: eintrag.createdAt,
+        }],
       })
     }
   }
-  return [...gruppen.values()].sort((a, b) => b.treffer - a.treffer || b.zuletzt - a.zuletzt)
+  return [...gruppen.values()]
+    .map(gruppe => ({ ...gruppe, dimensionen: [...gruppe.dimensionen].sort() }))
+    .sort((a, b) => b.treffer - a.treffer || b.zuletzt - a.zuletzt)
 }
 
 // Rücknahme. Von Anfang an gebaut, nicht zuletzt: ohne sie wiederholt sich ein

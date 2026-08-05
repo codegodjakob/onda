@@ -9,7 +9,7 @@
 // tatsächlichen baueAnfrage-Vertrag (Vorbild: verstaendnis-kontext.mjs).
 import { HINWEIS_ANWEISUNG } from './agent-prompts.mjs'
 import { baueOndaBloecke } from './onda-kontext.mjs'
-import { formuliereRueckkopplung } from './rueckkopplung-model.mjs'
+import { aktiveRueckkopplung, formuliereRueckkopplung } from './rueckkopplung-model.mjs'
 
 function kompakteListeHinweis(label, liste) {
   const eintraege = Array.isArray(liste) ? liste : []
@@ -44,7 +44,10 @@ export function baueHinweisKontext({
 } = {}) {
   const volatiles = [HINWEIS_ANWEISUNG]
 
-  const rueckkopplungHinweis = rueckkopplung ? formuliereRueckkopplung(rueckkopplung) : null
+  // Nur eine ausdruecklich freigegebene, versionierte Kalibrierung darf den Auftrag
+  // beeinflussen. Eine rohe Bilanz ist Diagnose, keine Policy.
+  const freigegebeneBilanz = aktiveRueckkopplung(rueckkopplung)
+  const rueckkopplungHinweis = freigegebeneBilanz ? formuliereRueckkopplung(freigegebeneBilanz) : null
   if (rueckkopplungHinweis) volatiles.push(rueckkopplungHinweis)
 
   const entscheidungenHinweis = kompakteListeHinweis(

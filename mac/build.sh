@@ -66,7 +66,17 @@ PLIST
 # Schluesselbundverwaltung > Zertifikatsassistent > Zertifikat erstellen,
 # Name "Onda Dev", selbstsigniertes Stammzertifikat, Zertifikatstyp Codesignatur.
 SIGNATUR_NAME="${ONDA_SIGNATUR:-Onda Dev}"
-if security find-certificate -c "$SIGNATUR_NAME" >/dev/null 2>&1; then
+# Ein Zertifikat allein reicht nicht: codesign braucht eine Identitaet mitsamt privatem
+# Schluessel. Diese Liste entscheidet deshalb, ob der benannte Signierweg benutzbar ist.
+#
+# WICHTIG: bewusst OHNE -v. Das Flag heisst "nur gueltige Identitaeten", und ein
+# selbstsigniertes Zertifikat gilt als nicht vertrauenswuerdig (CSSMERR_TP_NOT_TRUSTED),
+# solange niemand es ausdruecklich als vertrauenswuerdig markiert. Mit -v fiel es durch
+# den Filter, und der Bau signierte still wieder ad-hoc -- genau der Zustand, den das
+# Zertifikat beheben sollte. codesign selbst stoert die fehlende Vertrauensstellung
+# nicht: sie besagt nur, dass ein FREMDER Rechner der Signatur nicht traut. Hier geht es
+# allein um eine ueber alle Bauten stabile Identitaet.
+if security find-identity -p codesigning 2>/dev/null | grep -Fq "\"$SIGNATUR_NAME\""; then
   echo "— signiere mit „$SIGNATUR_NAME“ …"
   codesign --force -s "$SIGNATUR_NAME" "$APP" 2>/dev/null
 else

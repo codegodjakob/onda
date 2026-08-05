@@ -1,7 +1,6 @@
-// prosa und lyrik ergaenzt am 05.08.2026: das Abstract nennt "bis hin zu Prosatexten"
-// ausdruecklich als Bandbreite, die Liste kannte sie nicht. Ein Gedicht landete unter
-// 'other' und behielt damit alle vier Integritaetsfragen (textart-regeln.mjs) -- bei
-// einem Gedicht ist die Forderung nach einer Quellenangabe nicht streng, sondern absurd.
+// Eine gemeinsame, exhaustive Quelle für Sprachprofil, Handwerk und Integritätsregeln.
+// Prosa und Lyrik sind eigene Gattungen, damit fiktionale oder poetische Verfahren nicht
+// unter dem vorsichtigen Sachtext-Rückfall `other` beurteilt werden.
 export const LANGUAGE_GENRES = Object.freeze([
   'scientific',
   'essay',
@@ -261,17 +260,22 @@ export function buildLanguageContext({ project, profile = project?.languageProfi
   // der übrigen Stile kommt mit, sobald es mehr als einen gibt: Erst dann ist "dieser Text
   // folgt Stil A, nicht Stil B" eine Aussage.
   const houseStyle = profileValue(normalized, 'houseStyle')
+  const active = activeWritingStyle(normalized)
   if (houseStyle !== undefined) {
     known.houseStyle = houseStyle
     sources.houseStyle = 'language-profile'
-    const active = activeWritingStyle(normalized)
-    if (active) {
-      known.styleName = active.name
-      sources.styleName = 'language-profile'
-      if (active.purpose) {
-        known.stylePurpose = active.purpose
-        sources.stylePurpose = 'language-profile'
-      }
+  }
+  if (active && (
+    houseStyle !== undefined
+    || active.purpose
+    || normalized.styles.length > 1
+    || active.name !== DEFAULT_STYLE_NAME
+  )) {
+    known.styleName = active.name
+    sources.styleName = 'language-profile'
+    if (active.purpose) {
+      known.stylePurpose = active.purpose
+      sources.stylePurpose = 'language-profile'
     }
   }
   if (normalized.styles.length > 1) {
@@ -426,6 +430,34 @@ export function selectWritingStyle({
     })
   }
   return next
+}
+
+// Speichert Profilfelder und den gerade bearbeiteten Stil als EINEN atomaren Vorgang.
+// Der entscheidende Sonderfall ist ein neuer Stilname: Seine Regeln duerfen nicht zuerst
+// ueber houseStyle in den bisher aktiven Stil geschrieben werden. Genau das passierte im
+// Formular, als es updateLanguageProfile und defineWritingStyle nacheinander aufrief.
+export function saveLanguageProfileWithStyle({
+  profile,
+  projectId,
+  changes = {},
+  style = {},
+  at = Date.now(),
+}) {
+  if (!Number.isFinite(at)) throw new TypeError('Language profile time is required')
+  const safeChanges = isObject(changes) ? { ...changes } : {}
+  delete safeChanges.houseStyle
+  delete safeChanges.styles
+  delete safeChanges.activeStyleId
+
+  const next = updateLanguageProfile({ profile, projectId, changes: safeChanges, at })
+  const current = activeWritingStyle(next)
+  const name = cleanText(style?.name) || current?.name
+  if (!name) throw new TypeError('Writing style name is required')
+  const purpose = style?.purpose === undefined ? (current?.purpose || '') : style.purpose
+  const rules = style?.rules === undefined
+    ? cleanList(changes?.houseStyle ?? current?.rules)
+    : cleanList(style.rules)
+  return defineWritingStyle({ profile: next, projectId, name, purpose, rules, at })
 }
 
 export function setOrthographyAutomation({

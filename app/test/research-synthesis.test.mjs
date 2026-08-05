@@ -71,6 +71,36 @@ test('RESEARCH-02: Metadaten und Abstracts werden nicht als Originalfundstelle a
   assert.equal(original.usableAsEvidence, true)
 })
 
+test('RESEARCH-02: gemischter Lauf bewahrt Metadaten und Abstract als Material, importiert aber nur verifizierte Originalfundstellen', async () => {
+  const lauf = run()
+  const review = buildResearchReview({
+    run: lauf,
+    candidates: [
+      candidate('meta', 'supports', { accessLevel: 'metadata', original: null, locator: null, verification: null }),
+      candidate('abstract', 'supports', { accessLevel: 'abstract', verification: { status: 'unverified' } }),
+      candidate('original', 'supports'),
+    ],
+    searchOutcomes: [
+      { purpose: 'counter-evidence', status: 'completed', found: 0 },
+      { purpose: 'limitations', status: 'completed', found: 0 },
+    ],
+  })
+  assert.deepEqual(review.support.map(item => item.id), ['original'])
+  assert.deepEqual(review.researchMaterial.map(item => [item.id, item.maximumClaim]), [
+    ['meta', 'bibliographic-identity'],
+    ['abstract', 'abstract-visible-content'],
+  ])
+  const outcome = await commitResearchReview({
+    project: { id: 'project-a', sources: [], evidenceBundles: [], researchRuns: [lauf] },
+    run: lauf,
+    review,
+    at: 500,
+  }, { sha256 })
+  assert.equal(outcome.committed, true)
+  assert.deepEqual(outcome.project.sources.map(source => source.origin.immutableRef), ['https://example.org/original'])
+  assert.doesNotMatch(JSON.stringify(outcome.project.sources), /example\.org\/(?:meta|abstract)/)
+})
+
 test('RESEARCH-05: Review hält Stützung, Widerspruch, Grenzen und erfolglose Suche getrennt', () => {
   const review = buildResearchReview({
     run: run(),

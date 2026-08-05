@@ -8,6 +8,7 @@ import {
   defineWritingStyle,
   ensureLanguageProfile,
   selectWritingStyle,
+  saveLanguageProfileWithStyle,
   updateLanguageProfile,
 } from '../src/language-profile.mjs'
 
@@ -258,4 +259,27 @@ test('Stile mit gleichem Namensstamm bekommen verschiedene Kennungen', () => {
   profile = defineWritingStyle({ profile, projectId: 'p-a', name: 'ton-a', rules: ['b'], at: 110 })
   assert.equal(profile.styles.length, 3)
   assert.equal(new Set(profile.styles.map(style => style.id)).size, 3)
+})
+
+test('Das Speichern eines neuen Stilnamens bewahrt die Regeln des bisher aktiven Stils', () => {
+  const profile = ensureLanguageProfile({
+    id: 'p-a',
+    languageProfile: { houseStyle: ['alte Regel bleibt'] },
+  })
+  const next = saveLanguageProfileWithStyle({
+    profile,
+    projectId: 'p-a',
+    changes: { genre: 'essay', audience: ['Leserinnen'] },
+    style: {
+      name: 'Neue Reportage-Stimme',
+      purpose: 'Lange Reportagen',
+      rules: ['neue Regel gehoert nur hierher'],
+    },
+    at: 100,
+  })
+
+  assert.deepEqual(next.styles.find(entry => entry.id === DEFAULT_STYLE_ID).rules, ['alte Regel bleibt'])
+  assert.deepEqual(activeWritingStyle(next).rules, ['neue Regel gehoert nur hierher'])
+  assert.equal(next.genre, 'essay')
+  assert.deepEqual(next.audience, ['Leserinnen'])
 })

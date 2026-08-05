@@ -111,6 +111,19 @@ export const MINDESTZAHL_ZUGESTELLT = 12
 // sieht, als es sich leisten sollte.
 export const SCHWELLE_VERLUST = 1 / 3
 
+function clone(value) {
+  return value === undefined ? undefined : JSON.parse(JSON.stringify(value))
+}
+
+function stabilerHash(value) {
+  let hash = 2166136261
+  for (const character of String(value)) {
+    hash ^= character.codePointAt(0)
+    hash = Math.imul(hash, 16777619)
+  }
+  return (hash >>> 0).toString(36)
+}
+
 // Die Lagen, die dieses Modul kennt. 'noch-keine-aussage' ist der Vorgabewert und der
 // Fail-closed-Fall: Er heißt nicht "unauffällig", sondern "zu wenig Daten".
 export const LAGEN = Object.freeze(['noch-keine-aussage', 'unauffaellig', 'traegt', 'traegt-selten'])
@@ -174,8 +187,10 @@ export function bilanziereRueckmeldung({ dokumente = [] } = {}) {
   const gesamt = { angeboten: 0, offen: 0, angenommen: 0, verworfen: 0, risikoAngenommen: 0, bewertbar: 0 }
   const handwerk = { laeufe: 0, geliefert: 0, zugestellt: 0, nichtZugestellt: 0, anteil: null, lage: 'noch-keine-aussage' }
 
+  const geseheneFindings = new Set()
   ;(Array.isArray(dokumente) ? dokumente : []).forEach(eintrag => {
     if (!eintrag || typeof eintrag !== 'object') return
+    if (eintrag.trashed === true) return
 
     const entscheidungen = new Map()
     ;(Array.isArray(eintrag.decisions) ? eintrag.decisions : []).forEach(decision => {
@@ -185,6 +200,9 @@ export function bilanziereRueckmeldung({ dokumente = [] } = {}) {
     })
 
     ;(Array.isArray(eintrag.findings) ? eintrag.findings : []).forEach(finding => {
+      const findingId = String(finding?.id || '').trim()
+      if (findingId && geseheneFindings.has(findingId)) return
+      if (findingId) geseheneFindings.add(findingId)
       const art = artVonFinding(finding)
       if (!art) return
       const zeile = proArt.get(art)
@@ -208,7 +226,7 @@ export function bilanziereRueckmeldung({ dokumente = [] } = {}) {
 
   // bewertbar = angenommen + verworfen. Ein bewusst angenommenes Risiko zählt
   // ABSICHTLICH nicht mit: Wer ein Risiko annimmt, hat den Hinweis gelesen, verstanden
-  // und ausdrücklich abgewogen (panels.js beschriftet den Knopf auch so). Das ist die
+  // und ausdrücklich abgewogen (workspace.js beschriftet den Knopf auch so). Das ist die
   // ernsteste Form der Auseinandersetzung, die es hier gibt — sie als Verwerfen zu
   // zählen hieße, Onda genau die Arten abzugewöhnen, die es am gründlichsten getroffen
   // hat. Gezählt wird das Risiko trotzdem, es steht in der Bilanz; es treibt nur die
@@ -319,6 +337,57 @@ export function formuliereRueckkopplung(bilanz) {
   )
 
   return zeilen.join('\n')
+}
+
+// Aus einer Bilanz wird zunaechst nur ein sichtbarer, versionierter VORSCHLAG. Statistik
+// darf nie still zur Policy werden: Annahme/Verwerfen misst Nuetzlichkeit, nicht Wahrheit.
+// Die Kennung haengt ausschliesslich an der Datengrundlage. Kommt ein weiterer Autorakt
+// hinzu, entsteht ein neuer pending Vorschlag und eine alte Freigabe greift nicht weiter.
+export function erstelleRueckkopplungsvorschlag(bilanz) {
+  const hinweis = formuliereRueckkopplung(bilanz)
+  if (!hinweis) return null
+  const grundlage = {
+    proArt: (bilanz.proArt || []).map(zeile => ({
+      art: zeile.art,
+      angeboten: zeile.angeboten,
+      angenommen: zeile.angenommen,
+      verworfen: zeile.verworfen,
+      risikoAngenommen: zeile.risikoAngenommen,
+      offen: zeile.offen,
+      lage: zeile.lage,
+    })),
+    handwerk: bilanz.handwerk || null,
+  }
+  return {
+    schemaVersion: 1,
+    id: `rueckkopplung:${stabilerHash(JSON.stringify(grundlage))}`,
+    status: 'pending',
+    signal: 'usefulness-and-delivery',
+    // Explizite Grenze fuer UI, Export und spaetere Migrationen. Diese Kalibrierung darf
+    // weder Integritaetsregeln noch Kategorien, Datenschutz oder Autorenschaft aendern.
+    scope: 'darreichung-only',
+    bilanz: clone(bilanz),
+    hinweis,
+  }
+}
+
+export function entscheideRueckkopplung(vorschlag, { approved, actor, at } = {}) {
+  if (!vorschlag || typeof vorschlag !== 'object' || !vorschlag.id) {
+    throw new TypeError('Rueckkopplungsvorschlag is required')
+  }
+  if (actor !== 'user') throw new TypeError('Rueckkopplung requires explicit user consent')
+  if (!Number.isFinite(at)) throw new TypeError('Rueckkopplung decision time is required')
+  return {
+    ...clone(vorschlag),
+    status: approved === true ? 'approved' : 'rejected',
+    decidedBy: 'user',
+    decidedAt: at,
+  }
+}
+
+export function aktiveRueckkopplung(vorschlag) {
+  if (!vorschlag || vorschlag.status !== 'approved' || vorschlag.scope !== 'darreichung-only') return null
+  return vorschlag.bilanz && typeof vorschlag.bilanz === 'object' ? clone(vorschlag.bilanz) : null
 }
 
 // Die Bilanz als lesbare Tabelle, für Oberfläche und Dokumentation — damit die

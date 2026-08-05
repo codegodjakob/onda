@@ -123,3 +123,44 @@ test('RESEARCH-06: zwei aufeinanderfolgende Fehler erreichen die Stopbedingung',
   assert.equal(failed.toolEvents.length, 2)
   assert.equal(failed.candidates.length, 0)
 })
+
+test('RESEARCH-03: gesperrter Originalzugang erweitert den laufenden Plan automatisch nur um legale Wege', async () => {
+  const plan = runningPlan({
+    allowedTools: ['search', 'metadata'],
+    searchPaths: [
+      { id: 'original', purpose: 'support', tool: 'search', input: { query: 'original' } },
+      { id: 'counter', purpose: 'counter-evidence', tool: 'search', input: { query: 'counter' } },
+      { id: 'limits', purpose: 'limitations', tool: 'search', input: { query: 'limits' } },
+    ],
+    stopConditions: { maxToolCalls: 12, maxSources: 4, maxConsecutiveFailures: 2 },
+  })
+  const calls = []
+  const adapter = createResearchAdapter({
+    name: 'legal-fixture',
+    version: '1',
+    tools: ['search', 'metadata'],
+    invoke: async (tool, input) => {
+      calls.push({ tool, input })
+      if (input.query === 'original') {
+        return {
+          id: 'blocked-original',
+          candidates: [],
+          accessFailure: { title: 'A Study', doi: '10.1000/example', sourceState: 'paywalled-v1' },
+        }
+      }
+      return { id: `legal-${calls.length}`, candidates: [] }
+    },
+  })
+  let tick = 100
+  const result = await executeResearchPaths(plan, {
+    adapter,
+    now: () => ++tick,
+    idFactory: path => `event-${path.id}`,
+  })
+  assert.equal(result.status, 'review-ready')
+  assert.equal(result.searchPaths.length, 12)
+  assert.equal(result.toolEvents.length, 12)
+  assert.equal(result.searchPaths.slice(3).every(path => path.legalAlternative === true), true)
+  assert.equal(new Set(result.searchPaths.map(path => path.fingerprint || path.id)).size, 12)
+  assert.doesNotMatch(JSON.stringify(result).toLowerCase(), /bypass|credential|password|cookie/)
+})

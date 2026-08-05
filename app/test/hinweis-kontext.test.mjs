@@ -3,7 +3,11 @@ import assert from 'node:assert/strict'
 import { baueHinweisKontext } from '../src/hinweis-kontext.mjs'
 import { baueAnfrage } from '../src/agent-tasks.mjs'
 import { HINWEIS_ANWEISUNG } from '../src/agent-prompts.mjs'
-import { bilanziereRueckmeldung } from '../src/rueckkopplung-model.mjs'
+import {
+  bilanziereRueckmeldung,
+  entscheideRueckkopplung,
+  erstelleRueckkopplungsvorschlag,
+} from '../src/rueckkopplung-model.mjs'
 
 // PFLICHT (Lehre aus V-3, Fix-Runde 1, Finding 1): baueAnfrage (agent-tasks.mjs) konsumiert
 // ausschliesslich {verstaendnis, docText, volatiles, verlauf, anfrage}. Ein Kontext-Objekt mit
@@ -102,7 +106,10 @@ function machRueckkopplung() {
   anlegen('struktur', 'resolved', 2)
   anlegen('fakt', 'resolved', 9)
   anlegen('fakt', 'dismissed', 3)
-  return bilanziereRueckmeldung({ dokumente: [{ findings, decisions }] })
+  const vorschlag = erstelleRueckkopplungsvorschlag(
+    bilanziereRueckmeldung({ dokumente: [{ findings, decisions }] }),
+  )
+  return entscheideRueckkopplung(vorschlag, { approved: true, actor: 'user', at: 1 })
 }
 
 test('die Rueckkopplung erreicht den echten Request-Body und steht direkt hinter der Anweisung', () => {
@@ -133,4 +140,12 @@ test('eine Bilanz ohne verwertbare Zahlen erzeugt KEINEN leeren Block', () => {
   const kontext = baueHinweisKontext({ verstaendnis: null, docText: 'Text', rueckkopplung: leer })
   assert.deepEqual(kontext.volatiles, [HINWEIS_ANWEISUNG])
   assert.deepEqual(baueHinweisKontext({ docText: 'Text', rueckkopplung: null }).volatiles, [HINWEIS_ANWEISUNG])
+})
+
+test('eine rohe oder nur vorgeschlagene Bilanz beeinflusst den Auftrag nicht', () => {
+  const freigegeben = machRueckkopplung()
+  const roh = freigegeben.bilanz
+  const pending = { ...freigegeben, status: 'pending' }
+  assert.deepEqual(baueHinweisKontext({ docText: 'Text', rueckkopplung: roh }).volatiles, [HINWEIS_ANWEISUNG])
+  assert.deepEqual(baueHinweisKontext({ docText: 'Text', rueckkopplung: pending }).volatiles, [HINWEIS_ANWEISUNG])
 })

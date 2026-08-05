@@ -1,4 +1,4 @@
-import { executeResearchTool } from './research-adapter.mjs'
+import { executeResearchTool, legalAlternativePaths } from './research-adapter.mjs'
 import {
   appendResearchCandidate,
   canAttemptResearchPath,
@@ -32,6 +32,23 @@ function normalizedCandidate(candidate) {
   }
 }
 
+function erweitereUmLegaleZugaenge(run, result, adapter) {
+  const fehler = result?.accessFailure
+  if (!fehler || typeof fehler !== 'object') return run
+  const vorhanden = new Set((run.searchPaths || []).map(path => researchPathFingerprint(path)))
+  const ergaenzungen = legalAlternativePaths({
+    title: fehler.title,
+    doi: fehler.doi,
+    sourceState: fehler.sourceState || 'inaccessible',
+  }).filter(path => (
+    run.allowedTools?.includes(path.tool)
+    && adapter?.tools?.includes(path.tool)
+    && !vorhanden.has(path.fingerprint)
+  )).map(path => ({ ...path, legalAlternative: true }))
+  if (!ergaenzungen.length) return run
+  return { ...run, searchPaths: [...run.searchPaths, ...ergaenzungen] }
+}
+
 export async function executeResearchPaths(run, {
   adapter,
   signal = null,
@@ -43,7 +60,11 @@ export async function executeResearchPaths(run, {
   let current = clone(run)
   current.searchOutcomes = Array.isArray(current.searchOutcomes) ? current.searchOutcomes : []
 
-  for (const path of current.searchPaths) {
+  // Indexschleife bewusst: Ein fehlgeschlagener legaler Zugang kann waehrend des Laufs
+  // zusaetzliche legale Pfade anhaengen. Ein for-of-Iterator bliebe am alten Array haengen,
+  // sobald current durch die immutable Aktualisierung ersetzt wird.
+  for (let pathIndex = 0; pathIndex < current.searchPaths.length; pathIndex += 1) {
+    const path = current.searchPaths[pathIndex]
     if (pathCompleted(current, path)) continue
     if (!canAttemptResearchPath(current, path)) continue
     if (signal?.aborted) {
@@ -69,6 +90,7 @@ export async function executeResearchPaths(run, {
       found: candidates.length,
       resultRef: latestEvent.resultRef,
     })
+    current = erweitereUmLegaleZugaenge(current, outcome.result, adapter)
     candidates.forEach(candidate => {
       if (current.candidates.length >= current.stopConditions.maxSources) return
       current = appendResearchCandidate(current, {

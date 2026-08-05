@@ -14,6 +14,8 @@ const GUELTIGER_HINWEIS = {
     relevanz: 'Der Leser prüft genau solche Zahlen.',
     folge: 'Vertrauensverlust bei einer falschen Zahl.',
     muster: 'Eine Zahl, die das Argument trägt, braucht ihre Herkunft im Satz daneben.',
+    vorschlagsart: 'keiner',
+    stilmittelId: null,
     vorschlag: null,
     istGrundursache: true,
     integritaet: true,

@@ -182,12 +182,14 @@ test('leere Einzelquellen erzeugen jeweils gar keinen Block, die gefuellte bleib
   assert.match(nurGedaechtnis[0], /Gedächtnis/)
 })
 
-test('"Sonstig" ist keine Auskunft: genre/medium "other" erzeugen keinen Eintrag', () => {
+test('"Sonstig" behauptet keine Textart, setzt aber die fail-closed Arbeitsgrenze', () => {
   const bloecke = baueOndaBloecke({
     project: { id: PROJEKT_ID, languageProfile: sprachprofil({ genre: 'other', medium: 'other' }) },
     doc: OFFENER_TEXT,
   })
-  assert.deepEqual(bloecke, [], 'other sagt dem Modell nichts und darf nichts kosten')
+  assert.equal(bloecke.length, 1)
+  assert.doesNotMatch(bloecke[0], /Textsorte:|Medium:/)
+  assert.match(bloecke[0], /Keine Textart raten/)
 })
 
 test('Zielgruppe und Zielzustand aus dem Projektverstaendnis werden NICHT doppelt geschickt', () => {
@@ -649,6 +651,8 @@ test('jede Textart aus LANGUAGE_GENRES erreicht den Prompt', () => {
     const project = { id: PROJEKT_ID, languageProfile: sprachprofil({ genre }) }
     const block = baueOndaBloecke({ project }).find(b => /Textsorte:/.test(b))
     assert.ok(block, `Textart ${genre} erscheint nicht im Prompt`)
+    assert.match(block, /Prioritäten:/, `Textart ${genre} hat kein Handwerk`)
+    assert.match(block, /Prüffragen:/, `Textart ${genre} hat keine Prüffragen`)
   }
 })
 
@@ -656,4 +660,56 @@ test('eine unbestimmte Textart behauptet nichts', () => {
   const project = { id: PROJEKT_ID, languageProfile: sprachprofil({ genre: 'other' }) }
   const bloecke = baueOndaBloecke({ project })
   assert.equal(bloecke.some(b => /Textsorte:/.test(b)), false)
+  assert.ok(bloecke.some(b => /Keine Textart raten/.test(b)))
+})
+
+test('Quellen, Belege, Relationen und Sprachbericht erreichen gemeinsam alle Agentenkanaele', () => {
+  const project = {
+    id: PROJEKT_ID,
+    sources: [{
+      id: 'quelle-voll', projectId: PROJEKT_ID, status: 'active', type: 'pdf',
+      metadata: { title: { value: 'KANAL-QUELLE-9f1a' } },
+      origin: { immutableRef: 'project://projekt-onda/quelle.pdf' },
+    }],
+    evidenceBundles: [{
+      id: 'beleg-voll', projectId: PROJEKT_ID, claimText: 'KANAL-BELEG-8e2b',
+      status: 'supported', limitations: [],
+    }],
+    argumentModel: {
+      claims: [
+        { id: 'kanal-a', projectId: PROJEKT_ID, textId: OFFENER_TEXT.id, text: 'KANAL-AUSSAGE-A', validity: 'asserted' },
+        { id: 'kanal-b', projectId: PROJEKT_ID, textId: ANDERER_TEXT.id, text: 'KANAL-AUSSAGE-B', validity: 'asserted' },
+      ],
+      relations: [{
+        id: 'kanal-relation', projectId: PROJEKT_ID, fromClaimId: 'kanal-b', toClaimId: 'kanal-a',
+        type: 'supports', warrant: 'KANAL-BRUECKE-7d3c', confidence: 'high',
+      }],
+    },
+    languageReports: {
+      projectId: PROJEKT_ID,
+      byText: {
+        [OFFENER_TEXT.id]: {
+          projectId: PROJEKT_ID, textId: OFFENER_TEXT.id,
+          diagnostics: [{ id: 'kanal-diag', label: 'KANAL-DIAGNOSE-6c4d', message: 'prüfen', reason: 'Kontext', reviewQuestion: 'Trägt es?', confidence: 'high' }],
+          effect: { passages: [] }, rhetoric: { devices: [] }, fairness: { findings: [] },
+        },
+      },
+    },
+  }
+  const onda = { project, doc: OFFENER_TEXT, docs: ALLE_TEXTE }
+  const kontexte = [
+    baueHinweisKontext({ docText: 'Text', onda }),
+    baueErweiterungKontext({ docText: 'Text', onda }),
+    baueChatKontext({ docText: 'Text', anfrage: 'Frage', onda }),
+    baueVerstaendnisKontext({ docText: 'Text', anfrage: 'Vorhaben', onda }),
+  ]
+  for (const kontext of kontexte) {
+    const requestText = JSON.stringify(baueAnfrage(
+      kontext === kontexte[2] ? 'chat' : kontext === kontexte[3] ? 'verstaendnis' : kontext === kontexte[1] ? 'erweiterungen' : 'hinweise',
+      kontext,
+    ).body.messages)
+    for (const canary of ['KANAL-QUELLE-9f1a', 'KANAL-BELEG-8e2b', 'KANAL-BRUECKE-7d3c', 'KANAL-DIAGNOSE-6c4d']) {
+      assert.match(requestText, new RegExp(canary))
+    }
+  }
 })

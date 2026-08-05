@@ -17,8 +17,6 @@ const CLI_PFAD = fileURLToPath(new URL('../evals/run-v2-evals.mjs', import.meta.
 const execFile = promisify(execFileCallback)
 const EXTERNE_LIVE_GATES = [
   'INV-06',
-  'RESEARCH-02',
-  'RESEARCH-03',
   'EFFECT-06',
   'SYSTEM-03',
   'SYSTEM-09',
@@ -29,13 +27,13 @@ test('V2-Eval-Katalog lädt reproduzierbar und enthält den vollständigen Zielu
   const zusammenfassung = summarisiereEvalKatalog(katalog)
 
   assert.deepEqual(zusammenfassung, {
-    suites: 17,
-    evals: 118,
-    hardGates: 110,
+    suites: 18,
+    evals: 130,
+    hardGates: 122,
     scoredGates: 8,
-    externalLiveGates: 6,
+    externalLiveGates: 4,
   })
-  assert.equal(flattenEvals(katalog).length, 118)
+  assert.equal(flattenEvals(katalog).length, 130)
 })
 
 test('V2-Eval-Katalog erfüllt alle Struktur- und Konsistenzregeln', async () => {
@@ -70,7 +68,7 @@ test('der rohe JSON-Katalog enthält keine doppelten Given/When/Then-Schlüssel 
   const roh = await readFile(KATALOG_PFAD, 'utf8')
   const evalObjekte = roh.split(/\n        \{\n          "id": "/).slice(1)
 
-  assert.equal(evalObjekte.length, 118)
+  assert.equal(evalObjekte.length, 130)
   for (const [index, ausschnitt] of evalObjekte.entries()) {
     const objekt = ausschnitt.split(/\n        \}(?:,|\n)/, 1)[0]
     for (const schluessel of ['given', 'when', 'then']) {
@@ -103,6 +101,11 @@ test('Eval-Ergebnisse verlangen genau einen ehrlichen Status pro Katalog-Eval', 
   const inv06 = ergebnis.evals.find(eintrag => eintrag.id === 'INV-06')
   inv06.status = 'external-open'
   inv06.note = 'Mac-Live-Test ohne Netz noch offen'
+  const scored = ergebnis.evals.find(eintrag => eintrag.id === 'EVID-04')
+  scored.status = 'passed'
+  scored.evidence = [{ kind: 'fixture', path: 'evals/run-b1-quality.mjs' }]
+  scored.score = 4.5
+  scored.scoreRationale = 'Goldfälle und Kontrastfälle erreichen den Zielwert.'
 
   assert.deepEqual(validiereEvalErgebnisse(katalog, ergebnis), [])
 })
@@ -134,6 +137,32 @@ test('Eval-Ergebnisse weisen unbelegte Erfolge, unbekannte IDs und falsche Live-
   assert.match(fehler, /NICHT-DA.*unbekannt/)
 })
 
+test('bestandene Scored-Gates brauchen einen echten Wert und eine Begründung', async () => {
+  const katalog = await ladeEvalKatalog(KATALOG_PFAD)
+  const ergebnis = {
+    schemaVersion: 1,
+    catalogVersion: katalog.catalogVersion,
+    stage: 'FERTIGZUSTAND',
+    iteration: 1,
+    generatedAt: '2026-08-05T13:00:00.000Z',
+    gitCommit: 'abc1234',
+    rubricScores: Object.fromEntries(katalog.rubric.map(dimension => [dimension.id, 4.5])),
+    evals: flattenEvals(katalog).map(eintrag => ({
+      id: eintrag.id,
+      status: 'future-stage',
+      evidence: [],
+      note: 'Noch nicht gemessen',
+    })),
+  }
+  const scored = ergebnis.evals.find(eintrag => eintrag.id === 'EVID-04')
+  scored.status = 'passed'
+  scored.evidence = [{ kind: 'fixture', path: 'evals/run-b1-quality.mjs' }]
+
+  const fehler = validiereEvalErgebnisse(katalog, ergebnis).join('\n')
+  assert.match(fehler, /EVID-04.*Score zwischen 0 und 5/)
+  assert.match(fehler, /EVID-04.*Begründung/)
+})
+
 test('Eval-CLI prüft den Katalog und liefert eine maschinenlesbare Zusammenfassung', async () => {
   const { stdout, stderr } = await execFile(process.execPath, [CLI_PFAD])
   assert.equal(stderr, '')
@@ -141,11 +170,11 @@ test('Eval-CLI prüft den Katalog und liefert eine maschinenlesbare Zusammenfass
 
   assert.equal(bericht.valid, true)
   assert.deepEqual(bericht.catalog, {
-    suites: 17,
-    evals: 118,
-    hardGates: 110,
+    suites: 18,
+    evals: 130,
+    hardGates: 122,
     scoredGates: 8,
-    externalLiveGates: 6,
+    externalLiveGates: 4,
   })
   assert.equal(bericht.result, null)
 })
