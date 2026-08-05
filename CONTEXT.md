@@ -132,7 +132,7 @@ Der interaktive V2-Stand ist eine fokussierte Schreiboberflaeche aus Vanilla Jav
 - Wurde der markierte Seed inhaltlich bearbeitet, wird er vor dem Update als Nutzertext erhalten und entmarkiert; daneben entsteht eine frische Seed-Fixture. Dadurch ist ein Fixture-Reset sichtbar, ohne Nutzerschreibarbeit zu loeschen.
 - Ein alter unmarkierter Seed wird einmalig nur dann erkannt, wenn Projekt, Titel und die normalisierte eindeutige Fixture-Signatur exakt passen.
 
-Die alten Module `app/src/panels.js` und `app/src/structure.js` duerfen vorerst als ungenutzte Referenz im Repository bleiben. Sie werden weder importiert noch initialisiert und besitzen keinen DOM-Einstieg in der laufenden V2-Oberflaeche.
+Die alten Module `app/src/panels.js` und `app/src/structure.js` sind am 05.08.2026 geloescht worden (Issue #18): Sie waren nie Teil des Bundles, und die Eval-Pruefung ERWEITERUNG-04 misst seither das lebende Modul `workspace.js`. Die Git-Historie behaelt beide Dateien.
 
 ### Interaktionsregeln
 

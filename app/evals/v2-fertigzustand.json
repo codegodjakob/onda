@@ -1551,6 +1551,7 @@
             "app/src/erweiterung-model.mjs",
             "app/src/erweiterungslauf-model.mjs",
             "Rückmeldungs-Karte 04.08.2026: Erweiterungen werden nicht gezählt",
+            "app/src/workspace.js (renderZurueckgehalten)",
             "app/src/workspace.js (fuehreErweiterungslaufAus)"
           ]
         },
