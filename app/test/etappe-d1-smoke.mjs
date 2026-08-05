@@ -143,6 +143,10 @@ async function openLanguageDossier(page) {
   await page.locator('#languageModal').evaluate(async node => {
     await Promise.all(node.getAnimations({ subtree: true }).map(animation => animation.finished.catch(() => {})))
   })
+  // Ohne Animationen resolved das sofort, waehrend der rAF-Fokus aus openOndaDialog noch
+  // aussteht — der koennte sonst ein fill() im Kontextprofil bestehlen. Erst warten, bis
+  // der Dialog-Fokus wirklich angekommen ist.
+  await page.waitForFunction(() => document.activeElement?.closest('#languageModal'))
 }
 
 async function completeProfile(page) {
@@ -296,6 +300,10 @@ async function runLanguageFlow(browser) {
   await rhetoricCard.getByRole('button', { name: 'Zuordnung enthalten' }).click()
   await page.locator('.language-status').filter({ hasText: 'Zuordnung enthalten' }).waitFor()
   assert.match(await page.locator('#languageModal').textContent(), /bewusst nicht zugeordnet/)
+  // Jeder Status-Render fokussiert die Statuszeile per requestAnimationFrame (language-ui.mjs).
+  // Erst wenn dieser Fokus angekommen ist, kann er den gleich gesetzten Fokus auf dem
+  // Profil-Summary nicht mehr bestehlen — sonst laeuft das Enter ins Leere.
+  await page.waitForFunction(() => document.activeElement?.classList.contains('language-status'))
   const profileDetails = page.locator('.language-profile-editor')
   await profileDetails.locator('summary').focus()
   await page.keyboard.press('Enter')

@@ -51,6 +51,10 @@ async function openExample(page, clear = true) {
   }
   await page.locator('#doclist .doc').filter({ hasText: 'Beispiel: Calm Technology' }).click()
   await page.locator('#doclist .doc').first().click()
+  // openDoc fokussiert den Editor ueber Tiptaps focus() — und das laeuft intern in einem
+  // requestAnimationFrame. Erst wenn dieser Fokus angekommen ist, kann der spaet feuernde
+  // rAF keine fokusabhaengige Aktion (fill, focus + Enter) mehr bestehlen.
+  await page.waitForFunction(() => window.AIWT.state.editor.view.hasFocus())
 }
 
 async function installiereTransportMock(page) {
@@ -1841,6 +1845,9 @@ async function runTask6DialogueAndEvidence(browser) {
   await local.locator('.local-finding-summary').press('Enter')
   const evidence = page.locator('#evidenceWindow')
   await expectVisible(evidence)
+  // Der Fokus auf den Schliessen-Knopf kommt per requestAnimationFrame (workspace.js,
+  // evidenceFocusRequest) — ohne Frame-Barriere prueft das Assert zu frueh.
+  await page.waitForFunction(() => document.activeElement?.hasAttribute('data-close-evidence'))
   assert.equal(await evidence.locator('[data-close-evidence]').evaluate(node => document.activeElement === node), true)
   assert.equal(
     (await evidence.locator('.evidence-claim').textContent()).trim(),
@@ -1993,10 +2000,16 @@ async function runTask6Mobile(browser) {
   await local.locator('input').fill('Als Bedingung.')
   await local.locator('form').press('Enter')
   for (let turn = 2; turn <= 8; turn += 1) {
+    // Waehrend eines Chat-Laufs ist der Senden-Knopf deaktiviert; erst der letzte Re-Render
+    // des Laufs (finally in fuehreChatVorgangAus/fuehreChatLauf) aktiviert ihn wieder. Vorher
+    // koennte restoreInputState ein gleichzeitig laufendes fill() ueberschreiben — und ein
+    // Enter waehrend des Laufs wuerde still verworfen.
+    await local.locator('.agent-chat-send:not([disabled])').waitFor()
     const input = local.locator('input')
     await input.fill(`Mobile Antwort ${turn}.`)
     await input.press('Enter')
   }
+  await local.locator('.agent-chat-send:not([disabled])').waitFor()
   await local.locator('input').scrollIntoViewIfNeeded()
   const multiTurnLayout = await local.evaluate(node => {
     const messages = node.querySelector('.local-dialogue-messages')
@@ -2736,6 +2749,9 @@ async function runSystem8BudgetGate(browser) {
   await page.locator('#kiSettings').click()
   const dialog = page.locator('#kiModal[role="dialog"]')
   await expectVisible(dialog)
+  // openOndaDialog fokussiert per requestAnimationFrame das erste Element im Dialog. Erst wenn
+  // dieser Fokus angekommen ist, kann der spaet feuernde rAF das fill() nicht mehr bestehlen.
+  await page.waitForFunction(() => document.activeElement?.closest('#kiModal'))
   await dialog.locator('#kiBudgetInput').fill('0.50')
   await dialog.locator('.ki-budget-form').getByRole('button', { name: 'Grenze speichern', exact: true }).click()
   assert.match(await dialog.locator('.ki-budget-status').textContent(), /Grenze erreicht/)

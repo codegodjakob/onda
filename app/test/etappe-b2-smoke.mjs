@@ -99,6 +99,9 @@ async function installAdapter(page, delay = 0) {
 
 async function createPlan(page) {
   await page.locator('#researchPlanOpen').click()
+  // Das Formular fokussiert die Frage per requestAnimationFrame (research-ui.mjs). Erst wenn
+  // dieser Fokus angekommen ist, kann kein spaeter feuernder rAF mehr ein fill() bestehlen.
+  await page.waitForFunction(() => document.activeElement?.id === 'researchQuestion')
   await page.locator('#researchQuestion').fill('Wie belastbar ist die Wirkung nach einer Sitzung?')
   await page.locator('#researchClaim').fill('In dieser Stichprobe war die Fehlerrate nach einer Sitzung niedriger.')
   await page.locator('#researchBudget').fill('9')

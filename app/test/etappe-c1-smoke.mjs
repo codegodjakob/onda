@@ -96,6 +96,9 @@ async function openMemory(page) {
   await page.locator('#pvModal').waitFor({ state: 'visible' })
   await page.locator('#memoryOpen').click()
   await page.locator('#memoryModal').waitFor({ state: 'visible' })
+  // openOndaDialog fokussiert per requestAnimationFrame das erste Element im Dialog. Erst wenn
+  // dieser Fokus angekommen ist, kann der spaet feuernde rAF kein fill() mehr bestehlen.
+  await page.waitForFunction(() => document.activeElement?.closest('#memoryModal'))
 }
 
 async function switchToProject(page, name) {
@@ -133,6 +136,9 @@ async function runMemoryFlow(browser) {
 
   const goals = page.getByRole('heading', { name: 'Ziele und Wirkung' }).locator('..')
   await goals.locator('.memory-item').first().getByRole('button', { name: 'Korrigieren' }).click()
+  // Das Korrekturfeld fokussiert sich selbst per requestAnimationFrame (memory-ui.mjs).
+  // Erst nach diesem Fokus kann das fill() nicht mehr bestohlen werden.
+  await page.waitForFunction(() => document.activeElement?.classList.contains('memory-correction-input'))
   await page.locator('.memory-correction-input').fill(CORRECTED_TASK)
   await page.getByRole('button', { name: 'Korrektur speichern' }).click()
   await page.locator('.memory-status').filter({ hasText: 'Korrektur gespeichert' }).waitFor()
