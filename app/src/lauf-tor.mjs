@@ -59,7 +59,10 @@ export function kanalGesperrt(kanal) {
 // Array (die tatsaechlich behaltenen Funde), verworfen und geliefertAnzahl bereits Zahlen.
 // Faelle ohne dieses Feld (z.B. der Chat-Kanal) werten schlicht als 'geliefert'.
 function bewerteLaufErgebnis(ergebnis) {
-  if (ergebnis && ergebnis.erfolg === false) return { ergebnis: 'fehler' }
+  // Follow-up aus der Task-6-Review: ein nicht-werfendes erfolg:false (z.B. der
+  // Chat-Kanal bei einer abgelehnten Antwort) trug seinen fehler-Wert bisher nicht
+  // ins Journal -- fehlerTyp landete still bei null statt beim tatsaechlichen Grund.
+  if (ergebnis && ergebnis.erfolg === false) return { ergebnis: 'fehler', fehlerTyp: ergebnis.fehler || 'unbekannt' }
   if (ergebnis && Array.isArray(ergebnis.uebernommen)) {
     return {
       ergebnis: ergebnis.uebernommen.length === 0 ? 'verworfen' : 'geliefert',

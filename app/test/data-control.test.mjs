@@ -102,6 +102,14 @@ function fullStateWithSecretCanaries() {
         decisions: [],
       },
     ],
+    // Issue #12: laufJournal muss im Voll-Exportpaket landen (PERSISTED_KEYS), sonst
+    // verliert „Alle Daten exportieren" die Lauf-Chronik still. apiKey hier prüft, dass
+    // die Geheimnis-Tilgung auch innerhalb des Journals greift.
+    laufJournal: {
+      eintraege: [{ id: 'lauf-a', kanal: 'chat', ergebnis: 'geliefert', apiKey: 'CANARY-SECRET-JOURNAL' }],
+      monate: [],
+      gezeigt: [{ findingId: 'finding-a', art: 'hinweis', moment: 'pause', jetzt: 100 }],
+    },
   }
 }
 
@@ -118,6 +126,14 @@ test('SYSTEM-10: Gesamtexport bewahrt alle Domänen und entfernt Secrets', () =>
   assert.equal(JSON.stringify(payload).includes('CANARY-SECRET'), false)
   assert.deepEqual(importAllLocalData(payload), payload.state)
   assert.equal(payload.appStateSchemaVersion, 12)
+
+  // laufJournal (Issue #12) reist im Exportpaket mit (PERSISTED_KEYS) und übersteht den
+  // Roundtrip vollständig, aber ohne sein Geheimnisfeld.
+  assert.ok(payload.state.laufJournal, 'laufJournal ist Teil des Exportpakets')
+  assert.equal(payload.state.laufJournal.eintraege.length, 1)
+  assert.equal(payload.state.laufJournal.eintraege[0].apiKey, undefined, 'Geheimnisfelder werden auch im Journal entfernt')
+  assert.deepEqual(payload.state.laufJournal.gezeigt, [{ findingId: 'finding-a', art: 'hinweis', moment: 'pause', jetzt: 100 }])
+  assert.deepEqual(importAllLocalData(payload).laufJournal, payload.state.laufJournal)
 })
 
 test('SYSTEM-10: Export ist zeitunabhängig strukturell reproduzierbar und verändert den Zustand nicht', () => {

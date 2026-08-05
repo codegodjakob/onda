@@ -24,7 +24,7 @@ import { hatSchluessel, setzeSchluessel, loescheSchluessel } from './agent-gatew
 // direkt aus agent-gateway.mjs, jeder bekommt es als Parameter von fuehreLaufAus'
 // laufFn (siehe starteVerstaendnisEntwurf/sendeInterviewAntwort, sendeAgentenChat/
 // sendeLocalChat, fuehreHinweislaufAus, fuehreErweiterungslaufAus).
-import { fuehreLaufAus, kanalGesperrt, torJournal } from './lauf-tor.mjs'
+import { fuehreLaufAus, kanalGesperrt, merkeKarteGezeigt, torJournal } from './lauf-tor.mjs'
 import { letzteBezahlteSignatur } from './lauf-journal.mjs'
 import { aktuellerAgentStatus, beiAgentStatus, setzeAgentStatus, statuszeileFuer } from './agent-status.mjs'
 import { EXAMPLE_PROJECT_ID, seedBodySignature } from './example-seed.mjs'
@@ -142,9 +142,15 @@ let momentVonHand = false
 // gerade liest, sobald man wieder tippt. Wird mit dem Dokument zurueckgesetzt.
 let gezeigteHinweise = { docId: null, ids: new Set() }
 
-function merkeGezeigt(docId, findingId) {
+function merkeGezeigt(docId, findingId, { art, moment } = {}) {
   if (gezeigteHinweise.docId !== docId) gezeigteHinweise = { docId, ids: new Set() }
-  if (findingId) gezeigteHinweise.ids.add(findingId)
+  if (!findingId) return
+  const istErstesMal = !gezeigteHinweise.ids.has(findingId)
+  gezeigteHinweise.ids.add(findingId)
+  // Erstes Erscheinen je Karte wandert zusaetzlich ins Journal (Messpunkt fuer die
+  // spaetere Momente-Kalibrierung, Issue #12-Kommentar) -- das fluechtige Set hier
+  // bleibt unveraendert die Anzeige-Wahrheit, der Journal-Eintrag ist rein additiv.
+  if (istErstesMal) merkeKarteGezeigt({ findingId, art, moment })
 }
 
 function schonGezeigt(docId, findingId) {
@@ -2005,7 +2011,7 @@ function currentPassageFinding(doc, blocks) {
     const placement = resolveFindingPlacement(finding, blocks)
     if (placement.kind !== 'anchored' && placement.kind !== 'stale') continue
     if (!hadBlockId && finding.blockId) migrated = true
-    merkeGezeigt(doc?.id, finding.id)
+    merkeGezeigt(doc?.id, finding.id, { art: artVon(finding), moment })
     return { finding, block: placement.block, placementKind: placement.kind, migrated }
   }
   return { finding: null, block: null, placementKind: null, migrated }

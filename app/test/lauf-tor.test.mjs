@@ -365,6 +365,27 @@ test('nicht-leeres uebernommen ergibt Ergebnis geliefert mit den Wertzahlen aus 
   setzeTransportFuerTests(null)
 })
 
+// Follow-up aus der Task-6-Review: ein laufFn, das NICHT wirft, sondern schlicht
+// { erfolg: false, fehler: ... } zurueckgibt (so macht es der Chat-Kanal bei einer
+// abgelehnten Antwort), muss seinen fehler-Wert trotzdem im Journal tragen --
+// bewerteLaufErgebnis darf ihn nicht stillschweigend fallen lassen.
+test('ein laufFn, das erfolg:false zurueckgibt (statt zu werfen), traegt seinen fehler-Wert als fehlerTyp im Journal', async () => {
+  const t = fakeTransport([(a, h) => h.onFertig({ text: 'ok', usage: { ...USAGE }, stopReason: 'end_turn' })])
+  const w = baueWelt()
+  setzeTransportFuerTests(t)
+
+  const laufFn = async ({ runTask }) => {
+    await runTask('zusammenfassung', { docText: 'T' })
+    return { gestartet: true, erfolg: false, fehler: 'schema' }
+  }
+  const r = await fuehreLaufAus({ kanal: 'chat' }, laufFn)
+  assert.deepEqual(r, { gestartet: true, erfolg: false, fehler: 'schema' })
+  assert.equal(w.journal.eintraege.length, 1)
+  assert.equal(w.journal.eintraege[0].ergebnis, 'fehler')
+  assert.equal(w.journal.eintraege[0].fehlerTyp, 'schema', 'der fehler-Wert aus laufFn darf nicht verloren gehen')
+  setzeTransportFuerTests(null)
+})
+
 test('kanalGesperrt spiegelt das Sperren-Register waehrend eines laufenden Laufs', async () => {
   const t = fakeTransport([(a, h) => setTimeout(() => h.onFertig({ text: 'ok', usage: { ...USAGE }, stopReason: 'end_turn' }), 15)])
   baueWelt()
@@ -396,6 +417,8 @@ test('merkeKarteGezeigt haengt ein gezeigt-Ereignis an, dedupliziert per finding
   assert.equal(neu, true)
   assert.equal(journal.gezeigt.length, 1)
   assert.equal(journal.gezeigt[0].findingId, 'f1')
+  assert.equal(journal.gezeigt[0].art, 'hinweis', 'die Art wandert mit ins Journal')
+  assert.equal(journal.gezeigt[0].moment, 'pause', 'das Moment-Etikett wandert mit ins Journal')
   assert.equal(scheduleSaveAufrufe, 1)
 
   const nochmal = merkeKarteGezeigt({ findingId: 'f1', art: 'hinweis', moment: 'pause' })
