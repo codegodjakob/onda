@@ -18,6 +18,11 @@ import { Plugin, PluginKey } from '@tiptap/pm/state'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import { applySettings } from './ui.js'
 import { hatSchluessel, setzeSchluessel, loescheSchluessel, runTask } from './agent-gateway.mjs'
+// Das Lauf-Tor (Issue #12): Sperre, Signatur, Buchung und Journal fuer jeden bezahlten
+// Lauf. Der Interview-Kanal ist der erste, der ausschliesslich hierueber laeuft — sein
+// eigenes runTask kommt nicht mehr aus agent-gateway.mjs, sondern als Parameter von
+// fuehreLaufAus' laufFn (siehe starteVerstaendnisEntwurf/sendeInterviewAntwort unten).
+import { fuehreLaufAus, kanalGesperrt } from './lauf-tor.mjs'
 import { aktuellerAgentStatus, beiAgentStatus, setzeAgentStatus, statuszeileFuer } from './agent-status.mjs'
 import { EXAMPLE_PROJECT_ID, seedBodySignature } from './example-seed.mjs'
 import { MODELLE, TASK_TABLE } from './agent-tasks.mjs'
@@ -144,9 +149,10 @@ let evidenceReturnFindingId = null
 let riskConfirmationFocusRequest = false
 let ondaDialog = null
 let accentMenu = null
-// Verständnis-Interview: einmal je Projekt+Dokument prüfen, genau ein Lauf gleichzeitig.
+// Verständnis-Interview: einmal je Projekt+Dokument prüfen. Die Lauf-Sperre selbst
+// (frueher hier als interviewLaufAktiv) lebt jetzt im Lauf-Tor (lauf-tor.mjs) —
+// kanalGesperrt('interview') fragt sie ab, fuehreLaufAus setzt/loest sie synchron.
 let interviewPruefKey = null
-let interviewLaufAktiv = false
 let interviewStatus = null // null | 'laeuft' | ruhiger Fehlertext für die Statuszeile
 let pausierterAutomatiklauf = null
 // Echter Chat (Etappe A, Bereich C): genau ein Lauf gleichzeitig, app-weit (Panel und,
@@ -1561,79 +1567,101 @@ function pruefeVerstaendnisInterview() {
   persistWorkspace()
 }
 
-async function starteVerstaendnisEntwurf(projectId, docId) {
-  if (interviewLaufAktiv) return
-  interviewLaufAktiv = true
-  interviewStatus = 'laeuft'
-  // Ausserhalb des try deklariert, damit der catch-Zweig bei einem fehlgeschlagenen
-  // Lauf noch weiss, fuer welches Projekt/welche Nachricht der Fehlertext sichtbar
-  // gemacht werden muss (Fix-Runde 1, Finding 1).
-  let project = null
-  try {
-    const schluesselDa = await hatSchluessel()
-    if (!ctx || ctx.activeDoc()?.id !== docId) { interviewStatus = null; return }
-    project = ctx.state.projects.find(candidate => candidate.id === projectId)
-    const workspace = activeWorkspace()
-    if (!project || !workspace) { interviewStatus = null; return }
-    if (!schluesselDa) {
-      // Offline-Würde: kein Entwurf möglich — die feste Eröffnungsfrage steht
-      // trotzdem bereit; die Antwort darauf scheitert später ruhig per Statuszeile.
-      interviewStatus = null
-      const message = ensureInterviewMessage(workspace, project)
-      if (!message.text) message.text = INTERVIEW_EROEFFNUNG
-      persistWorkspace()
-      return
-    }
-    const kostenfreigabe = beansprucheAutomatikKosten('verstaendnis', { projectId, docId })
-    if (!kostenfreigabe.erlaubt) {
-      interviewStatus = BUDGET_PAUSE_TEXT
-      const message = ensureInterviewMessage(workspace, project)
-      message.text = BUDGET_PAUSE_TEXT
-      persistWorkspace()
-      return
-    }
-    // Projektweite Kostenbremse (Fix-Runde 1, Finding 2): VOR dem bezahlten Aufruf
-    // setzen und sofort persistieren, damit sie auch bei einem Fehlschlag gilt —
-    // kein zweiter bezahlter Versuch über weitere Dokumente desselben Projekts.
-    markiereEntwurfVersucht(ensureProjectUnderstanding(project))
-    persistWorkspace()
-    // Bereich W (Aura/Statuszeile) atmet ausschliesslich am echten Gateway-Zustand
-    // (applyAuraState liest aktuellerAgentStatus().zustand === 'laeuft') — dieser
-    // Aufruf ist der erste echte runTask-Aufruf im Panel, darum wird er hier gesetzt.
-    setzeAgentStatus({ zustand: 'laeuft' })
-    const { daten } = await runTask('verstaendnis', verstaendnisEingabe('entwurf'))
-    setzeAgentStatus({ zustand: 'bereit' })
-    if (!ctx) return
-    uebernimmVerstaendnis(project, daten)
-    interviewStatus = null
-    const antwort = String(daten.antwortText || '').trim()
-    if (antwort && ctx.activeDoc()?.id === docId) {
-      const message = ensureInterviewMessage(activeWorkspace(), project)
-      message.text = antwort
-      appendThreadMessage(message.thread, 'agent', antwort, Date.now())
-      announceAgentStatus(antwort)
-    }
-    ctx.persist()
-    refreshProjectUnderstandingModal()
-  } catch (fehler) {
-    interviewStatus = interviewFehlerText(fehler)
-    setzeAgentStatus({ zustand: 'fehler', fehlerTyp: fehler?.typ })
-    // Sichtbarkeit erzwingen (Fix-Runde 1, Finding 1): ohne eine existierende
-    // Nachricht kehrt renderAgentWidget vor dem interviewStatus-Absatz zurück, und
-    // der Fehlertext bliebe unsichtbar — bei bereits gesetztem Prüf-Gate ohne jede
-    // Wiederholmöglichkeit. Der Nutzer bekommt so den ruhigen Fehlertext UND das
-    // Eingabefeld; kein automatischer Retry, kein Kosten-Risiko.
-    if (ctx && project && ctx.activeDoc()?.id === docId) {
-      const workspace = activeWorkspace()
-      if (workspace) {
-        ensureInterviewMessage(workspace, project)
-        persistWorkspace()
-      }
-    }
-  } finally {
-    interviewLaufAktiv = false
-    if (ctx) refreshWorkspace()
+// Kleiner FNV-1a-Hash fuer Signaturen aus freiem Nutzertext — Muster wie einfacherHash
+// in erweiterungslauf-model.mjs, hier lokal, weil auch der Chat-Kanal (Task 6) ihn
+// braucht. Dient nur der Journal-Kennzeichnung, nicht einer Doppelbezahl-Sperre
+// (der Interview-Kanal laeuft ohne einmalJeSignatur — siehe unten).
+function fnvSignatur(text) {
+  let hash = 2166136261
+  const value = String(text || '')
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index)
+    hash = Math.imul(hash, 16777619)
   }
+  return (hash >>> 0).toString(36)
+}
+
+async function starteVerstaendnisEntwurf(projectId, docId) {
+  // Sperre, Buchung und Journal laufen jetzt durchs Lauf-Tor (lauf-tor.mjs) — hier
+  // bleibt nur noch der fachliche Rumpf. kanalGesperrt/fuehreLaufAus ersetzen das
+  // frühere interviewLaufAktiv; die Signatur wird SYNCHRON hier gebildet (vor jedem
+  // await), weil docPlainText() den gerade aktiven Doc liest und das an dieser Stelle
+  // im Aufruf noch derselbe Doc ist, fuer den der Lauf gedacht ist.
+  if (kanalGesperrt('interview')) return
+  interviewStatus = 'laeuft'
+  const signatur = `${docId}:${seedBodySignature(docPlainText())}`
+  await fuehreLaufAus({ kanal: 'interview', ausloeser: 'entwurf', signatur }, async ({ runTask }) => {
+    // Ausserhalb des try deklariert, damit der catch-Zweig bei einem fehlgeschlagenen
+    // Lauf noch weiss, fuer welches Projekt/welche Nachricht der Fehlertext sichtbar
+    // gemacht werden muss (Fix-Runde 1, Finding 1).
+    let project = null
+    try {
+      const schluesselDa = await hatSchluessel()
+      if (!ctx || ctx.activeDoc()?.id !== docId) { interviewStatus = null; return }
+      project = ctx.state.projects.find(candidate => candidate.id === projectId)
+      const workspace = activeWorkspace()
+      if (!project || !workspace) { interviewStatus = null; return }
+      if (!schluesselDa) {
+        // Offline-Würde: kein Entwurf möglich — die feste Eröffnungsfrage steht
+        // trotzdem bereit; die Antwort darauf scheitert später ruhig per Statuszeile.
+        interviewStatus = null
+        const message = ensureInterviewMessage(workspace, project)
+        if (!message.text) message.text = INTERVIEW_EROEFFNUNG
+        persistWorkspace()
+        return
+      }
+      const kostenfreigabe = beansprucheAutomatikKosten('verstaendnis', { projectId, docId })
+      if (!kostenfreigabe.erlaubt) {
+        interviewStatus = BUDGET_PAUSE_TEXT
+        const message = ensureInterviewMessage(workspace, project)
+        message.text = BUDGET_PAUSE_TEXT
+        persistWorkspace()
+        return
+      }
+      // Projektweite Kostenbremse (Fix-Runde 1, Finding 2): VOR dem bezahlten Aufruf
+      // setzen und sofort persistieren, damit sie auch bei einem Fehlschlag gilt —
+      // kein zweiter bezahlter Versuch über weitere Dokumente desselben Projekts.
+      markiereEntwurfVersucht(ensureProjectUnderstanding(project))
+      persistWorkspace()
+      // Bereich W (Aura/Statuszeile) atmet ausschliesslich am echten Gateway-Zustand
+      // (applyAuraState liest aktuellerAgentStatus().zustand === 'laeuft') — dieser
+      // Aufruf ist der erste echte runTask-Aufruf im Panel, darum wird er hier gesetzt.
+      setzeAgentStatus({ zustand: 'laeuft' })
+      const { daten } = await runTask('verstaendnis', verstaendnisEingabe('entwurf'))
+      setzeAgentStatus({ zustand: 'bereit' })
+      if (!ctx) return { erfolg: true }
+      uebernimmVerstaendnis(project, daten)
+      interviewStatus = null
+      const antwort = String(daten.antwortText || '').trim()
+      if (antwort && ctx.activeDoc()?.id === docId) {
+        const message = ensureInterviewMessage(activeWorkspace(), project)
+        message.text = antwort
+        appendThreadMessage(message.thread, 'agent', antwort, Date.now())
+        announceAgentStatus(antwort)
+      }
+      ctx.persist()
+      refreshProjectUnderstandingModal()
+      return { erfolg: true }
+    } catch (fehler) {
+      interviewStatus = interviewFehlerText(fehler)
+      setzeAgentStatus({ zustand: 'fehler', fehlerTyp: fehler?.typ })
+      // Sichtbarkeit erzwingen (Fix-Runde 1, Finding 1): ohne eine existierende
+      // Nachricht kehrt renderAgentWidget vor dem interviewStatus-Absatz zurück, und
+      // der Fehlertext bliebe unsichtbar — bei bereits gesetztem Prüf-Gate ohne jede
+      // Wiederholmöglichkeit. Der Nutzer bekommt so den ruhigen Fehlertext UND das
+      // Eingabefeld; kein automatischer Retry, kein Kosten-Risiko.
+      if (ctx && project && ctx.activeDoc()?.id === docId) {
+        const workspace = activeWorkspace()
+        if (workspace) {
+          ensureInterviewMessage(workspace, project)
+          persistWorkspace()
+        }
+      }
+      return { erfolg: false, fehler: fehler?.typ }
+    } finally {
+      if (ctx) refreshWorkspace()
+    }
+  })
 }
 
 // Composer-Routing: solange istInterviewAktiv() wahr ist, gehört jede Eingabe im
@@ -1645,41 +1673,49 @@ async function sendeInterviewAntwort(message, text) {
   // Projekt VOR jedem await ueber das Dokument aufloesen: die Antwort gehoert dem
   // Projekt, fuer das sie gestellt wurde — auch wenn danach umgeblaettert wird.
   const project = dokumentProjekt()
-  if (!project || interviewLaufAktiv) return
+  if (!project || kanalGesperrt('interview')) return
   appendThreadMessage(message.thread, 'user', text, Date.now())
-  interviewLaufAktiv = true
+  // Kein await zwischen dem Anhaengen und fuehreLaufAus: die Sperre selbst setzt
+  // das Tor synchron beim Aufruf (lauf-tor.mjs) — hier bleibt nur noch die
+  // sichtbare "laeuft"-Statuszeile, wie zuvor ohne Luecke.
   interviewStatus = 'laeuft'
   announceAgentStatus('Agent denkt nach …')
   persistWorkspace()
   refreshWorkspace()
-  try {
-    // Bereich W (Aura/Statuszeile) atmet ausschliesslich am echten Gateway-Zustand
-    // (applyAuraState liest aktuellerAgentStatus().zustand === 'laeuft') — wie in
-    // starteVerstaendnisEntwurf muss jeder echte runTask-Aufruf ihn setzen (U-5-Aura).
-    setzeAgentStatus({ zustand: 'laeuft' })
-    const { daten } = await runTask('verstaendnis', verstaendnisEingabe('antwort', text))
-    setzeAgentStatus({ zustand: 'bereit' })
-    if (!ctx) return
-    uebernimmVerstaendnis(project, daten)
-    interviewStatus = null
-    const antwort = String(daten.antwortText || '').trim()
-    if (antwort) {
-      appendThreadMessage(message.thread, 'agent', antwort, Date.now())
-      message.text = antwort
-      announceAgentStatus(antwort)
-    }
-    // Sind task + audience + desiredEffect jetzt gefüllt, ist das Interview
-    // abgeschlossen — der nächste Composer-Beitrag geht in den normalen Chat.
-    ctx.persist()
-    refreshProjectUnderstandingModal()
-  } catch (fehler) {
-    interviewStatus = interviewFehlerText(fehler)
-    setzeAgentStatus({ zustand: 'fehler', fehlerTyp: fehler?.typ })
-    announceAgentStatus(interviewStatus)
-  } finally {
-    interviewLaufAktiv = false
-    if (ctx) refreshWorkspace()
-  }
+  await fuehreLaufAus(
+    { kanal: 'interview', ausloeser: 'antwort', signatur: fnvSignatur(text) },
+    async ({ runTask }) => {
+      try {
+        // Bereich W (Aura/Statuszeile) atmet ausschliesslich am echten Gateway-Zustand
+        // (applyAuraState liest aktuellerAgentStatus().zustand === 'laeuft') — wie in
+        // starteVerstaendnisEntwurf muss jeder echte runTask-Aufruf ihn setzen (U-5-Aura).
+        setzeAgentStatus({ zustand: 'laeuft' })
+        const { daten } = await runTask('verstaendnis', verstaendnisEingabe('antwort', text))
+        setzeAgentStatus({ zustand: 'bereit' })
+        if (!ctx) return { erfolg: true }
+        uebernimmVerstaendnis(project, daten)
+        interviewStatus = null
+        const antwort = String(daten.antwortText || '').trim()
+        if (antwort) {
+          appendThreadMessage(message.thread, 'agent', antwort, Date.now())
+          message.text = antwort
+          announceAgentStatus(antwort)
+        }
+        // Sind task + audience + desiredEffect jetzt gefüllt, ist das Interview
+        // abgeschlossen — der nächste Composer-Beitrag geht in den normalen Chat.
+        ctx.persist()
+        refreshProjectUnderstandingModal()
+        return { erfolg: true }
+      } catch (fehler) {
+        interviewStatus = interviewFehlerText(fehler)
+        setzeAgentStatus({ zustand: 'fehler', fehlerTyp: fehler?.typ })
+        announceAgentStatus(interviewStatus)
+        return { erfolg: false, fehler: fehler?.typ }
+      } finally {
+        if (ctx) refreshWorkspace()
+      }
+    },
+  )
 }
 
 function scheduleTriggerRender() {
@@ -3029,7 +3065,7 @@ function renderAgentWidget() {
     const text = input.value.trim()
     if (!text || laufenderChatLauf) return
     if (istInterviewAktiv()) {
-      if (interviewLaufAktiv) return // ein Lauf zur Zeit; die Eingabe bleibt stehen
+      if (kanalGesperrt('interview')) return // ein Lauf zur Zeit; die Eingabe bleibt stehen
       input.value = ''
       sendeInterviewAntwort(message, text)
       return
@@ -3948,7 +3984,9 @@ export function initWorkspace(context) {
     agentLiveFrame = null
     agentPresenceFocusRequest = false
     interviewPruefKey = null
-    interviewLaufAktiv = false
+    // Keine interviewLaufAktiv-Rueckstellung mehr: die Sperre lebt im Lauf-Tor
+    // (lauf-tor.mjs), dessen eigenes finally sie freigibt, sobald der laufende
+    // Aufruf zurueckkehrt — auch wenn dieser Workspace vorher zerstoert wurde.
     interviewStatus = null
     pausierterAutomatiklauf = null
   }
