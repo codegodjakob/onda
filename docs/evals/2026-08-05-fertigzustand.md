@@ -2,7 +2,7 @@
 
 ## Ergebnis
 
-Der Katalog `2026-08-05.2` umfasst 130 Evals. Im vierten vollständigen Lauf bestanden alle
+Der Katalog `2026-08-05.2` umfasst 130 Evals. Im fünften und letzten vollständigen Lauf bestanden alle
 126 automatisierbaren Evals mit frischen Belegen. Vier echte Live-Gates bleiben offen.
 
 | Messgröße | Ergebnis | Schwelle |
@@ -21,15 +21,15 @@ Ruhe und Barrierefreiheit sind bewusst auf 4,5 gedeckelt. Automatisierte Browser
 Zoom-, WCAG-, Daten- und Geheimnisprüfungen können eine menschliche Langzeiterfahrung und reale
 assistive Nutzung vorbereiten, aber nicht wahrheitsgemäß als perfekte Erfahrung ausgeben.
 
-## Vier Schleifen
+## Fünf Schleifen
 
 ```mermaid
 xychart-beta
   title "Frisch bestandene anwendbare Evals"
-  x-axis ["Runde 1", "Runde 2", "Runde 3", "Runde 4"]
+  x-axis ["Runde 1", "Runde 2", "Runde 3", "Runde 4", "Runde 5"]
   y-axis "Evals" 0 --> 126
-  bar [122, 117, 126, 126]
-  line [122, 117, 126, 126]
+  bar [122, 117, 126, 126, 126]
+  line [122, 117, 126, 126, 126]
 ```
 
 | Runde | Bestanden | Fehlgeschlagen | Befund und Änderung |
@@ -38,6 +38,7 @@ xychart-beta
 | 2 | 117 | 9 | Ein Playwright-Prozess schloss unerwartet Browser und Seite; der identische Stand bestand direkt danach vollständig. Der Runner wiederholt ausschließlich diesen klar erkennbaren Infrastrukturabsturz einmal in einem frischen Prozess. Assertions und Timeouts bleiben harte Fehler. |
 | 3 | 126 | 0 | Alle 77 eindeutigen Prüfprogramme und damit alle 126 anwendbaren Evals bestanden frisch. |
 | 4 | 126 | 0 | Nach dem Abschlussreview wurden Stimmen-Wiederfreigabe, Fixture-Verträge und die beim kalten Mac-Start gedrosselte Probe korrigiert. Der exakte Commit `a6f85f9` bestand erneut vollständig. |
+| 5 | 126 | 0 | Die Abschlusskontrolle fand noch eine unklare Shell-Variablengrenze im signierten Mac-Bau. Nach Regressionstest und Reparatur bestand der exakte Produkt- und Build-Commit `ef07a01` erneut ohne Eval-Fehler. |
 
 Vor dem Gesamtrunner fanden die normalen Tests zwei veraltete Fixtures: Gateway- und
 Etappe-A-Antworten enthielten die neuen strukturierten Felder `vorschlagsart` und
@@ -74,7 +75,7 @@ cd app
 npm run test:unit
 npm run test:smoke
 npm run build
-ITERATION=4 node evals/run-fertigzustand.mjs
+ITERATION=5 node evals/run-fertigzustand.mjs
 ```
 
 Zusätzlich gehören zur Abschlussprüfung:

@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "catalogVersion": "2026-08-05.2",
   "stage": "FERTIGZUSTAND",
-  "iteration": 4,
-  "generatedAt": "2026-08-05T17:05:25.846Z",
-  "gitCommit": "a6f85f94b6d2eb9da12b7291c54090ab018588a0",
+  "iteration": 5,
+  "generatedAt": "2026-08-05T17:11:26.636Z",
+  "gitCommit": "ef07a01a0b637bff7ae89bfb5f988fca92807f07",
   "rubricScores": {
     "truth": 5,
     "authorship": 5,
@@ -52,6 +52,13 @@
     },
     {
       "iteration": 4,
+      "passed": 126,
+      "failed": 0,
+      "externalOpen": 4,
+      "weightedScore": 4.88
+    },
+    {
+      "iteration": 5,
       "passed": 126,
       "failed": 0,
       "externalOpen": 4,
