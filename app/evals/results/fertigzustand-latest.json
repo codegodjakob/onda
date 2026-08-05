@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "catalogVersion": "2026-08-05.2",
   "stage": "FERTIGZUSTAND",
-  "iteration": 5,
-  "generatedAt": "2026-08-05T17:11:26.636Z",
-  "gitCommit": "ef07a01a0b637bff7ae89bfb5f988fca92807f07",
+  "iteration": 1,
+  "generatedAt": "2026-08-05T17:57:00.523Z",
+  "gitCommit": "6de1f5b98b1acc2212c4a8ca832375009562bf1a",
   "rubricScores": {
     "truth": 5,
     "authorship": 5,
@@ -31,40 +31,2534 @@
   "loops": [
     {
       "iteration": 1,
-      "passed": 122,
-      "failed": 4,
-      "externalOpen": 4,
-      "weightedScore": 4.88
-    },
-    {
-      "iteration": 2,
-      "passed": 117,
-      "failed": 9,
-      "externalOpen": 4,
-      "weightedScore": 4.88
-    },
-    {
-      "iteration": 3,
-      "passed": 126,
-      "failed": 0,
-      "externalOpen": 4,
-      "weightedScore": 4.88
-    },
-    {
-      "iteration": 4,
-      "passed": 126,
-      "failed": 0,
-      "externalOpen": 4,
-      "weightedScore": 4.88
-    },
-    {
-      "iteration": 5,
       "passed": 126,
       "failed": 0,
       "externalOpen": 4,
       "weightedScore": 4.88
     }
   ],
+  "massstabVergleich": {
+    "status": "kein-vergleichsstand",
+    "aenderungen": []
+  },
+  "massstab": {
+    "catalogVersion": "2026-08-05.2",
+    "thresholds": {
+      "allApplicableHardGatesMustPass": true,
+      "minimumWeightedScore": 4.5,
+      "minimumDimensionScore": 4,
+      "maximumIterationsPerStage": 5,
+      "stopAfterConsecutiveNonImprovingIterations": 2
+    },
+    "rubrik": {
+      "truth": {
+        "label": "Wahrheit und Evidenz",
+        "weight": 0.25
+      },
+      "authorship": {
+        "label": "Autorschaft und Bedeutungstreue",
+        "weight": 0.2
+      },
+      "usefulness": {
+        "label": "Nützlichkeit und Priorisierung",
+        "weight": 0.15
+      },
+      "calm": {
+        "label": "Ruhe und Interaktionsqualität",
+        "weight": 0.15
+      },
+      "reliability": {
+        "label": "Zuverlässigkeit und Nachvollziehbarkeit",
+        "weight": 0.15
+      },
+      "access_privacy": {
+        "label": "Barrierefreiheit und Privatsphäre",
+        "weight": 0.1
+      }
+    },
+    "evidenceKinds": [
+      "browser",
+      "file-inspection",
+      "fixture",
+      "integration",
+      "manual-live",
+      "persistence",
+      "security-inspection",
+      "unit",
+      "user-study"
+    ],
+    "externalLiveGateIds": [
+      "EFFECT-06",
+      "INV-06",
+      "SYSTEM-03",
+      "SYSTEM-09"
+    ],
+    "evals": {
+      "INV-01": {
+        "title": "Keine unbemerkte Textänderung",
+        "gate": "hard",
+        "automation": "browser",
+        "given": "Ein Text ist geöffnet und der Agent führt Verständnis-, Hinweis-, Chat-, Recherche- oder Auditläufe aus.",
+        "when": "Der Nutzer übernimmt keinen Vorschlag.",
+        "then": "Der gespeicherte Editorinhalt bleibt bytegleich; nur eine bewusste Übernahme darf ihn verändern.",
+        "evidence": [
+          "Browser-Test über alle Agententasks",
+          "HTML-Snapshot vor und nach jedem Lauf"
+        ],
+        "source": [
+          "V2 §2.1",
+          "V2 §3",
+          "V2 §17"
+        ]
+      },
+      "INV-02": {
+        "title": "Herkunftsarten bleiben unterscheidbar",
+        "gate": "hard",
+        "automation": "integration",
+        "given": "Ein Projekt enthält Nutzertext, Agenteneinordnung, Vorschläge, Recherchematerial und belegtes Wissen.",
+        "when": "Diese Inhalte in Arbeitsansicht, Gedächtnis oder Export erscheinen.",
+        "then": "Jeder Inhalt trägt genau seine Herkunft und kein Recherchematerial wird als belegtes Wissen projiziert.",
+        "evidence": [
+          "Domänenmodell-Test",
+          "Export-Fixture mit Provenienzfeldern"
+        ],
+        "source": [
+          "V2 §2.5",
+          "V2 §6",
+          "V2 §8"
+        ]
+      },
+      "INV-03": {
+        "title": "Keine erfundene Quelle oder Fundstelle",
+        "gate": "hard",
+        "automation": "integration",
+        "given": "Ein Modell liefert eine plausible, aber nicht importierte Quelle oder eine nicht auffindbare Fundstelle.",
+        "when": "Die Antwort verarbeitet wird.",
+        "then": "Es entsteht weder verifiziertes Wissen noch ein zitierbarer Beleg; der Lauf enthält stattdessen eine sichtbare Grenze oder Abstention.",
+        "evidence": [
+          "Manipulierte Modell-Fixture",
+          "Negativtest gegen Source- und Evidence-Store"
+        ],
+        "source": [
+          "V2 §8",
+          "Forschungsnotiz Slop §6.2–3"
+        ]
+      },
+      "INV-04": {
+        "title": "Integritätsrisiken können nicht weggeklickt werden",
+        "gate": "hard",
+        "automation": "browser",
+        "given": "Ein offener Fakt-, Quellen-, Methoden- oder Logikhinweis existiert.",
+        "when": "Der Nutzer ihn verwerfen möchte.",
+        "then": "Die App verlangt eine bewusste Risikoannahme; das Risiko bleibt im Schlussaudit auffindbar.",
+        "evidence": [
+          "Browser-Fluss mit allen vier Integritätsarten",
+          "Persistenztest nach Reload"
+        ],
+        "source": [
+          "V2 §7",
+          "V2 §17"
+        ]
+      },
+      "INV-05": {
+        "title": "Projektgrenzen schützen vertrauliche Inhalte",
+        "gate": "hard",
+        "automation": "integration",
+        "given": "Projekt A enthält vertraulichen Text und Projekt B ist geöffnet.",
+        "when": "Dossiers, Prompts oder projektübergreifende Erinnerungen gebaut werden.",
+        "then": "Inhalte aus Projekt A fehlen vollständig, sofern keine ausdrückliche Freigabe mit Provenienz vorliegt.",
+        "evidence": [
+          "Canary-String-Test über Prompt-, Memory- und Exportpfade"
+        ],
+        "source": [
+          "V2 §2.7",
+          "V2 §12"
+        ]
+      },
+      "INV-06": {
+        "title": "Offline-Würde",
+        "gate": "hard",
+        "automation": "browser",
+        "given": "Kein Schlüssel oder keine Netzwerkverbindung ist vorhanden.",
+        "when": "Der Nutzer schreibt, speichert, liest oder exportiert und einen Agentenlauf anstößt.",
+        "then": "Schreiben, Speichern, Lesen und Export funktionieren; der Agent zeigt eine ruhige Statuszeile statt Modal oder Fokusraub.",
+        "evidence": [
+          "Browser-Test mit offline Transport",
+          "Mac-Live-Test ohne Netz"
+        ],
+        "source": [
+          "Etappe A §7",
+          "Etappe A AC-7"
+        ]
+      },
+      "INV-07": {
+        "title": "Demo bleibt Demo",
+        "gate": "hard",
+        "automation": "browser",
+        "given": "Das markierte Beispielprojekt ist geöffnet.",
+        "when": "Hinweise, Quellen, Chat oder Export angezeigt werden.",
+        "then": "Fixtures sind als Demo erkennbar, automatische teure Läufe bleiben gesperrt und keine Demoquelle erscheint in echten Projekten.",
+        "evidence": [
+          "Browser-Smoke über Beispiel- und echtes Projekt"
+        ],
+        "source": [
+          "V2 §17",
+          "Etappe A Demo-Regel"
+        ]
+      },
+      "INV-08": {
+        "title": "Abstention ist ein gültiger Erfolg",
+        "gate": "hard",
+        "automation": "fixture",
+        "given": "Die verfügbare Evidenz trägt eine angefragte Aussage nicht.",
+        "when": "Recherche, Chat oder Qualitätsprüfung eine Antwort erzeugt.",
+        "then": "Die Ausgabe benennt die Evidenzgrenze oder lässt die Aussage aus und erhält eine bessere Eval-Bewertung als eine plausible Vermutung.",
+        "evidence": [
+          "Kontrast-Fixtures mit Abstention und Halluzination",
+          "Rubrik-Judge mit festem Erwartungsranking"
+        ],
+        "source": [
+          "Forschungsnotiz Slop §2",
+          "Forschungsnotiz Slop §6.3"
+        ]
+      },
+      "INV-09": {
+        "title": "Keine kognitive Überwachung oder KI-Herkunftsbewertung",
+        "gate": "hard",
+        "automation": "integration",
+        "given": "Nutzerinteraktionen, Schreibtempo, Agentenbeiträge und Textmerkmale sind verfügbar.",
+        "when": "Projektmodell, Oberfläche, Analyse oder Export erzeugt werden.",
+        "then": "Es entstehen keine Aufmerksamkeits-, Verständnis-, Eigenständigkeits- oder KI-Wahrscheinlichkeitsscores; Rückspiegelungen beruhen ausschließlich auf benannten beobachtbaren Ereignissen.",
+        "evidence": [
+          "Schema- und UI-Negativtests",
+          "Canary-Suche nach verbotenen Scorefeldern"
+        ],
+        "source": [
+          "V2 §14",
+          "V2 §11"
+        ]
+      },
+      "WORK-01": {
+        "title": "Leeres Projekt beginnt mit einer gebündelten Frage",
+        "gate": "hard",
+        "automation": "browser",
+        "given": "Ein neues Projekt ohne Text und Verständnis wird geöffnet.",
+        "when": "Der Agent verfügbar ist.",
+        "then": "Er stellt genau eine offene, gebündelte Frage und keinen Fragenkatalog.",
+        "evidence": [
+          "Transport-Fixture",
+          "DOM-Assertion auf einen Fragezug"
+        ],
+        "source": [
+          "Etappe A §4"
+        ]
+      },
+      "WORK-02": {
+        "title": "Vorhandener Text erzeugt zuerst einen Verständnisentwurf",
+        "gate": "hard",
+        "automation": "browser",
+        "given": "Ein Projekt enthält Text, aber noch kein vollständiges Projektverständnis.",
+        "when": "Der Verständnislauf startet.",
+        "then": "Die Projektkarte erhält einen konkreten Entwurf aus dem Text und höchstens eine gebündelte Nachfrage nach echten Lücken.",
+        "evidence": [
+          "Browser-Fixture mit bekanntem Text",
+          "Schema- und UI-Assertions"
+        ],
+        "source": [
+          "Etappe A §4"
+        ]
+      },
+      "WORK-03": {
+        "title": "Nutzerkorrekturen sind bindend",
+        "gate": "hard",
+        "automation": "integration",
+        "given": "Der Nutzer korrigiert ein Feld des Projektverständnisses.",
+        "when": "Spätere Verständnis-, Hinweis-, Chat- und Auditkontexte gebaut werden.",
+        "then": "Der korrigierte Wert bleibt erhalten und wird als bindende Vorgabe in alle relevanten Kontexte übernommen.",
+        "evidence": [
+          "Pure Merge-Tests für alle Felder",
+          "Prompt-Body-Assertions"
+        ],
+        "source": [
+          "Etappe A §4",
+          "V2 §3"
+        ]
+      },
+      "WORK-04": {
+        "title": "Hinweise sind gültig verankert und priorisiert",
+        "gate": "hard",
+        "automation": "integration",
+        "given": "Ein Modelllauf liefert gültige, ungültige, doppelte und abhängige Hinweise.",
+        "when": "Der Lauf verarbeitet wird.",
+        "then": "Nur gültig verankerte neue Hinweise entstehen; Grundursachen und Integrität stehen vor lokalen Stilfragen.",
+        "evidence": [
+          "Fixture über alle acht Kategorien",
+          "Queue- und Anker-Assertions"
+        ],
+        "source": [
+          "V2 §7",
+          "Etappe A §5"
+        ]
+      },
+      "WORK-05": {
+        "title": "Ankerdrift bleibt ehrlich sichtbar",
+        "gate": "hard",
+        "automation": "browser",
+        "given": "Ein verankerter Hinweis existiert und die betroffene Passage wird verändert oder gelöscht.",
+        "when": "Die Arbeitsansicht neu rendert oder lädt.",
+        "then": "Der Hinweis wird stabil neu platziert oder sichtbar als verändert, mehrdeutig oder unplatzierbar markiert; die App rät keine Stelle.",
+        "evidence": [
+          "Browser-Test für stabil, stale, ambiguous und unplaced"
+        ],
+        "source": [
+          "V2 §17",
+          "Onda §5"
+        ]
+      },
+      "WORK-06": {
+        "title": "Lokales Gespräch nutzt Passage und Finding-Kontext",
+        "gate": "hard",
+        "automation": "browser",
+        "given": "Ein Hinweis ist geöffnet und der Nutzer fragt direkt an dieser Textstelle nach.",
+        "when": "Die Nachricht gesendet wird.",
+        "then": "Die Antwort streamt im lokalen Gespräch, bezieht Finding, Passage, Projektverständnis und Entscheidungen ein und verändert den Editor nicht.",
+        "evidence": [
+          "Transport-Mock mit Kontextprüfung",
+          "Streaming-DOM-Test"
+        ],
+        "source": [
+          "Onda §7",
+          "Etappe A §6"
+        ]
+      },
+      "WORK-07": {
+        "title": "Globaler Dialog bleibt kontextbezogen und ruhig",
+        "gate": "hard",
+        "automation": "browser",
+        "given": "Der Nutzer fragt im allgemeinen Agenten-Widget nach Text oder Projekt.",
+        "when": "Die Antwort streamt oder der Agent eine begründete Initiative meldet.",
+        "then": "Die Antwort nutzt Projektkontext, der Editor bleibt unverändert und das Widget übernimmt während aktiver Eingabe keinen Fokus.",
+        "evidence": [
+          "Browser-Streaming-Test",
+          "Fokus- und IME-Assertions"
+        ],
+        "source": [
+          "Onda §7",
+          "Etappe A §6"
+        ]
+      },
+      "WORK-08": {
+        "title": "Entscheidungsverlauf ist vollständig und persistent",
+        "gate": "hard",
+        "automation": "browser",
+        "given": "Vorschläge wurden übernommen, verändert, verworfen oder als Risiko angenommen.",
+        "when": "Der Entscheidungsverlauf geöffnet und die App neu geladen wird.",
+        "then": "Art, Zeitpunkt, betroffener Hinweis, resultierender Wortlaut und vorhandene Begründung bleiben sichtbar.",
+        "evidence": [
+          "Browser-Fluss für alle Entscheidungsarten",
+          "Reload-Assertion"
+        ],
+        "source": [
+          "Etappe A §6",
+          "V2 §7"
+        ]
+      },
+      "EVID-01": {
+        "title": "Quellenimport bewahrt Original und Herkunft",
+        "gate": "hard",
+        "automation": "fixture",
+        "given": "PDF, Web/URL, DOI, Text oder Audio/Video wird importiert.",
+        "when": "Der Import erfolgreich endet.",
+        "then": "Original bzw. unveränderlicher Verweis, Typ, Metadaten, Importzeit und Prüfsumme sind gespeichert; abgeleitete Inhalte bleiben getrennt.",
+        "evidence": [
+          "Fixture-Import pro Quellentyp",
+          "Store- und Hash-Assertions"
+        ],
+        "source": [
+          "V2 §8",
+          "Transfer §5"
+        ]
+      },
+      "EVID-02": {
+        "title": "Fundstellen springen zum überprüfbaren Original",
+        "gate": "hard",
+        "automation": "browser",
+        "given": "Eine Quelle enthält eine Seiten-, Abschnitts- oder Zeitfundstelle.",
+        "when": "Der Nutzer die Fundstelle öffnet.",
+        "then": "Reader oder Player zeigt den exakten Originalausschnitt und behält den Bezug zur gestützten Aussage.",
+        "evidence": [
+          "PDF-, HTML- und Zeitcode-Fixtures",
+          "Browser-Assertion auf Locator und Ausschnitt"
+        ],
+        "source": [
+          "V2 §8",
+          "Onda §8"
+        ]
+      },
+      "EVID-03": {
+        "title": "Belegbündel ist claim-spezifisch",
+        "gate": "hard",
+        "automation": "integration",
+        "given": "Eine überprüfbare Aussage besitzt Quellenmaterial.",
+        "when": "Ein Belegbündel gebaut wird.",
+        "then": "Es enthält exakte Aussage, stützende Fundstellen, Gegenbelege, Grenzen, Reichweite, Unsicherheit, erlaubte Formulierungsstärke und Nicht-Belegtes.",
+        "evidence": [
+          "Domänen-Fixture mit vollständigem und unvollständigem Bundle"
+        ],
+        "source": [
+          "V2 §8"
+        ]
+      },
+      "EVID-04": {
+        "title": "Quellenqualität wird pro Claim begründet",
+        "gate": "scored",
+        "automation": "fixture",
+        "given": "Mehrere Quellen unterscheiden sich in Methode, Aktualität, Unabhängigkeit und direkter Relevanz.",
+        "when": "Der Agent sie für eine konkrete Aussage einordnet.",
+        "then": "Die Einordnung nennt relevante Qualitätsdimensionen und erzeugt keinen globalen Wahrheitsscore.",
+        "evidence": [
+          "Gold-Fixtures mit erwarteten Stärken und Grenzen",
+          "Rubrik-Judge"
+        ],
+        "source": [
+          "V2 §8"
+        ]
+      },
+      "EVID-05": {
+        "title": "Zitat und Paraphrase passen zur Fundstelle",
+        "gate": "hard",
+        "automation": "integration",
+        "given": "Ein Text enthält direktes Zitat oder Paraphrase mit Quellenanker.",
+        "when": "Die Zitierprüfung läuft.",
+        "then": "Abweichende Zitate, überdehnte Paraphrasen und fehlende Seitenanker werden konkret markiert; passende Stellen bleiben unbeanstandet.",
+        "evidence": [
+          "Positive und negative Zitat-Fixtures"
+        ],
+        "source": [
+          "V2 §9"
+        ]
+      },
+      "EVID-06": {
+        "title": "Bibliografische Identität wird verifiziert",
+        "gate": "hard",
+        "automation": "integration",
+        "given": "Autor, Titel, Jahr, DOI, ISBN oder URL sind vorhanden oder widersprüchlich.",
+        "when": "Metadaten geprüft werden.",
+        "then": "Nur bestätigte Felder erhalten Verifiziert-Status; Konflikte und Versionen bleiben sichtbar.",
+        "evidence": [
+          "Metadaten-Fixtures mit DOI- und Versionskonflikten"
+        ],
+        "source": [
+          "V2 §9",
+          "Forschungsnotiz Slop §6.2"
+        ]
+      },
+      "EVID-07": {
+        "title": "Textzitate und Literaturverzeichnis sind konsistent",
+        "gate": "hard",
+        "automation": "integration",
+        "given": "Ein Text enthält Zitate und ein Literaturverzeichnis.",
+        "when": "Die Abschlussprüfung läuft.",
+        "then": "Fehlende, verwaiste und doppelte Einträge sowie Stilabweichungen werden fundstellengenau ausgewiesen.",
+        "evidence": [
+          "CSL-/Text-Fixtures für vollständig, fehlend, verwaist und doppelt"
+        ],
+        "source": [
+          "V2 §9"
+        ]
+      },
+      "EVID-08": {
+        "title": "Korrekturen, Rücknahmen und Versionen verändern den Evidenzstatus",
+        "gate": "hard",
+        "automation": "integration",
+        "given": "Eine Quelle besitzt eine Korrektur, Rücknahme, neue Version oder abweichende Primärquelle.",
+        "when": "Metadaten, Belegbündel und Audit aktualisiert werden.",
+        "then": "Status und betroffene Claims werden neu geprüft; frühere Fundstellen bleiben historisch nachvollziehbar, gelten aber nicht still weiter als belastbar.",
+        "evidence": [
+          "Fixture für Erratum, Retraction und Versionswechsel",
+          "Propagation-Assertions"
+        ],
+        "source": [
+          "V2 §9"
+        ]
+      },
+      "RESEARCH-01": {
+        "title": "Recherche beginnt mit prüfbarer Frage und Suchplan",
+        "gate": "hard",
+        "automation": "integration",
+        "given": "Eine Wissenslücke oder ein Belegbedarf ist erkannt.",
+        "when": "Ein Recherchelauf startet.",
+        "then": "Der Lauf speichert Frage, Claim-Bezug, erlaubte Werkzeuge, Stopbedingungen und geplante Suchwege vor dem ersten externen Aufruf.",
+        "evidence": [
+          "Research-run-Fixture und Ereignisprotokoll"
+        ],
+        "source": [
+          "V2 §3",
+          "V2 §8"
+        ]
+      },
+      "RESEARCH-02": {
+        "title": "Ergebnisse erscheinen erst nach Fundstellenprüfung",
+        "gate": "hard",
+        "automation": "integration",
+        "given": "Suche liefert Metadaten, Abstracts und Volltexte unterschiedlicher Zugänglichkeit.",
+        "when": "Der Agent Ergebnisse für das Projekt übernimmt.",
+        "then": "Nur sichtbare Originalausschnitte stützen entsprechende Aussagen; Metadaten und Abstracts werden nicht überdehnt.",
+        "evidence": [
+          "Adapter-Fixture mit Metadaten-only und Volltext"
+        ],
+        "source": [
+          "V2 §8"
+        ]
+      },
+      "RESEARCH-03": {
+        "title": "Nicht zugängliche Quellen führen zu legalen Alternativen",
+        "gate": "hard",
+        "automation": "integration",
+        "given": "Eine relevante Quelle ist nicht direkt zugänglich.",
+        "when": "Der Recherchelauf fortgesetzt wird.",
+        "then": "Er versucht dokumentierte legale Alternativen, umgeht keine Zugriffskontrolle und fordert keine Passwörter an.",
+        "evidence": [
+          "Adapter-Simulation für Paywall, Preprint und Repositorium",
+          "Werkzeugprotokoll"
+        ],
+        "source": [
+          "V2 §8"
+        ]
+      },
+      "RESEARCH-04": {
+        "title": "Erfolglose Wege werden nicht endlos wiederholt",
+        "gate": "hard",
+        "automation": "unit",
+        "given": "Ein Suchweg ist mit gleicher Anfrage und gleichem Quellenzustand gescheitert.",
+        "when": "Der Lauf neu plant oder fortgesetzt wird.",
+        "then": "Der Weg wird dedupliziert, solange keine neue Evidenz oder Zustandsänderung vorliegt.",
+        "evidence": [
+          "Planer-Test mit wiederholten Werkzeugereignissen"
+        ],
+        "source": [
+          "V2 §8"
+        ]
+      },
+      "RESEARCH-05": {
+        "title": "Gegenbelege und Grenzen werden aktiv gesucht",
+        "gate": "scored",
+        "automation": "fixture",
+        "given": "Eine zentrale Aussage besitzt mindestens eine stützende Quelle.",
+        "when": "Der Recherchelauf die Evidenzlage bewertet.",
+        "then": "Er sucht nach widersprechenden Befunden und methodischen Grenzen und dokumentiert deren Ergebnis oder das erfolglose Suchen.",
+        "evidence": [
+          "Gold-Recherche-Fixture",
+          "Rubrik-Judge auf Suchbreite und Ehrlichkeit"
+        ],
+        "source": [
+          "V2 §8"
+        ]
+      },
+      "RESEARCH-06": {
+        "title": "Recherche ist abbrechbar und atomar",
+        "gate": "hard",
+        "automation": "integration",
+        "given": "Ein Recherchelauf läuft oder ein Werkzeug fällt aus.",
+        "when": "Der Nutzer abbricht oder ein nicht behebbarer Fehler entsteht.",
+        "then": "Der Lauf endet ohne halbfertiges verifiziertes Wissen; geprüfte Zwischenergebnisse bleiben als solche erhalten und ein späterer Lauf kann fortsetzen.",
+        "evidence": [
+          "Abbruch- und Fehler-Injection im Research-Adapter"
+        ],
+        "source": [
+          "V2 §15",
+          "Qualitätskriterium Zuverlässigkeit"
+        ]
+      },
+      "RESEARCH-07": {
+        "title": "Werkzeugprotokoll macht jeden Rechercheweg reproduzierbar",
+        "gate": "hard",
+        "automation": "integration",
+        "given": "Ein Recherchelauf nutzt Suche, Import, Reader oder Metadatenadapter.",
+        "when": "Ein Werkzeugaufruf beginnt, endet, fehlschlägt oder abgebrochen wird.",
+        "then": "Werkzeug, normalisierte Eingabe, Ergebnisreferenz, Status, Zeit, Adapterversion und Claim-Bezug werden ohne Geheimnisse protokolliert.",
+        "evidence": [
+          "Contract-Test über alle Research-Adapter",
+          "Secret-Canary-Negativtest"
+        ],
+        "source": [
+          "V2 Bauabschnitt 3",
+          "V2 §8"
+        ]
+      },
+      "MEMORY-01": {
+        "title": "Ereignisse und Belege bleiben unveränderliche Wahrheit",
+        "gate": "hard",
+        "automation": "persistence",
+        "given": "Texte, Entscheidungen, Quellen und Agentenläufe erzeugen Ereignisse.",
+        "when": "Dossiers verdichtet oder neu aufgebaut werden.",
+        "then": "Originalereignisse und Primärquellen bleiben unverändert; abgeleitete Dossiers verweisen auf ihre Herkunft.",
+        "evidence": [
+          "Roundtrip- und Rebuild-Test aus Ereignis-Fixture"
+        ],
+        "source": [
+          "V2 §12"
+        ]
+      },
+      "MEMORY-02": {
+        "title": "Vier Gedächtnisebenen haben klare Grenzen",
+        "gate": "hard",
+        "automation": "unit",
+        "given": "Eine Erinnerung wird aus Text, Projekt, Thema oder persönlicher Präferenz abgeleitet.",
+        "when": "Sie gespeichert oder abgerufen wird.",
+        "then": "Sie besitzt genau eine Ebene, Gültigkeitsbereich, Provenienz, Sensitivität und Löschregel.",
+        "evidence": [
+          "Schema- und Normalisierungstests"
+        ],
+        "source": [
+          "V2 §12"
+        ]
+      },
+      "MEMORY-03": {
+        "title": "Projektgedächtnis entsteht automatisch und bleibt korrigierbar",
+        "gate": "hard",
+        "automation": "browser",
+        "given": "Der Nutzer arbeitet und entscheidet in einem Projekt.",
+        "when": "Das Projektdossier aktualisiert wird.",
+        "then": "Bestätigte Ziele, Begriffe, Quellen und Entscheidungen erscheinen ohne manuelle Ablage und können mit sichtbarer Wirkung korrigiert werden.",
+        "evidence": [
+          "Browser-Fluss mit Entscheidung, Reload und Korrektur"
+        ],
+        "source": [
+          "V2 §12"
+        ]
+      },
+      "MEMORY-04": {
+        "title": "Projektübergreifende Erinnerung braucht Freigabe",
+        "gate": "hard",
+        "automation": "browser",
+        "given": "Eine bestätigte thematische oder persönliche Erinnerung könnte in einem anderen Projekt helfen.",
+        "when": "Das System sie übernehmen möchte.",
+        "then": "Sensible oder projektspezifische Inhalte werden nur nach gebündelter ausdrücklicher Freigabe übernommen; Ablehnen verhindert die Übernahme.",
+        "evidence": [
+          "Browser-Test mit Canary-Daten und Consent"
+        ],
+        "source": [
+          "V2 §12"
+        ]
+      },
+      "MEMORY-05": {
+        "title": "Autorenstimme und Projektstimme bleiben getrennt",
+        "gate": "hard",
+        "automation": "integration",
+        "given": "Ein Nutzer arbeitet in Projekten mit unterschiedlichen Stimmen.",
+        "when": "Stilkontext oder Vorschläge gebaut werden.",
+        "then": "Projektentscheidungen überschreiben keine persönliche Präferenz und persönliche Präferenzen werden nicht als bindender Projektstil behandelt.",
+        "evidence": [
+          "Zwei-Projekt-Stilfixture mit Prompt-Assertions"
+        ],
+        "source": [
+          "V2 §12",
+          "Forschungsnotiz Slop §6.8"
+        ]
+      },
+      "MEMORY-06": {
+        "title": "Gedächtnis ist exportierbar und löschbar",
+        "gate": "hard",
+        "automation": "persistence",
+        "given": "Lokale Erinnerungen und Dossiers existieren.",
+        "when": "Der Nutzer eine Ebene, ein Projekt oder den gesamten Bestand exportiert oder löscht.",
+        "then": "Der Export ist lesbar und vollständig; Löschung entfernt Ziel und abgeleitete Indizes, ohne andere Bereiche zu beschädigen.",
+        "evidence": [
+          "Export-/Delete-Roundtrip mit Referenzprüfung"
+        ],
+        "source": [
+          "V2 §2.7",
+          "V2 §12"
+        ]
+      },
+      "ARG-01": {
+        "title": "Überprüfbare Aussagen werden atomar modelliert",
+        "gate": "hard",
+        "automation": "fixture",
+        "given": "Ein Satz enthält mehrere gestützte und ungestützte Tatsachenbehauptungen.",
+        "when": "Das Claim-Ledger aktualisiert wird.",
+        "then": "Die Behauptungen werden getrennt mit Textanker, Gültigkeit, Evidenzstatus und Unsicherheit geführt.",
+        "evidence": [
+          "Gold-Claim-Fixtures mit gemischten Sätzen"
+        ],
+        "source": [
+          "V2 §6",
+          "Forschungsnotiz Slop §6.1"
+        ]
+      },
+      "ARG-02": {
+        "title": "Argumentrelationen sind explizit und korrigierbar",
+        "gate": "hard",
+        "automation": "browser",
+        "given": "Passagen stützen, widersprechen, qualifizieren oder erklären einander.",
+        "when": "Das Argumentmodell angezeigt oder korrigiert wird.",
+        "then": "Relation, Schlussbrücke und Sicherheitsgrad sind verständlich sichtbar; Nutzerkorrekturen werden bindend gespeichert.",
+        "evidence": [
+          "Argument-Fixture und Browser-Korrektur"
+        ],
+        "source": [
+          "V2 §6",
+          "Forschungsnotiz Rhetorik §2"
+        ]
+      },
+      "ARG-03": {
+        "title": "Grundursachen parken abhängige Symptome",
+        "gate": "hard",
+        "automation": "unit",
+        "given": "Mehrere Hinweise hängen von derselben ungeklärten Annahme ab.",
+        "when": "Die Hinweispriorität berechnet wird.",
+        "then": "Die Annahme erscheint als Grundursache und abhängige Hinweise bleiben geparkt, aber auffindbar.",
+        "evidence": [
+          "Abhängigkeitsgraph-Fixture"
+        ],
+        "source": [
+          "V2 §4",
+          "V2 §7"
+        ]
+      },
+      "ARG-04": {
+        "title": "Naheliegende Gegenargumente werden berücksichtigt",
+        "gate": "scored",
+        "automation": "fixture",
+        "given": "Eine zentrale Position hat im Material ein relevantes Gegenargument.",
+        "when": "Die Argumentationsprüfung läuft.",
+        "then": "Der Agent benennt das stärkste relevante Gegenargument, seine Evidenz und die Auswirkung, ohne einen Strohmann zu erzeugen.",
+        "evidence": [
+          "Gold-Fixtures aus mehreren Genres",
+          "Rubrik-Judge"
+        ],
+        "source": [
+          "V2 §3",
+          "V2 §10"
+        ]
+      },
+      "ARG-05": {
+        "title": "Änderungen lösen begrenzte Auswirkungsanalyse aus",
+        "gate": "hard",
+        "automation": "integration",
+        "given": "Eine zentrale Aussage, Definition, Quelle oder Autorentscheidung ändert sich.",
+        "when": "Das Projektmodell aktualisiert wird.",
+        "then": "Nur erreichbare abhängige Claims, Hinweise, Belege und Passagen werden als neu zu prüfen markiert; unabhängige Bereiche bleiben stabil.",
+        "evidence": [
+          "Graph-Propagation-Fixture mit betroffenen und unabhängigen Knoten"
+        ],
+        "source": [
+          "V2 §7",
+          "Bauabschnitt 5"
+        ]
+      },
+      "ARG-06": {
+        "title": "Regressionen öffnen gelöste Punkte nur mit neuem Anlass",
+        "gate": "hard",
+        "automation": "integration",
+        "given": "Ein Hinweis wurde erledigt oder verworfen.",
+        "when": "Ein Folgelauf ohne neue Evidenz und danach mit veränderter Evidenz läuft.",
+        "then": "Der Punkt bleibt zunächst geschlossen und wird nur im zweiten Fall mit sichtbarem neuen Anlass wieder geöffnet.",
+        "evidence": [
+          "Zwei-Phasen-Regressionsfixture"
+        ],
+        "source": [
+          "V2 §7"
+        ]
+      },
+      "ARG-07": {
+        "title": "Alternative Argumentationswege sind substanziell verschieden",
+        "gate": "scored",
+        "automation": "fixture",
+        "given": "Der Nutzer bittet um alternative Wege für eine ungeklärte Argumentation.",
+        "when": "Der Agent Varianten erzeugt.",
+        "then": "Die Varianten unterscheiden sich in Prämisse, Schlussbrücke, Perspektive oder Evidenzstrategie und nicht nur durch Synonyme; ihre Auswirkungen und Risiken sind sichtbar.",
+        "evidence": [
+          "Genreübergreifende Varianten-Fixtures",
+          "Rubrik-Judge auf semantische Distanz und Tragfähigkeit"
+        ],
+        "source": [
+          "V2 §6",
+          "Forschungsnotiz Slop §6.9"
+        ]
+      },
+      "LANG-01": {
+        "title": "Sprachdiagnose nutzt ein korrigierbares Kontextprofil",
+        "gate": "hard",
+        "automation": "integration",
+        "given": "Genre, Teiltextfunktion, Fach oder Markt, Publikum, Medium und Zielhandlung sind bekannt oder unvollständig.",
+        "when": "Eine Sprachprüfung startet.",
+        "then": "Die Diagnose nutzt bekannte Angaben, kennzeichnet fehlende Grundlage und erfindet kein universelles Stilprofil.",
+        "evidence": [
+          "Kontextprofil-Fixtures über Wissenschaft, Essay, Projekt- und Webtext"
+        ],
+        "source": [
+          "Forschungsnotiz Deutsch §10–11"
+        ]
+      },
+      "LANG-02": {
+        "title": "Norm, Grammatik, Register und Wirkung werden getrennt",
+        "gate": "hard",
+        "automation": "fixture",
+        "given": "Testpassagen enthalten Normfehler, grammatische Auffälligkeiten und legitime Stilvarianten.",
+        "when": "Die deutsche Qualitätsprüfung läuft.",
+        "then": "Nur Normverstöße werden als Fehler bezeichnet; andere Befunde tragen ihren begrenzten Status und eine Begründung.",
+        "evidence": [
+          "Gold-Fixture mit erwarteter Statusklasse"
+        ],
+        "source": [
+          "Forschungsnotiz Deutsch §1"
+        ]
+      },
+      "LANG-03": {
+        "title": "Plurizentrische und institutionelle Varianten bleiben legitim",
+        "gate": "hard",
+        "automation": "fixture",
+        "given": "Ein Projekt verwendet Deutschland-, Österreich- oder Schweiz-Standard bzw. einen Hausstil.",
+        "when": "Varianten geprüft werden.",
+        "then": "Legitime Profilvarianten werden nicht als Fehler markiert; Normstatus und Konsistenz bleiben getrennt.",
+        "evidence": [
+          "D-A-CH- und Hausstil-Fixtures"
+        ],
+        "source": [
+          "Forschungsnotiz Deutsch §4"
+        ]
+      },
+      "LANG-04": {
+        "title": "Behauptungsstärke folgt Evidenz statt Modellton",
+        "gate": "hard",
+        "automation": "integration",
+        "given": "Claims besitzen unterschiedliche Evidenzarten, Reichweiten und Widerspruchslagen.",
+        "when": "Modalität oder Formulierung geprüft wird.",
+        "then": "Zu starke und zu schwache Formulierungen werden claim-spezifisch erkannt; passende Formulierungen bleiben erhalten.",
+        "evidence": [
+          "Evidenz-/Modalitätsmatrix als Fixture"
+        ],
+        "source": [
+          "Forschungsnotiz Deutsch §7",
+          "Forschungsnotiz Slop §2"
+        ]
+      },
+      "LANG-05": {
+        "title": "Oberflächenmuster lösen Diagnose statt Verbotsregel aus",
+        "gate": "hard",
+        "automation": "fixture",
+        "given": "Texte enthalten Gedankenstriche, Passiv, Nominalisierung, Dreierfiguren, Konnektoren oder Wiederholungen mit und ohne Funktion.",
+        "when": "Der Anti-Slop-Lauf startet.",
+        "then": "Nur funktionslose oder unpassende Häufungen erzeugen begrenzte Hinweise; kein Merkmal wird pauschal verboten.",
+        "evidence": [
+          "Kontrast-Fixtures je Musterfamilie"
+        ],
+        "source": [
+          "V2 §11",
+          "Forschungsnotiz Slop §3–6"
+        ]
+      },
+      "LANG-06": {
+        "title": "Sprachvarianten bewahren Bedeutungskern",
+        "gate": "hard",
+        "automation": "fixture",
+        "given": "Der Agent schlägt eine sprachliche oder rhetorische Variante vor.",
+        "when": "Bedeutung, Einschränkung, Evidenzstatus und Referenten verglichen werden.",
+        "then": "Nur bedeutungstreue Varianten werden angeboten; Abweichungen werden verworfen oder ausdrücklich als neue Argumentationsrichtung markiert.",
+        "evidence": [
+          "Minimalpaar-Fixtures mit semantischer Drift"
+        ],
+        "source": [
+          "V2 §10–11",
+          "Forschungsnotiz Rhetorik §3"
+        ]
+      },
+      "LANG-07": {
+        "title": "Kein KI-Herkunftsurteil und keine Tarnoptimierung",
+        "gate": "hard",
+        "automation": "integration",
+        "given": "Ein Text zeigt typische LLM- oder menschliche Oberflächenmuster.",
+        "when": "Qualitätsdiagnose und Revision laufen.",
+        "then": "Das System behauptet keine KI-Wahrscheinlichkeit und fügt keine Fehler, Zufälligkeit oder dekorative Details zum Täuschen von Detektoren ein.",
+        "evidence": [
+          "Prompt- und Ausgabe-Negativtests",
+          "Canary-Begriffe für Herkunftsscores"
+        ],
+        "source": [
+          "V2 §11",
+          "Forschungsnotiz Slop §6.14–15"
+        ]
+      },
+      "LANG-08": {
+        "title": "Rechtschreibautomatik ist optional und bedeutungsneutral",
+        "gate": "hard",
+        "automation": "browser",
+        "given": "Ein Text enthält eindeutige reine Rechtschreibfehler sowie mehrdeutige sprachliche Stellen.",
+        "when": "Die optionale automatische Rechtschreibkorrektur aus- oder eingeschaltet ist.",
+        "then": "Ausgeschaltet ändert sie nichts; eingeschaltet darf sie nur eindeutige Normfälle anwenden, protokolliert jede Änderung und lässt Bedeutung, Eigennamen sowie mehrdeutige Stellen unverändert.",
+        "evidence": [
+          "Browser- und Fixture-Test mit eindeutigen und mehrdeutigen Fällen"
+        ],
+        "source": [
+          "V2 §3",
+          "Forschungsnotiz Deutsch §1"
+        ]
+      },
+      "EFFECT-01": {
+        "title": "Publikumsmodell beschreibt Ausgangs- und Zielzustand",
+        "gate": "scored",
+        "automation": "fixture",
+        "given": "Ein Text besitzt Zielgruppe und Kommunikationsziel.",
+        "when": "Der Agent Wirkung analysiert.",
+        "then": "Er unterscheidet Vorwissen, Annahmen, Widerstände, geteilte Voraussetzungen und beabsichtigte Veränderung statt eines statischen Zielgruppenlabels.",
+        "evidence": [
+          "Genreübergreifende Gold-Fixtures",
+          "Rubrik-Judge"
+        ],
+        "source": [
+          "V2 §10",
+          "Forschungsnotiz Rhetorik §2"
+        ]
+      },
+      "EFFECT-02": {
+        "title": "Passagen besitzen eine konkrete kommunikative Funktion",
+        "gate": "scored",
+        "automation": "fixture",
+        "given": "Ein Text enthält orientierende, definierende, erklärende, belegende und aktivierende Passagen.",
+        "when": "Die Funktionsfolge analysiert wird.",
+        "then": "Funktionen und Diskursbeziehungen sind lokal begründet; dekorative oder funktionslose Passagen werden als Hypothese markiert.",
+        "evidence": [
+          "Gold-Fixtures mit Passagefunktionen",
+          "Rubrik-Judge"
+        ],
+        "source": [
+          "Forschungsnotiz Rhetorik §1–3"
+        ]
+      },
+      "EFFECT-03": {
+        "title": "Rhetorische Mittel werden auf Passung und Grenzen geprüft",
+        "gate": "scored",
+        "automation": "fixture",
+        "given": "Eine Variante nutzt Beispiel, Analogie, Metapher, Narration, Frame oder Direktheit.",
+        "when": "Die Wirkungsprüfung läuft.",
+        "then": "Der Agent nennt Funktion, erwarteten Gewinn, mögliche Fehlvorstellung und Evidenzsicherheit und kann die direkte Fassung bevorzugen.",
+        "evidence": [
+          "Kontrast-Fixtures mit tragender und irreführender Bildlichkeit"
+        ],
+        "source": [
+          "V2 §10",
+          "Forschungsnotiz Rhetorik §2"
+        ]
+      },
+      "EFFECT-04": {
+        "title": "Wirkungshypothesen werden nicht als Gewissheit ausgegeben",
+        "gate": "hard",
+        "automation": "integration",
+        "given": "Keine reale Publikumsreaktion liegt vor.",
+        "when": "Der Agent eine Leserwirkung prognostiziert.",
+        "then": "Die Prognose ist als begründete Hypothese markiert und enthält keine vorgetäuschte Wirkungssicherheit.",
+        "evidence": [
+          "Ausgabe-Fixtures mit verbotenen Gewissheitsformulierungen"
+        ],
+        "source": [
+          "Forschungsnotiz Rhetorik §3"
+        ]
+      },
+      "EFFECT-05": {
+        "title": "Persuasion bleibt wahrhaftig und fair",
+        "gate": "hard",
+        "automation": "fixture",
+        "given": "Marketing-, Kampagnen- oder personalisierter Text soll überzeugen.",
+        "when": "Die Wirkungs- und Integritätsprüfung läuft.",
+        "then": "Falsche Zuspitzung, ausgelassene zentrale Gegeninformation und ausnutzende Personalisierung werden vor Stiloptimierung markiert.",
+        "evidence": [
+          "Fairness-Fixtures mit erwarteten Integritätshinweisen"
+        ],
+        "source": [
+          "V2 §2.6",
+          "Forschungsnotiz Slop §6.11"
+        ]
+      },
+      "EFFECT-06": {
+        "title": "Reale Wirkung wird extern und aufgabenbezogen geprüft",
+        "gate": "scored",
+        "automation": "user-study",
+        "given": "Eine wichtige Fassung und eine klar definierte Leseraufgabe liegen vor.",
+        "when": "Reale Zielgruppenmitglieder die Aufgabe bearbeiten.",
+        "then": "Verstehen, Finden, Erinnern oder Handeln werden passend zur Aufgabe gemessen und getrennt von bloßer Lesbarkeit berichtet.",
+        "evidence": [
+          "Dokumentiertes Testprotokoll mit Zielgruppe und Aufgabe"
+        ],
+        "source": [
+          "Forschungsnotiz Deutsch §6",
+          "Forschungsnotiz Rhetorik §4"
+        ]
+      },
+      "AUDIT-01": {
+        "title": "Schlussaudit zeigt alle relevanten Zustände",
+        "gate": "hard",
+        "automation": "browser",
+        "given": "Ein Projekt enthält offene, geparkte, gelöste, verworfene und akzeptierte Hinweise.",
+        "when": "Der Nutzer Fertigstellen oder Export öffnet.",
+        "then": "Alle Zustände sind erreichbar; Integrität, Belege und Zitation stehen vor Stilfragen.",
+        "evidence": [
+          "Browser-Fixture mit jeder Statusart"
+        ],
+        "source": [
+          "V2 §5",
+          "Onda §10"
+        ]
+      },
+      "AUDIT-02": {
+        "title": "Freigabereife folgt harten Integritätsregeln",
+        "gate": "hard",
+        "automation": "integration",
+        "given": "Ein wissenschaftlicher Text besitzt offene kritische Beleg-, Zitat-, Fakten-, Methoden- oder Logikprobleme.",
+        "when": "Der Auditstatus berechnet wird.",
+        "then": "Der Status ist nicht freigabereif und nennt die blockierenden Punkte; Stilqualität kann das nicht ausgleichen.",
+        "evidence": [
+          "Auditmatrix über jede kritische Kategorie"
+        ],
+        "source": [
+          "V2 §9",
+          "V2 §17"
+        ]
+      },
+      "AUDIT-03": {
+        "title": "Export bleibt eine Nutzerentscheidung",
+        "gate": "hard",
+        "automation": "browser",
+        "given": "Der Audit enthält offene Risiken.",
+        "when": "Der Nutzer trotzdem exportieren möchte.",
+        "then": "Die App erklärt die Folgen und erlaubt nach bewusster Bestätigung den Export, ohne den Text als freigabereif zu bezeichnen.",
+        "evidence": [
+          "Browser-Fluss mit kritischem Risiko und Export"
+        ],
+        "source": [
+          "V2 §9",
+          "Onda §10"
+        ]
+      },
+      "AUDIT-04": {
+        "title": "Autorschaftsnachweis beruht auf beobachtbaren Ereignissen",
+        "gate": "hard",
+        "automation": "integration",
+        "given": "Nutzer und Agent haben Text, Ideen und Vorschläge beigetragen.",
+        "when": "Der private Autorschaftsnachweis erzeugt wird.",
+        "then": "Er unterscheidet Nutzertext, übernommene, veränderte und nicht übernommene Agentenbeiträge ohne Aufmerksamkeits- oder Verständnisbehauptungen.",
+        "evidence": [
+          "Provenienz-Fixture und exportierter Bericht"
+        ],
+        "source": [
+          "V2 §14"
+        ]
+      },
+      "AUDIT-05": {
+        "title": "Ausgabeprofile bewahren Inhalt und Referenzen",
+        "gate": "hard",
+        "automation": "file-inspection",
+        "given": "Ein Text enthält Überschriften, Listen, Zitate, Fußnoten, Links und Quellenverweise.",
+        "when": "Markdown, HTML und mindestens ein wissenschaftliches Austauschformat exportiert werden.",
+        "then": "Struktur, Text, Zitatanker und Bibliografie bleiben vollständig und maschinenlesbar; keine Agenten-UI gelangt in den Text.",
+        "evidence": [
+          "Golden-file-Exporte und Parser-Roundtrip"
+        ],
+        "source": [
+          "V2 §1",
+          "Bauabschnitt 7"
+        ]
+      },
+      "AUDIT-06": {
+        "title": "KI-Nutzungserklärung ist optional und belegbar",
+        "gate": "hard",
+        "automation": "file-inspection",
+        "given": "Ein Projekt enthält protokollierte Agentenbeiträge.",
+        "when": "Der Nutzer eine KI-Nutzungserklärung exportiert.",
+        "then": "Die Erklärung verwendet nur vorhandene Provenienzereignisse, lässt sich abschalten und enthält keine erfundenen Tätigkeiten.",
+        "evidence": [
+          "Fixture mit gemischten und ohne Agentenbeiträge"
+        ],
+        "source": [
+          "V2 §9",
+          "V2 §14"
+        ]
+      },
+      "AUDIT-07": {
+        "title": "Audit ist reproduzierbar und versioniert",
+        "gate": "hard",
+        "automation": "persistence",
+        "given": "Text, Projektmodell, Quellen und Regeln sind unverändert.",
+        "when": "Der Schlussaudit zweimal mit derselben Version läuft.",
+        "then": "Er erzeugt denselben strukturellen Befund; Regel-, Modell- und Datenversion sind im Protokoll sichtbar.",
+        "evidence": [
+          "Deterministischer Fixture-Lauf und Audit-Snapshot"
+        ],
+        "source": [
+          "V2 §6",
+          "V2 §15"
+        ]
+      },
+      "SYSTEM-01": {
+        "title": "Persistenz über Neustart",
+        "gate": "hard",
+        "automation": "persistence",
+        "given": "Ein Projekt enthält Texte, Quellen, Belege, Gedächtnis, Argumente, Dialoge, Entscheidungen und Auditstatus.",
+        "when": "Die App vollständig beendet und neu gestartet wird.",
+        "then": "Alle Inhalte und stabilen IDs bleiben erhalten und referenzielle Verknüpfungen sind gültig.",
+        "evidence": [
+          "Vollzustand-Roundtrip in Browser- und Mac-Store"
+        ],
+        "source": [
+          "V2 §17"
+        ]
+      },
+      "SYSTEM-02": {
+        "title": "Migration und Backup sind verlustfrei",
+        "gate": "hard",
+        "automation": "persistence",
+        "given": "Bestandsdaten aus jeder unterstützten Schemaversion oder eine beschädigte Hauptdatei liegen vor.",
+        "when": "Die App startet.",
+        "then": "Daten werden additiv migriert oder aus dem letzten gültigen Backup wiederhergestellt; Nutzertext und Originalquellen bleiben erhalten.",
+        "evidence": [
+          "Versionierte Migrations-Fixtures und Korruptions-Injection"
+        ],
+        "source": [
+          "V2 §15",
+          "Bestandsvertrag"
+        ]
+      },
+      "SYSTEM-03": {
+        "title": "Schlüssel bleiben außerhalb von Zustand und Export",
+        "gate": "hard",
+        "automation": "security-inspection",
+        "given": "Ein API-Schlüssel ist in der Mac-App oder im Browserweg hinterlegt.",
+        "when": "Zustand, Logs, Backups, Exporte und JS-Brückennachrichten untersucht werden.",
+        "then": "Die Mac-App gibt nur den Vorhanden-Status an JS; kein Schlüsselwert erscheint in einem untersuchten Artefakt.",
+        "evidence": [
+          "Canary-Schlüssel und rekursive Artefaktsuche",
+          "Keychain-Live-Test"
+        ],
+        "source": [
+          "Etappe A §3"
+        ]
+      },
+      "SYSTEM-04": {
+        "title": "Tastatur und sichtbarer Fokus decken alle Kernflüsse",
+        "gate": "hard",
+        "automation": "browser",
+        "given": "Maus oder Touch werden nicht verwendet.",
+        "when": "Projekt, Editor, Struktur, Hinweis, Dialog, Quelle, Audit und Export bedient werden.",
+        "then": "Jeder Kernfluss ist erreichbar, Fokus bleibt sichtbar und Schließen stellt einen sinnvollen Fokus wieder her.",
+        "evidence": [
+          "Playwright-Tastaturpfade"
+        ],
+        "source": [
+          "V2 §17",
+          "Onda §11–13"
+        ]
+      },
+      "SYSTEM-05": {
+        "title": "Schmale Viewports bleiben überlappungsfrei",
+        "gate": "hard",
+        "automation": "browser",
+        "given": "Die App läuft bei 390×844, 1024×768 und 1440×1000.",
+        "when": "Alle tiefen Oberflächenzustände geöffnet werden.",
+        "then": "Kein horizontaler Overflow, keine verdeckten Aktionen und keine unlösbaren Überlappungen entstehen.",
+        "evidence": [
+          "Geometrie-Assertions und Screenshots je Zustand"
+        ],
+        "source": [
+          "V2 §17",
+          "Onda §13"
+        ]
+      },
+      "SYSTEM-06": {
+        "title": "Reduzierte Bewegung und kein Fokusraub",
+        "gate": "hard",
+        "automation": "browser",
+        "given": "prefers-reduced-motion ist aktiv oder der Nutzer tippt bzw. komponiert per IME.",
+        "when": "Hinweise, Initiative, Dialog oder Rechercheergebnis erscheinen.",
+        "then": "Nicht notwendige Bewegung ist praktisch deaktiviert und Auswahl sowie Fokus bleiben beim Nutzer.",
+        "evidence": [
+          "CSS-Zeitmessung, Fokus- und IME-Browsertests"
+        ],
+        "source": [
+          "Onda §11",
+          "V2 §17"
+        ]
+      },
+      "SYSTEM-07": {
+        "title": "Schreiben reagiert unabhängig von Agentenläufen",
+        "gate": "hard",
+        "automation": "browser",
+        "given": "Recherche, Modellstream oder Audit läuft im Hintergrund.",
+        "when": "Der Nutzer im Editor tippt.",
+        "then": "Eingaben erscheinen ohne wahrnehmbare Blockierung; ein einzelner synchroner App-Task blockiert den Hauptthread nicht länger als 50 ms.",
+        "evidence": [
+          "Performance-Trace und Long-task-Assertion"
+        ],
+        "source": [
+          "V2 §2.4",
+          "V2 §13"
+        ]
+      },
+      "SYSTEM-08": {
+        "title": "Kosten und Budget bleiben sichtbar und begrenzbar",
+        "gate": "hard",
+        "automation": "integration",
+        "given": "Agentenläufe verbrauchen Tokens oder erreichen ein konfiguriertes Monatsbudget.",
+        "when": "Usage verbucht oder ein neuer kostenpflichtiger Lauf geplant wird.",
+        "then": "Verbrauch und Schätzung steigen nachvollziehbar; oberhalb des Budgets startet kein automatischer Lauf ohne bewusste Freigabe.",
+        "evidence": [
+          "Usage-/Monatswechsel-/Budgettests",
+          "Browser-Dialog bei Budgetgrenze"
+        ],
+        "source": [
+          "Etappe A §3.4"
+        ]
+      },
+      "SYSTEM-09": {
+        "title": "Browser- und Mac-Kernlogik bleiben gleich",
+        "gate": "hard",
+        "automation": "integration",
+        "given": "Derselbe deterministische Transport- und Store-Fixture wird im Browser- und Brückenpfad verwendet.",
+        "when": "Arbeitsschleife, Persistenz und Export ausgeführt werden.",
+        "then": "Domänenergebnisse sind gleich; Unterschiede beschränken sich auf Schlüssel- und Dateisystemadapter.",
+        "evidence": [
+          "Contract-Tests für Transport und Store",
+          "Mac-Probe"
+        ],
+        "source": [
+          "Etappe A §3"
+        ]
+      },
+      "SYSTEM-10": {
+        "title": "Vollständige lokale Datenkontrolle",
+        "gate": "hard",
+        "automation": "file-inspection",
+        "given": "Ein vollständiger Projektbestand existiert.",
+        "when": "Der Nutzer Gesamt-Export und anschließende Löschung ausführt.",
+        "then": "Der Export enthält alle eigenen Texte, Quellen, Entscheidungen, Provenienz und lesbare Metadaten; die Löschung entfernt den lokalen Bestand und hinterlässt keine geheimen Schlüssel im Export.",
+        "evidence": [
+          "Exportmanifest-Prüfung, Lösch- und Wiederimporttest"
+        ],
+        "source": [
+          "V2 §2.7",
+          "V2 §12"
+        ]
+      },
+      "SYSTEM-11": {
+        "title": "Kernoberfläche erfüllt WCAG 2.1 AA",
+        "gate": "hard",
+        "automation": "browser",
+        "given": "Bibliothek, Editor, Struktur, Hinweise, Dialoge, Reader, Audit und Einstellungen sind in jedem Kernzustand geöffnet.",
+        "when": "Semantik, Namen, Beziehungen, Kontrast, Fokusreihenfolge und Zoom geprüft werden.",
+        "then": "Automatisierbare WCAG-2.1-AA-Verstöße sind null; manuell prüfbare Tastatur-, Fokus- und 200-Prozent-Zoom-Szenarien bestehen.",
+        "evidence": [
+          "axe-Lauf je Kernzustand",
+          "manuelles A11y-Protokoll für nicht automatisierbare Kriterien"
+        ],
+        "source": [
+          "V2 §17",
+          "Onda §11–13"
+        ]
+      },
+      "DESIGN-01": {
+        "title": "Feedback steht neben der Stelle, nicht darunter",
+        "gate": "hard",
+        "automation": "browser",
+        "given": "Ein Hinweis ist an eine Passage im geöffneten Text verankert.",
+        "when": "Der Hinweis wird angezeigt.",
+        "then": "Der Hinweis erscheint seitlich versetzt neben der Passage und überlappt deren Zeilenhöhe. Zwischen der Passage und dem folgenden Absatz entsteht kein eingeschobener Block über die volle Textbreite; der Lesefluss der Spalte bleibt ununterbrochen.",
+        "evidence": [
+          "Browser-Messung: Kastengeometrie von Passage und Hinweis (horizontaler Versatz > 0, vertikale Überlappung > 0)",
+          "Browser-Messung: Abstand zwischen Passage und Folgeabsatz unverändert gegenüber einem Absatz ohne Hinweis"
+        ],
+        "source": [
+          "Rückmeldung 2026-07-31",
+          "docs/REDESIGN-IDEEN.md §1"
+        ]
+      },
+      "DESIGN-02": {
+        "title": "Die Struktur-Spalte wiederholt den Text nicht",
+        "gate": "hard",
+        "automation": "browser",
+        "given": "Ein Dokument mit mehreren Absätzen ist geöffnet, die Struktur-Spalte ist sichtbar.",
+        "when": "Die Spalte wird im Ausgangszustand erhoben.",
+        "then": "Die Spalte zeigt im eingeklappten Zustand keinen wörtlichen Auszug aus dem Dokumenttext. Wer die Spalte liest, liest nicht denselben Text ein zweites Mal.",
+        "evidence": [
+          "Browser-Messung: kein sichtbarer Textknoten der Spalte ist eine Teilzeichenkette eines Dokumentabsatzes (Mindestlänge 20 Zeichen)"
+        ],
+        "source": [
+          "Rückmeldung 2026-07-31",
+          "docs/REDESIGN-IDEEN.md §2"
+        ]
+      },
+      "DESIGN-03": {
+        "title": "Bausteine öffnen sich einzeln auf Wunsch",
+        "gate": "hard",
+        "automation": "browser",
+        "given": "Die Struktur-Spalte zeigt mehrere Bausteine im eingeklappten Zustand.",
+        "when": "Ein Baustein wird angeklickt.",
+        "then": "Genau dieser Baustein zeigt zusätzliche Angaben; die übrigen bleiben eingeklappt. Ein zweiter Klick schließt ihn wieder.",
+        "evidence": [
+          "Browser-Messung: Höhe des geklickten Bausteins wächst, Höhe der übrigen bleibt gleich",
+          "Browser-Messung: Zustand ist umkehrbar"
+        ],
+        "source": [
+          "Rückmeldung 2026-07-31",
+          "docs/REDESIGN-IDEEN.md §2"
+        ]
+      },
+      "DESIGN-04": {
+        "title": "Keine Beschriftungen in Großbuchstaben",
+        "gate": "hard",
+        "automation": "browser",
+        "given": "Eine beliebige Kernansicht ist geöffnet (Startseite, Textliste, Schreibansicht, Verständnisfenster, Einstellungen).",
+        "when": "Alle sichtbaren Beschriftungen werden erhoben.",
+        "then": "Kein sichtbares Element wird per text-transform in Großbuchstaben gesetzt. Ein Wort steht nur dann in Versalien, wenn es die Autorin oder der Autor so geschrieben hat.",
+        "evidence": [
+          "Browser-Messung über alle Kernansichten: Anzahl sichtbarer Elemente mit textTransform === 'uppercase' ist 0"
+        ],
+        "source": [
+          "Rückmeldung 2026-07-31",
+          "docs/REDESIGN-IDEEN.md §3"
+        ]
+      },
+      "DESIGN-05": {
+        "title": "Bibliothek und Schreibansicht sprechen dieselbe Gestaltungssprache",
+        "gate": "hard",
+        "automation": "browser",
+        "given": "Startseite, Textliste und Schreibansicht sind nacheinander geöffnet.",
+        "when": "Abstände, Schriftgrade, Radien und Kartenbehandlung werden verglichen.",
+        "then": "Alle drei Ansichten beziehen diese Werte aus denselben Gestaltungsmarken. Keine Ansicht führt eigene, fest eingetragene Werte. Der Wechsel zwischen ihnen fühlt sich nicht wie ein Wechsel der Anwendung an.",
+        "evidence": [
+          "Browser-Messung: verwendete Abstands-, Schrift- und Radienwerte je Ansicht stammen aus der Marken-Liste",
+          "Datei-Prüfung: keine fest eingetragenen px-Werte in den Regeln der Bibliotheks- und Startseitenansicht"
+        ],
+        "source": [
+          "docs/REDESIGN-IDEEN.md §4d",
+          "Befund 2026-07-31: Startseite optisch unverändert gegenüber 07.07."
+        ]
+      },
+      "DESIGN-06": {
+        "title": "Die Umgestaltungsentscheidungen sind getroffen",
+        "gate": "hard",
+        "automation": "file-inspection",
+        "given": "docs/REDESIGN-IDEEN.md sammelt Punkte mit Status offen, vereinbart oder verworfen.",
+        "when": "Die Umsetzung eines Punktes beginnt.",
+        "then": "Dieser Punkt trägt den Status vereinbart oder verworfen mit einer Begründung. Kein Punkt wird umgesetzt, solange er auf offen steht — die Entscheidung liegt beim Nutzer, nicht bei der Umsetzung.",
+        "evidence": [
+          "Datei-Prüfung: Statustabelle in docs/REDESIGN-IDEEN.md enthält keinen Eintrag 'open' für einen Punkt, dessen Eval bereits bestanden wird"
+        ],
+        "source": [
+          "Anweisung 2026-07-31: erst sammeln, dann umsetzen"
+        ]
+      },
+      "DESIGN-07": {
+        "title": "Lernen bleibt Rückblick statt Leistungsdashboard",
+        "gate": "hard",
+        "automation": "browser",
+        "given": "Im Personenbereich liegen wiederkehrende Muster, ein möglicher Stimmenzug und eine Rückkopplung vor.",
+        "when": "Die schreibende Person diesen Bereich betrachtet und bedient.",
+        "then": "Dimension, Wiederkehr, Stimmenfreigabe und Rückkopplung sind ruhig lesbar und vollständig rücknehmbar. Es gibt weder Fortschrittsbalken noch Punktestand noch eine Erfolgsquote, die Optimierung auf Klicks statt auf Schreiben nahelegt.",
+        "evidence": [
+          "Browser-Prüfung: Personenbereich bei leerem, wiederkehrendem, vorgeschlagenem und freigegebenem Zustand",
+          "Datei-Prüfung: keine Score-, Progress- oder Erfolgsquoten-Komponente im Personenbereich"
+        ],
+        "source": [
+          "docs/VISION-GEGEN-GEBAUTES.md",
+          "app/src/workspace.js (renderErkanntes)"
+        ]
+      },
+      "ERWEITERUNG-01": {
+        "title": "Die Zahl der Stellen gehört zur Art",
+        "gate": "hard",
+        "automation": "unit",
+        "given": "Der Agent bietet eine Erweiterung an. Eine Weiterführung gehört zu genau einer Stelle im Text, ein Feld zu keiner, eine Verbindung zu genau zwei.",
+        "when": "Die Zahl der mitgelieferten Stellen nicht zur Art passt, eine Stelle im Text nicht auffindbar ist oder eine Verbindung zweimal auf dieselbe Stelle zeigt.",
+        "then": "Die Erweiterung wird verworfen. Es wird keine Stelle erfunden, damit die Form gleichmäßig aussieht, und keine weggelassen, damit sie passt. Was übernommen wird, trägt den Wortlaut des Dokuments und nicht die Schreibweise des Modells.",
+        "evidence": [
+          "Node-Test über alle drei Arten mit passender und unpassender Stellenzahl",
+          "Negativfälle: erfundene Stelle, fehlende zweite Stelle, zweimal dieselbe Stelle"
+        ],
+        "source": [
+          "Rückmeldungs-Karte 04.08.2026: drei Arten von Erweiterung",
+          "app/src/erweiterung-model.mjs",
+          "app/src/erweiterungslauf-model.mjs",
+          "app/src/erweiterung-model.mjs (ANKER_ANZAHL)"
+        ]
+      },
+      "ERWEITERUNG-02": {
+        "title": "Ohne übertragbares Muster keine Erweiterung",
+        "gate": "hard",
+        "automation": "unit",
+        "given": "Der Agent hat einen weiterführenden Gedanken zu diesem Text.",
+        "when": "Er nennt kein Muster — also kein Prinzip, das beim nächsten Text von allein wieder anwendbar wäre.",
+        "then": "Die Erweiterung wird verworfen. Das Muster ist Pflichtfeld der Antwortform und Bedingung für die Übernahme; ein Einfall, der nur für diesen einen Fall gilt, erreicht die Seitenspalte nie.",
+        "evidence": [
+          "Node-Test: eine Erweiterung ohne Muster wird verworfen",
+          "Prüfung der Antwortform: muster steht unter den Pflichtfeldern"
+        ],
+        "source": [
+          "Rückmeldungs-Karte 04.08.2026: drei Arten von Erweiterung",
+          "app/src/erweiterung-model.mjs",
+          "app/src/erweiterungslauf-model.mjs",
+          "Rückmeldungs-Karte 04.08.2026: das Muster benennen, nicht nur den Einzelfall",
+          "app/src/agent-tasks.mjs (ERWEITERUNGEN_SCHEMA)"
+        ]
+      },
+      "ERWEITERUNG-03": {
+        "title": "Weggelegtes kommt nicht wieder",
+        "gate": "hard",
+        "automation": "unit",
+        "given": "Eine Erweiterung wurde gemerkt oder weggelegt.",
+        "when": "Ein späterer Lauf zum selben Text den Agenten erneut fragt.",
+        "then": "Alles schon Angebotene liegt der Anfrage mit seinem Zustand bei, und dasselbe Angebot wird kein zweites Mal übernommen — auch nicht als neue Verkleidung derselben Stelle und desselben Gedankens. Weggelegtes verschwindet aus der Sicht und bleibt gespeichert, gerade damit es nicht wiederkommt.",
+        "evidence": [
+          "Node-Test: derselbe Vorschlag im zweiten Lauf wird verworfen statt übernommen",
+          "Node-Test: Weggelegtes ist unsichtbar, steht aber mit Zustand in der Liste des schon Angebotenen"
+        ],
+        "source": [
+          "Rückmeldungs-Karte 04.08.2026: drei Arten von Erweiterung",
+          "app/src/erweiterung-model.mjs",
+          "app/src/erweiterungslauf-model.mjs",
+          "app/src/erweiterung-kontext.mjs"
+        ]
+      },
+      "ERWEITERUNG-04": {
+        "title": "Ein Angebot ist kein offener Posten",
+        "gate": "hard",
+        "automation": "integration",
+        "given": "Ein Dokument trägt gleichzeitig offene Hinweise und mehrere Erweiterungen.",
+        "when": "Die Arbeitsoberfläche ihre Zahlen bildet: die Warteschlange der offenen Punkte, die Bilanzzeile und die Zähler an Coach und Randspalte.",
+        "then": "Keine dieser Zahlen zählt eine Erweiterung mit. Sie steht in keiner Warteschlange, klopft nicht von sich aus an und verlangt keine Entscheidung mit Konsequenz. Es gibt genau zwei Gesten: merken und weglegen.",
+        "evidence": [
+          "Prüfung der Warteschlange mit Hinweisen und Erweiterungen nebeneinander, samt Gegenprobe ohne Hinweise",
+          "Bauprüfung: das Modul der beiden Zähler kennt den Kanal nicht, und der Lauf ruft keinen Weg zum Anklopfen"
+        ],
+        "source": [
+          "Rückmeldungs-Karte 04.08.2026: drei Arten von Erweiterung",
+          "app/src/erweiterung-model.mjs",
+          "app/src/erweiterungslauf-model.mjs",
+          "Rückmeldungs-Karte 04.08.2026: Erweiterungen werden nicht gezählt",
+          "app/src/workspace.js (renderZurueckgehalten)",
+          "app/src/workspace.js (fuehreErweiterungslaufAus)"
+        ]
+      },
+      "ERWEITERUNG-05": {
+        "title": "Der Kanal lässt sich von Hand ziehen",
+        "gate": "hard",
+        "automation": "unit",
+        "given": "Der Text ist kürzer als die Länge, ab der von selbst gefragt wird.",
+        "when": "Die Autorin oder der Autor den Kanal ausdrücklich abruft.",
+        "then": "Der Lauf startet trotzdem. Die Mindestlänge bremst allein die selbsttätigen Läufe, nur ein leerer Text bleibt gesperrt, und derselbe Text darf erneut angefragt werden — es gibt keine Sperre auf unveränderten Text, weil eine Erweiterung beim zweiten Mal eine andere sein kann.",
+        "evidence": [
+          "Node-Test: kurzer Text von Hand erlaubt, von selbst gesperrt",
+          "Node-Test: leerer Text bleibt auch von Hand gesperrt",
+          "Node-Test: derselbe Text darf erneut angefragt werden"
+        ],
+        "source": [
+          "Rückmeldungs-Karte 04.08.2026: drei Arten von Erweiterung",
+          "app/src/erweiterung-model.mjs",
+          "app/src/erweiterungslauf-model.mjs",
+          "Rückmeldungs-Karte 04.08.2026: jeder Moment muss auch von Hand ziehbar sein",
+          "app/src/erweiterungslauf-model.mjs (pruefeErweiterungslaufGate)"
+        ]
+      },
+      "ERWEITERUNG-06": {
+        "title": "Eine Verbindung in einen Nachbartext ist sichtbar und anspringbar",
+        "gate": "hard",
+        "automation": "integration",
+        "given": "Eine Verbindung trägt eine Stelle im offenen Text und eine sichtbare Stelle in einem anderen Text desselben Projekts.",
+        "when": "Sie geprüft, angezeigt und angeklickt wird.",
+        "then": "Nur Wortlaut, den das Modell tatsächlich sehen konnte, wird als Anker akzeptiert. Der Klick öffnet den benannten Text und fokussiert genau die dort einmal vorkommende Stelle; verborgener, mehrdeutiger oder inzwischen driftender Wortlaut wird nicht geraten.",
+        "evidence": [
+          "Node-Test: unsichtbarer und mehrdeutiger Fremdanker wird verworfen",
+          "Browser-Prüfung: Klick öffnet den Nachbartext und fokussiert die eindeutige Fundstelle"
+        ],
+        "source": [
+          "Abstract: Cross-Pollination von Ideen",
+          "app/src/erweiterungslauf-model.mjs",
+          "app/src/workspace.js"
+        ]
+      },
+      "ERWEITERUNG-07": {
+        "title": "Projektgrenzen öffnen sich nur über ausdrückliche Freigabe",
+        "gate": "hard",
+        "automation": "integration",
+        "given": "Ein Gedanke stammt aus einem anderen Projekt.",
+        "when": "Er für eine Erweiterung im aktiven Projekt in Betracht kommt.",
+        "then": "Der fremde Projekttext bleibt unsichtbar. Erst eine ausdrücklich bestätigte, zielgebundene Übertragung macht den freigegebenen Wissenseintrag im neuen Projekt verfügbar; Ablehnung und Rücknahme halten ihn fern.",
+        "evidence": [
+          "Node-Test: fremdes Projektwissen wird ohne Transfer nicht abgerufen",
+          "Node-Test: nur eine Nutzerfreigabe erzeugt einen zielgebundenen Eintrag"
+        ],
+        "source": [
+          "app/src/memory-retrieval.mjs",
+          "app/src/onda-kontext.mjs"
+        ]
+      },
+      "MOMENT-01": {
+        "title": "Sprachliches erscheint sofort",
+        "gate": "hard",
+        "automation": "unit",
+        "given": "Beim Schreiben entsteht ein Hinweis zur Formulierung.",
+        "when": "Die Hand noch auf der Tastatur liegt.",
+        "then": "Er ist sofort zu sehen. Die Formulierung ist die einzige Art, die keinen Abstand braucht — sie ist dort am billigsten zu ändern, wo sie steht, und das Aufschauen kostet mehr als die Korrektur selbst.",
+        "evidence": [
+          "Node-Test: die Art Formulierung steht auf dem Moment sofort",
+          "Prüfung der vollständigen Zuordnung Art zu Moment"
+        ],
+        "source": [
+          "Rückmeldungs-Karte 04.08.2026: drei Momente — sofort, beim Innehalten, beim Aufschauen",
+          "app/src/momente-model.mjs"
+        ]
+      },
+      "MOMENT-02": {
+        "title": "Was Abstand braucht, wartet aufs Aufschauen",
+        "gate": "hard",
+        "automation": "unit",
+        "given": "Es liegen Hinweise zu Aufbau, Wirkung oder Erklärung vor sowie Erweiterungen aller drei Arten.",
+        "when": "Weitergeschrieben oder nur kurz innegehalten wird.",
+        "then": "Keiner dieser Punkte erscheint. Sie werden erst sichtbar, wenn aufgeschaut wird: nach langer Ruhe, beim Verlassen der Schreibansicht oder auf ausdrücklichen Abruf. Zurückgehalten heißt dabei nur zurückgehalten — der Punkt bleibt bestehen und erscheint, sobald sein Moment da ist.",
+        "evidence": [
+          "Node-Test: keine der drei Erweiterungsarten erscheint beim Schreiben oder beim Innehalten",
+          "Prüfung der vollständigen Zuordnung: Aufbau, Wirkung und Erklärung stehen auf dem Moment Aufschauen"
+        ],
+        "source": [
+          "Rückmeldungs-Karte 04.08.2026: drei Momente — sofort, beim Innehalten, beim Aufschauen",
+          "app/src/momente-model.mjs",
+          "app/src/workspace.js (currentPassageFinding)"
+        ]
+      },
+      "MOMENT-03": {
+        "title": "Integritätsfragen erscheinen beim Innehalten",
+        "gate": "hard",
+        "automation": "unit",
+        "given": "Ein Hinweis zu Tatsache, Quelle, Methode oder Logik liegt vor.",
+        "when": "Erst mitten im Satz weitergeschrieben wird und später ein Satz oder Absatz abgeschlossen ist.",
+        "then": "Mitten im Satz erscheint er nicht. Nach dem abgeschlossenen Satz erscheint er, ohne dass erst aufgeschaut werden muss. Alle vier Arten stehen auf demselben Moment; keine drängt sich vor und keine wartet länger als nötig.",
+        "evidence": [
+          "Prüfung der vollständigen Zuordnung: alle vier Integritätsarten stehen auf dem Moment Innehalten und auf keinem früheren"
+        ],
+        "source": [
+          "Rückmeldungs-Karte 04.08.2026: drei Momente — sofort, beim Innehalten, beim Aufschauen",
+          "app/src/momente-model.mjs"
+        ]
+      },
+      "MOMENT-04": {
+        "title": "Der Moment hängt an der Satzgrenze, nicht nur an der Uhr",
+        "gate": "hard",
+        "automation": "unit",
+        "given": "Die Hand ruht.",
+        "when": "Die Pause mitten im Satz liegt oder hinter einem abgeschlossenen Satz oder Absatz.",
+        "then": "Mitten im Satz gilt die Pause als Nachdenken und ändert nichts, bis die lange Ruhe erreicht ist. Hinter einer Grenze genügt ein Bruchteil dieser Zeit. Eine Grenze ohne jede Ruhe ist noch kein Innehalten, sonst wäre es jeder Tastendruck.",
+        "evidence": [
+          "Node-Test: gleiche Pause, einmal mitten im Satz und einmal hinter der Grenze, ergibt verschiedene Momente",
+          "Node-Test: Grenze ohne Ruhe bleibt beim Moment sofort"
+        ],
+        "source": [
+          "Rückmeldungs-Karte 04.08.2026: drei Momente — sofort, beim Innehalten, beim Aufschauen",
+          "app/src/momente-model.mjs",
+          "Rückmeldungs-Ticket 01: wann stört Rückmeldung, und wann trägt sie"
+        ]
+      },
+      "MOMENT-05": {
+        "title": "Jeder Moment ist auch von Hand zu ziehen",
+        "gate": "hard",
+        "automation": "unit",
+        "given": "Die Autorin oder der Autor will jetzt sehen, was da ist, statt auf eine Pause zu warten.",
+        "when": "Sie oder er ausdrücklich danach fragt oder die Schreibansicht verlässt.",
+        "then": "Der höchste Moment gilt sofort, unabhängig davon, wie kurz die letzte Pause war. Proaktiv heißt nie: warten müssen.",
+        "evidence": [
+          "Node-Test: von Hand angefordert ergibt immer den Moment Aufschauen",
+          "Node-Test: Verlassen der Schreibansicht ergibt den Moment Aufschauen"
+        ],
+        "source": [
+          "Rückmeldungs-Karte 04.08.2026: drei Momente — sofort, beim Innehalten, beim Aufschauen",
+          "app/src/momente-model.mjs",
+          "Rückmeldungs-Ticket 07: Rückmeldung von Hand anfordern"
+        ]
+      },
+      "MOMENT-06": {
+        "title": "Momente sind aufsteigend, nicht ausschließend",
+        "gate": "hard",
+        "automation": "unit",
+        "given": "Der Moment des Aufschauens ist erreicht und es liegen Rückmeldungen aus allen drei Momenten vor.",
+        "when": "Die Oberfläche zeigt, was jetzt erscheinen darf.",
+        "then": "Alles Niedrigere bleibt sichtbar. Ein Hinweis zur Formulierung verschwindet nicht dadurch, dass die Hand von der Tastatur genommen wurde.",
+        "evidence": [
+          "Node-Test: beim Aufschauen erscheinen auch die Arten der früheren Momente",
+          "Prüfung der vollständigen Zuordnung über alle Arten und alle drei Momente"
+        ],
+        "source": [
+          "Rückmeldungs-Karte 04.08.2026: drei Momente — sofort, beim Innehalten, beim Aufschauen",
+          "app/src/momente-model.mjs"
+        ]
+      },
+      "MOMENT-07": {
+        "title": "Keine Art fällt durch den Rhythmus",
+        "gate": "hard",
+        "automation": "unit",
+        "given": "Alle Rückmeldungsarten beider Kanäle: acht Hinweisarten und drei Erweiterungsarten.",
+        "when": "Der Rhythmus bestimmt, wann jede von ihnen erscheinen darf.",
+        "then": "Jede Art hat genau einen entschiedenen Moment und eine tragfähige Begründung dafür, und jeder der drei Momente trägt mindestens eine Art. Eine neue Art ohne entschiedenen Moment ist ein sichtbarer Fehlschlag und kein stiller Rückfall.",
+        "evidence": [
+          "Node-Test: jede Art aus beiden Kanälen hat einen Moment, die Tabelle hat genau elf Zeilen",
+          "Node-Test: jede Zeile trägt eine Begründung, kein Moment bleibt ohne Art"
+        ],
+        "source": [
+          "Rückmeldungs-Karte 04.08.2026: drei Momente — sofort, beim Innehalten, beim Aufschauen",
+          "app/src/momente-model.mjs",
+          "app/src/agent-prompts.mjs (die acht Hinweisarten)"
+        ]
+      },
+      "KONTEXT-01": {
+        "title": "Was das Projekt weiß, erreicht das Modell",
+        "gate": "hard",
+        "automation": "integration",
+        "given": "Für ein Projekt sind Textsorte und Stilprofil gesetzt, in anderen Texten desselben Projekts wird etwas behauptet, es ist Gedächtnis freigegeben und es steht Erkanntes im Personen-Speicher.",
+        "when": "Irgendeine Anfrage an das Modell gebaut wird — für Hinweise, für Erweiterungen, für das Gespräch oder für das Verständnis.",
+        "then": "Jeder dieser Wissensstände steht im tatsächlich abgeschickten Anfragekörper, und zwar in jedem Kanal. Ein Kanal, der das Wissen vergisst, ist kein fehlerhafter Test, sondern ein blinder Kanal: Dasselbe Modell antwortet dann je nach Anlass mit oder ohne Kenntnis desselben Projekts.",
+        "evidence": [
+          "Prüfung: markierte Zeichenfolgen aus jeder Wissensquelle im echten Anfragekörper aller Kanäle",
+          "Prüfung: jedes Modul, das einen Anfragekontext baut, hängt das Projektwissen an",
+          "Node-Test: der Nachtrag hängt hinten an und lässt die Eingabe unangetastet"
+        ],
+        "source": [
+          "Abstract: „Das System versteht den gesamten Kontext\"",
+          "app/src/onda-kontext.mjs",
+          "Umbau 05.08.2026: die kluge Hälfte an die blinde angeschlossen"
+        ]
+      },
+      "KONTEXT-02": {
+        "title": "Kein Wissensblock entwertet den Zwischenspeicher",
+        "gate": "hard",
+        "automation": "integration",
+        "given": "Eine Anfrage trägt Projektwissen mit.",
+        "when": "Der Anfragekörper zusammengesetzt ist.",
+        "then": "Als zwischengespeichert sind nur das Projektverständnis und der Dokumenttext markiert; jeder Wissensblock steht dahinter. Das ist kein Ordnungssinn, sondern Geld: Ein Wissensblock im Präfix würde den Zwischenspeicher entwerten, sobald sich irgendeine Projektangabe ändert, und jede Anfrage danach wäre voll zu bezahlen statt zu einem Zehntel.",
+        "evidence": [
+          "Prüfung: genau zwei Blöcke tragen die Zwischenspeicher-Markierung, und keiner davon enthält Projektwissen",
+          "Node-Test je Kanal: die Wissensblöcke stehen ganz hinten"
+        ],
+        "source": [
+          "app/src/onda-kontext.mjs",
+          "app/src/agent-tasks.mjs (Aufbau der Anfrage)"
+        ]
+      },
+      "KONTEXT-03": {
+        "title": "Was nicht bekannt ist, erzeugt keinen Block",
+        "gate": "hard",
+        "automation": "unit",
+        "given": "Ein Projekt ohne Angaben, ohne Aussagen, ohne freigegebenes Gedächtnis und ohne Erkanntes.",
+        "when": "Die Wissensblöcke gebaut werden.",
+        "then": "Es entsteht kein Block — kein leerer und keiner, in dem „unbekannt\" steht. Sonst bezahlte jede einzelne Anfrage dafür, mitzuteilen, dass nichts bekannt ist, und das Modell begänne zu raten, was es nicht weiß.",
+        "evidence": [
+          "Prüfung: ohne jede Angabe entstehen null Blöcke, und kein gebauter Block sagt „unbekannt\"",
+          "Node-Test: leere Einzelquellen erzeugen jeweils gar keinen Block"
+        ],
+        "source": [
+          "app/src/onda-kontext.mjs (Regel 3: ein leerer Wert erzeugt gar keinen Block)"
+        ]
+      },
+      "KONTEXT-04": {
+        "title": "Jeder Block hat eine begründete Obergrenze",
+        "gate": "hard",
+        "automation": "unit",
+        "given": "Mehr Aussagen und mehr Gedächtniseinträge, als in eine Anfrage gehören.",
+        "when": "Die Blöcke gebaut werden.",
+        "then": "Jeder Block hält seine Obergrenze ein, kürzt zu lange Einträge und nennt die Gesamtzahl, wenn er gekürzt hat. Beim Kürzen fällt zuerst das Unverbindliche: Eine für das Projekt bindende Festlegung weicht nie einer persönlichen Vorliebe. Jede Grenze wird bei jedem Lauf neu bezahlt, deshalb muss sie eine Zahl mit Begründung sein und keine gefühlte.",
+        "evidence": [
+          "Node-Test: die Obergrenze für den Aussagen-Speicher greift und die Gesamtzahl wird genannt",
+          "Node-Test: die Obergrenze für das Gedächtnis greift, bindende Einträge zuerst",
+          "Node-Test: lange Aussagen werden gekürzt statt in voller Länge bezahlt"
+        ],
+        "source": [
+          "app/src/onda-kontext.mjs (MAX_AUSSAGEN, MAX_GEDAECHTNIS)",
+          "app/src/erkanntes-model.mjs (PROMPT_GRENZE)"
+        ]
+      },
+      "KONTEXT-05": {
+        "title": "Ein beschädigter Speicher kostet keinen bezahlten Lauf",
+        "gate": "hard",
+        "automation": "unit",
+        "given": "Ein Sprachprofil oder ein Gedächtnisspeicher ist unbrauchbar, etwa weil er aus einem fremden Projekt stammt.",
+        "when": "Eine Anfrage an das Modell gebaut wird.",
+        "then": "Der Lauf findet statt, nur ohne diesen einen Block. Ein Wissensblock ist eine Zugabe; er darf einen bezahlten Lauf nie verhindern.",
+        "evidence": [
+          "Node-Test: ein beschädigtes Sprachprofil verhindert keinen Lauf, es fällt nur der Block weg"
+        ],
+        "source": [
+          "app/src/onda-kontext.mjs"
+        ]
+      },
+      "KONTEXT-06": {
+        "title": "Was in anderen Texten steht, reist mit Namen mit",
+        "gate": "hard",
+        "automation": "unit",
+        "given": "Ein Projekt mit mehreren Texten, in denen etwas behauptet wird, darunter Zurückgezogenes und Veraltetes.",
+        "when": "Eine Anfrage zum gerade offenen Text gebaut wird.",
+        "then": "Die Aussagen aus den anderen Texten stehen mit dem Titel ihres Textes darin; zurückgezogene und veraltete gar nicht. Ohne sie sieht das Modell nur den offenen Text und kann einem Kapitel widersprechen, das es nie gelesen hat.",
+        "evidence": [
+          "Node-Test: Aussagen aus anderen Texten nennen den Text beim Namen",
+          "Node-Test: veraltete und zurückgezogene Aussagen gehen gar nicht mit",
+          "Node-Test: Aussagen des offenen Textes gehen nur mit, wenn sie einen Belegstand tragen"
+        ],
+        "source": [
+          "Abstract: Cross-Pollination von Ideen",
+          "app/src/onda-kontext.mjs",
+          "app/src/claim-ledger.mjs (der einzige dokumentübergreifende Speicher)"
+        ]
+      },
+      "KONTEXT-07": {
+        "title": "Das Arbeitsdossier umfasst alle gebauten Wissensarten",
+        "gate": "hard",
+        "automation": "integration",
+        "given": "Zum offenen Text liegen Quellen, Belegbündel, Argumentbeziehungen sowie Sprach-, Wirkungs-, Rhetorik- und Fairnessbefunde vor.",
+        "when": "Ein Hinweis-, Erweiterungs-, Chat- oder Verständnislauf gebaut wird.",
+        "then": "Alle sieben Wissensarten erreichen jeden Kanal gemeinsam, mit Geltungsbereich, Unsicherheit und Herkunft. Wirkungsannahmen bleiben Hypothesen und Belegstände werden nicht hochgestuft.",
+        "evidence": [
+          "Node-Test: markierte Werte aller Wissensarten erscheinen im Arbeitsdossier",
+          "Integrationstest: dasselbe Dossier erreicht alle vier echten Anfragekörper"
+        ],
+        "source": [
+          "Abstract: vollständiger Kontext",
+          "app/src/arbeitskontext-model.mjs",
+          "app/src/onda-kontext.mjs"
+        ]
+      },
+      "KONTEXT-08": {
+        "title": "Arbeitswissen ist isoliert, dedupliziert und budgetiert",
+        "gate": "hard",
+        "automation": "unit",
+        "given": "Das Projekt enthält doppelte, fremde, zurückgezogene, veraltete und sehr umfangreiche Arbeitsdaten.",
+        "when": "Das Arbeitsdossier projiziert wird.",
+        "then": "Nur aktive projektzugehörige Daten werden einmal aufgenommen. Ein festes Zeichen- und Mengenbudget begrenzt die Auswahl deterministisch, und das Manifest zählt jeden Ausschlussgrund, ohne ausgeschlossene Inhalte preiszugeben.",
+        "evidence": [
+          "Node-Test: Fremd-, Inaktiv-, Duplikat- und Budgetfälle",
+          "Node-Test: gleicher Eingang ergibt bytegleichen Ausgang und bleibt unter dem Zeichenbudget"
+        ],
+        "source": [
+          "app/src/arbeitskontext-model.mjs"
+        ]
+      },
+      "MUSTER-01": {
+        "title": "Jede Rückmeldungsart trägt ihr Prinzip",
+        "gate": "hard",
+        "automation": "integration",
+        "given": "Alle Rückmeldungsarten beider Kanäle: die acht Hinweisarten und die drei Erweiterungsarten.",
+        "when": "Das Modell eine Rückmeldung abliefert.",
+        "then": "Jede von ihnen muss das übertragbare Prinzip mitliefern, und keine ist davon ausgenommen. Ein Hinweis, der nur diese eine Stelle repariert, macht diesen einen Text besser; das Prinzip dahinter macht die schreibende Person besser.",
+        "evidence": [
+          "Prüfung: beide Antwortformen führen das Prinzip als Pflichtfeld, über alle elf Arten",
+          "Prüfung: das Prinzip überlebt die Verarbeitung eines Hinweises",
+          "Node-Test: das Feld wandert in den gespeicherten Hinweis"
+        ],
+        "source": [
+          "Abstract: „hinter jedem Feedback das dahinterliegende System offenbaren\"",
+          "app/src/agent-tasks.mjs (HINWEISE_SCHEMA, ERWEITERUNGEN_SCHEMA)"
+        ]
+      },
+      "MUSTER-02": {
+        "title": "Das Prinzip lässt sich nicht stillschweigend weglassen",
+        "gate": "hard",
+        "automation": "file-inspection",
+        "given": "Ein Modell, dem das Verallgemeinern in diesem Fall schwerfällt.",
+        "when": "Die Form der Antwort festgelegt ist.",
+        "then": "Das Prinzip ist Pflichtfeld in einer geschlossenen Feldliste, nicht nur eine Bitte im Auftragstext. Steht es nicht in der Liste, kann das Modell es nicht einmal freiwillig nachreichen — die Bitte liefe jedes Mal ins Leere, ohne dass es irgendwo auffiele.",
+        "evidence": [
+          "Prüfung: das Prinzip steht in beiden Kanälen in der Pflichtliste, die Feldliste ist geschlossen und das Feld ist im Schema erklärt",
+          "Node-Test: die Feldreihenfolge steht fest — erst die Folge, dann das Prinzip, dann erst ein Vorschlag"
+        ],
+        "source": [
+          "app/src/agent-tasks.mjs",
+          "app/src/agent-prompts.mjs (HINWEIS_ANWEISUNG, ERWEITERUNG_ANWEISUNG)"
+        ]
+      },
+      "MUSTER-03": {
+        "title": "Das Prinzip ist mehr als die Beobachtung noch einmal",
+        "gate": "hard",
+        "automation": "file-inspection",
+        "given": "Der Auftragstext an das Modell.",
+        "when": "Er erklärt, was das Prinzip sein soll.",
+        "then": "Er verlangt einen Satz, der beim nächsten Text und bei einem anderen Thema von allein wieder trägt, und weist den Einzelfall ausdrücklich zurück. Ohne diese Unterscheidung schreibt ein Modell die Beobachtung ein zweites Mal, nur allgemeiner formuliert — und der ganze Ertrag wäre eine bezahlte Doppelung.",
+        "evidence": [
+          "Prüfung: beide Auftragstexte verlangen den nächsten Text, nicht diesen",
+          "Node-Test: der Auftragstext nennt das Prinzip in beiden Kanälen"
+        ],
+        "source": [
+          "app/src/agent-prompts.mjs"
+        ]
+      },
+      "MUSTER-04": {
+        "title": "Das Prinzip ist zu sehen, nicht nur gespeichert",
+        "gate": "hard",
+        "automation": "file-inspection",
+        "given": "Ein Hinweis und eine Erweiterung liegen vor.",
+        "when": "Die schreibende Person sie ansieht.",
+        "then": "Das Prinzip steht auf beiden. Ein Pflichtfeld, das nur in einer Datei liegt, ist für den Menschen davor nicht da — und dann wächst niemand daran.",
+        "evidence": [
+          "Prüfung: das Prinzip eines Hinweises und das einer Erweiterung werden beide gezeichnet"
+        ],
+        "source": [
+          "Abstract: der persönliche Erkenntnishorizont erweitert sich über die Zeit",
+          "app/src/workspace.js"
+        ]
+      },
+      "MUSTER-05": {
+        "title": "Ein fehlendes Prinzip wiegt in beiden Kanälen verschieden",
+        "gate": "hard",
+        "automation": "unit",
+        "given": "Eine Rückmeldung kommt ohne Prinzip zurück.",
+        "when": "Sie verarbeitet wird.",
+        "then": "Bei einer Erweiterung wird sie verworfen, bei einem Hinweis nicht. Bei der Erweiterung ist das Prinzip der ganze Ertrag; beim Hinweis trägt die Stelle auch allein, und ihn wegzuwerfen hieße, eine richtige Beobachtung wegen einer fehlenden Zugabe zu verlieren.",
+        "evidence": [
+          "Prüfung: eine Erweiterung ohne Prinzip wird verworfen, ein Hinweis ohne Prinzip bleibt",
+          "Node-Test: ein leeres Muster verwirft den Erweiterungseintrag"
+        ],
+        "source": [
+          "app/src/erweiterungslauf-model.mjs",
+          "app/src/agent-findings.mjs"
+        ]
+      },
+      "TEXTART-01": {
+        "title": "Die Textart entscheidet, was bindet",
+        "gate": "hard",
+        "automation": "integration",
+        "given": "Derselbe Hinweis auf einen fehlenden Beleg, einmal in einer wissenschaftlichen Arbeit und einmal auf einem Plakattext.",
+        "when": "Die schreibende Person ihn verwirft.",
+        "then": "In der Arbeit nimmt sie ein Risiko bewusst an, auf dem Plakat nicht. Ein Plakat hat für eine Fußnote keinen Platz; dort eine Risikoannahme zu verlangen, ist eine Mahnung für ein Versprechen, das niemand gegeben hat.",
+        "evidence": [
+          "Prüfung: derselbe verworfene Quellenhinweis endet in der Arbeit als angenommenes Risiko und auf dem Plakat als verworfen",
+          "Node-Test: die Umwandlung eines Hinweises wendet dieselbe Regel an wie die Entscheidung"
+        ],
+        "source": [
+          "Abstract: Texte jeglicher Art, vom Essay bis zur Prosa",
+          "app/src/textart-regeln.mjs",
+          "app/src/reasoning-model.mjs"
+        ]
+      },
+      "TEXTART-02": {
+        "title": "Eine fehlende Angabe nimmt keine Sicherung weg",
+        "gate": "hard",
+        "automation": "unit",
+        "given": "Die Textart ist nicht angegeben, unbekannt oder ein geerbter Name wie „constructor\".",
+        "when": "Entschieden wird, was bindet.",
+        "then": "Es binden dieselben vier Arten wie vorher, und nichts stürzt ab. Eine Sicherung fällt nicht weg, weil ein Feld leer geblieben ist.",
+        "evidence": [
+          "Prüfung: leere, unbekannte und geerbte Namen fallen auf die vorsichtigen vier zurück",
+          "Node-Test: ohne Textart bleibt die Sicherung bei jedem der vier Fälle"
+        ],
+        "source": [
+          "app/src/textart-regeln.mjs (STANDARD_INTEGRITAET, fail-closed)"
+        ]
+      },
+      "TEXTART-03": {
+        "title": "Die Regel kann nur enger machen, nie weiter",
+        "gate": "hard",
+        "automation": "unit",
+        "given": "Das Modell meldet eine Art als bindend, die die Textart gerade ausgeschlossen hat.",
+        "when": "Daraus eine Rückmeldung wird.",
+        "then": "Sie bindet trotzdem nicht. Zusätzliches darf das Modell melden, Abgeräumtes nicht zurückholen — sonst hätte ein Plakattext weiterhin Quellenfragen, nur weil der Auftragstext dem Modell das nahelegt.",
+        "evidence": [
+          "Prüfung: keine Textart macht eine Art bindend, die es ohne Textart nicht wäre",
+          "Node-Test: das Modell-Flag darf ergänzen, aber nichts zurückholen"
+        ],
+        "source": [
+          "app/src/textart-regeln.mjs",
+          "app/src/agent-findings.mjs"
+        ]
+      },
+      "TEXTART-04": {
+        "title": "Keine Textart fällt durch",
+        "gate": "hard",
+        "automation": "file-inspection",
+        "given": "Alle Textarten, die das Sprachprofil kennt.",
+        "when": "Gefragt wird, was bei ihnen bindet.",
+        "then": "Jede hat eine eigene entschiedene Zeile und eine tragfähige Begründung, und jede Zeile nennt nur Arten, die es wirklich gibt. Eine später hinzukommende Textart taucht sofort mit dem vorsichtigen Fall auf, statt still zu fehlen.",
+        "evidence": [
+          "Prüfung: die vollständige Tabelle Zeile für Zeile, mit Begründung und gegen die tatsächlichen Hinweisarten geprüft",
+          "Node-Test: die Textarten sind die des Sprachprofils, keine zweite Liste daneben"
+        ],
+        "source": [
+          "app/src/textart-regeln.mjs",
+          "app/src/language-profile.mjs (LANGUAGE_GENRES)"
+        ]
+      },
+      "TEXTART-05": {
+        "title": "Erfundenes schuldet nichts über die Welt",
+        "gate": "hard",
+        "automation": "file-inspection",
+        "given": "Ein Prosatext und ein Gedicht.",
+        "when": "Gefragt wird, was bei ihnen bindet.",
+        "then": "Bei Prosa bindet nur der Bruch im Gedankengang, bei Lyrik nichts. Eine erfundene Tatsache ist dort kein Verstoß, sondern das Handwerk; im Gedicht kann sogar der Widerspruch die Form sein. Das ist die einzige Textart, in der Onda gar keine Integritätsfrage kennt.",
+        "evidence": [
+          "Prüfung: Prosa bindet die Logik und nicht die Tatsache, Lyrik bindet nichts",
+          "Node-Test: Prosa und Lyrik stehen in der Textartenliste"
+        ],
+        "source": [
+          "Abstract: „bis hin zu Prosatexten\"",
+          "app/src/textart-regeln.mjs"
+        ]
+      },
+      "TEXTART-06": {
+        "title": "Die Textart erreicht die Entscheidung, nicht nur die Tabelle",
+        "gate": "hard",
+        "automation": "integration",
+        "given": "Ein Projekt mit gesetzter Textart und ein Hinweis dazu.",
+        "when": "Der Hinweis entsteht und später darüber entschieden wird.",
+        "then": "Die Textart reist am Hinweis mit, sodass auch die spätere Entscheidung sie kennt. Eine Regel, die gebaut ist und die niemand übergibt, wirkt nicht — sie sieht nur so aus.",
+        "evidence": [
+          "Prüfung: die Textart steht am umgewandelten Hinweis und bestimmt den Ausgang der Entscheidung",
+          "Node-Test: der Hinweislauf reicht die Textart des Projekts durch"
+        ],
+        "source": [
+          "app/src/hinweislauf-model.mjs",
+          "app/src/workspace.js (Textart aus dem Sprachprofil des Projekts)"
+        ]
+      },
+      "TEXTART-07": {
+        "title": "Jede Textart bekommt ihr eigenes Handwerk",
+        "gate": "hard",
+        "automation": "unit",
+        "given": "Derselbe Textteil wird als wissenschaftlicher Text, Essay oder Prosa geführt.",
+        "when": "Onda Ziel, Prioritäten, Prüffragen und typische Fehlformen projiziert.",
+        "then": "Die drei Projektionen unterscheiden sich sachlich: Wissenschaft prüft Beleg und Methode, Essay Gedankengang und Gegenposition, Prosa Szene, Figur und Perspektive. Jede bekannte Textart hat eine vollständige Zeile; die unbestimmte rät nichts.",
+        "evidence": [
+          "Node-Test: vollständige Tabelle über alle Textarten",
+          "Kontrasttest: Wissenschaft, Essay und Prosa erhalten verschiedene Prüffragen"
+        ],
+        "source": [
+          "app/src/handwerk-model.mjs",
+          "docs/research/2026-08-05-feld-komposition-ueberarbeitung.md"
+        ]
+      },
+      "TEXTART-08": {
+        "title": "Stilmittelregeln sind ein Laufzeit-Gate",
+        "gate": "hard",
+        "automation": "integration",
+        "given": "Das Modell schlägt ein Stilmittel mit strukturierter ID vor.",
+        "when": "Die Antwort in Hinweise umgewandelt wird.",
+        "then": "Unbekannte IDs, fehlende Textarten, unpassende Textarten und widersprüchliche Vorschlagsformen werden verworfen. Nur eine kanonische ID, die in dieser Textart trägt, erreicht den Text; gewöhnliche Formulierungsvorschläge bleiben davon unabhängig möglich.",
+        "evidence": [
+          "Node-Test: unbekannt, textartlos und wissenschaftliche Alliteration fallen geschlossen",
+          "Node-Test: Kampagnen-Alliteration und normaler Formulierungsvorschlag bleiben möglich"
+        ],
+        "source": [
+          "app/src/stilmittel.mjs",
+          "app/src/hinweislauf-model.mjs",
+          "app/src/agent-tasks.mjs"
+        ]
+      },
+      "PERSON-01": {
+        "title": "Es gibt einen Ort, der einer Person gehört",
+        "gate": "hard",
+        "automation": "integration",
+        "given": "Eine Erkenntnis, die über diesen einen Text hinausreicht.",
+        "when": "Sie gespeichert wird.",
+        "then": "Sie liegt auf der persönlichen Ebene und gilt über alle Projekte, nicht an einem Dokument und nicht an einem Projekt, und sie trägt ihre Herkunft mit. Ohne einen solchen Ort stirbt jede Einsicht mit dem Text, in dem sie aufkam.",
+        "evidence": [
+          "Prüfung: der Eintrag liegt bei der Person, gilt über alle Projekte und trägt eine Herkunft",
+          "Node-Test: ein Prinzip wird auf der persönlichen Ebene über alle Projekte gespeichert"
+        ],
+        "source": [
+          "Abstract: „erweitert über die Zeit seinen persönlichen Erkenntnishorizont\"",
+          "app/src/erkanntes-model.mjs"
+        ]
+      },
+      "PERSON-02": {
+        "title": "Nur Angenommenes kommt hinein, über einen einzigen Weg",
+        "gate": "hard",
+        "automation": "file-inspection",
+        "given": "Eine Rückmeldung wird angenommen, eine andere verworfen.",
+        "when": "Der Personen-Speicher fortgeschrieben wird.",
+        "then": "Nur das Angenommene steht darin, und es gibt genau einen Weg hinein. Ein Prinzip aus etwas, das die schreibende Person gerade zurückgewiesen hat, wäre ihr in den Mund gelegt; und ein Speicher, der sich an mehreren Stellen selbst füllt, lässt sich später nicht mehr überblicken.",
+        "evidence": [
+          "Prüfung: genau ein Modul schreibt, und ein Hinweis wandert nur bei Annahme hinein"
+        ],
+        "source": [
+          "app/src/workspace.js",
+          "app/src/erkanntes-model.mjs"
+        ]
+      },
+      "PERSON-03": {
+        "title": "Jeder Satz lässt sich zurücknehmen",
+        "gate": "hard",
+        "automation": "integration",
+        "given": "Ein Satz im Personen-Speicher stimmt nicht.",
+        "when": "Er zurückgenommen wird.",
+        "then": "Er verschwindet aus der Liste und aus jeder künftigen Anfrage, alle seine Begegnungen auf einmal, und bleibt zugleich als überholt erhalten. Ohne die Rücknahme wiederholte sich ein falscher Satz in jedem künftigen Text — das ist das größte Risiko dieses ganzen Speichers.",
+        "evidence": [
+          "Prüfung: die Rücknahme erwischt alle Begegnungen und wirkt auch in der Anfrage",
+          "Node-Test: Überholtes bleibt gespeichert, nur nicht mehr aktiv"
+        ],
+        "source": [
+          "app/src/erkanntes-model.mjs"
+        ]
+      },
+      "PERSON-04": {
+        "title": "Was wiederkam, steht oben",
+        "gate": "hard",
+        "automation": "unit",
+        "given": "Ein Satz kam mehrfach auf, andere je einmal.",
+        "when": "Die Liste gezeigt oder in eine Anfrage gelegt wird.",
+        "then": "Der mehrfache steht oben und trägt die Zahl seiner Begegnungen. Genau das droht ein weiteres Mal gesagt zu werden — und genau daran zeigt sich, was noch nicht sitzt.",
+        "evidence": [
+          "Node-Test: was am häufigsten wiederkam, steht oben",
+          "Node-Test: derselbe Satz zweimal ergibt einen Eintrag mit zwei Begegnungen"
+        ],
+        "source": [
+          "app/src/erkanntes-model.mjs"
+        ]
+      },
+      "PERSON-05": {
+        "title": "Der Speicher verlangt Kürze, nicht Schweigen",
+        "gate": "hard",
+        "automation": "integration",
+        "given": "Ein Prinzip steht bereits im Personen-Speicher, und dieselbe Sache taucht im Text wieder auf.",
+        "when": "Die Anfrage an das Modell gebaut wird.",
+        "then": "Das Modell wird gebeten, sich kürzer zu fassen — nicht, zu schweigen. Ein System, das über Bekanntes schweigt, würde schlechter, je mehr es weiß; wer denselben Fehler zum fünften Mal macht, braucht den Hinweis am nötigsten.",
+        "evidence": [
+          "Prüfung: der Block verlangt Kürze und ausdrücklich kein Schweigen",
+          "Node-Test: erkannte Prinzipien landen im Prompt, aber nie im Zwischenspeicher-Präfix"
+        ],
+        "source": [
+          "app/src/onda-kontext.mjs",
+          "app/src/erkanntes-model.mjs"
+        ]
+      },
+      "PERSON-06": {
+        "title": "Zwei Einsichten verschmelzen nicht aus Versehen",
+        "gate": "hard",
+        "automation": "unit",
+        "given": "Zwei verschiedene Einsichten, die einander ähneln.",
+        "when": "Sie im Personen-Speicher abgeglichen werden.",
+        "then": "Sie bleiben zwei. Nur Schreibung, Satzzeichen und Leerraum machen keinen neuen Satz; eine unscharfe Ähnlichkeit würde zwei Einsichten zu einer verschmelzen, und dieser Schaden wiegt schwerer als die gesparte Zeile.",
+        "evidence": [
+          "Node-Test: der Abgleich bleibt bewusst stumpf — keine unscharfe Ähnlichkeit",
+          "Node-Test: Groß- und Kleinschreibung und Satzzeichen machen keinen neuen Satz"
+        ],
+        "source": [
+          "app/src/erkanntes-model.mjs (schluesselFuer)"
+        ]
+      },
+      "LERNEN-01": {
+        "title": "Muster behalten Dimension und jede Begegnung",
+        "gate": "hard",
+        "automation": "unit",
+        "given": "Dasselbe übertragbare Prinzip begegnet der Person in mehreren Texten und Projekten.",
+        "when": "Die persönliche Entwicklung projiziert wird.",
+        "then": "Es erscheint als ein wortgleiches Muster mit fachlicher Dimension und getrennten Begegnungen. Jede Begegnung behält Dokument, Projekt, Anker, Zeitpunkt und Herkunft; kein Zähler verschluckt den Weg dorthin.",
+        "evidence": [
+          "Node-Test: zwei Begegnungen eines Belegmusters bewahren beide Fundstellen und Projekte",
+          "Node-Test: fachliche Dimensionen sind in der Personenliste sichtbar"
+        ],
+        "source": [
+          "app/src/autorentwicklung-model.mjs",
+          "app/src/erkanntes-model.mjs"
+        ]
+      },
+      "LERNEN-02": {
+        "title": "Ähnliche Muster verschmelzen nur nach Zustimmung",
+        "gate": "hard",
+        "automation": "unit",
+        "given": "Zwei verschiedene Prinzipien könnten zu einer größeren Fähigkeit gehören.",
+        "when": "Onda eine Verbindung vorschlägt.",
+        "then": "Der Vorschlag bleibt zunächst wirkungslos. Nur die Person kann ihn bestätigen; ein Agent kann weder verbinden noch umbenennen. Die Einzelmuster und ihre Herkunft bleiben auch in der bestätigten Gruppe erhalten.",
+        "evidence": [
+          "Node-Test: offener Vorschlag gruppiert nichts",
+          "Node-Test: Agentenfreigabe scheitert, Nutzerfreigabe gruppiert ohne Datenverlust"
+        ],
+        "source": [
+          "app/src/autorentwicklung-model.mjs"
+        ]
+      },
+      "LERNEN-03": {
+        "title": "Schreibstimme entsteht aus mehreren eigenen Textstellen",
+        "gate": "hard",
+        "automation": "integration",
+        "given": "Ein möglicher persönlicher Stimmenzug taucht in mindestens zwei verschiedenen eigenen Textstellen auf.",
+        "when": "Er als Schreibstimme vorgemerkt und bestätigt wird.",
+        "then": "Ein einzelner oder agentengeschriebener Anker reicht nicht. Der Vorschlag beeinflusst vor der Bestätigung keinen Lauf; nach Nutzerfreigabe erreicht er den Stilkontext als unverbindliche persönliche Präferenz und lässt sich vollständig zurücknehmen.",
+        "evidence": [
+          "Node-Test: mindestens zwei verschiedene Nutzeranker sind Pflicht",
+          "Node-Test: Freigabe schreibt eine reversible persönliche Stimmenpräferenz",
+          "Browser-Prüfung: Vormerken, bestätigen und zurücknehmen im Personenbereich"
+        ],
+        "source": [
+          "app/src/autorentwicklung-model.mjs",
+          "app/src/workspace.js",
+          "app/src/memory-retrieval.mjs"
+        ]
+      },
+      "LERNEN-04": {
+        "title": "Kompetenzsignale brauchen beobachtbare Handlungen",
+        "gate": "hard",
+        "automation": "unit",
+        "given": "Wiederkehr, Selbstkorrektur, eine eigene Fassung, eine bestätigte Wirkung und bloße Ablehnungen liegen nebeneinander.",
+        "when": "Onda Entwicklungssignale bildet.",
+        "then": "Nur Wiederkehr mit Fundstellen sowie ausdrücklich protokollierte Selbstkorrektur, eigene Fassung und bestätigte Wirkung zählen. Eine Ablehnung wird nie als Kompetenz, Wahrheit oder Erfolg umgedeutet.",
+        "evidence": [
+          "Node-Test: beobachtbare Ereignisse erzeugen benannte Signale",
+          "Negativtest: suggestion-rejected erzeugt kein Entwicklungssignal"
+        ],
+        "source": [
+          "app/src/autorentwicklung-model.mjs"
+        ]
+      },
+      "LERNEN-05": {
+        "title": "Rückkopplung ist versioniert, eng begrenzt und zustimmungspflichtig",
+        "gate": "hard",
+        "automation": "integration",
+        "given": "Über mehrere eigene, nicht gelöschte Texte zeigt sich ein auffälliges Verhältnis von angenommenen zu verworfenen Hinweisen.",
+        "when": "Onda daraus eine mögliche Anpassung ableitet.",
+        "then": "Doppelte Findings und Papierkorbtexte zählen nicht. Die Statistik allein und ein offener Vorschlag verändern keinen Prompt. Nur die Person kann genau die Darreichung freigeben; Integritätsfragen und Hinweisarten bleiben unangetastet. Geänderte Daten erzeugen eine neue offene Version statt still die alte Zustimmung zu erben.",
+        "evidence": [
+          "Node-Test: Deduplizierung, Papierkorbfilter und neue Versionskennung",
+          "Node-Test: offen ist wirkungslos, nur Nutzerfreigabe erreicht den Prompt",
+          "Browser-Prüfung: Freigabe und Rücknahme sind im Personenbereich sichtbar"
+        ],
+        "source": [
+          "app/src/rueckkopplung-model.mjs",
+          "app/src/hinweis-kontext.mjs",
+          "app/src/workspace.js"
+        ]
+      }
+    },
+    "bindungen": {
+      "INV-01": [
+        "test/v2-smoke.mjs",
+        "test/etappe-a-smoke.mjs"
+      ],
+      "INV-02": [
+        "test/provenance-model.test.mjs"
+      ],
+      "INV-03": [
+        "test/anchor-verify.test.mjs",
+        "test/locator-model.test.mjs"
+      ],
+      "INV-04": [
+        "test/reasoning-model.test.mjs",
+        "test/decision-log-smoke.mjs"
+      ],
+      "INV-05": [
+        "test/memory-retrieval.test.mjs"
+      ],
+      "INV-07": [
+        "test/example-seed.test.mjs"
+      ],
+      "INV-08": [
+        "test/research-quality.test.mjs",
+        "evals/run-b2-quality.mjs"
+      ],
+      "INV-09": [
+        "test/language-patterns.test.mjs"
+      ],
+      "WORK-01": [
+        "test/etappe-a-smoke.mjs"
+      ],
+      "WORK-02": [
+        "test/etappe-a-smoke.mjs",
+        "test/verstaendnis-interview.test.mjs"
+      ],
+      "WORK-03": [
+        "test/verstaendnis-merge.test.mjs"
+      ],
+      "WORK-04": [
+        "test/anchor-verify.test.mjs",
+        "test/hinweislauf-model.test.mjs"
+      ],
+      "WORK-05": [
+        "test/workspace-model.test.mjs",
+        "test/v2-smoke.mjs"
+      ],
+      "WORK-06": [
+        "test/chat-kontext.test.mjs"
+      ],
+      "WORK-07": [
+        "test/chat-kontext.test.mjs",
+        "test/v2-smoke.mjs"
+      ],
+      "WORK-08": [
+        "test/decision-log-smoke.mjs"
+      ],
+      "EVID-01": [
+        "test/source-model.test.mjs"
+      ],
+      "EVID-02": [
+        "test/locator-model.test.mjs",
+        "test/etappe-b1-smoke.mjs"
+      ],
+      "EVID-03": [
+        "test/evidence-bundle.test.mjs"
+      ],
+      "EVID-04": [
+        "evals/run-b1-quality.mjs",
+        "evals/run-quality-rubric.mjs"
+      ],
+      "EVID-05": [
+        "test/citation-audit.test.mjs"
+      ],
+      "EVID-06": [
+        "test/source-model.test.mjs"
+      ],
+      "EVID-07": [
+        "test/citation-audit.test.mjs"
+      ],
+      "EVID-08": [
+        "test/source-model.test.mjs",
+        "test/provenance-model.test.mjs"
+      ],
+      "RESEARCH-01": [
+        "test/research-run.test.mjs"
+      ],
+      "RESEARCH-02": [
+        "test/research-synthesis.test.mjs"
+      ],
+      "RESEARCH-03": [
+        "test/research-adapter.test.mjs",
+        "test/research-orchestrator.test.mjs"
+      ],
+      "RESEARCH-04": [
+        "test/research-run.test.mjs"
+      ],
+      "RESEARCH-05": [
+        "test/research-quality.test.mjs",
+        "evals/run-b2-quality.mjs",
+        "evals/run-quality-rubric.mjs"
+      ],
+      "RESEARCH-06": [
+        "test/research-orchestrator.test.mjs"
+      ],
+      "RESEARCH-07": [
+        "test/research-adapter.test.mjs"
+      ],
+      "MEMORY-01": [
+        "test/memory-model.test.mjs"
+      ],
+      "MEMORY-02": [
+        "test/memory-model.test.mjs"
+      ],
+      "MEMORY-03": [
+        "test/etappe-c1-smoke.mjs"
+      ],
+      "MEMORY-04": [
+        "test/memory-retrieval.test.mjs"
+      ],
+      "MEMORY-05": [
+        "test/memory-dossier.test.mjs"
+      ],
+      "MEMORY-06": [
+        "test/memory-portability.test.mjs"
+      ],
+      "ARG-01": [
+        "test/claim-ledger.test.mjs"
+      ],
+      "ARG-02": [
+        "test/argument-graph.test.mjs",
+        "test/etappe-c2-smoke.mjs"
+      ],
+      "ARG-03": [
+        "test/argument-model.test.mjs"
+      ],
+      "ARG-04": [
+        "test/argument-quality.test.mjs",
+        "evals/run-c2-quality.mjs",
+        "evals/run-quality-rubric.mjs"
+      ],
+      "ARG-05": [
+        "test/argument-projection.test.mjs"
+      ],
+      "ARG-06": [
+        "test/argument-deliberation.test.mjs"
+      ],
+      "ARG-07": [
+        "test/argument-quality.test.mjs",
+        "evals/run-c2-quality.mjs",
+        "evals/run-quality-rubric.mjs"
+      ],
+      "LANG-01": [
+        "test/language-profile.test.mjs"
+      ],
+      "LANG-02": [
+        "test/language-diagnostics.test.mjs"
+      ],
+      "LANG-03": [
+        "test/language-variant.test.mjs"
+      ],
+      "LANG-04": [
+        "test/language-modality.test.mjs"
+      ],
+      "LANG-05": [
+        "test/language-patterns.test.mjs"
+      ],
+      "LANG-06": [
+        "test/language-variant.test.mjs"
+      ],
+      "LANG-07": [
+        "test/language-patterns.test.mjs"
+      ],
+      "LANG-08": [
+        "test/orthography.test.mjs"
+      ],
+      "EFFECT-04": [
+        "test/effect-analysis.test.mjs"
+      ],
+      "EFFECT-01": [
+        "test/d1-quality.test.mjs",
+        "evals/run-d1-quality.mjs",
+        "evals/run-quality-rubric.mjs"
+      ],
+      "EFFECT-02": [
+        "test/d1-quality.test.mjs",
+        "evals/run-d1-quality.mjs",
+        "evals/run-quality-rubric.mjs"
+      ],
+      "EFFECT-03": [
+        "test/d1-quality.test.mjs",
+        "evals/run-d1-quality.mjs",
+        "evals/run-quality-rubric.mjs"
+      ],
+      "EFFECT-05": [
+        "test/effect-fairness.test.mjs"
+      ],
+      "AUDIT-01": [
+        "test/etappe-d2-smoke.mjs"
+      ],
+      "AUDIT-02": [
+        "test/final-audit.test.mjs"
+      ],
+      "AUDIT-03": [
+        "test/etappe-d2-smoke.mjs"
+      ],
+      "AUDIT-04": [
+        "test/authorship-proof.test.mjs"
+      ],
+      "AUDIT-05": [
+        "test/publication-export.test.mjs"
+      ],
+      "AUDIT-06": [
+        "test/authorship-proof.test.mjs"
+      ],
+      "AUDIT-07": [
+        "test/final-audit.test.mjs"
+      ],
+      "SYSTEM-01": [
+        "test/workspace-model.test.mjs"
+      ],
+      "SYSTEM-02": [
+        "test/data-control.test.mjs",
+        "test/example-seed.test.mjs"
+      ],
+      "SYSTEM-04": [
+        "test/d2-accessibility.test.mjs"
+      ],
+      "SYSTEM-05": [
+        "test/v2-smoke.mjs"
+      ],
+      "SYSTEM-06": [
+        "test/v2-smoke.mjs",
+        "test/d2-accessibility.test.mjs"
+      ],
+      "SYSTEM-07": [
+        "test/performance-smoke.mjs"
+      ],
+      "SYSTEM-08": [
+        "test/settings-model.test.mjs",
+        "test/agent-tasks.test.mjs"
+      ],
+      "SYSTEM-10": [
+        "test/data-control.test.mjs"
+      ],
+      "SYSTEM-11": [
+        "test/d2-accessibility.test.mjs"
+      ],
+      "DESIGN-01": [
+        "evals/pruefungen/gestalt.mjs"
+      ],
+      "DESIGN-02": [
+        "evals/pruefungen/gestalt.mjs"
+      ],
+      "DESIGN-03": [
+        "evals/pruefungen/gestalt.mjs"
+      ],
+      "DESIGN-04": [
+        "evals/pruefungen/gestalt.mjs"
+      ],
+      "DESIGN-05": [
+        "evals/pruefungen/gestalt.mjs"
+      ],
+      "ERWEITERUNG-01": [
+        "test/erweiterungslauf-model.test.mjs"
+      ],
+      "ERWEITERUNG-02": [
+        "test/erweiterungslauf-model.test.mjs",
+        "test/agent-tasks.test.mjs"
+      ],
+      "ERWEITERUNG-03": [
+        "test/erweiterungslauf-model.test.mjs"
+      ],
+      "ERWEITERUNG-05": [
+        "test/erweiterungslauf-model.test.mjs"
+      ],
+      "MOMENT-01": [
+        "test/momente-model.test.mjs",
+        "evals/pruefungen/momente-tabelle.mjs"
+      ],
+      "MOMENT-02": [
+        "test/momente-model.test.mjs",
+        "evals/pruefungen/momente-tabelle.mjs"
+      ],
+      "MOMENT-03": [
+        "evals/pruefungen/momente-tabelle.mjs"
+      ],
+      "MOMENT-04": [
+        "test/momente-model.test.mjs"
+      ],
+      "MOMENT-05": [
+        "test/momente-model.test.mjs"
+      ],
+      "MOMENT-06": [
+        "test/momente-model.test.mjs",
+        "evals/pruefungen/momente-tabelle.mjs"
+      ],
+      "MOMENT-07": [
+        "test/momente-model.test.mjs"
+      ],
+      "DESIGN-06": [
+        "evals/pruefungen/umgestaltung-entschieden.mjs"
+      ],
+      "DESIGN-07": [
+        "test/v2-smoke.mjs"
+      ],
+      "KONTEXT-01": [
+        "evals/pruefungen/kontext-alle-kanaele.mjs",
+        "test/onda-kontext.test.mjs"
+      ],
+      "KONTEXT-02": [
+        "evals/pruefungen/kontext-alle-kanaele.mjs",
+        "test/onda-kontext.test.mjs"
+      ],
+      "KONTEXT-03": [
+        "evals/pruefungen/kontext-alle-kanaele.mjs",
+        "test/onda-kontext.test.mjs"
+      ],
+      "KONTEXT-04": [
+        "test/onda-kontext.test.mjs",
+        "test/erkanntes-model.test.mjs"
+      ],
+      "KONTEXT-05": [
+        "test/onda-kontext.test.mjs"
+      ],
+      "KONTEXT-06": [
+        "test/onda-kontext.test.mjs"
+      ],
+      "KONTEXT-07": [
+        "test/arbeitskontext-model.test.mjs",
+        "test/onda-kontext.test.mjs"
+      ],
+      "KONTEXT-08": [
+        "test/arbeitskontext-model.test.mjs"
+      ],
+      "MUSTER-01": [
+        "evals/pruefungen/muster-pflicht.mjs",
+        "test/agent-findings.test.mjs"
+      ],
+      "MUSTER-02": [
+        "evals/pruefungen/muster-pflicht.mjs",
+        "test/agent-tasks.test.mjs"
+      ],
+      "MUSTER-03": [
+        "evals/pruefungen/muster-pflicht.mjs",
+        "test/agent-prompts.test.mjs"
+      ],
+      "MUSTER-04": [
+        "evals/pruefungen/muster-pflicht.mjs"
+      ],
+      "MUSTER-05": [
+        "evals/pruefungen/muster-pflicht.mjs",
+        "test/erweiterungslauf-model.test.mjs"
+      ],
+      "TEXTART-01": [
+        "evals/pruefungen/textart-tabelle.mjs",
+        "test/agent-findings.test.mjs"
+      ],
+      "TEXTART-02": [
+        "evals/pruefungen/textart-tabelle.mjs",
+        "test/textart-regeln.test.mjs"
+      ],
+      "TEXTART-03": [
+        "evals/pruefungen/textart-tabelle.mjs",
+        "test/textart-regeln.test.mjs"
+      ],
+      "TEXTART-04": [
+        "evals/pruefungen/textart-tabelle.mjs",
+        "test/textart-regeln.test.mjs"
+      ],
+      "TEXTART-05": [
+        "evals/pruefungen/textart-tabelle.mjs",
+        "test/textart-regeln.test.mjs"
+      ],
+      "TEXTART-06": [
+        "evals/pruefungen/textart-tabelle.mjs",
+        "test/hinweislauf-model.test.mjs"
+      ],
+      "TEXTART-07": [
+        "test/handwerk-model.test.mjs",
+        "test/onda-kontext.test.mjs"
+      ],
+      "TEXTART-08": [
+        "test/agent-tasks.test.mjs",
+        "test/hinweislauf-model.test.mjs"
+      ],
+      "PERSON-01": [
+        "evals/pruefungen/person-speicher.mjs",
+        "test/erkanntes-model.test.mjs"
+      ],
+      "PERSON-02": [
+        "evals/pruefungen/person-speicher.mjs"
+      ],
+      "PERSON-03": [
+        "evals/pruefungen/person-speicher.mjs",
+        "test/erkanntes-model.test.mjs"
+      ],
+      "PERSON-04": [
+        "test/erkanntes-model.test.mjs"
+      ],
+      "PERSON-05": [
+        "evals/pruefungen/person-speicher.mjs",
+        "test/onda-kontext.test.mjs"
+      ],
+      "PERSON-06": [
+        "test/erkanntes-model.test.mjs"
+      ],
+      "ERWEITERUNG-04": [
+        "evals/pruefungen/erweiterung-kein-posten.mjs"
+      ],
+      "ERWEITERUNG-06": [
+        "test/erweiterungslauf-model.test.mjs",
+        "test/v2-smoke.mjs"
+      ],
+      "ERWEITERUNG-07": [
+        "test/memory-retrieval.test.mjs",
+        "test/onda-kontext.test.mjs"
+      ],
+      "LERNEN-01": [
+        "test/autorentwicklung-model.test.mjs",
+        "test/erkanntes-model.test.mjs"
+      ],
+      "LERNEN-02": [
+        "test/autorentwicklung-model.test.mjs"
+      ],
+      "LERNEN-03": [
+        "test/autorentwicklung-model.test.mjs",
+        "test/onda-kontext.test.mjs",
+        "test/v2-smoke.mjs"
+      ],
+      "LERNEN-04": [
+        "test/autorentwicklung-model.test.mjs"
+      ],
+      "LERNEN-05": [
+        "test/rueckkopplung-model.test.mjs",
+        "test/hinweis-kontext.test.mjs",
+        "test/v2-smoke.mjs"
+      ]
+    }
+  },
   "evals": [
     {
       "id": "INV-01",
@@ -87,7 +2581,7 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "integration",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-provenance-model-test-mjs.log",
           "command": "node --test test/provenance-model.test.mjs"
         }
@@ -98,12 +2592,12 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "integration",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-anchor-verify-test-mjs.log",
           "command": "node --test test/anchor-verify.test.mjs"
         },
         {
-          "kind": "integration",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-locator-model-test-mjs.log",
           "command": "node --test test/locator-model.test.mjs"
         }
@@ -114,7 +2608,7 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "browser",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-reasoning-model-test-mjs.log",
           "command": "node --test test/reasoning-model.test.mjs"
         },
@@ -130,7 +2624,7 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "integration",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-memory-retrieval-test-mjs.log",
           "command": "node --test test/memory-retrieval.test.mjs"
         }
@@ -147,7 +2641,7 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "browser",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-example-seed-test-mjs.log",
           "command": "node --test test/example-seed.test.mjs"
         }
@@ -158,12 +2652,12 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "fixture",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-research-quality-test-mjs.log",
           "command": "node --test test/research-quality.test.mjs"
         },
         {
-          "kind": "fixture",
+          "kind": "integration",
           "path": "evals/results/laeufe/evals-run-b2-quality-mjs.log",
           "command": "node evals/run-b2-quality.mjs"
         }
@@ -174,7 +2668,7 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "integration",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-language-patterns-test-mjs.log",
           "command": "node --test test/language-patterns.test.mjs"
         }
@@ -201,7 +2695,7 @@
           "command": "node test/etappe-a-smoke.mjs"
         },
         {
-          "kind": "browser",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-verstaendnis-interview-test-mjs.log",
           "command": "node --test test/verstaendnis-interview.test.mjs"
         }
@@ -212,7 +2706,7 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "integration",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-verstaendnis-merge-test-mjs.log",
           "command": "node --test test/verstaendnis-merge.test.mjs"
         }
@@ -223,12 +2717,12 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "integration",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-anchor-verify-test-mjs.log",
           "command": "node --test test/anchor-verify.test.mjs"
         },
         {
-          "kind": "integration",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-hinweislauf-model-test-mjs.log",
           "command": "node --test test/hinweislauf-model.test.mjs"
         }
@@ -239,7 +2733,7 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "browser",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-workspace-model-test-mjs.log",
           "command": "node --test test/workspace-model.test.mjs"
         },
@@ -255,7 +2749,7 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "browser",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-chat-kontext-test-mjs.log",
           "command": "node --test test/chat-kontext.test.mjs"
         }
@@ -266,7 +2760,7 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "browser",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-chat-kontext-test-mjs.log",
           "command": "node --test test/chat-kontext.test.mjs"
         },
@@ -293,7 +2787,7 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "fixture",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-source-model-test-mjs.log",
           "command": "node --test test/source-model.test.mjs"
         }
@@ -304,7 +2798,7 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "browser",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-locator-model-test-mjs.log",
           "command": "node --test test/locator-model.test.mjs"
         },
@@ -320,7 +2814,7 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "integration",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-evidence-bundle-test-mjs.log",
           "command": "node --test test/evidence-bundle.test.mjs"
         }
@@ -331,12 +2825,12 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "fixture",
+          "kind": "integration",
           "path": "evals/results/laeufe/evals-run-b1-quality-mjs.log",
           "command": "node evals/run-b1-quality.mjs"
         },
         {
-          "kind": "fixture",
+          "kind": "integration",
           "path": "evals/results/laeufe/evals-run-quality-rubric-mjs.log",
           "command": "node evals/run-quality-rubric.mjs"
         }
@@ -349,7 +2843,7 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "integration",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-citation-audit-test-mjs.log",
           "command": "node --test test/citation-audit.test.mjs"
         }
@@ -360,7 +2854,7 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "integration",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-source-model-test-mjs.log",
           "command": "node --test test/source-model.test.mjs"
         }
@@ -371,7 +2865,7 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "integration",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-citation-audit-test-mjs.log",
           "command": "node --test test/citation-audit.test.mjs"
         }
@@ -382,12 +2876,12 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "integration",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-source-model-test-mjs.log",
           "command": "node --test test/source-model.test.mjs"
         },
         {
-          "kind": "integration",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-provenance-model-test-mjs.log",
           "command": "node --test test/provenance-model.test.mjs"
         }
@@ -398,7 +2892,7 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "integration",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-research-run-test-mjs.log",
           "command": "node --test test/research-run.test.mjs"
         }
@@ -409,7 +2903,7 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "integration",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-research-synthesis-test-mjs.log",
           "command": "node --test test/research-synthesis.test.mjs"
         }
@@ -420,12 +2914,12 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "integration",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-research-adapter-test-mjs.log",
           "command": "node --test test/research-adapter.test.mjs"
         },
         {
-          "kind": "integration",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-research-orchestrator-test-mjs.log",
           "command": "node --test test/research-orchestrator.test.mjs"
         }
@@ -447,17 +2941,17 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "fixture",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-research-quality-test-mjs.log",
           "command": "node --test test/research-quality.test.mjs"
         },
         {
-          "kind": "fixture",
+          "kind": "integration",
           "path": "evals/results/laeufe/evals-run-b2-quality-mjs.log",
           "command": "node evals/run-b2-quality.mjs"
         },
         {
-          "kind": "fixture",
+          "kind": "integration",
           "path": "evals/results/laeufe/evals-run-quality-rubric-mjs.log",
           "command": "node evals/run-quality-rubric.mjs"
         }
@@ -470,7 +2964,7 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "integration",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-research-orchestrator-test-mjs.log",
           "command": "node --test test/research-orchestrator.test.mjs"
         }
@@ -481,7 +2975,7 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "integration",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-research-adapter-test-mjs.log",
           "command": "node --test test/research-adapter.test.mjs"
         }
@@ -492,7 +2986,7 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "persistence",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-memory-model-test-mjs.log",
           "command": "node --test test/memory-model.test.mjs"
         }
@@ -525,7 +3019,7 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "browser",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-memory-retrieval-test-mjs.log",
           "command": "node --test test/memory-retrieval.test.mjs"
         }
@@ -536,7 +3030,7 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "integration",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-memory-dossier-test-mjs.log",
           "command": "node --test test/memory-dossier.test.mjs"
         }
@@ -547,7 +3041,7 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "persistence",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-memory-portability-test-mjs.log",
           "command": "node --test test/memory-portability.test.mjs"
         }
@@ -558,7 +3052,7 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "fixture",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-claim-ledger-test-mjs.log",
           "command": "node --test test/claim-ledger.test.mjs"
         }
@@ -569,7 +3063,7 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "browser",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-argument-graph-test-mjs.log",
           "command": "node --test test/argument-graph.test.mjs"
         },
@@ -596,17 +3090,17 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "fixture",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-argument-quality-test-mjs.log",
           "command": "node --test test/argument-quality.test.mjs"
         },
         {
-          "kind": "fixture",
+          "kind": "integration",
           "path": "evals/results/laeufe/evals-run-c2-quality-mjs.log",
           "command": "node evals/run-c2-quality.mjs"
         },
         {
-          "kind": "fixture",
+          "kind": "integration",
           "path": "evals/results/laeufe/evals-run-quality-rubric-mjs.log",
           "command": "node evals/run-quality-rubric.mjs"
         }
@@ -619,7 +3113,7 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "integration",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-argument-projection-test-mjs.log",
           "command": "node --test test/argument-projection.test.mjs"
         }
@@ -630,7 +3124,7 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "integration",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-argument-deliberation-test-mjs.log",
           "command": "node --test test/argument-deliberation.test.mjs"
         }
@@ -641,17 +3135,17 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "fixture",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-argument-quality-test-mjs.log",
           "command": "node --test test/argument-quality.test.mjs"
         },
         {
-          "kind": "fixture",
+          "kind": "integration",
           "path": "evals/results/laeufe/evals-run-c2-quality-mjs.log",
           "command": "node evals/run-c2-quality.mjs"
         },
         {
-          "kind": "fixture",
+          "kind": "integration",
           "path": "evals/results/laeufe/evals-run-quality-rubric-mjs.log",
           "command": "node evals/run-quality-rubric.mjs"
         }
@@ -664,7 +3158,7 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "integration",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-language-profile-test-mjs.log",
           "command": "node --test test/language-profile.test.mjs"
         }
@@ -675,7 +3169,7 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "fixture",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-language-diagnostics-test-mjs.log",
           "command": "node --test test/language-diagnostics.test.mjs"
         }
@@ -686,7 +3180,7 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "fixture",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-language-variant-test-mjs.log",
           "command": "node --test test/language-variant.test.mjs"
         }
@@ -697,7 +3191,7 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "integration",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-language-modality-test-mjs.log",
           "command": "node --test test/language-modality.test.mjs"
         }
@@ -708,7 +3202,7 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "fixture",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-language-patterns-test-mjs.log",
           "command": "node --test test/language-patterns.test.mjs"
         }
@@ -719,7 +3213,7 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "fixture",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-language-variant-test-mjs.log",
           "command": "node --test test/language-variant.test.mjs"
         }
@@ -730,7 +3224,7 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "integration",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-language-patterns-test-mjs.log",
           "command": "node --test test/language-patterns.test.mjs"
         }
@@ -741,7 +3235,7 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "browser",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-orthography-test-mjs.log",
           "command": "node --test test/orthography.test.mjs"
         }
@@ -752,17 +3246,17 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "fixture",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-d1-quality-test-mjs.log",
           "command": "node --test test/d1-quality.test.mjs"
         },
         {
-          "kind": "fixture",
+          "kind": "integration",
           "path": "evals/results/laeufe/evals-run-d1-quality-mjs.log",
           "command": "node evals/run-d1-quality.mjs"
         },
         {
-          "kind": "fixture",
+          "kind": "integration",
           "path": "evals/results/laeufe/evals-run-quality-rubric-mjs.log",
           "command": "node evals/run-quality-rubric.mjs"
         }
@@ -775,17 +3269,17 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "fixture",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-d1-quality-test-mjs.log",
           "command": "node --test test/d1-quality.test.mjs"
         },
         {
-          "kind": "fixture",
+          "kind": "integration",
           "path": "evals/results/laeufe/evals-run-d1-quality-mjs.log",
           "command": "node evals/run-d1-quality.mjs"
         },
         {
-          "kind": "fixture",
+          "kind": "integration",
           "path": "evals/results/laeufe/evals-run-quality-rubric-mjs.log",
           "command": "node evals/run-quality-rubric.mjs"
         }
@@ -798,17 +3292,17 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "fixture",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-d1-quality-test-mjs.log",
           "command": "node --test test/d1-quality.test.mjs"
         },
         {
-          "kind": "fixture",
+          "kind": "integration",
           "path": "evals/results/laeufe/evals-run-d1-quality-mjs.log",
           "command": "node evals/run-d1-quality.mjs"
         },
         {
-          "kind": "fixture",
+          "kind": "integration",
           "path": "evals/results/laeufe/evals-run-quality-rubric-mjs.log",
           "command": "node evals/run-quality-rubric.mjs"
         }
@@ -821,7 +3315,7 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "integration",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-effect-analysis-test-mjs.log",
           "command": "node --test test/effect-analysis.test.mjs"
         }
@@ -832,7 +3326,7 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "fixture",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-effect-fairness-test-mjs.log",
           "command": "node --test test/effect-fairness.test.mjs"
         }
@@ -860,7 +3354,7 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "integration",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-final-audit-test-mjs.log",
           "command": "node --test test/final-audit.test.mjs"
         }
@@ -882,7 +3376,7 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "integration",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-authorship-proof-test-mjs.log",
           "command": "node --test test/authorship-proof.test.mjs"
         }
@@ -893,7 +3387,7 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "file-inspection",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-publication-export-test-mjs.log",
           "command": "node --test test/publication-export.test.mjs"
         }
@@ -904,7 +3398,7 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "file-inspection",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-authorship-proof-test-mjs.log",
           "command": "node --test test/authorship-proof.test.mjs"
         }
@@ -915,7 +3409,7 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "persistence",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-final-audit-test-mjs.log",
           "command": "node --test test/final-audit.test.mjs"
         }
@@ -926,7 +3420,7 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "persistence",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-workspace-model-test-mjs.log",
           "command": "node --test test/workspace-model.test.mjs"
         }
@@ -937,12 +3431,12 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "persistence",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-data-control-test-mjs.log",
           "command": "node --test test/data-control.test.mjs"
         },
         {
-          "kind": "persistence",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-example-seed-test-mjs.log",
           "command": "node --test test/example-seed.test.mjs"
         }
@@ -1008,12 +3502,12 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "integration",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-settings-model-test-mjs.log",
           "command": "node --test test/settings-model.test.mjs"
         },
         {
-          "kind": "integration",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-agent-tasks-test-mjs.log",
           "command": "node --test test/agent-tasks.test.mjs"
         }
@@ -1030,7 +3524,7 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "file-inspection",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-data-control-test-mjs.log",
           "command": "node --test test/data-control.test.mjs"
         }
@@ -1107,7 +3601,7 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "file-inspection",
+          "kind": "integration",
           "path": "evals/results/laeufe/evals-pruefungen-umgestaltung-entschieden-mjs.log",
           "command": "node evals/pruefungen/umgestaltung-entschieden.mjs"
         }
@@ -1189,12 +3683,12 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "integration",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-erweiterungslauf-model-test-mjs.log",
           "command": "node --test test/erweiterungslauf-model.test.mjs"
         },
         {
-          "kind": "integration",
+          "kind": "browser",
           "path": "evals/results/laeufe/test-v2-smoke-mjs.log",
           "command": "node test/v2-smoke.mjs"
         }
@@ -1205,12 +3699,12 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "integration",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-memory-retrieval-test-mjs.log",
           "command": "node --test test/memory-retrieval.test.mjs"
         },
         {
-          "kind": "integration",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-onda-kontext-test-mjs.log",
           "command": "node --test test/onda-kontext.test.mjs"
         }
@@ -1226,7 +3720,7 @@
           "command": "node --test test/momente-model.test.mjs"
         },
         {
-          "kind": "unit",
+          "kind": "integration",
           "path": "evals/results/laeufe/evals-pruefungen-momente-tabelle-mjs.log",
           "command": "node evals/pruefungen/momente-tabelle.mjs"
         }
@@ -1242,7 +3736,7 @@
           "command": "node --test test/momente-model.test.mjs"
         },
         {
-          "kind": "unit",
+          "kind": "integration",
           "path": "evals/results/laeufe/evals-pruefungen-momente-tabelle-mjs.log",
           "command": "node evals/pruefungen/momente-tabelle.mjs"
         }
@@ -1253,7 +3747,7 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "unit",
+          "kind": "integration",
           "path": "evals/results/laeufe/evals-pruefungen-momente-tabelle-mjs.log",
           "command": "node evals/pruefungen/momente-tabelle.mjs"
         }
@@ -1291,7 +3785,7 @@
           "command": "node --test test/momente-model.test.mjs"
         },
         {
-          "kind": "unit",
+          "kind": "integration",
           "path": "evals/results/laeufe/evals-pruefungen-momente-tabelle-mjs.log",
           "command": "node evals/pruefungen/momente-tabelle.mjs"
         }
@@ -1318,7 +3812,7 @@
           "command": "node evals/pruefungen/kontext-alle-kanaele.mjs"
         },
         {
-          "kind": "integration",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-onda-kontext-test-mjs.log",
           "command": "node --test test/onda-kontext.test.mjs"
         }
@@ -1334,7 +3828,7 @@
           "command": "node evals/pruefungen/kontext-alle-kanaele.mjs"
         },
         {
-          "kind": "integration",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-onda-kontext-test-mjs.log",
           "command": "node --test test/onda-kontext.test.mjs"
         }
@@ -1345,7 +3839,7 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "unit",
+          "kind": "integration",
           "path": "evals/results/laeufe/evals-pruefungen-kontext-alle-kanaele-mjs.log",
           "command": "node evals/pruefungen/kontext-alle-kanaele.mjs"
         },
@@ -1399,12 +3893,12 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "integration",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-arbeitskontext-model-test-mjs.log",
           "command": "node --test test/arbeitskontext-model.test.mjs"
         },
         {
-          "kind": "integration",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-onda-kontext-test-mjs.log",
           "command": "node --test test/onda-kontext.test.mjs"
         }
@@ -1431,7 +3925,7 @@
           "command": "node evals/pruefungen/muster-pflicht.mjs"
         },
         {
-          "kind": "integration",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-agent-findings-test-mjs.log",
           "command": "node --test test/agent-findings.test.mjs"
         }
@@ -1442,12 +3936,12 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "file-inspection",
+          "kind": "integration",
           "path": "evals/results/laeufe/evals-pruefungen-muster-pflicht-mjs.log",
           "command": "node evals/pruefungen/muster-pflicht.mjs"
         },
         {
-          "kind": "file-inspection",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-agent-tasks-test-mjs.log",
           "command": "node --test test/agent-tasks.test.mjs"
         }
@@ -1458,12 +3952,12 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "file-inspection",
+          "kind": "integration",
           "path": "evals/results/laeufe/evals-pruefungen-muster-pflicht-mjs.log",
           "command": "node evals/pruefungen/muster-pflicht.mjs"
         },
         {
-          "kind": "file-inspection",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-agent-prompts-test-mjs.log",
           "command": "node --test test/agent-prompts.test.mjs"
         }
@@ -1474,7 +3968,7 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "file-inspection",
+          "kind": "integration",
           "path": "evals/results/laeufe/evals-pruefungen-muster-pflicht-mjs.log",
           "command": "node evals/pruefungen/muster-pflicht.mjs"
         }
@@ -1485,7 +3979,7 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "unit",
+          "kind": "integration",
           "path": "evals/results/laeufe/evals-pruefungen-muster-pflicht-mjs.log",
           "command": "node evals/pruefungen/muster-pflicht.mjs"
         },
@@ -1506,7 +4000,7 @@
           "command": "node evals/pruefungen/textart-tabelle.mjs"
         },
         {
-          "kind": "integration",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-agent-findings-test-mjs.log",
           "command": "node --test test/agent-findings.test.mjs"
         }
@@ -1517,7 +4011,7 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "unit",
+          "kind": "integration",
           "path": "evals/results/laeufe/evals-pruefungen-textart-tabelle-mjs.log",
           "command": "node evals/pruefungen/textart-tabelle.mjs"
         },
@@ -1533,7 +4027,7 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "unit",
+          "kind": "integration",
           "path": "evals/results/laeufe/evals-pruefungen-textart-tabelle-mjs.log",
           "command": "node evals/pruefungen/textart-tabelle.mjs"
         },
@@ -1549,12 +4043,12 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "file-inspection",
+          "kind": "integration",
           "path": "evals/results/laeufe/evals-pruefungen-textart-tabelle-mjs.log",
           "command": "node evals/pruefungen/textart-tabelle.mjs"
         },
         {
-          "kind": "file-inspection",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-textart-regeln-test-mjs.log",
           "command": "node --test test/textart-regeln.test.mjs"
         }
@@ -1565,12 +4059,12 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "file-inspection",
+          "kind": "integration",
           "path": "evals/results/laeufe/evals-pruefungen-textart-tabelle-mjs.log",
           "command": "node evals/pruefungen/textart-tabelle.mjs"
         },
         {
-          "kind": "file-inspection",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-textart-regeln-test-mjs.log",
           "command": "node --test test/textart-regeln.test.mjs"
         }
@@ -1586,7 +4080,7 @@
           "command": "node evals/pruefungen/textart-tabelle.mjs"
         },
         {
-          "kind": "integration",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-hinweislauf-model-test-mjs.log",
           "command": "node --test test/hinweislauf-model.test.mjs"
         }
@@ -1613,12 +4107,12 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "integration",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-agent-tasks-test-mjs.log",
           "command": "node --test test/agent-tasks.test.mjs"
         },
         {
-          "kind": "integration",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-hinweislauf-model-test-mjs.log",
           "command": "node --test test/hinweislauf-model.test.mjs"
         }
@@ -1634,7 +4128,7 @@
           "command": "node evals/pruefungen/person-speicher.mjs"
         },
         {
-          "kind": "integration",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-erkanntes-model-test-mjs.log",
           "command": "node --test test/erkanntes-model.test.mjs"
         }
@@ -1645,7 +4139,7 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "file-inspection",
+          "kind": "integration",
           "path": "evals/results/laeufe/evals-pruefungen-person-speicher-mjs.log",
           "command": "node evals/pruefungen/person-speicher.mjs"
         }
@@ -1661,7 +4155,7 @@
           "command": "node evals/pruefungen/person-speicher.mjs"
         },
         {
-          "kind": "integration",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-erkanntes-model-test-mjs.log",
           "command": "node --test test/erkanntes-model.test.mjs"
         }
@@ -1688,7 +4182,7 @@
           "command": "node evals/pruefungen/person-speicher.mjs"
         },
         {
-          "kind": "integration",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-onda-kontext-test-mjs.log",
           "command": "node --test test/onda-kontext.test.mjs"
         }
@@ -1737,17 +4231,17 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "integration",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-autorentwicklung-model-test-mjs.log",
           "command": "node --test test/autorentwicklung-model.test.mjs"
         },
         {
-          "kind": "integration",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-onda-kontext-test-mjs.log",
           "command": "node --test test/onda-kontext.test.mjs"
         },
         {
-          "kind": "integration",
+          "kind": "browser",
           "path": "evals/results/laeufe/test-v2-smoke-mjs.log",
           "command": "node test/v2-smoke.mjs"
         }
@@ -1769,17 +4263,17 @@
       "status": "passed",
       "evidence": [
         {
-          "kind": "integration",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-rueckkopplung-model-test-mjs.log",
           "command": "node --test test/rueckkopplung-model.test.mjs"
         },
         {
-          "kind": "integration",
+          "kind": "unit",
           "path": "evals/results/laeufe/test-hinweis-kontext-test-mjs.log",
           "command": "node --test test/hinweis-kontext.test.mjs"
         },
         {
-          "kind": "integration",
+          "kind": "browser",
           "path": "evals/results/laeufe/test-v2-smoke-mjs.log",
           "command": "node test/v2-smoke.mjs"
         }
