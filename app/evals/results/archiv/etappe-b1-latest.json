@@ -1,0 +1,815 @@
+{
+  "_veraltet": "VERALTET UND ENTWERTET (05.08.2026, Issue #15): Die Rubrikwerte in dieser Datei wurden seinerzeit von Hand eingetragen, und viele Belege zeigen auf die Ergebnisdatei der Vorstufe statt auf eine frische Pruefung. Diese Datei ist ein historisches Dokument der Etappe, kein gueltiger Messwert. Der einzige gueltige Stand ist der frische Lauf: evals/results/fertigzustand-latest.json (node evals/run-fertigzustand.mjs).",
+  "schemaVersion": 1,
+  "catalogVersion": "2026-07-30.1",
+  "stage": "B1",
+  "iteration": 5,
+  "generatedAt": "2026-07-30T14:54:56Z",
+  "gitCommit": "15fbece",
+  "rubricScores": {
+    "truth": 4.9,
+    "authorship": 4.8,
+    "usefulness": 4.7,
+    "calm": 4.7,
+    "reliability": 4.9,
+    "access_privacy": 4.7
+  },
+  "weightedScore": 4.8,
+  "scoreRationale": {
+    "truth": "Originale und Fundstellen werden mit SHA-256 geprüft; nicht importierte, veränderte oder zurückgezogene Belege können kein verifiziertes Wissen erzeugen. Zitat-, Paraphrase-, Metadaten- und Verzeichniskonflikte werden konkret ausgewiesen.",
+    "authorship": "Nutzertext, Agenteneinordnung, Recherchematerial, Fundstellen und Belegwissen tragen getrennte Provenienz. Das Quellenmodell ändert keinen Editorinhalt und ungeprüfte Angaben sind nicht kopierbar.",
+    "usefulness": "Quellenimport, exakte Fundstelle und claim-spezifisches Belegbündel bilden einen vollständigen sichtbaren Arbeitsfluss. Vertiefende Grenzen bleiben optional aufklappbar, während der belegte Zusammenhang im Reader vollständig sichtbar ist.",
+    "calm": "Der Dialog kehrt nach Import zur Quellenliste zurück, hält die Aussage beim Lesen sichtbar und stellt Fokus nach Escape wieder her. Der schmale 390×844-Fluss bleibt ohne horizontalen Überlauf.",
+    "reliability": "271 Logiktests, vollständiger V2-Browserlauf, B1-/A-Smokes, Persistenz-Roundtrip, Build, native Selftests und Startprobe bestehen. Die Quellen-UI ist von der zentralen Workspace-Orchestrierung getrennt.",
+    "access_privacy": "Der B1-Kernfluss ist per Tastatur bedienbar, projektfremde Evidenz wird fail-closed abgewiesen und nur sichere HTTPS-Originale werden extern geöffnet. Vollständiges WCAG-AA und der echte Keychain-Live-Test bleiben spätere beziehungsweise externe Gates."
+  },
+  "loops": [
+    {
+      "iteration": 1,
+      "commit": "00b485d",
+      "result": "Quelle, Locator, Belegbündel und Zitierprüfung wurden als fail-closed Domänenmodule mit 15 kontrastiven RED/GREEN-Tests aufgebaut."
+    },
+    {
+      "iteration": 2,
+      "commit": "15fbece",
+      "result": "Typisierter Import, SHA-256, Reader, Reload, Seiten-, Abschnitts- und Zeitfundstellen sowie Rücknahme liefen im echten Browserfluss."
+    },
+    {
+      "iteration": 3,
+      "commit": "15fbece",
+      "result": "Die EVID-04-Goldrubrik scheiterte zunächst mit 4,4/5 an zu knappen Begründungen; präzisere Stärken und Grenzen erhöhten denselben unveränderten Prüfer auf 5,0/5."
+    },
+    {
+      "iteration": 4,
+      "commit": "15fbece",
+      "result": "Visuelle Prüfung reduzierte die Formulardichte und korrigierte die Scrollposition; Provenienz trennt Nutzertext, Agentenbefund, Recherchematerial und Belegwissen."
+    },
+    {
+      "iteration": 5,
+      "commit": "15fbece",
+      "result": "Quellen-UI wurde aus der Workspace-Orchestrierung getrennt; vollständige Regression, Performance, Browser, native Selftests, Neubau und Startprobe bestanden."
+    }
+  ],
+  "evals": [
+    {
+      "id": "INV-01",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "test/etappe-a-smoke.mjs",
+          "command": "node test/etappe-a-smoke.mjs"
+        },
+        {
+          "kind": "browser",
+          "path": "test/v2-smoke.mjs",
+          "command": "node test/v2-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "INV-02",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "test/provenance-model.test.mjs",
+          "command": "node --test test/provenance-model.test.mjs"
+        },
+        {
+          "kind": "browser",
+          "path": "test/etappe-b1-smoke.mjs",
+          "command": "node test/etappe-b1-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "INV-03",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "unit",
+          "path": "test/source-model.test.mjs",
+          "command": "node --test test/source-model.test.mjs test/locator-model.test.mjs test/evidence-bundle.test.mjs"
+        },
+        {
+          "kind": "browser",
+          "path": "test/v2-smoke.mjs",
+          "command": "node test/v2-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "INV-04",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "test/v2-smoke.mjs",
+          "command": "node test/v2-smoke.mjs"
+        },
+        {
+          "kind": "persistence",
+          "path": "test/decision-log-smoke.mjs",
+          "command": "node test/decision-log-smoke.mjs"
+        },
+        {
+          "kind": "unit",
+          "path": "test/reasoning-model.test.mjs",
+          "command": "node --test test/reasoning-model.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "INV-05",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Aktive Projektkontexte sind getrennt; vollständige Canary-Evidenz über Dossiers, Gedächtnis und Exporte folgt mit C1 und D2."
+    },
+    {
+      "id": "INV-06",
+      "status": "external-open",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "test/v2-smoke.mjs",
+          "command": "node test/v2-smoke.mjs"
+        }
+      ],
+      "note": "Der Browser-Offlinepfad ist geprüft; der geforderte Mac-Live-Test ohne Netz bleibt extern offen."
+    },
+    {
+      "id": "INV-07",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "test/v2-smoke.mjs",
+          "command": "node test/v2-smoke.mjs"
+        },
+        {
+          "kind": "unit",
+          "path": "test/workspace-model.test.mjs",
+          "command": "node --test test/workspace-model.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "INV-08",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Das kontrastive Abstention-vs.-Halluzination-Judging wird mit Recherche und Sprachqualität in B2/D1 aufgebaut."
+    },
+    {
+      "id": "INV-09",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "file-inspection",
+          "path": "src",
+          "command": "! rg -n \"attentionScore|understandingScore|aiProbability|kiWahrscheinlichkeit|eigenstaendigkeitsScore\" src"
+        },
+        {
+          "kind": "unit",
+          "path": "test/chat-kontext.test.mjs",
+          "command": "node --test test/chat-kontext.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "WORK-01",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "test/etappe-a-smoke.mjs",
+          "command": "node test/etappe-a-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "WORK-02",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "test/etappe-a-smoke.mjs",
+          "command": "node test/etappe-a-smoke.mjs"
+        },
+        {
+          "kind": "unit",
+          "path": "test/hinweislauf-model.test.mjs",
+          "command": "node --test test/hinweislauf-model.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "WORK-03",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "test/verstaendnis-kontext.test.mjs",
+          "command": "node --test test/verstaendnis-kontext.test.mjs"
+        },
+        {
+          "kind": "unit",
+          "path": "test/verstaendnis-merge.test.mjs",
+          "command": "node --test test/verstaendnis-merge.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "WORK-04",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "test/agent-findings.test.mjs",
+          "command": "node --test test/agent-findings.test.mjs test/hinweislauf-model.test.mjs"
+        },
+        {
+          "kind": "browser",
+          "path": "test/etappe-a-smoke.mjs",
+          "command": "node test/etappe-a-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "WORK-05",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "test/v2-smoke.mjs",
+          "command": "node test/v2-smoke.mjs"
+        },
+        {
+          "kind": "unit",
+          "path": "test/workspace-model.test.mjs",
+          "command": "node --test test/workspace-model.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "WORK-06",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "test/v2-smoke.mjs",
+          "command": "node test/v2-smoke.mjs"
+        },
+        {
+          "kind": "integration",
+          "path": "test/chat-kontext.test.mjs",
+          "command": "node --test test/chat-kontext.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "WORK-07",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "test/v2-smoke.mjs",
+          "command": "node test/v2-smoke.mjs"
+        },
+        {
+          "kind": "integration",
+          "path": "test/chat-kontext.test.mjs",
+          "command": "node --test test/chat-kontext.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "WORK-08",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "persistence",
+          "path": "test/decision-log-smoke.mjs",
+          "command": "node test/decision-log-smoke.mjs"
+        },
+        {
+          "kind": "unit",
+          "path": "test/chat-kontext.test.mjs",
+          "command": "node --test test/chat-kontext.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "EVID-01",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "fixture",
+          "path": "test/source-model.test.mjs",
+          "command": "node --test test/source-model.test.mjs"
+        },
+        {
+          "kind": "persistence",
+          "path": "test/etappe-b1-smoke.mjs",
+          "command": "node test/etappe-b1-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "EVID-02",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "unit",
+          "path": "test/locator-model.test.mjs",
+          "command": "node --test test/locator-model.test.mjs"
+        },
+        {
+          "kind": "browser",
+          "path": "test/etappe-b1-smoke.mjs",
+          "command": "node test/etappe-b1-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "EVID-03",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "test/evidence-bundle.test.mjs",
+          "command": "node --test test/evidence-bundle.test.mjs"
+        },
+        {
+          "kind": "browser",
+          "path": "test/etappe-b1-smoke.mjs",
+          "command": "node test/etappe-b1-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "EVID-04",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "fixture",
+          "path": "evals/fixtures/evidenzqualitaet.mjs",
+          "command": "npm run eval:b1-quality"
+        },
+        {
+          "kind": "unit",
+          "path": "test/b1-quality.test.mjs",
+          "command": "node --test test/b1-quality.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "EVID-05",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "test/citation-audit.test.mjs",
+          "command": "node --test test/citation-audit.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "EVID-06",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "test/citation-audit.test.mjs",
+          "command": "node --test test/citation-audit.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "EVID-07",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "test/citation-audit.test.mjs",
+          "command": "node --test test/citation-audit.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "EVID-08",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "test/source-model.test.mjs",
+          "command": "node --test test/source-model.test.mjs test/evidence-bundle.test.mjs"
+        },
+        {
+          "kind": "browser",
+          "path": "test/etappe-b1-smoke.mjs",
+          "command": "node test/etappe-b1-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "RESEARCH-01",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe B2: prüfbare Recherchefrage und Suchplan."
+    },
+    {
+      "id": "RESEARCH-02",
+      "status": "external-open",
+      "evidence": [],
+      "note": "Echte Suchprovider- und Fundstellenprüfung ist ein externes Live-Gate in B2."
+    },
+    {
+      "id": "RESEARCH-03",
+      "status": "external-open",
+      "evidence": [],
+      "note": "Legale Alternativbeschaffung für real nicht zugängliche Quellen benötigt Live-Provider-Evidenz in B2."
+    },
+    {
+      "id": "RESEARCH-04",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe B2: begrenzte Fehlpfade und Wiederholsperren."
+    },
+    {
+      "id": "RESEARCH-05",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe B2: aktive Gegenbeleg- und Grenzensuche."
+    },
+    {
+      "id": "RESEARCH-06",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe B2: abbrechbare, atomare Rechercheläufe."
+    },
+    {
+      "id": "RESEARCH-07",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe B2: reproduzierbares Werkzeugprotokoll."
+    },
+    {
+      "id": "MEMORY-01",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe C1: unveränderliche Ereignis- und Belegwahrheit."
+    },
+    {
+      "id": "MEMORY-02",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe C1: vier klar getrennte Gedächtnisebenen."
+    },
+    {
+      "id": "MEMORY-03",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe C1: automatisch entstehendes, korrigierbares Projektgedächtnis."
+    },
+    {
+      "id": "MEMORY-04",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe C1: freigegebene projektübergreifende Erinnerung."
+    },
+    {
+      "id": "MEMORY-05",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe C1: Trennung von Autoren- und Projektstimme."
+    },
+    {
+      "id": "MEMORY-06",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe C1/D2: exportierbares und löschbares Gedächtnis."
+    },
+    {
+      "id": "ARG-01",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe C2: atomare überprüfbare Claims."
+    },
+    {
+      "id": "ARG-02",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe C2: explizite korrigierbare Argumentrelationen."
+    },
+    {
+      "id": "ARG-03",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Grundursachen parken bereits Findings; der vollständige Argumentgraph folgt in C2."
+    },
+    {
+      "id": "ARG-04",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe C2: naheliegende Gegenargumente."
+    },
+    {
+      "id": "ARG-05",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe C2: begrenzte Auswirkungsanalyse nach Änderungen."
+    },
+    {
+      "id": "ARG-06",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe C2: Regressionen öffnen Punkte nur bei neuem Anlass."
+    },
+    {
+      "id": "ARG-07",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe C2: substanziell verschiedene Argumentationswege."
+    },
+    {
+      "id": "LANG-01",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe D1: korrigierbares deutsches Kontextprofil."
+    },
+    {
+      "id": "LANG-02",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe D1: Trennung von Norm, Grammatik, Register und Wirkung."
+    },
+    {
+      "id": "LANG-03",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe D1: plurizentrische und institutionelle Varianten."
+    },
+    {
+      "id": "LANG-04",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe D1: Behauptungsstärke folgt Evidenz."
+    },
+    {
+      "id": "LANG-05",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe D1: Oberflächenmuster als Diagnose statt Verbot."
+    },
+    {
+      "id": "LANG-06",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe D1: bedeutungstreue Sprachvarianten."
+    },
+    {
+      "id": "LANG-07",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe D1: kein Herkunftsurteil und keine Tarnoptimierung."
+    },
+    {
+      "id": "LANG-08",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe D1: optionale bedeutungsneutrale Rechtschreibautomation."
+    },
+    {
+      "id": "EFFECT-01",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe D1: Ausgangs- und Zielzustand des Publikums."
+    },
+    {
+      "id": "EFFECT-02",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe D1: konkrete kommunikative Funktion je Passage."
+    },
+    {
+      "id": "EFFECT-03",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe D1: Passung und Grenzen rhetorischer Mittel."
+    },
+    {
+      "id": "EFFECT-04",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe D1: Wirkungshypothesen ohne Gewissheitsbehauptung."
+    },
+    {
+      "id": "EFFECT-05",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe D1: wahrhaftige und faire Persuasion."
+    },
+    {
+      "id": "EFFECT-06",
+      "status": "external-open",
+      "evidence": [],
+      "note": "Reale Wirkung benötigt eine externe, aufgabenbezogene Nutzerprüfung in D1."
+    },
+    {
+      "id": "AUDIT-01",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe D2: Schlussaudit über alle relevanten Zustände."
+    },
+    {
+      "id": "AUDIT-02",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe D2: Freigabereife nach harten Integritätsregeln."
+    },
+    {
+      "id": "AUDIT-03",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe D2: Export als bewusste Nutzerentscheidung."
+    },
+    {
+      "id": "AUDIT-04",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe D2: Autorschaftsnachweis aus beobachtbaren Ereignissen."
+    },
+    {
+      "id": "AUDIT-05",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe D2: inhalts- und referenztreue Ausgabeprofile."
+    },
+    {
+      "id": "AUDIT-06",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe D2: optionale belegbare KI-Nutzungserklärung."
+    },
+    {
+      "id": "AUDIT-07",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe D2: reproduzierbares versioniertes Audit."
+    },
+    {
+      "id": "SYSTEM-01",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "persistence",
+          "path": "test/v2-smoke.mjs",
+          "command": "node test/v2-smoke.mjs"
+        },
+        {
+          "kind": "persistence",
+          "path": "test/decision-log-smoke.mjs",
+          "command": "node test/decision-log-smoke.mjs"
+        },
+        {
+          "kind": "persistence",
+          "path": "test/etappe-b1-smoke.mjs",
+          "command": "node test/etappe-b1-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "SYSTEM-02",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "persistence",
+          "path": "test/v2-smoke.mjs",
+          "command": "node test/v2-smoke.mjs"
+        },
+        {
+          "kind": "unit",
+          "path": "test/example-seed.test.mjs",
+          "command": "node --test test/example-seed.test.mjs"
+        },
+        {
+          "kind": "persistence",
+          "path": "../mac/main.swift",
+          "command": "swiftc -O -swift-version 5 -o /tmp/aiwt-selftest ../mac/main.swift && /tmp/aiwt-selftest --selftest"
+        },
+        {
+          "kind": "persistence",
+          "path": "test/etappe-b1-smoke.mjs",
+          "command": "node test/etappe-b1-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "SYSTEM-03",
+      "status": "external-open",
+      "evidence": [
+        {
+          "kind": "security-inspection",
+          "path": "src/agent-transport.mjs",
+          "command": "node --test test/agent-transport.test.mjs"
+        }
+      ],
+      "note": "Browser- und Brückenvertrag sind geprüft; der reale macOS-Keychain- und Export-Live-Test bleibt extern offen."
+    },
+    {
+      "id": "SYSTEM-04",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "test/v2-smoke.mjs",
+          "command": "AIWT_TASK7_ONLY=1 node test/v2-smoke.mjs"
+        },
+        {
+          "kind": "browser",
+          "path": "test/etappe-b1-smoke.mjs",
+          "command": "node test/etappe-b1-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "SYSTEM-05",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "test/v2-smoke.mjs",
+          "command": "node test/v2-smoke.mjs"
+        },
+        {
+          "kind": "browser",
+          "path": "test/etappe-b1-smoke.mjs",
+          "command": "node test/etappe-b1-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "SYSTEM-06",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "test/v2-smoke.mjs",
+          "command": "AIWT_TASK7_ONLY=1 node test/v2-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "SYSTEM-07",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "test/performance-smoke.mjs",
+          "command": "node test/performance-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "SYSTEM-08",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "unit",
+          "path": "test/settings-model.test.mjs",
+          "command": "node --test test/settings-model.test.mjs test/hinweislauf-model.test.mjs"
+        },
+        {
+          "kind": "browser",
+          "path": "test/v2-smoke.mjs",
+          "command": "AIWT_SYSTEM8_ONLY=1 node test/v2-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "SYSTEM-09",
+      "status": "external-open",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "test/agent-transport.test.mjs",
+          "command": "node --test test/agent-transport.test.mjs"
+        }
+      ],
+      "note": "Die gemeinsame JS-Kernlogik und native Brücke sind geprüft; der geforderte echte Browser-vs.-Mac-Providervergleich bleibt extern offen."
+    },
+    {
+      "id": "SYSTEM-10",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe D2: vollständiger Export, selektives Löschen und Neuimport aller lokalen Daten."
+    },
+    {
+      "id": "SYSTEM-11",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Tastatur, Fokus, Bewegung und Viewports sind geprüft; das vollständige WCAG-2.1-AA-Gate folgt in D2."
+    }
+  ]
+}
