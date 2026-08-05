@@ -81,9 +81,9 @@ PLIST
 # API-Schluessel erlaubt hat — nach dem naechsten Bau passt sie nicht mehr, und die
 # Passwortabfrage kommt erneut. "Immer erlauben" haelt damit nur bis zum naechsten Bau.
 #
-# Liegt ein eigenes Codesignatur-Zertifikat im Schluesselbund, wird damit signiert:
-# die Identitaet bleibt dann ueber alle Bauten hinweg dieselbe, und die Abfrage kommt
-# genau einmal. Ohne Zertifikat bleibt alles wie bisher — das hier nimmt nichts weg.
+# Das eigene Codesignatur-Zertifikat hält die Identität über alle Bauten hinweg
+# gleich. Fehlt es, bricht der Release-Bau ab: Ein stiller ad-hoc-Rückfall würde
+# die Schlüsselbundfreigabe beim nächsten Bau wieder ungültig machen.
 #
 # Das Zertifikat anzulegen ist Jakobs Sache: es braucht sein Passwort.
 # Schluesselbundverwaltung > Zertifikatsassistent > Zertifikat erstellen,
@@ -103,8 +103,8 @@ if security find-identity -p codesigning 2>/dev/null | grep -Fq "\"$SIGNATUR_NAM
   echo "— signiere mit „${SIGNATUR_NAME}“ …"
   codesign --force -s "$SIGNATUR_NAME" "$APP"
 else
-  echo "— signiere (lokal, ad-hoc) …"
-  codesign --force -s - "$APP"
+  echo "FEHLER: Signieridentität „${SIGNATUR_NAME}“ mit privatem Schlüssel fehlt."
+  exit 1
 fi
 
 # Jeder Bau ersetzt das App-Paket. macOS merkt sich aber den alten Eintrag, und

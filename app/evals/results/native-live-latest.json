@@ -1,0 +1,15 @@
+{
+  "passed": false,
+  "keyPresent": null,
+  "requestCount": null,
+  "nativeRequestCount": null,
+  "task": "hinweise",
+  "model": "claude-opus-5",
+  "durationMs": 190000,
+  "usage": null,
+  "annotationKind": null,
+  "schemaValid": false,
+  "errorType": "keychain-authorization-timeout",
+  "processArgumentsSecretFree": true,
+  "processStopped": true
+}

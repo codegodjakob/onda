@@ -1,6 +1,6 @@
 # Onda-UI-Neubau – Abschluss-Eval
 
-Stand: 5. August 2026
+Stand: 6. August 2026
 
 Qualitätsschwelle: 4,6 von 5
 
@@ -71,13 +71,15 @@ Die vollständige Rubrik mit Begründungen je Dimension steht in `app/evals/onda
 
 Der Live-Adapter fragt zuerst ausschließlich den booleschen Schlüsselstatus ab. Danach darf er genau eine kurze `hinweise`-Anfrage mit dem Modell `claude-opus-5` senden. Die Antwort wird lokal noch einmal vollständig gegen das geschlossene JSON-Schema geprüft: Pflichtfelder, Typen, erlaubte Werte, Verschachtelung und verbotene Zusatzfelder. Der persistierbare Beleg besitzt eine feste Whitelist: Bestanden, Schlüssel vorhanden, Request-Zahl, Task, Modell, Laufzeit, vier Tokenzähler, Anmerkungsart, Schemaergebnis und ein begrenzter Fehlertyp. Anfrage, Antwort, Header und Schlüsselwert können nicht in den Beleg gelangen.
 
-Der einzige ausgeführte Live-Versuch erreichte keine Schemaantwort. macOS protokollierte stattdessen, dass für die frisch signierte Onda-App ein Schlüsselbund-Berechtigungsdialog angezeigt wurde. Der Lauf wurde nach der festen Grenze beendet; es gab keinen automatischen zweiten Versuch und keine Geheimnisausgabe. Damit bleibt ONDA-UI-18 ehrlich offen, bis der Systemdialog einmal für die signierte App bestätigt wird. Dieser externe Zustand wird nicht als Produkterfolg umetikettiert.
+Die bisherigen ausdrücklich freigegebenen Live-Versuche erreichten keine Schemaantwort. Auch nach einer einfachen Freigabe protokollierte macOS am 6. August erneut den Schlüsselbunddialog. Jeder Lauf wurde nach seiner festen Grenze beendet; es gab innerhalb der Live-Probe keinen Retry und keine Geheimnisausgabe. Das beweist, dass der bereits früher angelegte Eintrag noch an seiner alten App-ACL hing und eine bloß temporäre Erlaubnis nicht genügte.
+
+Der dauerhafte Korrekturpfad verwendet deshalb keine veraltete ACL-API. Nach genau einer erlaubten Leseoperation kopiert die signierte App den Schlüssel unter den neuen Service `Onda.signiert.v1`, liest die Kopie zur Verifikation zurück und entfernt erst danach den alten Eintrag. macOS erzeugt die neue ACL aus der stabilen Designated Requirement der mit `Onda Dev` signierten App. Zusätzlich bricht der Release-Bau hart ab, falls diese Signieridentität fehlt; ein stiller Rückfall auf eine wechselnde ad-hoc-Signatur ist ausgeschlossen. ONDA-UI-18 bleibt bis zur einmaligen Migration und einer anschließenden Schemaantwort offen.
 
 ## Belege
 
 - Qualitative Rubrik: `app/evals/onda-ui-rubric.json`
 - Reproduzierbarer Maschinenbericht: `app/evals/results/onda-ui-automated-latest.json`
-- Maschinenbericht des einmaligen Live-Laufs: `app/evals/results/onda-ui-latest.json`
+- Maschinenberichte der freigegebenen Live-Läufe: `app/evals/results/onda-ui-latest.json` und `app/evals/results/onda-ui-live-latest.json`
 - Sicher redigiertes Live-Protokoll: `app/evals/results/onda-ui-runs/native-live.log`
 - Editor-Matrix: `app/evals/results/screenshots/onda-editor-{1440,1024,720,320}.png`
 - Bibliothek: `app/evals/results/screenshots/onda-library-{1280,320}.png`

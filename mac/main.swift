@@ -190,10 +190,12 @@ enum Store {
 // MARK: - Schlüsselbund (API-Schlüssel verlässt nie den nativen Prozess)
 
 enum Keychain {
-    static let service = "Onda"
-    /// Die App hieß früher "Schreibwerkzeug". Ein damals hinterlegter Schlüssel wird beim
-    /// ersten Lesen still auf den neuen Namen übernommen — niemand muss ihn neu eintragen.
-    static let fruehererService = "Schreibwerkzeug"
+    /// Eigener Service für Einträge, die von der dauerhaft signierten App angelegt
+    /// wurden. macOS versieht sie automatisch mit deren stabiler Designated Requirement.
+    static let service = "Onda.signiert.v1"
+    /// Schlüssel aus der Zeit vor der festen Signatur werden nach der einmaligen
+    /// Freigabe sicher übernommen; niemand muss den Wert neu eingeben.
+    static let fruehereServices = ["Onda", "Schreibwerkzeug"]
     static let account = "anthropic-api-key"
 
     private static func basisAbfrage(service: String, account: String) -> [String: Any] {
@@ -217,16 +219,21 @@ enum Keychain {
     }
 
     /// Liest den Schlüssel — nur für den nativen 'llm'-Handler, nie für JS.
-    /// Findet sich unter dem heutigen Namen nichts, wird einmalig der frühere Eintrag
-    /// übernommen (kopieren, dann alten löschen).
+    /// Findet sich unter dem signierten Namen nichts, wird ein früherer Eintrag
+    /// einmalig gelesen, unter dem neuen Service gespeichert, verifiziert und erst
+    /// danach entfernt. Scheitert ein Schritt, bleibt das Original unangetastet.
     static func lesen(service: String = Keychain.service, account: String = Keychain.account) -> String? {
         if let s = roh(service: service, account: account) { return s }
-        guard service == Keychain.service,
-              let alt = roh(service: Keychain.fruehererService, account: account) else { return nil }
-        if setzen(alt, service: service, account: account) {
-            SecItemDelete(basisAbfrage(service: Keychain.fruehererService, account: account) as CFDictionary)
+        guard service == Keychain.service else { return nil }
+        for fruehererService in fruehereServices {
+            guard let alt = roh(service: fruehererService, account: account) else { continue }
+            if setzen(alt, service: service, account: account),
+               roh(service: service, account: account) != nil {
+                SecItemDelete(basisAbfrage(service: fruehererService, account: account) as CFDictionary)
+            }
+            return alt
         }
-        return alt
+        return nil
     }
 
     private static func roh(service: String, account: String) -> String? {
@@ -245,7 +252,9 @@ enum Keychain {
         // Beim Löschen auch einen eventuell verbliebenen Alt-Eintrag entfernen, damit ein
         // gelöschter Schlüssel nicht beim nächsten Lesen wieder auftaucht.
         if service == Keychain.service {
-            SecItemDelete(basisAbfrage(service: Keychain.fruehererService, account: account) as CFDictionary)
+            for fruehererService in fruehereServices {
+                SecItemDelete(basisAbfrage(service: fruehererService, account: account) as CFDictionary)
+            }
         }
         return status == errSecSuccess || status == errSecItemNotFound
     }
@@ -264,9 +273,10 @@ enum Keychain {
     /// sauberere Verhalten: das Geheimnis wird nur noch gelesen, wenn es benutzt wird.
     static func vorhanden(service: String = Keychain.service, account: String = Keychain.account) -> Bool {
         if existiert(service: service, account: account) { return true }
-        // Derselbe Alt-Eintrag, den `lesen` still übernimmt — auch hier nur nachsehen,
+        // Dieselben Alt-Einträge, die `lesen` still übernimmt — auch hier nur nachsehen,
         // nicht lesen. Die Übernahme selbst passiert weiterhin erst beim echten Lesen.
-        if service == Keychain.service, existiert(service: Keychain.fruehererService, account: account) { return true }
+        if service == Keychain.service,
+           fruehereServices.contains(where: { existiert(service: $0, account: account) }) { return true }
         return false
     }
 

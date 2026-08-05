@@ -1,0 +1,596 @@
+{
+  "schemaVersion": 1,
+  "catalogVersion": "2026-08-05.3",
+  "generatedAt": "2026-08-05T22:40:06.045Z",
+  "gitCommit": "43c10af7e21a47ea761714562b96ea69abbaae70",
+  "mode": "live-native",
+  "iteration": 3,
+  "threshold": 4.6,
+  "criteria": [
+    {
+      "criterion": "ONDA-UI-01",
+      "title": "Systemweite Gestalt",
+      "gate": "hard",
+      "status": "passed",
+      "score": 5,
+      "evidence": [
+        {
+          "kind": "contract",
+          "path": "evals/results/onda-ui-runs/contract.log",
+          "command": "/Users/jakobschlenker/.hermes/node/bin/node --test test/annotation-contract.test.mjs test/annotation-schema.test.mjs test/onda-design-contract.test.mjs",
+          "durationMs": 76
+        },
+        {
+          "kind": "browser",
+          "path": "evals/results/onda-ui-runs/browser.log",
+          "command": "/Users/jakobschlenker/.hermes/node/bin/node test/onda-ui-smoke.mjs",
+          "durationMs": 14904
+        }
+      ]
+    },
+    {
+      "criterion": "ONDA-UI-02",
+      "title": "Alle 24 Textarten",
+      "gate": "hard",
+      "status": "passed",
+      "score": 5,
+      "evidence": [
+        {
+          "kind": "contract",
+          "path": "evals/results/onda-ui-runs/contract.log",
+          "command": "/Users/jakobschlenker/.hermes/node/bin/node --test test/annotation-contract.test.mjs test/annotation-schema.test.mjs test/onda-design-contract.test.mjs",
+          "durationMs": 76
+        },
+        {
+          "kind": "browser",
+          "path": "evals/results/onda-ui-runs/browser.log",
+          "command": "/Users/jakobschlenker/.hermes/node/bin/node test/onda-ui-smoke.mjs",
+          "durationMs": 14904
+        }
+      ]
+    },
+    {
+      "criterion": "ONDA-UI-03",
+      "title": "Reiner Notizmodus",
+      "gate": "hard",
+      "status": "passed",
+      "score": 5,
+      "evidence": [
+        {
+          "kind": "contract",
+          "path": "evals/results/onda-ui-runs/contract.log",
+          "command": "/Users/jakobschlenker/.hermes/node/bin/node --test test/annotation-contract.test.mjs test/annotation-schema.test.mjs test/onda-design-contract.test.mjs",
+          "durationMs": 76
+        },
+        {
+          "kind": "gateway",
+          "path": "evals/results/onda-ui-runs/gateway.log",
+          "command": "/Users/jakobschlenker/.hermes/node/bin/node --test test/agent-gateway.test.mjs test/agent-tasks.test.mjs",
+          "durationMs": 75
+        },
+        {
+          "kind": "browser",
+          "path": "evals/results/onda-ui-runs/browser.log",
+          "command": "/Users/jakobschlenker/.hermes/node/bin/node test/onda-ui-smoke.mjs",
+          "durationMs": 14904
+        }
+      ]
+    },
+    {
+      "criterion": "ONDA-UI-04",
+      "title": "Exakte Wortkorrektur mit Undo",
+      "gate": "hard",
+      "status": "passed",
+      "score": 5,
+      "evidence": [
+        {
+          "kind": "operations",
+          "path": "evals/results/onda-ui-runs/operations.log",
+          "command": "/Users/jakobschlenker/.hermes/node/bin/node --test test/annotation-operations.test.mjs test/annotation-controller.test.mjs",
+          "durationMs": 69
+        },
+        {
+          "kind": "browser",
+          "path": "evals/results/onda-ui-runs/browser.log",
+          "command": "/Users/jakobschlenker/.hermes/node/bin/node test/onda-ui-smoke.mjs",
+          "durationMs": 14904
+        }
+      ]
+    },
+    {
+      "criterion": "ONDA-UI-05",
+      "title": "Rewrite mit unverändertem Originalpfad",
+      "gate": "hard",
+      "status": "passed",
+      "score": 5,
+      "evidence": [
+        {
+          "kind": "operations",
+          "path": "evals/results/onda-ui-runs/operations.log",
+          "command": "/Users/jakobschlenker/.hermes/node/bin/node --test test/annotation-operations.test.mjs test/annotation-controller.test.mjs",
+          "durationMs": 69
+        },
+        {
+          "kind": "browser",
+          "path": "evals/results/onda-ui-runs/browser.log",
+          "command": "/Users/jakobschlenker/.hermes/node/bin/node test/onda-ui-smoke.mjs",
+          "durationMs": 14904
+        }
+      ]
+    },
+    {
+      "criterion": "ONDA-UI-06",
+      "title": "Sichere Einfügung im Textfluss",
+      "gate": "hard",
+      "status": "passed",
+      "score": 5,
+      "evidence": [
+        {
+          "kind": "operations",
+          "path": "evals/results/onda-ui-runs/operations.log",
+          "command": "/Users/jakobschlenker/.hermes/node/bin/node --test test/annotation-operations.test.mjs test/annotation-controller.test.mjs",
+          "durationMs": 69
+        },
+        {
+          "kind": "browser",
+          "path": "evals/results/onda-ui-runs/browser.log",
+          "command": "/Users/jakobschlenker/.hermes/node/bin/node test/onda-ui-smoke.mjs",
+          "durationMs": 14904
+        }
+      ]
+    },
+    {
+      "criterion": "ONDA-UI-07",
+      "title": "Strukturänderung zeigt Ursprung und Ziel",
+      "gate": "hard",
+      "status": "passed",
+      "score": 5,
+      "evidence": [
+        {
+          "kind": "operations",
+          "path": "evals/results/onda-ui-runs/operations.log",
+          "command": "/Users/jakobschlenker/.hermes/node/bin/node --test test/annotation-operations.test.mjs test/annotation-controller.test.mjs",
+          "durationMs": 69
+        },
+        {
+          "kind": "browser",
+          "path": "evals/results/onda-ui-runs/browser.log",
+          "command": "/Users/jakobschlenker/.hermes/node/bin/node test/onda-ui-smoke.mjs",
+          "durationMs": 14904
+        }
+      ]
+    },
+    {
+      "criterion": "ONDA-UI-08",
+      "title": "Atomare Mehrfachbereiche",
+      "gate": "hard",
+      "status": "passed",
+      "score": 5,
+      "evidence": [
+        {
+          "kind": "operations",
+          "path": "evals/results/onda-ui-runs/operations.log",
+          "command": "/Users/jakobschlenker/.hermes/node/bin/node --test test/annotation-operations.test.mjs test/annotation-controller.test.mjs",
+          "durationMs": 69
+        },
+        {
+          "kind": "browser",
+          "path": "evals/results/onda-ui-runs/browser.log",
+          "command": "/Users/jakobschlenker/.hermes/node/bin/node test/onda-ui-smoke.mjs",
+          "durationMs": 14904
+        }
+      ]
+    },
+    {
+      "criterion": "ONDA-UI-09",
+      "title": "Ehrliche Quellen- und Faktenkarte",
+      "gate": "hard",
+      "status": "passed",
+      "score": 5,
+      "evidence": [
+        {
+          "kind": "contract",
+          "path": "evals/results/onda-ui-runs/contract.log",
+          "command": "/Users/jakobschlenker/.hermes/node/bin/node --test test/annotation-contract.test.mjs test/annotation-schema.test.mjs test/onda-design-contract.test.mjs",
+          "durationMs": 76
+        },
+        {
+          "kind": "browser",
+          "path": "evals/results/onda-ui-runs/browser.log",
+          "command": "/Users/jakobschlenker/.hermes/node/bin/node test/onda-ui-smoke.mjs",
+          "durationMs": 14904
+        }
+      ]
+    },
+    {
+      "criterion": "ONDA-UI-10",
+      "title": "Belegter Vergleich oder echter Dialog",
+      "gate": "hard",
+      "status": "passed",
+      "score": 5,
+      "evidence": [
+        {
+          "kind": "contract",
+          "path": "evals/results/onda-ui-runs/contract.log",
+          "command": "/Users/jakobschlenker/.hermes/node/bin/node --test test/annotation-contract.test.mjs test/annotation-schema.test.mjs test/onda-design-contract.test.mjs",
+          "durationMs": 76
+        },
+        {
+          "kind": "browser",
+          "path": "evals/results/onda-ui-runs/browser.log",
+          "command": "/Users/jakobschlenker/.hermes/node/bin/node test/onda-ui-smoke.mjs",
+          "durationMs": 14904
+        }
+      ]
+    },
+    {
+      "criterion": "ONDA-UI-11",
+      "title": "Priorisierte Navigation",
+      "gate": "hard",
+      "status": "passed",
+      "score": 5,
+      "evidence": [
+        {
+          "kind": "operations",
+          "path": "evals/results/onda-ui-runs/operations.log",
+          "command": "/Users/jakobschlenker/.hermes/node/bin/node --test test/annotation-operations.test.mjs test/annotation-controller.test.mjs",
+          "durationMs": 69
+        },
+        {
+          "kind": "browser",
+          "path": "evals/results/onda-ui-runs/browser.log",
+          "command": "/Users/jakobschlenker/.hermes/node/bin/node test/onda-ui-smoke.mjs",
+          "durationMs": 14904
+        }
+      ]
+    },
+    {
+      "criterion": "ONDA-UI-12",
+      "title": "Sichere Sammelannahme",
+      "gate": "hard",
+      "status": "passed",
+      "score": 5,
+      "evidence": [
+        {
+          "kind": "operations",
+          "path": "evals/results/onda-ui-runs/operations.log",
+          "command": "/Users/jakobschlenker/.hermes/node/bin/node --test test/annotation-operations.test.mjs test/annotation-controller.test.mjs",
+          "durationMs": 69
+        },
+        {
+          "kind": "browser",
+          "path": "evals/results/onda-ui-runs/browser.log",
+          "command": "/Users/jakobschlenker/.hermes/node/bin/node test/onda-ui-smoke.mjs",
+          "durationMs": 14904
+        }
+      ]
+    },
+    {
+      "criterion": "ONDA-UI-13",
+      "title": "Erklärtes und widerrufbares Verwerfen",
+      "gate": "hard",
+      "status": "passed",
+      "score": 5,
+      "evidence": [
+        {
+          "kind": "operations",
+          "path": "evals/results/onda-ui-runs/operations.log",
+          "command": "/Users/jakobschlenker/.hermes/node/bin/node --test test/annotation-operations.test.mjs test/annotation-controller.test.mjs",
+          "durationMs": 69
+        },
+        {
+          "kind": "workspace",
+          "path": "evals/results/onda-ui-runs/workspace.log",
+          "command": "/Users/jakobschlenker/.hermes/node/bin/node --test test/workspace-model.test.mjs",
+          "durationMs": 82
+        },
+        {
+          "kind": "browser",
+          "path": "evals/results/onda-ui-runs/browser.log",
+          "command": "/Users/jakobschlenker/.hermes/node/bin/node test/onda-ui-smoke.mjs",
+          "durationMs": 14904
+        }
+      ]
+    },
+    {
+      "criterion": "ONDA-UI-14",
+      "title": "Ruhiger Anmerkungsmodus",
+      "gate": "hard",
+      "status": "passed",
+      "score": 5,
+      "evidence": [
+        {
+          "kind": "operations",
+          "path": "evals/results/onda-ui-runs/operations.log",
+          "command": "/Users/jakobschlenker/.hermes/node/bin/node --test test/annotation-operations.test.mjs test/annotation-controller.test.mjs",
+          "durationMs": 69
+        },
+        {
+          "kind": "browser",
+          "path": "evals/results/onda-ui-runs/browser.log",
+          "command": "/Users/jakobschlenker/.hermes/node/bin/node test/onda-ui-smoke.mjs",
+          "durationMs": 14904
+        }
+      ]
+    },
+    {
+      "criterion": "ONDA-UI-15",
+      "title": "Verlustfreie Migration bestehender Daten",
+      "gate": "hard",
+      "status": "passed",
+      "score": 5,
+      "evidence": [
+        {
+          "kind": "contract",
+          "path": "evals/results/onda-ui-runs/contract.log",
+          "command": "/Users/jakobschlenker/.hermes/node/bin/node --test test/annotation-contract.test.mjs test/annotation-schema.test.mjs test/onda-design-contract.test.mjs",
+          "durationMs": 76
+        },
+        {
+          "kind": "workspace",
+          "path": "evals/results/onda-ui-runs/workspace.log",
+          "command": "/Users/jakobschlenker/.hermes/node/bin/node --test test/workspace-model.test.mjs",
+          "durationMs": 82
+        },
+        {
+          "kind": "browser",
+          "path": "evals/results/onda-ui-runs/browser.log",
+          "command": "/Users/jakobschlenker/.hermes/node/bin/node test/onda-ui-smoke.mjs",
+          "durationMs": 14904
+        }
+      ]
+    },
+    {
+      "criterion": "ONDA-UI-16",
+      "title": "Responsive Schreibansicht ohne Überlauf",
+      "gate": "hard",
+      "status": "passed",
+      "score": 5,
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "evals/results/onda-ui-runs/browser.log",
+          "command": "/Users/jakobschlenker/.hermes/node/bin/node test/onda-ui-smoke.mjs",
+          "durationMs": 14904
+        }
+      ]
+    },
+    {
+      "criterion": "ONDA-UI-17",
+      "title": "WCAG 2.1 AA und Tastatur",
+      "gate": "hard",
+      "status": "passed",
+      "score": 5,
+      "evidence": [
+        {
+          "kind": "accessibility",
+          "path": "evals/results/onda-ui-runs/accessibility.log",
+          "command": "/Users/jakobschlenker/.hermes/node/bin/node test/d2-accessibility.test.mjs",
+          "durationMs": 4825
+        },
+        {
+          "kind": "browser",
+          "path": "evals/results/onda-ui-runs/browser.log",
+          "command": "/Users/jakobschlenker/.hermes/node/bin/node test/onda-ui-smoke.mjs",
+          "durationMs": 14904
+        }
+      ]
+    },
+    {
+      "criterion": "ONDA-UI-18",
+      "title": "Geheimnisfreier nativer Minimallauf",
+      "gate": "hard",
+      "status": "failed",
+      "score": 0,
+      "evidence": [
+        {
+          "kind": "native-live",
+          "path": "evals/results/onda-ui-runs/native-live.log",
+          "command": "/Users/jakobschlenker/.hermes/node/bin/node evals/run-native-live-probe.mjs",
+          "durationMs": 190110
+        }
+      ]
+    },
+    {
+      "criterion": "ONDA-UI-19",
+      "title": "Keine Funktionsregression",
+      "gate": "hard",
+      "status": "passed",
+      "score": 5,
+      "evidence": [
+        {
+          "kind": "contract",
+          "path": "evals/results/onda-ui-runs/contract.log",
+          "command": "/Users/jakobschlenker/.hermes/node/bin/node --test test/annotation-contract.test.mjs test/annotation-schema.test.mjs test/onda-design-contract.test.mjs",
+          "durationMs": 76
+        },
+        {
+          "kind": "operations",
+          "path": "evals/results/onda-ui-runs/operations.log",
+          "command": "/Users/jakobschlenker/.hermes/node/bin/node --test test/annotation-operations.test.mjs test/annotation-controller.test.mjs",
+          "durationMs": 69
+        },
+        {
+          "kind": "gateway",
+          "path": "evals/results/onda-ui-runs/gateway.log",
+          "command": "/Users/jakobschlenker/.hermes/node/bin/node --test test/agent-gateway.test.mjs test/agent-tasks.test.mjs",
+          "durationMs": 75
+        },
+        {
+          "kind": "workspace",
+          "path": "evals/results/onda-ui-runs/workspace.log",
+          "command": "/Users/jakobschlenker/.hermes/node/bin/node --test test/workspace-model.test.mjs",
+          "durationMs": 82
+        },
+        {
+          "kind": "browser",
+          "path": "evals/results/onda-ui-runs/browser.log",
+          "command": "/Users/jakobschlenker/.hermes/node/bin/node test/onda-ui-smoke.mjs",
+          "durationMs": 14904
+        },
+        {
+          "kind": "accessibility",
+          "path": "evals/results/onda-ui-runs/accessibility.log",
+          "command": "/Users/jakobschlenker/.hermes/node/bin/node test/d2-accessibility.test.mjs",
+          "durationMs": 4825
+        },
+        {
+          "kind": "build",
+          "path": "evals/results/onda-ui-runs/build.log",
+          "command": "npm run build",
+          "durationMs": 180
+        }
+      ]
+    },
+    {
+      "criterion": "ONDA-UI-20",
+      "title": "Wahrnehmbare Designqualität",
+      "gate": "hard",
+      "status": "passed",
+      "score": 5,
+      "evidence": [
+        {
+          "kind": "contract",
+          "path": "evals/results/onda-ui-runs/contract.log",
+          "command": "/Users/jakobschlenker/.hermes/node/bin/node --test test/annotation-contract.test.mjs test/annotation-schema.test.mjs test/onda-design-contract.test.mjs",
+          "durationMs": 76
+        },
+        {
+          "kind": "browser",
+          "path": "evals/results/onda-ui-runs/browser.log",
+          "command": "/Users/jakobschlenker/.hermes/node/bin/node test/onda-ui-smoke.mjs",
+          "durationMs": 14904
+        }
+      ]
+    },
+    {
+      "criterion": "ONDA-UI-21",
+      "title": "Ruhige KI-Fehler und genau ein Retry",
+      "gate": "hard",
+      "status": "passed",
+      "score": 5,
+      "evidence": [
+        {
+          "kind": "gateway",
+          "path": "evals/results/onda-ui-runs/gateway.log",
+          "command": "/Users/jakobschlenker/.hermes/node/bin/node --test test/agent-gateway.test.mjs test/agent-tasks.test.mjs",
+          "durationMs": 75
+        },
+        {
+          "kind": "browser",
+          "path": "evals/results/onda-ui-runs/browser.log",
+          "command": "/Users/jakobschlenker/.hermes/node/bin/node test/onda-ui-smoke.mjs",
+          "durationMs": 14904
+        }
+      ]
+    },
+    {
+      "criterion": "ONDA-UI-22",
+      "title": "Speichern und Wiederherstellen",
+      "gate": "hard",
+      "status": "passed",
+      "score": 5,
+      "evidence": [
+        {
+          "kind": "workspace",
+          "path": "evals/results/onda-ui-runs/workspace.log",
+          "command": "/Users/jakobschlenker/.hermes/node/bin/node --test test/workspace-model.test.mjs",
+          "durationMs": 82
+        },
+        {
+          "kind": "browser",
+          "path": "evals/results/onda-ui-runs/browser.log",
+          "command": "/Users/jakobschlenker/.hermes/node/bin/node test/onda-ui-smoke.mjs",
+          "durationMs": 14904
+        }
+      ]
+    }
+  ],
+  "rubric": {
+    "source": "evals/onda-ui-rubric.json",
+    "iteration": 2,
+    "dimensions": {
+      "designSystem": {
+        "label": "Designsystemtreue",
+        "score": 4.9,
+        "rationale": "ABC Diatype, vier Größen, drei Gewichte, Sky als einziger Akzent, Aura nur für KI-Präsenz, Pillen und 24-Pixel-Flächen sind in Shell und Anmerkungen konsistent.",
+        "evidence": [
+          "ONDA-UI-01",
+          "ONDA-UI-16"
+        ]
+      },
+      "caseFit": {
+        "label": "Passende Gestalt je Anwendungsfall",
+        "score": 4.9,
+        "rationale": "Korrektur, Umschreibung, Einfügung, Zielplatz, Bereich, Quelle, Vergleich, Dialog und Titel besitzen eigene, handlungsnahe Formen; Text- und Notizmodus bleiben getrennt.",
+        "evidence": [
+          "ONDA-UI-02",
+          "ONDA-UI-03",
+          "ONDA-UI-04",
+          "ONDA-UI-05",
+          "ONDA-UI-06",
+          "ONDA-UI-07",
+          "ONDA-UI-08",
+          "ONDA-UI-09",
+          "ONDA-UI-10"
+        ]
+      },
+      "hierarchyCalm": {
+        "label": "Visuelle Hierarchie und Ruhe",
+        "score": 4.8,
+        "rationale": "Schreibblatt und Text bleiben dominant; Navigation, Review-Leiste und Karten sind ruhig abgestuft. Die informationsreiche Anmerkungsgalerie bleibt bewusst eine Prüffläche, nicht die Produktansicht.",
+        "evidence": [
+          "ONDA-UI-11",
+          "ONDA-UI-14",
+          "ONDA-UI-20"
+        ]
+      },
+      "interactionSafety": {
+        "label": "Entscheidungsklarheit und Reversibilität",
+        "score": 5,
+        "rationale": "Übernehmen, Original behalten, eigene Fassung, sichere Sammelkorrektur, Rückgängig und dreistufiger Verwerfungsumfang sind sichtbar und eindeutig.",
+        "evidence": [
+          "ONDA-UI-04",
+          "ONDA-UI-12",
+          "ONDA-UI-13"
+        ]
+      },
+      "responsive": {
+        "label": "Responsive Robustheit",
+        "score": 4.9,
+        "rationale": "1440, 1024, 720 und 320 Pixel bleiben ohne horizontalen Überlauf; die Randkarte wandert unter den Text und mobile Navigation bleibt zusammen.",
+        "evidence": [
+          "ONDA-UI-16"
+        ]
+      },
+      "accessibility": {
+        "label": "Barrierefreiheit",
+        "score": 5,
+        "rationale": "Axe WCAG 2.1 A/AA ohne serious/critical Befunde, 44-Pixel-Ziele, Tastaturpfade, Fokusführung und reduzierte Bewegung sind belegt.",
+        "evidence": [
+          "ONDA-UI-17"
+        ]
+      },
+      "reliability": {
+        "label": "Funktionale Zuverlässigkeit",
+        "score": 4.7,
+        "rationale": "Unit-, Browser-, Build-, Performance- und Native-Selbsttests sind grün. Der einmalige echte Lauf ist separat als externes Hard Gate wegen des macOS-Schlüsselbunddialogs offen.",
+        "evidence": [
+          "ONDA-UI-15",
+          "ONDA-UI-18",
+          "ONDA-UI-19",
+          "ONDA-UI-21",
+          "ONDA-UI-22"
+        ]
+      }
+    },
+    "average": 4.89,
+    "passed": true
+  },
+  "summary": {
+    "passed": 21,
+    "failed": 1,
+    "notRun": 0,
+    "automatableHardGatesPass": false
+  }
+}
