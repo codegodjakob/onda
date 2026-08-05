@@ -1,4 +1,14 @@
-import { getActiveBlockId, getEditorBlocks, insertSemanticBlock, replaceAnchoredTexts, replaceFindingTarget } from './block-identity.js'
+import {
+  applyAnchoredReplacements,
+  getActiveBlockId,
+  getEditorBlocks,
+  insertAnchoredText,
+  insertSemanticBlock,
+  insertSemanticHeading,
+  moveTopLevelBlock,
+  replaceAnchoredTexts,
+  replaceFindingTarget,
+} from './block-identity.js'
 import { decideFinding, ensureProjectUnderstanding, ensureReasoningModel, getFindingQueue, isIntegrityCategory, istInterviewOffen, loeseSchutz, markiereEntwurfVersucht, markiereGeschuetzt, mergeVerstaendnis } from './reasoning-model.mjs'
 import {
   appendThreadMessage,
@@ -83,6 +93,15 @@ import { createArgumentUi } from './argument-ui.mjs'
 import { createLanguageUi } from './language-ui.mjs'
 import { analyzeArgumentImpact } from './argument-graph.mjs'
 import { createAuditUi } from './audit-ui.mjs'
+import { annotationSummary, createAnnotationController } from './annotation-controller.mjs'
+import { renderAnnotation } from './annotation-components.mjs'
+import { resolveAnnotationPresentation } from './annotation-contract.mjs'
+import {
+  invertAnnotationOperation,
+  planAnnotationOperation,
+  validateAnnotationOperation,
+} from './annotation-operations.mjs'
+import { ondaIcon } from './onda-icons.mjs'
 
 const BLOCK_TYPES = [
   ['paragraph', 'Freier Absatz'],
@@ -100,6 +119,7 @@ const ROLE_LABELS = new Map([
 
 let ctx = null
 let controller = null
+let annotationController = null
 let lastContext = null
 let renderedDocId = null
 let decoratedDocId = null
@@ -2237,11 +2257,11 @@ function planeMomentwechsel() {
   }, Math.max(24, naechste - ruhe))
 }
 
-function currentPassageFinding(doc, blocks) {
-  const queue = getFindingQueue(doc)
+function visiblePassageFindingRecords(doc, blocks) {
+  ensureReasoningModel(doc)
   const moment = momentJetzt(doc?.id)
-  let migrated = false
-  for (const finding of [queue.current, ...queue.upcoming]) {
+  const records = []
+  for (const finding of doc.findings.filter(candidate => candidate?.status === 'open')) {
     // Der Rhythmus folgt der Art, nicht dem Kanal (momente-model.mjs): eine
     // Formulierung darf sofort erscheinen, eine Strukturfrage erst beim Aufschauen.
     // Zurueckgehalten heisst nur zurueckgehalten -- der Hinweis bleibt bestehen und
@@ -2251,11 +2271,18 @@ function currentPassageFinding(doc, blocks) {
     const hadBlockId = Boolean(finding.blockId)
     const placement = resolveFindingPlacement(finding, blocks)
     if (placement.kind !== 'anchored' && placement.kind !== 'stale') continue
-    if (!hadBlockId && finding.blockId) migrated = true
+    const migrated = !hadBlockId && Boolean(finding.blockId)
     merkeGezeigt(doc?.id, finding.id)
-    return { finding, block: placement.block, placementKind: placement.kind, migrated }
+    records.push({ finding, block: placement.block, placementKind: placement.kind, migrated })
   }
-  return { finding: null, block: null, placementKind: null, migrated }
+  return records
+}
+
+function currentPassageFinding(doc, blocks) {
+  const records = visiblePassageFindingRecords(doc, blocks)
+  const chosen = annotationController?.current(momentJetzt(doc?.id)) || records[0]?.finding || null
+  const record = records.find(candidate => candidate.finding.id === chosen?.id)
+  return record || { finding: null, block: null, placementKind: null, migrated: records.some(item => item.migrated) }
 }
 
 function unplacedPassageFindings(doc, blocks) {
@@ -2501,7 +2528,7 @@ function targetDocumentRange(blockId, target) {
   return ranges.length === 1 ? ranges[0] : null
 }
 
-function decideAndAdvance(finding, decision) {
+function decideAndAdvance(finding, decision, { refresh = true, restoreFocus = true } = {}) {
   const doc = ctx.activeDoc()
   const workspace = activeWorkspace()
   // Ueber einen Hinweis zu entscheiden IST ein Aufschauen. Wer gerade Rueckmeldung
@@ -2538,19 +2565,25 @@ function decideAndAdvance(finding, decision) {
   clearFindingWorkspaceState(workspace, finding.id)
   localFeedbackError = null
   ctx.scheduleSave()
-  refreshWorkspace()
-  requestAnimationFrame(() => {
-    const nextSummary = elements().localLayer?.querySelector('.local-finding-summary')
-    if (nextSummary && !elements().localLayer?.classList.contains('is-paused')) {
-      nextSummary.focus({ preventScroll: true })
-    } else {
-      ctx.editor.view.focus()
-    }
-  })
+  if (refresh) refreshWorkspace()
+  if (restoreFocus) {
+    requestAnimationFrame(() => {
+      const nextSurface = elements().localLayer?.querySelector('.onda-annotation')
+      const nextAction = nextSurface?.querySelector('button, input')
+      if (nextAction && !elements().localLayer?.classList.contains('is-paused')) {
+        nextAction.focus({ preventScroll: true })
+      } else {
+        ctx.editor.view.focus()
+      }
+    })
+  }
+  return recorded
 }
 
 function handleSuggestionReject(finding) {
-  if (!isIntegrityCategory(finding.category)) {
+  const isIntegrity = isIntegrityCategory(finding.category)
+    || ['beleg', 'faktencheck', 'widerspruch'].includes(finding.anmerkungsart)
+  if (!isIntegrity) {
     decideAndAdvance(finding, { kind: 'reject' })
     return
   }
@@ -2737,6 +2770,207 @@ function renderSuggestion(finding, blockId) {
   return suggestion
 }
 
+function annotationDocumentSnapshot(doc = ctx?.activeDoc()) {
+  const title = document.getElementById('title')?.value ?? doc?.title ?? ''
+  const blocks = getEditorBlocks(ctx?.editor).map(block => ({
+    id: block.id,
+    type: block.type,
+    role: block.role,
+    text: block.text,
+  }))
+  const sources = Array.isArray(doc?.annotationSources) ? doc.annotationSources : []
+  return { title, blocks, sources }
+}
+
+function cloneData(value) {
+  return typeof structuredClone === 'function'
+    ? structuredClone(value)
+    : JSON.parse(JSON.stringify(value))
+}
+
+function applyAnnotationPlan(finding, plan, doc) {
+  switch (plan.kind) {
+    case 'replace-range':
+      return replaceFindingTarget(ctx.editor, finding.target, finding.action, finding.blockId || null)
+    case 'insert-at':
+      return finding.insertionText
+        ? insertAnchoredText(ctx.editor, {
+          blockId: finding.blockId || null,
+          target: finding.target,
+          text: finding.insertionText,
+          position: finding.insertionPosition || 'after',
+        })
+        : replaceFindingTarget(ctx.editor, finding.target, finding.action, finding.blockId || null)
+    case 'replace-many':
+      return applyAnchoredReplacements(ctx.editor, finding.targets.map(target => ({
+        blockId: target.blockId,
+        target: target.text,
+        replacement: typeof target.replacement === 'string' ? target.replacement : finding.action,
+      })))
+    case 'move-block':
+      return moveTopLevelBlock(ctx.editor, {
+        fromBlockId: finding.move?.fromBlockId || finding.blockId,
+        toBlockId: finding.move?.toBlockId,
+        position: finding.move?.position || 'after',
+      })
+    case 'insert-heading':
+      return Boolean(insertSemanticHeading(ctx.editor, {
+        afterBlockId: finding.heading?.afterBlockId || finding.blockId,
+        blockId: finding.heading?.id,
+        text: finding.heading?.text || finding.action,
+        level: finding.heading?.level || 2,
+      }))
+    case 'replace-title': {
+      const title = document.getElementById('title')
+      if (!title) return false
+      title.value = finding.action
+      doc.title = finding.action
+      ctx.autoGrowTitle()
+      return true
+    }
+    case 'attach-source': {
+      const source = Array.isArray(finding.sources) ? finding.sources[0] : null
+      if (!source) return false
+      if (!Array.isArray(doc.annotationSources)) doc.annotationSources = []
+      doc.annotationSources.push(cloneData(source))
+      return true
+    }
+    default:
+      return false
+  }
+}
+
+function applySemanticFinding(finding, { refresh = false, restoreFocus = false } = {}) {
+  const doc = ctx?.activeDoc()
+  if (!doc || finding?.status !== 'open') return { ok: false, reason: 'finding-unavailable' }
+  const before = annotationDocumentSnapshot(doc)
+  const plan = planAnnotationOperation(finding, before)
+  if (!plan.ok) return plan
+  const validation = validateAnnotationOperation(plan, annotationDocumentSnapshot(doc))
+  if (!validation.ok) return validation
+
+  const editorBefore = cloneData(ctx.editor.getJSON())
+  const sourcesBefore = cloneData(doc.annotationSources || [])
+  const titleBefore = document.getElementById('title')?.value || ''
+  if (!applyAnnotationPlan(finding, plan, doc)) return { ok: false, reason: 'apply-failed' }
+
+  const editorAfter = cloneData(ctx.editor.getJSON())
+  const sourcesAfter = cloneData(doc.annotationSources || [])
+  const titleAfter = document.getElementById('title')?.value || ''
+  const decision = decideAndAdvance(
+    finding,
+    { kind: 'accept', appliedText: finding.action || finding.insertionText || '' },
+    { refresh, restoreFocus },
+  )
+  return {
+    ...plan,
+    ok: true,
+    docId: doc.id,
+    editorBefore,
+    editorAfter,
+    sourcesBefore,
+    sourcesAfter,
+    titleBefore,
+    titleAfter,
+    decisionId: decision?.id || null,
+  }
+}
+
+function undoSemanticOperation(operation) {
+  const doc = ctx?.activeDoc()
+  if (!doc || operation?.docId !== doc.id) return { ok: false, reason: 'wrong-document' }
+  if (JSON.stringify(ctx.editor.getJSON()) !== JSON.stringify(operation.editorAfter)) {
+    return { ok: false, reason: 'stale-target' }
+  }
+  if ((document.getElementById('title')?.value || '') !== operation.titleAfter) {
+    return { ok: false, reason: 'stale-title' }
+  }
+  if (JSON.stringify(doc.annotationSources || []) !== JSON.stringify(operation.sourcesAfter || [])) {
+    return { ok: false, reason: 'stale-sources' }
+  }
+
+  ctx.editor.commands.setContent(cloneData(operation.editorBefore), false)
+  const title = document.getElementById('title')
+  if (title) title.value = operation.titleBefore
+  doc.title = operation.titleBefore
+  doc.annotationSources = cloneData(operation.sourcesBefore || [])
+  const finding = doc.findings.find(candidate => candidate.id === operation.findingId)
+  if (finding) {
+    finding.status = 'open'
+    delete finding.decidedAt
+  }
+  if (operation.decisionId) {
+    doc.decisions = doc.decisions.filter(decision => decision.id !== operation.decisionId)
+  }
+  activeWorkspace().activeAnnotationId = operation.findingId || null
+  ctx.autoGrowTitle()
+  ctx.scheduleSave()
+  return { ok: true, inverse: invertAnnotationOperation(operation) }
+}
+
+function acceptSemanticFinding(finding) {
+  const operation = applySemanticFinding(finding)
+  if (!operation.ok) {
+    showLocalFeedbackError(finding.id)
+    refreshWorkspace()
+    return operation
+  }
+  annotationController?.pushUndo(operation)
+  refreshWorkspace()
+  requestAnimationFrame(() => (
+    elements().localLayer?.querySelector('.onda-annotation button, .onda-annotation input')
+      || document.getElementById('annotationUndo')
+      || ctx.editor.view.dom
+  ).focus({ preventScroll: true }))
+  announceAgentStatus('Änderung übernommen. Rückgängig bleibt möglich.')
+  return operation
+}
+
+function replyToAnnotation(finding, text) {
+  if (!text || laufenderChatLauf) return
+  ensureLocalThread(finding)
+  appendThreadMessage(finding.thread, 'user', text, Date.now())
+  ctx.persist()
+  refreshWorkspace()
+  sendeLocalChat(finding, text)
+}
+
+function renderAnnotationReviewBar() {
+  const doc = ctx?.activeDoc()
+  const workspace = activeWorkspace()
+  const bar = document.getElementById('annotationReviewBar')
+  if (!bar || !doc || !workspace) return
+  const summary = annotationSummary(doc.findings)
+  bar.hidden = summary.total === 0 && workspace.undoStack.length === 0
+  const label = document.getElementById('annotationReviewSummary')
+  if (label) {
+    label.textContent = summary.total
+      ? `${summary.fehler} ${summary.fehler === 1 ? 'Fehler' : 'Fehler'} · ${summary.empfehlungen} ${summary.empfehlungen === 1 ? 'Empfehlung' : 'Empfehlungen'} · ${summary.geschmack} Geschmack`
+      : 'Keine offenen Anmerkungen'
+  }
+  const bulk = document.getElementById('annotationBulkAccept')
+  const safeCount = (Array.isArray(doc.findings) ? doc.findings : []).filter(finding => (
+    finding.status === 'open'
+    && ['rechtschreibung', 'grammatik', 'zeichensetzung'].includes(finding.anmerkungsart)
+    && finding.action
+  )).length
+  if (bulk) {
+    bulk.hidden = safeCount === 0
+    bulk.textContent = safeCount === 1 ? 'Sichere Korrektur übernehmen' : `${safeCount} sichere Korrekturen übernehmen`
+  }
+  const quiet = document.getElementById('annotationQuietToggle')
+  if (quiet) {
+    quiet.setAttribute('aria-pressed', String(workspace.quietAnnotations))
+    quiet.textContent = workspace.quietAnnotations ? 'Anmerkungen zeigen' : 'Ruhig'
+  }
+  const previous = document.getElementById('annotationPrevious')
+  const next = document.getElementById('annotationNext')
+  if (previous) previous.disabled = summary.total < 2 || workspace.quietAnnotations
+  if (next) next.disabled = summary.total < 2 || workspace.quietAnnotations
+  const undo = document.getElementById('annotationUndo')
+  if (undo) undo.disabled = workspace.undoStack.length === 0
+}
+
 function scheduleLocalPosition(blockId) {
   if (localPositionFrame) cancelAnimationFrame(localPositionFrame)
   queueMicrotask(() => {
@@ -2756,8 +2990,7 @@ function positionLocalSurface(blockId) {
   const ui = elements()
   const block = blockElement(blockId)
   const selectorId = escapedSelectorValue(blockId)
-  const local = ui.localLayer?.querySelector(`.local-finding[data-block-id="${selectorId}"]`)
-  const suggestion = ui.localLayer?.querySelector(`.local-suggestion[data-block-id="${selectorId}"]`)
+  const local = ui.localLayer?.querySelector(`.onda-annotation[data-block-id="${selectorId}"]`)
   if (!ui.localLayer || !block || !local) {
     setLocalFindingDecoration(blockId, 0)
     return
@@ -2768,9 +3001,9 @@ function positionLocalSurface(blockId) {
   const scrollRect = ui.scroll?.getBoundingClientRect()
   if (layerRect.width <= 0 || blockRect.width <= 0) return
   const gutter = 16
-  const sideWidth = 244
+  const sideWidth = 340
   const availableRight = layerRect.right - blockRect.right
-  const below = window.matchMedia('(max-width: 900px)').matches || availableRight < sideWidth + 48
+  const below = window.matchMedia('(max-width: 1040px)').matches || availableRight < sideWidth + 48
   const localWidth = below
     ? Math.max(0, Math.min(blockRect.width, layerRect.width - gutter * 2))
     : Math.min(sideWidth, availableRight - 42)
@@ -2782,21 +3015,13 @@ function positionLocalSurface(blockId) {
   local.hidden = Boolean(scrollRect && (blockRect.bottom < scrollRect.top || blockRect.top > scrollRect.bottom))
 
   const localRect = local.getBoundingClientRect()
-  let feedbackBottom = below ? localRect.bottom : blockRect.bottom
-  if (suggestion) {
-    suggestion.style.width = `${Math.min(blockRect.width, layerRect.width - gutter * 2)}px`
-    suggestion.style.left = `${Math.max(gutter, blockRect.left - layerRect.left)}px`
-    suggestion.style.top = `${blockRect.bottom - layerRect.top + (below ? localRect.height + 28 : 14)}px`
-    const suggestionRect = suggestion.getBoundingClientRect()
-    feedbackBottom = Math.max(feedbackBottom, suggestionRect.bottom)
-  }
+  const feedbackBottom = below ? localRect.bottom : blockRect.bottom
 
   const touchTriggerClearance = Math.max(46, (insertTrigger?.getBoundingClientRect().height || 26) + 8)
   const spacing = feedbackBottom > blockRect.bottom
     ? feedbackBottom - blockRect.bottom + (below ? touchTriggerClearance : 14)
     : 0
-  const maxSpacing = suggestion ? MAX_LOCAL_SUGGESTION_SPACING : MAX_LOCAL_FEEDBACK_SPACING
-  setLocalFindingDecoration(blockId, Math.min(maxSpacing, spacing))
+  setLocalFindingDecoration(blockId, Math.min(MAX_LOCAL_SUGGESTION_SPACING, spacing))
 }
 
 function renderLocalFinding() {
@@ -2804,9 +3029,9 @@ function renderLocalFinding() {
   const doc = ctx.activeDoc()
   const workspace = activeWorkspace()
   if (!ui.localLayer || !doc || !workspace) return
-  const previousLocal = ui.localLayer.querySelector('.local-finding')
-  const previousFindingId = previousLocal?.dataset.findingId || null
-  const inputState = captureInputState(ui.localLayer, '.local-dialogue input')
+  const previous = ui.localLayer.querySelector('.onda-annotation')
+  const previousFindingId = previous?.dataset.findingId || previous?.dataset.annotationKind || null
+  const inputState = captureInputState(ui.localLayer, '.aura-dialogue__input')
 
   const blocks = getEditorBlocks(ctx.editor)
   const resolution = currentPassageFinding(doc, blocks)
@@ -2815,9 +3040,6 @@ function renderLocalFinding() {
   const isStale = resolution.placementKind === 'stale'
   if (resolution.migrated) ctx.scheduleSave()
 
-  if (workspace.expandedFindingId && workspace.expandedFindingId !== finding?.id) workspace.expandedFindingId = null
-  if (workspace.suggestionFindingId && workspace.suggestionFindingId !== finding?.id) workspace.suggestionFindingId = null
-  if (workspace.localThreadFindingId && workspace.localThreadFindingId !== finding?.id) workspace.localThreadFindingId = null
   if (localFeedbackError && localFeedbackError.findingId !== finding?.id) localFeedbackError = null
 
   if (
@@ -2832,77 +3054,31 @@ function renderLocalFinding() {
 
   ui.localLayer.replaceChildren()
   if (!finding || !blockId) return
-
-  const expanded = workspace.expandedFindingId === finding.id
-  const ids = localSurfaceIds(finding.id)
-  const surface = createNode('article', `local-finding${expanded ? ' is-expanded' : ''}${isStale ? ' is-stale' : ''}`)
+  const presentation = resolveAnnotationPresentation(finding)
+  const callbacks = {
+    onAccept: presentation.operation && !isStale ? acceptSemanticFinding : null,
+    onDismiss: handleSuggestionReject,
+    onSecondary: finding.action && !isStale ? handleSuggestionOwnVersion : null,
+    secondaryLabel: 'Eigene Fassung',
+    onReply: replyToAnnotation,
+  }
+  if (presentation.form === 'dialogue') ensureLocalThread(finding)
+  const surface = renderAnnotation(
+    isStale ? { ...finding, fixtureState: 'stale', short: 'Textstelle verändert' } : finding,
+    callbacks,
+  )
   surface.dataset.findingId = finding.id
   surface.dataset.blockId = blockId
-
-  const connector = createNode('span', 'local-finding-connector')
-  connector.setAttribute('aria-hidden', 'true')
-  const summary = createNode('button', 'local-finding-summary')
-  summary.id = ids.summary
-  summary.type = 'button'
-  summary.setAttribute('aria-expanded', String(expanded))
-  const controls = []
-  if (expanded) controls.push(ids.detail)
-  if (workspace.suggestionFindingId === finding.id && !isStale) controls.push(ids.suggestion)
-  if (workspace.localThreadFindingId === finding.id) controls.push(ids.dialogue)
-  if (controls.length) summary.setAttribute('aria-controls', controls.join(' '))
-  summary.append(
-    createNode('span', 'local-finding-short', isStale ? 'Textstelle verändert' : finding.short),
-    createNode('span', 'local-finding-disclosure', expanded ? '↘' : '›'),
-  )
-  summary.addEventListener('click', () => {
-    const isExpanded = workspace.expandedFindingId === finding.id
-    const isSuggestionOpen = workspace.suggestionFindingId === finding.id
-    if (!isExpanded) {
-      workspace.expandedFindingId = finding.id
-      workspace.suggestionFindingId = null
-      workspace.localThreadFindingId = null
-    } else if (isSuggestionOpen) {
-      workspace.suggestionFindingId = null
-    } else if (finding.action && !isStale) {
-      workspace.suggestionFindingId = finding.id
-      workspace.localThreadFindingId = null
-    } else if (finding.sources?.length) {
-      workspace.evidenceFindingId = finding.id
-      evidenceReturnFindingId = finding.id
-      evidenceFocusRequest = true
-    } else {
-      ensureLocalThread(finding)
-      workspace.localThreadFindingId = finding.id
-    }
-    localFeedbackError = null
-    requestLocalSummaryFocus(finding.id)
-    ctx.scheduleSave()
-    refreshWorkspace()
-  })
-  surface.append(connector, summary)
-
-  if (expanded) {
-    const detail = createNode('div', 'local-finding-detail')
-    detail.id = ids.detail
-    appendDetailRow(detail, 'Beobachtung', finding.short)
-    if (isStale) appendDetailRow(detail, 'Anker', 'Der frühere Wortlaut ist an diesem Abschnitt nicht mehr vorhanden. Der Hinweis bleibt offen.')
-    appendDetailRow(detail, 'Relevanz', finding.why || finding.gesamt || 'Die Stelle beeinflusst, wie klar die Aussage beim Lesen ankommt.')
-    appendDetailRow(detail, 'Folge', findingConsequence(finding))
-    // Das Muster ist der eigentliche Ertrag: die Beobachtung hilft diesem einen Text,
-    // das Prinzip dahinter hilft beim naechsten. Es steht ZULETZT, weil man es erst
-    // versteht, wenn man den Einzelfall begriffen hat. Fehlt es, steht keine leere
-    // Zeile da — ein Hinweis ohne Prinzip ist immer noch ein gueltiger Hinweis.
-    if (finding.muster) appendDetailRow(detail, 'Muster', finding.muster)
-    surface.append(detail)
-  }
-  const dialogue = renderLocalDialogue(finding)
-  if (dialogue) surface.append(dialogue)
   const ownVersion = renderOwnVersionStatus(finding, blocks)
   if (ownVersion) surface.append(ownVersion)
-
+  const riskConfirmation = renderIntegrityRiskConfirmation(finding)
+  if (riskConfirmation) surface.append(riskConfirmation)
+  if (localFeedbackError?.findingId === finding.id) {
+    const error = createNode('p', 'local-finding-error', localFeedbackError.message)
+    error.setAttribute('role', 'status')
+    surface.append(error)
+  }
   ui.localLayer.append(surface)
-  const suggestion = isStale ? null : renderSuggestion(finding, blockId)
-  if (suggestion) ui.localLayer.append(suggestion)
   if (ui.localLayer.classList.contains('is-paused')) {
     setLocalFindingDecoration(blockId, 0)
     return
@@ -2911,11 +3087,10 @@ function renderLocalFinding() {
   scheduleLocalPosition(blockId)
   if (localSummaryFocusRequest === finding.id) {
     localSummaryFocusRequest = null
-    summary.focus()
+    surface.querySelector('button, input')?.focus()
   } else if (previousFindingId === finding.id && inputState) {
-    restoreInputState(surface.querySelector('.local-dialogue input'), inputState)
+    restoreInputState(surface.querySelector('.aura-dialogue__input'), inputState)
   }
-  scrollThreadToLatest(surface.querySelector('.local-dialogue-messages'))
 }
 
 function applyAuraState() {
@@ -4093,6 +4268,7 @@ export function refreshWorkspace({ reconcileEditing = false } = {}) {
   renderProjectUnderstandingCard()
   renderMaterialEntry()
   syncThemeToggle()
+  renderAnnotationReviewBar()
   renderLocalFinding()
   renderAgentWidget()
   renderEvidenceWindow()
@@ -4104,6 +4280,16 @@ export function initWorkspace(context) {
   controller?.destroy()
   lastContext = context
   ctx = context
+  annotationController = createAnnotationController({
+    getFindings: () => {
+      const doc = ctx?.activeDoc()
+      return doc ? visiblePassageFindingRecords(doc, getEditorBlocks(ctx.editor)).map(record => record.finding) : []
+    },
+    getWorkspace: () => activeWorkspace(),
+    persist: () => persistWorkspace(),
+    accept: finding => applySemanticFinding(finding, { refresh: false, restoreFocus: false }),
+    undo: operation => undoSemanticOperation(operation),
+  })
   ctx.editor.registerPlugin(activeBlockPlugin())
   ctx.editor.registerPlugin(localFindingPlugin())
   const ui = elements()
@@ -4211,6 +4397,42 @@ export function initWorkspace(context) {
   const onSidebarReopen = () => setSidebarCollapsed(false)
   applySidebarCollapsed(Boolean(ctx.state.settings.sidebarCollapsed))
 
+  const previousAnnotation = () => {
+    momentVonHand = true
+    annotationController?.previous('aufschauen')
+    persistWorkspace()
+    refreshWorkspace()
+  }
+  const nextAnnotation = () => {
+    momentVonHand = true
+    annotationController?.next('aufschauen')
+    persistWorkspace()
+    refreshWorkspace()
+  }
+  const toggleQuietAnnotations = () => {
+    const workspace = activeWorkspace()
+    annotationController?.setQuiet(!workspace?.quietAnnotations)
+    refreshWorkspace()
+  }
+  const acceptSafeAnnotations = () => {
+    const result = annotationController?.acceptAllSafeCorrections()
+    if (result?.ok) announceAgentStatus(`${result.count} sichere Korrekturen übernommen. Rückgängig bleibt einzeln möglich.`)
+    refreshWorkspace()
+  }
+  const undoAnnotation = () => {
+    const result = annotationController?.undoLast()
+    if (!result?.ok) {
+      announceAgentStatus(result?.reason === 'stale-target'
+        ? 'Seit der Änderung wurde weitergeschrieben. Rückgängig hat deshalb nichts verändert.'
+        : 'Es gibt nichts rückgängig zu machen.')
+    } else {
+      announceAgentStatus('Die letzte Anmerkungsänderung wurde rückgängig gemacht.')
+    }
+    refreshWorkspace()
+  }
+  document.getElementById('annotationPrevious')?.replaceChildren(ondaIcon('chevron-left', { size: 18 }))
+  document.getElementById('annotationNext')?.replaceChildren(ondaIcon('chevron-right', { size: 18 }))
+
   const onPointerOver = event => {
     const block = event.target.closest('[data-block-id]')
     const activeBlockId = activeWorkspace()?.activeBlockId
@@ -4294,6 +4516,11 @@ export function initWorkspace(context) {
   listen(document.getElementById('themeToggle'), 'click', toggleTheme)
   listen(document.getElementById('accentToggle'), 'click', event => openAccentMenu(event.currentTarget))
   listen(document.getElementById('kiSettings'), 'click', event => openKiSettingsDialog(event.currentTarget))
+  listen(document.getElementById('annotationPrevious'), 'click', previousAnnotation)
+  listen(document.getElementById('annotationNext'), 'click', nextAnnotation)
+  listen(document.getElementById('annotationQuietToggle'), 'click', toggleQuietAnnotations)
+  listen(document.getElementById('annotationBulkAccept'), 'click', acceptSafeAnnotations)
+  listen(document.getElementById('annotationUndo'), 'click', undoAnnotation)
   listenEditor('selectionUpdate', onSelectionUpdate)
   listenEditor('update', onEditorUpdate)
 
@@ -4333,6 +4560,7 @@ export function initWorkspace(context) {
 
     if (window.__workspaceCloseTopLayer === closeTopLayer) delete window.__workspaceCloseTopLayer
     if (controller === instance) controller = null
+    annotationController = null
     if (ctx === context) ctx = null
 
     renderedDocId = null
@@ -4384,6 +4612,16 @@ export const __workspaceTestBridge = {
   },
   invalidateInitiative() {
     controller?.invalidateInitiative({ requireNewInput: true })
+  },
+  injectFinding(finding) {
+    const doc = ctx?.activeDoc()
+    if (!doc || !finding || typeof finding !== 'object') return null
+    ensureReasoningModel(doc)
+    doc.findings.push(finding)
+    activeWorkspace().activeAnnotationId = finding.id || null
+    momentVonHand = true
+    refreshWorkspace()
+    return finding
   },
   snapshot() {
     return controller?.snapshot() || {

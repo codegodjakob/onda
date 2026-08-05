@@ -79,10 +79,51 @@ async function runLab(browser) {
   await page.close()
 }
 
+async function openExample(page) {
+  await page.goto(baseUrl, { waitUntil: 'networkidle' })
+  await page.evaluate(() => localStorage.clear())
+  await page.reload({ waitUntil: 'networkidle' })
+  await page.locator('#doclist .doc').filter({ hasText: 'Beispiel: Calm Technology' }).click()
+  await page.locator('#doclist .doc').first().click()
+}
+
+async function runEditor(browser) {
+  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } })
+  await openExample(page)
+  const seeded = await page.evaluate(() => {
+    const block = window.AIWT.__blockIdentityTestBridge.getBlocks().find(candidate => candidate.text.length > 24)
+    if (!block) return null
+    const target = block.text.slice(0, Math.min(32, block.text.length))
+    const finding = {
+      id: 'onda-editor-smoke', status: 'open', placement: 'passage', blockId: block.id,
+      target, action: `${target} — präzisiert`, short: 'Der Satz lässt sich präziser führen.',
+      why: 'Die Kernaussage wird früher sichtbar.', folge: 'Die Aussage bleibt gleich.',
+      anmerkungsart: 'satzstil', createdAt: -1,
+    }
+    window.AIWT.__workspaceTestBridge.injectFinding(finding)
+    return { blockId: block.id, target, action: finding.action }
+  })
+  assert.ok(seeded)
+  await page.locator('[data-annotation-form="rewrite"]').waitFor({ state: 'visible' })
+  assert.equal(await page.locator('.local-finding-detail-row').count(), 0)
+  assert.equal(await page.locator('#annotationReviewBar').isVisible(), true)
+  assert.match(await page.locator('#annotationReviewSummary').textContent(), /Empfehlung/)
+
+  await page.getByRole('button', { name: /Fassung übernehmen/ }).click()
+  assert.equal(await page.locator('#editor .ProseMirror').textContent().then(text => text.includes(seeded.action)), true)
+  assert.equal(await page.evaluate(() => window.AIWT.state.docs.find(doc => doc.id === window.AIWT.state.active).findings.find(item => item.id === 'onda-editor-smoke').status), 'resolved')
+
+  await page.getByRole('button', { name: 'Rückgängig' }).click()
+  assert.equal(await page.locator('#editor .ProseMirror').textContent().then(text => text.includes(seeded.target)), true)
+  assert.equal(await page.evaluate(() => window.AIWT.state.docs.find(doc => doc.id === window.AIWT.state.active).findings.find(item => item.id === 'onda-editor-smoke').status), 'open')
+  await page.close()
+}
+
 const browser = await chromium.launch({ headless: true })
 try {
   if (requestedSection === 'all' || requestedSection === 'components') await runComponents(browser)
   if (requestedSection === 'all' || requestedSection === 'lab') await runLab(browser)
+  if (requestedSection === 'all' || requestedSection === 'editor') await runEditor(browser)
   console.log(`ONDA UI ${requestedSection}: PASS`)
 } finally {
   await browser.close()

@@ -101,6 +101,19 @@
           <button id="sidebarReopen" class="onda-icon-btn" title="Seitenleiste einblenden" aria-label="Seitenleiste einblenden" aria-controls="ondaSidebar" aria-expanded="false" hidden>›</button>
           <button id="ondaAura" class="onda-aura" title="Agentengespräch öffnen" aria-label="Agentengespräch öffnen" aria-controls="agentWidget" aria-expanded="false"></button>
         </header>
+        <section id="annotationReviewBar" class="onda-review-bar" aria-label="Anmerkungen zum Text" hidden>
+          <div class="onda-review-bar__summary">
+            <span class="onda-review-bar__eyebrow">Anmerkungen</span>
+            <span id="annotationReviewSummary">Keine offenen Anmerkungen</span>
+          </div>
+          <div class="onda-review-bar__actions">
+            <button id="annotationBulkAccept" class="onda-review-control" type="button" hidden>Sichere Korrekturen übernehmen</button>
+            <button id="annotationQuietToggle" class="onda-review-control" type="button" aria-pressed="false">Ruhig</button>
+            <button id="annotationPrevious" class="onda-review-icon" type="button" aria-label="Vorherige Anmerkung"></button>
+            <button id="annotationNext" class="onda-review-icon" type="button" aria-label="Nächste Anmerkung"></button>
+            <button id="annotationUndo" class="onda-review-control" type="button" disabled>Rückgängig</button>
+          </div>
+        </section>
         <main id="scroll">
           <div id="page">
             <textarea id="title" rows="1" placeholder="Titel" spellcheck="false"></textarea>

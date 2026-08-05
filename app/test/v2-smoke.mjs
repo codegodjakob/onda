@@ -2892,24 +2892,18 @@ try {
       await runDesktop(browser)
       await runBlockIdentityRegressions(browser)
       await runTask4InteractionRegressions(browser)
-      await runTask5PassageFeedback(browser)
-      await runTask5OwnershipAndAmbiguity(browser)
-      await runFinalFindingRegressions(browser)
+      // Die frühere zweistufige Oberfläche aus Kurzzeile, Beobachtung/Relevanz/Folge
+      // und separater Vorschlagskarte existiert absichtlich nicht mehr. Ihre
+      // Interaktionspfade werden im semantischen Onda-Smoke über alle Formen geprüft.
       await runSaveAlert(browser)
       await runPrintLayout(browser)
       await runHomeFocus(browser)
       await runMobile(browser)
-      await runTask5MobileFeedback(browser)
-      await runTask6DialogueAndEvidence(browser)
-      await runTask6Mobile(browser)
-      await runTask6InitiativeAndLifecycle(browser)
       await runSystem8BudgetGate(browser)
       await runFinalStateLearningAndCrossDocument(browser)
     }
-    await runTask7Scenarios(browser, false)
-    await runTask7Scenarios(browser, true)
-    await runTask7Intermediate(browser)
-    await runTask7KeyboardAndMotion(browser)
+    // Die alten Task-7-Screenshots beschrieben dieselbe entfernte Kartenstruktur.
+    // Die neue Matrix lebt in onda-ui-smoke.mjs und annotation-lab.html.
   }
   console.log('V2 smoke passed')
 } finally {

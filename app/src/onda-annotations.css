@@ -20,6 +20,27 @@
 }
 .aura-mark--active .aura-mark__n { background: var(--accent); color: var(--on-accent); }
 
+.onda-review-bar {
+  flex: none; display: flex; align-items: center; justify-content: space-between; gap: var(--space-4);
+  margin: 0 var(--space-4) var(--space-2); padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-panel); background: var(--bg-sunken); color: var(--text-secondary);
+}
+.onda-review-bar[hidden] { display: none; }
+.onda-review-bar__summary { display: flex; align-items: baseline; gap: var(--space-2); min-width: 0; font: var(--type-body); }
+.onda-review-bar__eyebrow { color: var(--text-primary); font-weight: var(--fw-medium); }
+.onda-review-bar__actions { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-2); }
+.onda-review-control, .onda-review-icon {
+  min-height: 40px; padding: 0 var(--space-3); border: 0; border-radius: var(--radius-control);
+  background: transparent; color: var(--text-secondary); font: var(--type-label); cursor: pointer;
+  transition: var(--transition-colors);
+}
+.onda-review-icon { width: 40px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+.onda-review-control:hover, .onda-review-icon:hover, .onda-review-control[aria-pressed="true"] { background: var(--bg-hover); color: var(--text-primary); }
+.onda-review-control:disabled, .onda-review-icon:disabled { opacity: .42; cursor: default; }
+
+#localAgentLayer > .onda-annotation { position: absolute; z-index: 2; width: 340px; pointer-events: auto; }
+#localAgentLayer > .onda-annotation.is-below { width: auto; }
+
 .onda-annotation {
   display: flex; flex-direction: column; gap: var(--space-3); width: 100%;
   padding: var(--space-4) var(--space-5); overflow-wrap: anywhere;
@@ -93,8 +114,14 @@
 @keyframes onda-annotation-in { from { opacity: 0; transform: translateY(6px); } }
 @media (max-width: 1040px) {
   .onda-annotation { max-width: var(--container-reading); }
+  .onda-review-bar { align-items: flex-start; }
+  .onda-review-bar__actions { flex-wrap: wrap; }
 }
 @media (max-width: 480px) {
+  .onda-review-bar { flex-direction: column; align-items: stretch; margin-inline: var(--space-2); }
+  .onda-review-bar__summary { flex-wrap: wrap; }
+  .onda-review-bar__actions { justify-content: flex-start; }
+  .onda-review-control { flex: 1 1 auto; }
   .onda-annotation { padding: var(--space-4); }
   .aura-note__head { flex-wrap: wrap; }
   .aura-note__scope { width: 100%; margin-left: 24px; }
