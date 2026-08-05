@@ -16,7 +16,8 @@
 //    irgendwo gespeichert wurde. Kein Absturz, kein kaputtes JSON — nur Verlust.
 // Dieser Test schreibt das BEOBACHTETE Verhalten fest: baut später jemand einen
 // Fensterabgleich oder eine Konfliktwarnung, wird dieser Test rot und muss dann
-// bewusst umgeschrieben werden — genau so soll es sein.
+// bewusst umgeschrieben werden — genau so soll es sein. Der offene Umbau ist als
+// Issue #25 erfasst.
 //
 // Läuft wie d2-accessibility.test.mjs: eigener statischer Server, echtes Chromium,
 // EIN Browser-Kontext (zwei Tabs teilen sich localStorage wie im echten Browser).

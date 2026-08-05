@@ -61,8 +61,9 @@ Die Prüfung schreibt dieses Verhalten als Beobachtung fest: baut später
 jemand einen Fensterabgleich oder eine Konfliktwarnung, wird sie rot und
 wird dann bewusst umgeschrieben. Warum kein Fix hier: ein echter
 Fensterabgleich ist ein eigenes Vorhaben mit Gestaltungsfragen (Warnung?
-Sperre? Zusammenführen?), kein Nebeneffekt einer Prüf-Etappe. Es ist als
-eigenes Issue erfasst und gehört in die Nähe von #19 (Datensicherheit).
+Sperre? Zusammenführen?), kein Nebeneffekt einer Prüf-Etappe. Es ist als eigenes Issue erfasst
+([#25](https://github.com/codegodjakob/onda/issues/25)) und gehört in die
+Nähe von #19 (Datensicherheit).
 
 ## Prüfung 3 · Ein fremder, unordentlicher Text
 
