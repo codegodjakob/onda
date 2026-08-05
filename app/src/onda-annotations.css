@@ -1,0 +1,107 @@
+.aura-mark {
+  border: 0;
+  border-radius: .34em;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  transition: background-color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
+}
+.aura-mark--korrektur { border: 1px solid var(--border-strong); padding: 0 var(--space-1); }
+.aura-mark--stil { background: var(--bg-sunken); padding: 1px var(--space-1); }
+.aura-mark--struktur { background: var(--bg-surface); box-shadow: var(--shadow-md); padding: 1px 5px; }
+.aura-mark--inhalt, .aura-mark--notiz { background: var(--accent-tint); padding: 1px var(--space-1); }
+.aura-mark:hover, .aura-mark--active { background: var(--accent-tint); border-color: var(--accent); }
+.aura-mark__n {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 20px; height: 20px; padding: 0 var(--space-1); margin-left: var(--space-1);
+  border-radius: var(--radius-full); background: var(--bg-sunken); color: var(--text-tertiary);
+  font: var(--type-caption); font-variant-numeric: tabular-nums; vertical-align: 2px;
+}
+.aura-mark--active .aura-mark__n { background: var(--accent); color: var(--on-accent); }
+
+.onda-annotation {
+  display: flex; flex-direction: column; gap: var(--space-3); width: 100%;
+  padding: var(--space-4) var(--space-5); overflow-wrap: anywhere;
+  border: 1px solid var(--border-subtle); border-radius: var(--radius-panel);
+  background: var(--bg-surface); box-shadow: var(--shadow-xs); color: var(--text-primary);
+  font-family: var(--font-sans); text-align: left;
+  animation: onda-annotation-in var(--dur-normal) var(--ease-out);
+}
+.onda-annotation[data-state="loading"] { opacity: .68; }
+.onda-annotation[data-state="applied"] { background: var(--bg-sunken); }
+.onda-annotation[data-state="rejected"], .onda-annotation[data-state="closed"] { opacity: .62; }
+.onda-annotation[data-state="stale"], .onda-annotation[data-state="error"] { border-color: var(--danger); }
+.aura-note__head { display: flex; align-items: center; gap: var(--space-2); min-width: 0; font: var(--type-label); }
+.aura-note__head > svg { flex: none; color: var(--text-tertiary); }
+.aura-note__kind { min-width: 0; }
+.aura-note__priority { font: var(--type-caption); color: var(--text-tertiary); }
+.aura-note__priority--fehler { color: var(--danger); }
+.aura-note__scope { margin-left: auto; color: var(--text-tertiary); font: var(--type-caption); white-space: nowrap; }
+.aura-note__body { margin: 0; color: var(--text-secondary); font: var(--type-body); text-wrap: pretty; }
+.aura-note__from { color: var(--text-tertiary); text-decoration: line-through; text-decoration-thickness: 1px; }
+.aura-note__to { color: var(--text-primary); font-weight: var(--fw-medium); }
+.aura-note__acts { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.aura-action {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2);
+  min-height: 44px; padding: 0 var(--space-4); border: 1px solid transparent;
+  border-radius: var(--radius-control); font: var(--type-label); cursor: pointer;
+  transition: var(--transition-colors), transform var(--dur-fast) var(--ease-out);
+}
+.aura-action:active { transform: scale(.98); }
+.aura-action--primary { background: var(--accent); color: var(--on-accent); }
+.aura-action--primary:hover { background: var(--accent-hover); }
+.aura-action--ghost { background: transparent; color: var(--text-secondary); }
+.aura-action--ghost:hover { background: var(--bg-hover); color: var(--text-primary); }
+.aura-note__details { color: var(--text-link); font: var(--type-caption); }
+.aura-note__details summary { width: fit-content; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.aura-note__rule { margin: var(--space-2) 0 0; padding: var(--space-3) var(--space-4); border-radius: var(--radius-panel); background: var(--bg-sunken); color: var(--text-secondary); font: var(--type-caption); }
+
+.aura-correction__comparison {
+  display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); align-items: center; gap: var(--space-3);
+  padding: var(--space-3) var(--space-4); border-radius: var(--radius-panel); background: var(--bg-sunken); font: var(--type-body);
+}
+.aura-correction__comparison > svg { color: var(--text-tertiary); }
+.aura-rewrite__text, .aura-slot__text, .aura-region__proposal {
+  margin: 0; padding: var(--space-3) var(--space-4); border-radius: var(--radius-panel);
+  background: var(--bg-sunken); color: var(--text-primary); font: var(--type-body); line-height: var(--leading-relaxed);
+}
+.aura-insertion__flow { display: grid; grid-template-columns: 2px minmax(0,1fr); gap: var(--space-3); align-items: stretch; }
+.aura-insertion__caret { border-radius: var(--radius-full); background: var(--accent); }
+.aura-insertion__text { margin: 0; color: var(--text-primary); font: var(--type-body); line-height: var(--leading-relaxed); }
+.aura-slot { border-style: dashed; border-color: var(--border-strong); box-shadow: none; }
+.aura-region { background: var(--bg-sunken); }
+.aura-region__samples { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.aura-region__sample { padding: var(--space-2) var(--space-3); border-radius: var(--radius-control); background: var(--bg-surface); color: var(--text-secondary); font: var(--type-caption); box-shadow: var(--shadow-xs); }
+.aura-note__source, .aura-note__compare { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-4); border-radius: var(--radius-panel); background: var(--bg-sunken); }
+.aura-note__srclink { display: inline-flex; align-items: center; gap: var(--space-2); color: var(--text-link); font: var(--type-label); text-decoration: none; }
+.aura-note__srclink:hover { text-decoration: underline; text-underline-offset: 2px; }
+.aura-note__excerpt { margin: 0; padding-left: var(--space-3); border-left: 2px solid var(--border-default); color: var(--text-secondary); font: var(--type-body); line-height: var(--leading-relaxed); }
+.aura-note__srcmeta, .aura-note__cmpref { color: var(--text-tertiary); font: var(--type-caption); }
+.aura-note__cmp { display: flex; flex-direction: column; gap: var(--space-1); }
+.aura-note__cmptext { color: var(--text-primary); font: var(--type-body); }
+.aura-dialogue__bubble, .aura-dialogue__reply { max-width: 92%; margin: 0; padding: var(--space-3) var(--space-4); border-radius: var(--radius-panel); font: var(--type-body); }
+.aura-dialogue__bubble { background: var(--bg-sunken); color: var(--text-primary); }
+.aura-dialogue__reply { align-self: flex-end; background: var(--accent-tint); }
+.aura-dialogue__composer { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-1); border: 1px solid var(--border-default); border-radius: var(--radius-pill); background: var(--bg-surface); }
+.aura-dialogue__input { min-width: 0; flex: 1; height: 42px; padding: 0 var(--space-3); border: 0; outline: 0; background: transparent; color: var(--text-primary); font: var(--type-body); }
+.aura-dialogue__composer .aura-action { min-height: 40px; }
+.aura-title-correction__field { display: flex; flex-direction: column; gap: var(--space-2); }
+.aura-title-correction__label { color: var(--text-tertiary); font: var(--type-caption); }
+.aura-title-correction__input { width: 100%; min-height: 48px; padding: 0 var(--space-4); border: 1px solid var(--border-default); border-radius: var(--radius-control); background: var(--bg-sunken); color: var(--text-primary); font: var(--type-title); }
+
+@keyframes onda-annotation-in { from { opacity: 0; transform: translateY(6px); } }
+@media (max-width: 1040px) {
+  .onda-annotation { max-width: var(--container-reading); }
+}
+@media (max-width: 480px) {
+  .onda-annotation { padding: var(--space-4); }
+  .aura-note__head { flex-wrap: wrap; }
+  .aura-note__scope { width: 100%; margin-left: 24px; }
+  .aura-correction__comparison { grid-template-columns: 1fr; }
+  .aura-correction__comparison > svg { transform: rotate(90deg); }
+  .aura-action { flex: 1 1 auto; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .onda-annotation { animation: none; }
+}

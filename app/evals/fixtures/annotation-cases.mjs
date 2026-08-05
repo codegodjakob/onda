@@ -50,6 +50,7 @@ export const ANNOTATION_CASES = Object.freeze(ALL_ANNOTATION_KINDS.map((kind, in
     folge: 'Die Entscheidung bleibt bei der Autorin oder dem Autor.',
     action: `${info.label} – neue Fassung`,
     priority: info.priority,
+    fixtureState: ['open', 'applied', 'rejected', 'stale', 'loading', 'error', 'closed'][index % 7],
     ...extra,
   })
 }))
