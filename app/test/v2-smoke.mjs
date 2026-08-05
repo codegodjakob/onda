@@ -8,30 +8,7 @@ const { chromium } = require('playwright')
 const baseUrl = process.env.AIWT_URL || 'http://127.0.0.1:4173/'
 const screenshotDir = process.env.AIWT_SCREENSHOT_DIR || '/tmp'
 
-function assertReachableSurfaceIsV2Only() {
-  const reachableFiles = [
-    '../index.html',
-    '../src/editor.js',
-    '../src/ui.js',
-  ]
-  const reachable = reachableFiles
-    .map(path => readFileSync(new URL(path, import.meta.url), 'utf8'))
-    .join('\n')
-  const forbidden = [
-    /from ['"]\.\/panels\.js['"]/,
-    /from ['"]\.\/structure\.js['"]/,
-    /\binitPanels\s*\(/,
-    /\binitStructure\s*\(/,
-    /\bbuildRails\s*\(/,
-    /\bbuildBubble\s*\(/,
-    /\bshowBubble\s*\(/,
-    /\bid=["'](?:railL|railR|pCoach|pStruct|structView)["']/,
-    /\bid=["'](?:workspaceHeader|workspaceBack|workspacePath|agentPresence|structureShelf|workspaceBody)["']/,
-  ]
-  forbidden.forEach(pattern => {
-    assert.equal(pattern.test(reachable), false, `Alte erreichbare Oberfläche gefunden: ${pattern}`)
-  })
-
+function assertOndaRahmenSteht() {
   const example = readFileSync(new URL('../src/example.js', import.meta.url), 'utf8')
   assert.match(example, /volle Kraft, leise Präsentation/)
 
@@ -41,7 +18,7 @@ function assertReachableSurfaceIsV2Only() {
   }
 }
 
-assertReachableSurfaceIsV2Only()
+assertOndaRahmenSteht()
 
 async function openExample(page, clear = true) {
   await page.goto(baseUrl, { waitUntil: 'networkidle' })

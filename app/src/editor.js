@@ -123,40 +123,20 @@ function now() { return Date.now() }
 export function docTitle(d) { return (d && d.title && d.title.trim()) ? d.title.trim() : 'Ohne Titel' }
 export function activeDoc() { return state.docs.find(d => d.id === state.active) }
 
-// Ein Text trägt seine Struktur, seine Erzählfäden, Coach- und Formulierungs-Karten
-// und den Zustand seiner Leisten bei sich — alles wird mitgespeichert.
+// Ein Text trägt seine Coach- und Formulierungs-Karten bei sich — Altbestand,
+// den ensureReasoningModel in Hinweise übernimmt.
 function ensureDocShape(d) {
-  if (!Array.isArray(d.structure)) d.structure = []
-  if (!Array.isArray(d.narrative)) d.narrative = []
   if (!Array.isArray(d.coach)) d.coach = []
   if (!Array.isArray(d.lane)) d.lane = []
-  if (!d.panels || typeof d.panels !== 'object') d.panels = { struct: false, coach: false, lane: false }
   if (!d.provenance || typeof d.provenance !== 'object' || Array.isArray(d.provenance)) {
     d.provenance = { actor: 'user', action: 'document-create', createdAt: Number.isFinite(d.updated) ? d.updated : now() }
   }
-  // Jeder Erzählfaden hat eine feste Farbe (Index in der Faden-Palette).
-  d.narrative.forEach((t, i) => { if (t.color == null) t.color = i })
-  // Alt-Notizen ohne Anker: den Baustein aus dem Titel „… (Baustein)" erkennen
-  // und daran heften (dann steht die Notiz in ihrer Zeile statt bei „ohne Baustein").
-  d.narrative.forEach(t => (t.steps || []).forEach(s => {
-    if (!s.blockId && s.h) {
-      const m = /\(([^)]+)\)\s*$/.exec(s.h)
-      if (m) { const b = findBlockByTitle(d.structure, m[1].trim()); if (b) { s.blockId = b.id; s.h = s.h.replace(/\s*\([^)]+\)\s*$/, '').trim() } }
-    }
-  }))
   // Anmerkungen: Standard-Art ist Formulierung.
   d.lane.forEach(c => { if (!c.kind) c.kind = 'form' })
   ensureReasoningModel(d)
   ensureErweiterungen(d)
   ensureWorkspaceState(d)
   return d
-}
-function findBlockByTitle(list, title) {
-  for (const b of list) {
-    if ((b.title || '').trim() === title) return b
-    const r = findBlockByTitle(b.children || [], title); if (r) return r
-  }
-  return null
 }
 // Ein Projekt trägt sein Material (Canvas) — geteilt über alle Texte des Projekts.
 function ensureProjectShape(p) {
@@ -386,13 +366,12 @@ export function newDoc() {
 export function duplicateDoc(id) {
   flushSave()
   const src = state.docs.find(x => x.id === id); if (!src) return
-  // Eine Kopie erbt auch die Struktur, die Erzählfäden und die Hinweise des Textes.
+  // Eine Kopie erbt auch die Karten und die Hinweise des Textes.
   const clone = obj => JSON.parse(JSON.stringify(obj || []))
   const copy = ensureDocShape({
     id: uid(), title: (src.title ? src.title + ' Kopie' : 'Kopie'), body: src.body, updated: now(), projectId: src.projectId,
-    structure: clone(src.structure), narrative: clone(src.narrative), coach: clone(src.coach), lane: clone(src.lane),
+    coach: clone(src.coach), lane: clone(src.lane),
     findings: clone(src.findings), decisions: clone(src.decisions),
-    panels: Object.assign({ struct: false, coach: false, lane: false }, src.panels),
   })
   state.docs.push(copy)
   showDoc(copy.id)

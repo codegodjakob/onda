@@ -6,7 +6,7 @@
 //
 // Eine Integritätsfrage ist eine, die durch bloßes Verwerfen nicht verschwindet: Wer sie
 // wegklickt, nimmt ein Risiko bewusst an (reasoning-model.mjs decideFinding -> 'risk-accepted',
-// panels.js beschriftet den Knopf dann auch so), und das Finding trägt die zu belegende
+// workspace.js beschriftet den Knopf dann auch so), und das Finding trägt die zu belegende
 // Aussage als claim mit (agent-findings.mjs hinweisZuFinding).
 //
 // Vorher waren es vier feste Arten — fakt, quelle, methode, logik — für jeden Text, egal
