@@ -173,6 +173,39 @@ test('das Journal traegt je bezahltem Lauf Zeitpunkt, Kanal, Ausloeser, Signatur
   setzeTransportFuerTests(null)
 })
 
+// Seam Task 2 -> Task 3: die vier Gateway-internen throws (refusal/max_tokens/JSON-Fehler/
+// Pflichtfeld-Fehler, agent-gateway.mjs) haengen ihre usage ans geworfene Fehlerobjekt --
+// im Unterschied zu einem reinen Transportfehler ohne Antwort. Dieser Test provoziert genau
+// das ueber onFertig (nicht onFehler!) mit stopReason:'refusal': das Gateway wirft SELBST,
+// mit usage. torRunTask muss diesen fehler.usage-Zweig treffen (lauf-tor.mjs, catch in
+// torRunTask) -- ein abgelehnter Lauf hat trotzdem echte Tokens gekostet.
+test('ein abgelehnter Lauf (refusal) verbucht seine usage ueber den fehler.usage-Zweig und steht mit Kosten im Journal', async () => {
+  const t = fakeTransport([(a, h) => h.onFertig({ text: 'x', stopReason: 'refusal', usage: { input_tokens: 7, output_tokens: 3 } })])
+  const w = baueWelt()
+  setzeTransportFuerTests(t)
+
+  const laufFn = async ({ runTask }) => {
+    await runTask('chat', { docText: 'T' })
+    return { gestartet: true, erfolg: true }
+  }
+  const r = await fuehreLaufAus({ kanal: 'chat' }, laufFn)
+  assert.equal(r.gestartet, true)
+  assert.equal(r.erfolg, false)
+  assert.equal(r.fehler, 'abgelehnt')
+
+  assert.equal(w.journal.eintraege.length, 1, 'auch ein abgelehnter Lauf ist bezahlt (ein runTask-Aufruf) und landet im Journal')
+  const [e] = w.journal.eintraege
+  assert.equal(e.ergebnis, 'fehler')
+  assert.equal(e.fehlerTyp, 'abgelehnt')
+  assert.deepEqual(e.tasks, ['chat'], 'verbucheImEintrag lief -- der Aufruf ist erfasst')
+  assert.ok(e.stand, 'stand wird beim ersten bezahlten Aufruf gesetzt, auch wenn er scheitert')
+  assert.equal(e.stand.modell, 'claude-opus-5')
+  assert.equal(e.tokens.input, 7)
+  assert.equal(e.tokens.output, 3)
+  assert.ok(e.kostenCents > 0, 'ein abgelehnter Lauf hat trotzdem echte Tokens gekostet')
+  setzeTransportFuerTests(null)
+})
+
 test('ein Lauf, der das Gateway nie erreicht, landet nicht im Journal', async () => {
   const w = baueWelt()
   const ohneRunTask = async () => ({ gestartet: false, grund: 'kein-schluessel' })
