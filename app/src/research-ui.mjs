@@ -2,6 +2,7 @@ import { createResearchAdapter } from './research-adapter.mjs'
 import { executeResearchPaths } from './research-orchestrator.mjs'
 import { createResearchPlan, researchPathFingerprint, transitionResearchRun } from './research-run.mjs'
 import { buildResearchReview, commitResearchReview } from './research-synthesis.mjs'
+import { ondaIcon } from './onda-icons.mjs'
 
 const STATUS_LABELS = Object.freeze({
   planned: 'Geplant',
@@ -68,7 +69,8 @@ export function createResearchUi({
     const form = createNode('form', 'research-plan-form')
     form.id = 'researchPlanForm'
     form.setAttribute('aria-label', 'Recherche planen')
-    const back = actionButton('‹ Zur Quellenliste', 'research-back')
+    const back = actionButton('Zur Quellenliste', 'research-back')
+    back.prepend(ondaIcon('arrow-left', { size: 16 }))
     back.id = 'researchPlanBack'
     back.addEventListener('click', () => renderLibrary())
     const question = document.createElement('textarea')
@@ -314,7 +316,8 @@ export function createResearchUi({
     const section = createNode('section', 'research-run-view')
     section.id = 'researchRunView'
     section.dataset.status = current.status
-    const back = actionButton('‹ Zur Quellenliste', 'research-back')
+      const back = actionButton('Zur Quellenliste', 'research-back')
+      back.prepend(ondaIcon('arrow-left', { size: 16 }))
     back.id = 'researchRunBack'
     back.addEventListener('click', () => renderLibrary())
     const status = createNode('span', `research-run-status is-${current.status}`, STATUS_LABELS[current.status] || current.status)

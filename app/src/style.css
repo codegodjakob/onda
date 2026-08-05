@@ -1164,13 +1164,6 @@ body.zen #title:focus { opacity: 1; }
   color: var(--text-secondary);
   font: var(--fw-semibold) var(--text-xs)/1 var(--font-sans);
 }
-#accentToggle .onda-accent-dot {
-  width: 14px;
-  height: 14px;
-  border-radius: var(--radius-full);
-  background: var(--accent);
-  box-shadow: inset 0 0 0 1px rgba(28, 26, 23, 0.14);
-}
 
 .onda-editor-col {
   --onda-topbar-h: 52px;
@@ -4191,36 +4184,6 @@ button.onda-aura:focus-visible {
   .language-primary,
   .language-action { width: 100%; }
 }
-
-/* Akzent-Auswahl (Popover) */
-.onda-accent-menu {
-  position: fixed;
-  z-index: 70;
-  display: grid;
-  grid-template-columns: repeat(3, auto);
-  gap: var(--space-2);
-  padding: var(--space-2);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-overlay);
-  background: var(--bg-surface);
-  box-shadow: var(--shadow-lg);
-}
-.onda-accent-swatch {
-  width: 26px;
-  height: 26px;
-  border-radius: var(--radius-full);
-  border: 2px solid transparent;
-  box-shadow: inset 0 0 0 1px var(--line);
-  cursor: pointer;
-}
-.onda-accent-swatch.is-current { border-color: var(--text-primary); }
-.onda-accent-swatch:focus-visible { outline: 2px solid transparent; box-shadow: var(--shadow-focus); }
-.onda-accent-swatch[data-accent="sky"] { background: #79b4dc; }
-.onda-accent-swatch[data-accent="sage"] { background: #7a9d6f; }
-.onda-accent-swatch[data-accent="blue"] { background: #5b8fce; }
-.onda-accent-swatch[data-accent="clay"] { background: #c07a5c; }
-.onda-accent-swatch[data-accent="lavender"] { background: #9a86c4; }
-.onda-accent-swatch[data-accent="sand"] { background: #c2a15e; }
 
 /* ==================== KI-Anschluss (Einstellungen, Bereich U) ==================== */
 .ki-status-row { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }

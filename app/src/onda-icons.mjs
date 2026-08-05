@@ -13,6 +13,7 @@ const ICONS = Object.freeze({
   ],
   'chevron-left': [['path', { d: 'm15 18-6-6 6-6' }]],
   'chevron-right': [['path', { d: 'm9 18 6-6-6-6' }]],
+  'chevron-down': [['path', { d: 'm6 9 6 6 6-6' }]],
   'arrow-left': [['path', { d: 'M19 12H5M12 19l-7-7 7-7' }]],
   'arrow-right': [['path', { d: 'M5 12h14M12 5l7 7-7 7' }]],
   check: [['path', { d: 'm20 6-11 11-5-5' }]],
@@ -20,6 +21,15 @@ const ICONS = Object.freeze({
   undo: [['path', { d: 'M9 14 4 9l5-5M4 9h9.5a6.5 6.5 0 0 1 0 13H10' }]],
   trash: [['path', { d: 'M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3' }]],
   edit: [['path', { d: 'M4 20l1-4L16 5l3 3L8 19l-4 1ZM13.5 7.5l3 3' }]],
+  copy: [
+    ['rect', { x: '9', y: '9', width: '11', height: '11', rx: '2' }],
+    ['path', { d: 'M5 15V5a2 2 0 0 1 2-2h10' }],
+  ],
+  sort: [
+    ['path', { d: 'M7 4v13M7 4 4 7M7 4l3 3' }],
+    ['path', { d: 'M17 20V7M17 20l-3-3M17 20l3-3' }],
+  ],
+  text: [['path', { d: 'M4 6h16M4 12h16M4 18h10' }]],
   search: [
     ['circle', { cx: '11', cy: '11', r: '7' }],
     ['path', { d: 'm20 20-4-4' }],

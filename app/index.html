@@ -37,7 +37,7 @@
     <!-- Bibliothek: Startseite mit allen Texten (später: Projekte, Quellen) -->
     <section id="home">
       <div id="homeInner">
-        <button id="crumb" class="crumb" hidden>‹ Projekte</button>
+        <button id="crumb" class="crumb" hidden><span>Projekte</span></button>
         <div class="home-head">
           <div>
             <span class="onda-eyebrow">Bibliothek</span>
@@ -73,12 +73,12 @@
         <div class="onda-brand">
           <span class="onda-aura onda-aura--sm" aria-hidden="true"></span>
           <span class="onda-wordmark">Onda</span>
-          <button id="sidebarCollapse" class="onda-icon-btn" title="Seitenleiste einklappen" aria-label="Seitenleiste einklappen" aria-controls="ondaSidebar" aria-expanded="true">‹</button>
+          <button id="sidebarCollapse" class="onda-icon-btn" title="Seitenleiste einklappen" aria-label="Seitenleiste einklappen" aria-controls="ondaSidebar" aria-expanded="true"></button>
         </div>
 
         <nav class="onda-project-nav" aria-label="Projekt">
           <button id="sidebarBack" class="onda-side-back" title="Zur Projektübersicht" aria-label="Zur Projektübersicht">
-            <span class="onda-side-back-chevron" aria-hidden="true">‹</span>
+            <span class="onda-side-back-chevron" aria-hidden="true"></span>
             <span class="onda-side-back-label">Projekt</span>
           </button>
 
@@ -116,19 +116,14 @@
         <div class="onda-side-footer">
           <span class="onda-avatar" aria-hidden="true">J</span>
           <span class="onda-side-user">Jakob</span>
-          <button id="themeToggle" class="onda-icon-btn" title="Erscheinung wechseln" aria-label="Erscheinung wechseln">☾</button>
-          <!-- Der Akzentwechsler ist ausgeblendet: das Design System kennt genau EINEN
-               Akzent (Sky) und sagt ausdrücklich "Keine Akzent-Varianten". Der Knopf
-               bleibt im Markup stehen, damit die Entscheidung mit einem Wort rückgängig
-               zu machen ist — er zeigt nur nichts mehr an. -->
-          <button id="accentToggle" class="onda-icon-btn" title="Akzentfarbe wechseln" aria-label="Akzentfarbe wechseln" hidden><span class="onda-accent-dot" aria-hidden="true"></span></button>
-          <button id="kiSettings" class="onda-icon-btn" title="KI-Anschluss" aria-label="KI-Anschluss einrichten" aria-haspopup="dialog" aria-controls="kiModal">⚙︎</button>
+          <button id="themeToggle" class="onda-icon-btn" title="Erscheinung wechseln" aria-label="Erscheinung wechseln"></button>
+          <button id="kiSettings" class="onda-icon-btn" title="KI-Anschluss" aria-label="KI-Anschluss einrichten" aria-haspopup="dialog" aria-controls="kiModal"></button>
         </div>
       </aside>
 
       <div class="onda-editor-col">
         <header class="onda-topbar">
-          <button id="sidebarReopen" class="onda-icon-btn" title="Seitenleiste einblenden" aria-label="Seitenleiste einblenden" aria-controls="ondaSidebar" aria-expanded="false" hidden>›</button>
+          <button id="sidebarReopen" class="onda-icon-btn" title="Seitenleiste einblenden" aria-label="Seitenleiste einblenden" aria-controls="ondaSidebar" aria-expanded="false" hidden></button>
           <button id="ondaAura" class="onda-aura" title="Agentengespräch öffnen" aria-label="Agentengespräch öffnen" aria-controls="agentWidget" aria-expanded="false"></button>
         </header>
         <section id="annotationReviewBar" class="onda-review-bar" aria-label="Anmerkungen zum Text" hidden>

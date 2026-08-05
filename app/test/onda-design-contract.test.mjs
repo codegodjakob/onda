@@ -5,6 +5,13 @@ import { readFile } from 'node:fs/promises'
 const tokensUrl = new URL('../src/onda-tokens.css', import.meta.url)
 const styleUrl = new URL('../src/style.css', import.meta.url)
 const indexUrl = new URL('../index.html', import.meta.url)
+const renderedControlUrls = [
+  indexUrl,
+  new URL('../src/ui.js', import.meta.url),
+  new URL('../src/workspace.js', import.meta.url),
+  new URL('../src/source-library-ui.mjs', import.meta.url),
+  new URL('../src/research-ui.mjs', import.meta.url),
+]
 
 test('Onda-Tokens besitzen genau vier Schriftgrößen und drei Gewichte', async () => {
   const css = await readFile(tokensUrl, 'utf8')
@@ -67,4 +74,23 @@ test('Onda-Icons verwenden die eine Linienregel und zugängliche Namen', async (
   } finally {
     globalThis.document = previousDocument
   }
+})
+
+test('Gerenderte Bedienelemente verwenden keine Unicode-Ersatzsymbole', async () => {
+  const sources = (await Promise.all(renderedControlUrls.map(url => readFile(url, 'utf8')))).join('\n')
+  const forbidden = [
+    /<button[^>]*>\s*[‹›☀☾⚙×✓✎→+]\s*</,
+    /createNode\(\s*['"]button['"][^\n]*['"][×✓✎→+]['"]\s*\)/,
+    /\.textContent\s*=\s*[^\n]*['"][☀☾]['"]/
+  ]
+  forbidden.forEach(pattern => assert.doesNotMatch(sources, pattern))
+})
+
+test('Sky ist der einzige auswählbare Akzent', async () => {
+  const [html, css, workspace] = await Promise.all([
+    readFile(indexUrl, 'utf8'),
+    readFile(styleUrl, 'utf8'),
+    readFile(new URL('../src/workspace.js', import.meta.url), 'utf8'),
+  ])
+  assert.doesNotMatch(`${html}\n${css}\n${workspace}`, /accentToggle|onda-accent-menu|ONDA_ACCENTS|data-accent="(?:sage|blue|clay|lavender|sand)"/)
 })

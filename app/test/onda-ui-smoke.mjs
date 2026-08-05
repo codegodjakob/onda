@@ -188,12 +188,59 @@ async function runShell(browser) {
   await page.close()
 }
 
+async function assertOndaSurface(locator, name, { rounded = true } = {}) {
+  const contract = await locator.evaluate(node => {
+    const style = getComputedStyle(node)
+    return {
+      fontFamily: style.fontFamily,
+      fontWeight: style.fontWeight,
+      radius: style.borderTopLeftRadius,
+    }
+  })
+  assert.match(contract.fontFamily, /ABC Diatype/, `${name} verwendet nicht ABC Diatype`)
+  assert.ok(['400', '500', '700'].includes(contract.fontWeight), `${name} verwendet Gewicht ${contract.fontWeight}`)
+  if (rounded) assert.equal(contract.radius, '24px', `${name} verwendet Radius ${contract.radius}`)
+}
+
+async function runSurfaces(browser) {
+  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } })
+  await page.goto(baseUrl, { waitUntil: 'networkidle' })
+  await page.evaluate(() => localStorage.clear())
+  await page.reload({ waitUntil: 'networkidle' })
+  await assertOndaSurface(page.locator('#home'), 'Bibliothek')
+
+  await page.locator('#doclist .doc').filter({ hasText: 'Beispiel: Calm Technology' }).click()
+  await page.locator('#doclist .doc').first().click()
+  await assertOndaSurface(page.locator('.onda-editor-col'), 'Schreibblatt')
+  await assertOndaSurface(page.locator('.onda-sidebar'), 'Projektnavigation', { rounded: false })
+
+  await page.getByRole('button', { name: 'KI-Anschluss einrichten' }).click()
+  await assertOndaSurface(page.locator('#kiModal'), 'KI-Anschluss')
+  await page.locator('#kiModal').getByRole('button', { name: 'Schließen' }).click()
+
+  await page.getByRole('button', { name: 'Agentengespräch öffnen' }).click()
+  await assertOndaSurface(page.locator('#agentWidget'), 'Agentengespräch')
+  await page.locator('#agentWidget').getByRole('button', { name: /schließen/i }).click()
+
+  await page.locator('#pvCard').click()
+  await page.locator('#argumentOpen').click()
+  await assertOndaSurface(page.locator('#argumentModal'), 'Argumentationsdossier')
+  await page.locator('#argumentModal').getByRole('button', { name: 'Schließen' }).click()
+
+  await page.locator('#pvCard').click()
+  await page.locator('#auditOpen').click()
+  await assertOndaSurface(page.locator('#auditModal'), 'Schlussaudit')
+  await page.locator('#auditModal').getByRole('button', { name: 'Schließen' }).click()
+  await page.close()
+}
+
 const browser = await chromium.launch({ headless: true })
 try {
   if (requestedSection === 'all' || requestedSection === 'components') await runComponents(browser)
   if (requestedSection === 'all' || requestedSection === 'lab') await runLab(browser)
   if (requestedSection === 'all' || requestedSection === 'editor') await runEditor(browser)
   if (requestedSection === 'all' || requestedSection === 'shell') await runShell(browser)
+  if (requestedSection === 'all' || requestedSection === 'surfaces') await runSurfaces(browser)
   console.log(`ONDA UI ${requestedSection}: PASS`)
 } finally {
   await browser.close()

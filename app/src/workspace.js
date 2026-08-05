@@ -184,7 +184,6 @@ let evidenceFocusRequest = false
 let evidenceReturnFindingId = null
 let riskConfirmationFocusRequest = false
 let ondaDialog = null
-let accentMenu = null
 // Verständnis-Interview: einmal je Projekt+Dokument prüfen, genau ein Lauf gleichzeitig.
 let interviewPruefKey = null
 let interviewLaufAktiv = false
@@ -193,8 +192,6 @@ let pausierterAutomatiklauf = null
 // Echter Chat (Etappe A, Bereich C): genau ein Lauf gleichzeitig, app-weit (Panel und,
 // ab Task C-3, auch die Randkarten-Gespraeche teilen sich dieses Feld ueber fuehreChatLauf).
 let laufenderChatLauf = null
-const ONDA_ACCENTS = ['sky', 'sage', 'blue', 'clay', 'lavender', 'sand']
-const ONDA_ACCENT_LABELS = { sky: 'Himmel', sage: 'Salbei', blue: 'Blau', clay: 'Ton', lavender: 'Lavendel', sand: 'Sand' }
 
 const AGENT_IDLE_MS = 3000
 const AGENT_BOUNDARY_IDLE_MS = 300
@@ -1151,7 +1148,8 @@ function openOndaDialog({ id, title, opener, build }) {
   const header = createNode('header', 'onda-dialog-header')
   const heading = createNode('h2', 'onda-dialog-title', title)
   heading.id = titleId
-  const close = createNode('button', 'onda-icon-btn onda-dialog-close', '×')
+  const close = createNode('button', 'onda-icon-btn onda-dialog-close')
+  close.append(ondaIcon('x', { size: 18 }))
   close.type = 'button'
   close.setAttribute('aria-label', 'Schließen')
   close.addEventListener('click', () => closeOndaDialog())
@@ -1509,7 +1507,7 @@ function syncThemeToggle() {
   const button = document.getElementById('themeToggle')
   if (!button) return
   const dark = document.documentElement.dataset.theme === 'dark'
-  button.textContent = dark ? '☀' : '☾'
+  button.replaceChildren(ondaIcon(dark ? 'sun' : 'moon', { size: 18 }))
   button.setAttribute('aria-pressed', String(dark))
   const label = dark ? 'Zu hellem Erscheinungsbild wechseln' : 'Zu dunklem Erscheinungsbild wechseln'
   button.setAttribute('aria-label', label)
@@ -1522,57 +1520,6 @@ function toggleTheme() {
   applySettings()
   ctx.persist()
   syncThemeToggle()
-}
-
-function closeAccentMenu({ restoreFocus = true } = {}) {
-  if (!accentMenu) return false
-  const { node, opener, outsideHandler } = accentMenu
-  document.removeEventListener('pointerdown', outsideHandler, true)
-  node.remove()
-  accentMenu = null
-  if (restoreFocus && opener?.isConnected) opener.focus()
-  return true
-}
-
-function openAccentMenu(opener) {
-  closeAccentMenu({ restoreFocus: false })
-  const settings = ctx.state.settings
-  const current = ONDA_ACCENTS.includes(settings.accent) ? settings.accent : 'sky'
-  const menu = createNode('div', 'onda-accent-menu')
-  menu.setAttribute('role', 'menu')
-  menu.setAttribute('aria-label', 'Akzentfarbe wählen')
-  ONDA_ACCENTS.forEach(accent => {
-    const swatch = createNode('button', 'onda-accent-swatch')
-    swatch.type = 'button'
-    swatch.setAttribute('role', 'menuitemradio')
-    swatch.setAttribute('aria-checked', String(accent === current))
-    swatch.dataset.accent = accent
-    swatch.title = ONDA_ACCENT_LABELS[accent]
-    swatch.setAttribute('aria-label', ONDA_ACCENT_LABELS[accent])
-    swatch.classList.toggle('is-current', accent === current)
-    swatch.addEventListener('click', () => {
-      settings.accent = accent
-      applySettings()
-      ctx.persist()
-      closeAccentMenu()
-    })
-    menu.append(swatch)
-  })
-  const outsideHandler = event => {
-    if (menu.contains(event.target) || opener.contains(event.target)) return
-    closeAccentMenu({ restoreFocus: false })
-  }
-  menu.addEventListener('keydown', event => {
-    if (event.key === 'Escape') { event.preventDefault(); closeAccentMenu() }
-  })
-  document.getElementById('editorView').append(menu)
-  const rect = opener.getBoundingClientRect()
-  const menuRect = menu.getBoundingClientRect()
-  menu.style.left = `${Math.max(8, rect.left)}px`
-  menu.style.top = `${Math.max(8, rect.top - menuRect.height - 8)}px`
-  accentMenu = { node: menu, opener, outsideHandler }
-  document.addEventListener('pointerdown', outsideHandler, true)
-  menu.querySelector('button')?.focus()
 }
 
 function renderProjectUnderstandingCard() {
@@ -2028,7 +1975,8 @@ function renderInsertTrigger() {
   if (!ui.insertLayer || !workspace) return
 
   if (!insertTrigger) {
-    insertTrigger = createNode('button', 'block-insert-trigger', '+')
+    insertTrigger = createNode('button', 'block-insert-trigger')
+    insertTrigger.append(ondaIcon('plus', { size: 18 }))
     insertTrigger.id = 'blockInsertTrigger'
     insertTrigger.type = 'button'
     insertTrigger.title = 'Textbaustein einfügen'
@@ -2387,7 +2335,8 @@ function renderLocalDialogue(finding) {
   input.type = 'text'
   input.placeholder = 'Antworten …'
   input.setAttribute('aria-label', 'Dem Agenten zu dieser Stelle antworten')
-  const send = createNode('button', 'agent-chat-send', '→')
+  const send = createNode('button', 'agent-chat-send')
+  send.append(ondaIcon('arrow-right', { size: 18 }))
   send.type = 'submit'
   send.title = 'Senden'
   send.setAttribute('aria-label', 'Nachricht senden')
@@ -2443,8 +2392,9 @@ function appendSuggestionVersion(parent, label, prefix, changed, suffix, changeC
   parent.append(row)
 }
 
-function findingActionButton(label, symbol, handler) {
-  const button = createNode('button', 'suggestion-action', symbol)
+function findingActionButton(label, iconName, handler) {
+  const button = createNode('button', 'suggestion-action')
+  button.append(ondaIcon(iconName, { size: 18 }))
   button.type = 'button'
   button.title = label
   button.setAttribute('aria-label', label)
@@ -2765,12 +2715,12 @@ function renderOwnVersionStatus(finding, blocks) {
   const actions = createNode('div', 'own-version-actions')
   const cancel = findingActionButton(
     'Eigene Fassung abbrechen',
-    '×',
+    'x',
     () => cancelOwnVersion(finding.id),
   )
   const complete = findingActionButton(
     'Eigene Fassung abschliessen',
-    '✓',
+    'check',
     () => completeOwnVersion(finding.id),
   )
   complete.disabled = completion.kind !== 'accept'
@@ -2841,9 +2791,9 @@ function renderSuggestion(finding, blockId) {
 
   const actions = createNode('div', 'suggestion-actions')
   actions.append(
-    findingActionButton('Verwerfen', '×', () => handleSuggestionReject(finding)),
-    findingActionButton('Eigene Fassung schreiben', '✎', () => handleSuggestionOwnVersion(finding)),
-    findingActionButton('Übernehmen', '✓', () => handleSuggestionAccept(finding)),
+    findingActionButton('Verwerfen', 'x', () => handleSuggestionReject(finding)),
+    findingActionButton('Eigene Fassung schreiben', 'edit', () => handleSuggestionOwnVersion(finding)),
+    findingActionButton('Übernehmen', 'check', () => handleSuggestionAccept(finding)),
   )
   suggestion.append(versions, actions)
   const riskConfirmation = renderIntegrityRiskConfirmation(finding)
@@ -3540,7 +3490,11 @@ function renderEntscheidungsverlauf(workspace) {
   toggle.append(
     createNode('span', 'agent-decisions-title', 'Entscheidungsverlauf'),
     createNode('span', 'onda-badge agent-decisions-count', String(eintraege.length)),
-    createNode('span', 'agent-decisions-disclosure', offen ? '↘' : '›'),
+    (() => {
+      const disclosure = createNode('span', 'agent-decisions-disclosure')
+      disclosure.append(ondaIcon(offen ? 'chevron-down' : 'chevron-right', { size: 16 }))
+      return disclosure
+    })(),
   )
   toggle.addEventListener('click', () => {
     workspace.agent.decisionsOpen = !workspace.agent.decisionsOpen
@@ -3593,7 +3547,8 @@ function renderAgentWidget() {
   header.append(
     createNode('strong', 'agent-widget-title', 'Agent'),
   )
-  const close = createNode('button', 'surface-close', '×')
+  const close = createNode('button', 'surface-close')
+  close.append(ondaIcon('x', { size: 18 }))
   close.type = 'button'
   close.dataset.closeAgent = ''
   close.title = 'Gespräch schließen'
@@ -3631,7 +3586,8 @@ function renderAgentWidget() {
   input.type = 'text'
   input.placeholder = 'Antworten …'
   input.setAttribute('aria-label', 'Dem Agenten antworten')
-  const send = createNode('button', 'agent-chat-send', '→')
+  const send = createNode('button', 'agent-chat-send')
+  send.append(ondaIcon('arrow-right', { size: 18 }))
   send.type = 'submit'
   send.title = 'Senden'
   send.setAttribute('aria-label', 'Nachricht senden')
@@ -3753,7 +3709,8 @@ function renderEvidenceWindow() {
   const finding = doc.findings.find(candidate => candidate.id === workspace.evidenceFindingId)
   const header = createNode('header', 'evidence-header')
   header.append(createNode('strong', 'evidence-title', 'Quellen im Kontext'))
-  const close = createNode('button', 'surface-close', '×')
+  const close = createNode('button', 'surface-close')
+  close.append(ondaIcon('x', { size: 18 }))
   close.type = 'button'
   close.dataset.closeEvidence = ''
   close.title = 'Quellen schließen'
@@ -4545,6 +4502,10 @@ export function initWorkspace(context) {
     }
     refreshWorkspace()
   }
+  document.getElementById('sidebarCollapse')?.replaceChildren(ondaIcon('chevron-left', { size: 18 }))
+  document.getElementById('sidebarReopen')?.replaceChildren(ondaIcon('chevron-right', { size: 18 }))
+  document.querySelector('.onda-side-back-chevron')?.replaceChildren(ondaIcon('arrow-left', { size: 16 }))
+  document.getElementById('kiSettings')?.replaceChildren(ondaIcon('settings', { size: 18 }))
   document.getElementById('annotationPrevious')?.replaceChildren(ondaIcon('chevron-left', { size: 18 }))
   document.getElementById('annotationNext')?.replaceChildren(ondaIcon('chevron-right', { size: 18 }))
 
@@ -4629,7 +4590,6 @@ export function initWorkspace(context) {
   listen(document.getElementById('pvCard'), 'click', event => openProjectUnderstandingModal(event.currentTarget))
   listen(document.getElementById('materialSources'), 'click', event => openProjectSourcesModal(event.currentTarget))
   listen(document.getElementById('themeToggle'), 'click', toggleTheme)
-  listen(document.getElementById('accentToggle'), 'click', event => openAccentMenu(event.currentTarget))
   listen(document.getElementById('kiSettings'), 'click', event => openKiSettingsDialog(event.currentTarget))
   listen(document.getElementById('annotationPrevious'), 'click', previousAnnotation)
   listen(document.getElementById('annotationNext'), 'click', nextAnnotation)
@@ -4659,7 +4619,6 @@ export function initWorkspace(context) {
     clearMomentTimer()
     closeInsertMenu({ restoreFocus: false })
     closeOndaDialog({ restoreFocus: false })
-    closeAccentMenu({ restoreFocus: false })
     cleanups.splice(0).reverse().forEach(cleanup => cleanup())
 
     clearTimeout(hoverTimer)

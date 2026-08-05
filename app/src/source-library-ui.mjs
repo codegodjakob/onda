@@ -3,6 +3,7 @@ import { createLocator, resolveLocator } from './locator-model.mjs'
 import { buildEvidenceBundle, propagateSourceEvent } from './evidence-bundle.mjs'
 import { createResearchUi } from './research-ui.mjs'
 import { analyzeArgumentImpact } from './argument-graph.mjs'
+import { ondaIcon } from './onda-icons.mjs'
 
 export function createSourceLibraryUi({
   context,
@@ -274,7 +275,8 @@ export function createSourceLibraryUi({
     const reader = createNode('section', 'source-reader')
     reader.id = 'sourceReader'
     reader.dataset.locatorKind = locator.kind
-    const back = createNode('button', 'source-reader-back', '‹ Zur Quellenliste')
+    const back = createNode('button', 'source-reader-back', 'Zur Quellenliste')
+    back.prepend(ondaIcon('arrow-left', { size: 16 }))
     back.id = 'sourceReaderBack'
     back.type = 'button'
     back.addEventListener('click', () => renderProjectSourceLibrary(body, project))
