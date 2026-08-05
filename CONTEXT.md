@@ -210,7 +210,7 @@ npm run eval:b2-quality
 npm run eval:c2-quality
 npm run eval:d1-quality
 npm run eval:d2-quality
-node evals/run-v2-evals.mjs --result evals/results/etappe-d2-latest.json
+node evals/run-v2-evals.mjs --result evals/results/etappe-d2-latest.json  # frischer Nachlauf; der eingefrorene D2-Stand liegt in results/archiv/
 ```
 
 Der Haupt-Smoke prueft die Zustaende `base`, `shelf`, `finding`, `suggestion`, `local-dialogue`, `agent` und `evidence` bei Desktop, Mobile und relevanten Zwischenbreiten. Er deckt Seed-Erhalt, Klartext-Patches, expliziten Own-Version-Abschluss, Integritaetsbestaetigung, stale/mehrdeutige Anker, Fokus, Escape-Kaskade, Reduced Motion, ARIA-Beziehungen, horizontalen Overflow, Streaming und die lokale Monatsgrenze ab.
