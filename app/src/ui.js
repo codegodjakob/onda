@@ -2,6 +2,8 @@
 // Seitenleiste (Suche/Papierkorb), Einstellungen, Fokus-Modus.
 // Calm Technology: wenig sichtbar, alles im Kontext, Peripherie statt Alarm.
 
+import { refreshOndaShell } from './onda-shell.mjs'
+
 let ctx = null
 let sortMode = 'recent'
 let searchQuery = ''
@@ -483,7 +485,8 @@ function projectRows(listEl) {
     const main = el('button', 'doc-main')
     main.type = 'button'
     main.appendChild(el('div', 'dt', p.name))
-    main.appendChild(el('div', 'dd', count + (count === 1 ? ' Text' : ' Texte')))
+    main.appendChild(el('div', 'doc-status', count + (count === 1 ? ' Text' : ' Texte')))
+    main.appendChild(el('div', 'dd', fmtDate(p.created)))
     main.addEventListener('click', () => { ctx.ops.openProject(p.id); homeMode = 'docs'; refreshSidebar() })
     item.appendChild(main)
     const acts = el('div', 'trash-acts')
@@ -546,6 +549,7 @@ export function refreshSidebar() {
     trashSec.style.display = 'none'
     projectRows(listEl)
     if (!ctx.state.projects.length) listEl.appendChild(el('div', 'empty', 'Noch kein Projekt.'))
+    refreshOndaShell(ctx, { mode: homeMode })
     return
   }
 
@@ -571,8 +575,11 @@ export function refreshSidebar() {
     const tt = el('div', 'dt')
     tt.appendChild(highlightMatch(ctx.docTitle(d), q))
     main.appendChild(tt)
+    main.appendChild(el('div', 'doc-status', 'In Arbeit'))
     const preview = stripHtml(d.body).trim().slice(0, 90)
-    main.appendChild(el('div', 'dd', fmtDate(d.updated) + (preview ? '  \u00b7  ' + preview : '')))
+    const date = el('div', 'dd', fmtDate(d.updated))
+    if (preview) date.title = preview
+    main.appendChild(date)
     main.addEventListener('click', () => ctx.ops.openDoc(d.id))
     item.appendChild(main)
     const acts = el('div', 'trash-acts')
@@ -619,6 +626,7 @@ export function refreshSidebar() {
   if (trash.length) {
     trashListEl.appendChild(el('div', 'trash-note', 'Wird nach 30 Tagen automatisch endg\u00fcltig gel\u00f6scht.'))
   }
+  refreshOndaShell(ctx, { mode: homeMode })
 }
 function bindSidebar() {
   const nb = document.getElementById('newBtn')
@@ -659,6 +667,16 @@ function bindSidebar() {
   tgl.addEventListener('click', () => {
     const l = document.getElementById('trashlist')
     l.hidden = !l.hidden
+  })
+  document.addEventListener('aiwt:librarynavigate', event => {
+    const mode = event.detail?.mode
+    if (mode === 'projects') homeMode = 'projects'
+    if (mode === 'docs' || mode === 'archive') homeMode = 'docs'
+    refreshSidebar()
+    if (mode === 'archive') {
+      const list = document.getElementById('trashlist')
+      if (list && list.closest('#trash')?.style.display !== 'none') list.hidden = false
+    }
   })
 }
 

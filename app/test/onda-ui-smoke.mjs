@@ -144,11 +144,56 @@ async function runEditor(browser) {
   await page.close()
 }
 
+async function runShell(browser) {
+  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } })
+  await page.goto(baseUrl, { waitUntil: 'networkidle' })
+  await page.evaluate(() => localStorage.clear())
+  await page.reload({ waitUntil: 'networkidle' })
+
+  assert.equal(await page.locator('main').count(), 1, 'Die App braucht genau einen Hauptbereich')
+  assert.equal(await page.locator('.onda-app-shell').count(), 1, 'Die gemeinsame Onda-Shell fehlt')
+  assert.equal(await page.getByRole('navigation', { name: 'Bibliothek' }).isVisible(), true)
+  assert.equal(await page.locator('#home .onda-aura').isVisible(), true)
+
+  await page.locator('#doclist .doc').filter({ hasText: 'Beispiel: Calm Technology' }).click()
+  await page.locator('#doclist .doc').first().click()
+  assert.equal(await page.getByRole('navigation', { name: 'Projekt' }).isVisible(), true)
+
+  const editorWidth = await page.locator('#editor .ProseMirror').evaluate(node => node.getBoundingClientRect().width)
+  assert.ok(editorWidth >= 640 && editorWidth <= 680, `Die Schreibspalte ist ${editorWidth}px statt 640–680px breit`)
+  assert.equal(await page.locator('#title').evaluate(node => getComputedStyle(node).fontSize), '40px')
+  assert.equal(await page.locator('.onda-editor-col').evaluate(node => getComputedStyle(node).borderTopRightRadius), '24px')
+
+  if (screenshots) {
+    const directory = resolve(appRoot, 'evals/results/screenshots')
+    await mkdir(directory, { recursive: true })
+    for (const width of [1440, 1024, 720, 320]) {
+      await page.setViewportSize({ width, height: 1000 })
+      await page.screenshot({ path: resolve(directory, `onda-editor-${width}.png`), fullPage: true })
+    }
+    await page.setViewportSize({ width: 1280, height: 900 })
+    await page.getByRole('button', { name: 'Zur Projektübersicht' }).click()
+    await page.screenshot({ path: resolve(directory, 'onda-library-1280.png'), fullPage: true })
+    await page.setViewportSize({ width: 320, height: 760 })
+    await page.screenshot({ path: resolve(directory, 'onda-library-320.png'), fullPage: true })
+    await page.locator('#doclist .doc').filter({ hasText: 'Beispiel: Calm Technology' }).click()
+    await page.locator('#doclist .doc').first().click()
+  }
+
+  await page.setViewportSize({ width: 320, height: 760 })
+  await page.waitForTimeout(50)
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
+  assert.ok(overflow <= 1, `Die App laeuft mobil ${overflow}px horizontal ueber`)
+  assert.equal(await page.locator('#editor .ProseMirror').isVisible(), true)
+  await page.close()
+}
+
 const browser = await chromium.launch({ headless: true })
 try {
   if (requestedSection === 'all' || requestedSection === 'components') await runComponents(browser)
   if (requestedSection === 'all' || requestedSection === 'lab') await runLab(browser)
   if (requestedSection === 'all' || requestedSection === 'editor') await runEditor(browser)
+  if (requestedSection === 'all' || requestedSection === 'shell') await runShell(browser)
   console.log(`ONDA UI ${requestedSection}: PASS`)
 } finally {
   await browser.close()

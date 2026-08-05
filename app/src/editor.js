@@ -28,6 +28,7 @@ import { ensureLanguageReportStore } from './language-report.mjs'
 import { ensureFinalAuditStore } from './final-audit.mjs'
 import { emptyLocalState } from './data-control.mjs'
 import { pruefeNativeBruecken } from './native-probe-model.mjs'
+import { initOndaShell } from './onda-shell.mjs'
 
 // ---------- Sanfte Markierung (Peripherie): eine flüchtige Dekoration ----------
 // Zeigt eine Passage kurz an, OHNE das Dokument zu ändern — sie wird nicht
@@ -662,6 +663,7 @@ export function boot() {
     gateway: { runTask, hatSchluessel, setzeSchluessel, loescheSchluessel },
   }
   initUI(ctx)
+  initOndaShell(ctx)
   initWorkspace(ctx)
   applySettings()
   refreshSidebar()

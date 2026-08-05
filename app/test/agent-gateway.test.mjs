@@ -9,6 +9,7 @@ const USAGE = Object.freeze({ input_tokens: 10, output_tokens: 20, cache_read_in
 const GUELTIGER_HINWEIS = {
   hinweise: [{
     kategorie: 'fakt',
+    anmerkungsart: 'beleg',
     anker: 'wörtliches Zitat',
     beobachtung: 'Zahl ohne Beleg.',
     relevanz: 'Der Leser prüft genau solche Zahlen.',

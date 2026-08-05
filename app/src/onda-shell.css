@@ -1,0 +1,405 @@
+/* Onda Write — gemeinsame App-Shell fuer Bibliothek und Schreibraum. */
+.onda-app-shell {
+  width: 100%;
+  height: 100dvh;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  padding: 10px;
+  overflow: hidden;
+  background: var(--bg-app);
+}
+
+#ondaMain {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+}
+
+.onda-library-sidebar {
+  width: 244px;
+  min-height: 0;
+  display: none;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  gap: var(--space-6);
+  padding: var(--space-4) var(--space-3) var(--space-3);
+}
+
+body.view-home .onda-library-sidebar { display: grid; }
+
+.onda-library-brand,
+.onda-library-footer {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding-inline: var(--space-2);
+}
+
+.onda-library-brand .onda-wordmark {
+  font: var(--fw-bold) var(--text-base)/1.2 var(--font-sans);
+  letter-spacing: var(--tracking-tight);
+}
+
+.onda-library-nav {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.onda-library-nav__item,
+.onda-library-recent__item {
+  width: 100%;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-control);
+  color: var(--text-secondary);
+  font: var(--type-label);
+  text-align: left;
+  transition: var(--transition-colors);
+}
+
+.onda-library-nav__item:hover,
+.onda-library-recent__item:hover { color: var(--text-primary); background: var(--bg-hover); }
+
+.onda-library-nav__item.is-active {
+  color: var(--text-primary);
+  background: var(--bg-active);
+}
+
+.onda-library-recent {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.onda-library-recent .onda-eyebrow { padding-inline: var(--space-4); }
+
+#libraryRecent {
+  min-height: 0;
+  display: grid;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+}
+
+.onda-library-recent__item {
+  min-height: 36px;
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-weight: var(--fw-regular);
+}
+
+.onda-library-footer {
+  min-height: 44px;
+  color: var(--text-secondary);
+  font: var(--type-label);
+}
+
+body.view-editor .onda-library-sidebar { display: none; }
+
+body.view-home #home {
+  height: 100%;
+  display: block;
+  overflow-y: auto;
+  border-radius: var(--radius-panel);
+  background: var(--bg-surface);
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+#homeInner {
+  width: min(100%, calc(var(--container-lg) + var(--space-10) * 2));
+  max-width: none;
+  margin-inline: auto;
+  padding: var(--space-10);
+}
+
+.home-head {
+  align-items: flex-end;
+  margin-bottom: var(--space-8);
+}
+
+.home-title {
+  margin: var(--space-2) 0 0;
+  color: var(--text-primary);
+  font: var(--type-display);
+  letter-spacing: var(--tracking-tighter);
+}
+
+.home-count {
+  min-height: 18px;
+  margin: var(--space-2) 0 0;
+  color: var(--text-secondary);
+  font: var(--type-caption);
+}
+
+.home-head__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.onda-primary-action {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-5);
+  border-radius: var(--radius-control);
+  background: var(--accent);
+  color: var(--text-on-accent);
+  font: var(--type-label);
+  transition: var(--transition-colors), var(--transition-transform);
+}
+
+.onda-primary-action:hover { background: var(--accent-hover); }
+.onda-primary-action:active { transform: translateY(1px); }
+.onda-primary-action svg { width: 18px; height: 18px; }
+
+.home-tools {
+  width: min(100%, 560px);
+  gap: var(--space-3);
+  margin-bottom: var(--space-7);
+}
+
+.onda-search-field { flex: 1; min-width: 0; }
+
+#home .onda-search-field #search {
+  width: 100%;
+  min-height: 44px;
+  padding: var(--space-3) var(--space-5);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: var(--bg-sunken);
+  color: var(--text-primary);
+  font: var(--type-body);
+}
+
+#home #sortBtn {
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border-radius: var(--radius-control);
+}
+
+.onda-list-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 112px 150px;
+  gap: var(--space-4);
+  padding: 0 var(--space-5) var(--space-3);
+  color: var(--text-tertiary);
+  font: var(--type-caption);
+}
+
+#home #doclist {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-2);
+}
+
+#home #doclist .doc {
+  min-width: 0;
+  min-height: 70px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0;
+  padding: var(--space-3) var(--space-5);
+  border-radius: var(--radius-card);
+  background: var(--surface-2);
+}
+
+#home #doclist .doc:hover,
+#home #doclist .doc:focus-within { background: var(--surface-3); }
+
+#home #doclist .doc-main {
+  min-height: 42px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 112px 150px;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+#home #doclist .dt {
+  color: var(--text-primary);
+  font: var(--type-label);
+}
+
+#home #doclist .dd {
+  color: var(--text-secondary);
+  font: var(--type-caption);
+  white-space: nowrap;
+}
+
+.doc-status {
+  color: var(--text-secondary);
+  font: var(--type-caption);
+}
+
+#home .trash-acts { opacity: 1; }
+
+#trash {
+  margin-top: var(--space-7);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+}
+
+body.view-editor .onda-app-shell { grid-template-columns: minmax(0, 1fr); }
+
+body.view-editor #editorView {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  display: flex;
+  gap: 10px;
+  overflow: hidden;
+  background: transparent;
+}
+
+#editorView .onda-sidebar {
+  width: var(--sidebar-width);
+  height: 100%;
+  padding: var(--space-4) var(--space-3) var(--space-3);
+}
+
+.onda-project-nav {
+  min-height: 0;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+#editorView .onda-editor-col {
+  --onda-topbar-h: var(--topbar-height);
+  height: 100%;
+  border-radius: var(--radius-panel);
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-xs);
+}
+
+#editorView .onda-topbar {
+  height: var(--topbar-height);
+  padding-inline: var(--space-5);
+}
+
+#editorView #scroll {
+  min-width: 0;
+  padding-inline: max(var(--space-6), calc((100% - 1140px) / 2));
+  scroll-padding-block: var(--space-10);
+}
+
+#editorView #page {
+  --onda-anmerkungsrand: 388px;
+  width: calc(var(--container-reading) + var(--onda-anmerkungsrand));
+  max-width: 100%;
+  min-height: 100%;
+  margin: 0;
+  padding: var(--space-10) var(--onda-anmerkungsrand) 38vh 0;
+}
+
+#editorView #title {
+  margin: 0 0 var(--space-6);
+  font: var(--type-display);
+  letter-spacing: var(--tracking-tighter);
+}
+
+#editorView #editor .ProseMirror {
+  width: var(--container-reading);
+  max-width: 100%;
+  font: var(--type-body);
+  line-height: var(--leading-relaxed);
+}
+
+#editorView #editor .ProseMirror:focus-visible {
+  outline: 0;
+  box-shadow: none;
+}
+
+#blockInsertLayer,
+#localAgentLayer { top: var(--topbar-height); }
+
+@media (max-width: 1040px) {
+  #editorView #scroll { padding-inline: max(var(--space-6), calc((100% - var(--container-reading)) / 2)); }
+
+  #editorView #page {
+    --onda-anmerkungsrand: 0px;
+    width: var(--container-reading);
+    margin-inline: auto;
+    padding: var(--space-10) 0 38vh;
+  }
+}
+
+@media (max-width: 800px) {
+  .onda-app-shell { padding: var(--space-2); gap: var(--space-2); }
+
+  body.view-home .onda-app-shell { grid-template-columns: minmax(0, 1fr); }
+  body.view-home .onda-library-sidebar { display: none; }
+
+  #homeInner { padding: var(--space-8) var(--space-5) var(--space-11); }
+
+  .home-head { align-items: center; }
+  .home-head__actions > .onda-aura { display: none; }
+
+  #editorView .onda-sidebar {
+    height: 100%;
+    border-radius: var(--radius-panel);
+  }
+
+  #editorView #scroll { padding-inline: var(--space-6); }
+  #editorView #page { width: 100%; padding: var(--space-9) 0 34vh; }
+}
+
+@media (max-width: 560px) {
+  .onda-app-shell { padding: var(--space-1); gap: var(--space-1); }
+
+  #home { border-radius: var(--radius-xl); }
+  #homeInner { padding: var(--space-7) var(--space-4) var(--space-10); }
+
+  .home-head { align-items: flex-start; margin-bottom: var(--space-7); }
+  .home-title { font-size: 32px; }
+  .onda-primary-action { width: 44px; padding: 0; justify-content: center; }
+  .onda-primary-action span { display: none; }
+
+  .home-tools { width: 100%; margin-bottom: var(--space-5); }
+  .onda-list-head { display: none; }
+
+  #home #doclist .doc {
+    min-height: 76px;
+    padding: var(--space-4);
+    border-radius: var(--radius-xl);
+  }
+
+  #home #doclist .doc-main {
+    display: block;
+  }
+
+  #home #doclist .dd {
+    display: block;
+    margin-top: var(--space-1);
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  #home #doclist .doc-status { display: none; }
+
+  #editorView { gap: var(--space-1); }
+  #editorView .onda-editor-col { border-radius: var(--radius-xl); }
+  #editorView .onda-topbar { padding-inline: var(--space-3); }
+  #editorView #scroll { padding-inline: var(--space-5); }
+  #editorView #page { padding-top: var(--space-8); }
+  #editorView #title { font-size: var(--text-4xl); }
+}
+
+@media print {
+  .onda-app-shell { display: block; height: auto; padding: 0; }
+  .onda-library-sidebar, #ondaSidebar { display: none !important; }
+  #editorView .onda-editor-col { box-shadow: none; }
+}

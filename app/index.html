@@ -5,23 +5,59 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Onda</title>
 <link rel="stylesheet" href="src/onda-tokens.css" />
-<link rel="stylesheet" href="src/onda-annotations.css" />
 <link rel="stylesheet" href="src/style.css" />
+<link rel="stylesheet" href="src/onda-shell.css" />
+<link rel="stylesheet" href="src/onda-annotations.css" />
 </head>
 <body class="view-home">
-  <div id="app">
+  <div id="app" class="onda-app-shell">
+
+    <aside id="librarySidebar" class="onda-library-sidebar" aria-label="Bibliotheksleiste">
+      <div class="onda-library-brand">
+        <span class="onda-aura onda-aura--sm" aria-hidden="true"></span>
+        <span class="onda-wordmark">Onda Write</span>
+      </div>
+      <nav class="onda-library-nav" aria-label="Bibliothek">
+        <button id="libraryProjects" class="onda-library-nav__item is-active" type="button" aria-current="page">Projekte</button>
+        <button id="libraryDocuments" class="onda-library-nav__item" type="button">Dokumente</button>
+        <button id="libraryArchive" class="onda-library-nav__item" type="button">Papierkorb</button>
+      </nav>
+      <section class="onda-library-recent" aria-labelledby="libraryRecentTitle">
+        <p id="libraryRecentTitle" class="onda-eyebrow">Zuletzt bearbeitet</p>
+        <div id="libraryRecent"></div>
+      </section>
+      <div class="onda-library-footer">
+        <span class="onda-avatar" aria-hidden="true">J</span>
+        <span>Jakob</span>
+      </div>
+    </aside>
+
+    <main id="ondaMain" aria-label="Onda Write">
 
     <!-- Bibliothek: Startseite mit allen Texten (später: Projekte, Quellen) -->
     <section id="home">
       <div id="homeInner">
         <button id="crumb" class="crumb" hidden>‹ Projekte</button>
         <div class="home-head">
-          <span class="home-title" id="homeTitle">Projekte</span>
-          <button id="newBtn" title="Neu"></button>
+          <div>
+            <span class="onda-eyebrow">Bibliothek</span>
+            <h1 class="home-title" id="homeTitle">Projekte</h1>
+            <p id="homeCount" class="home-count" aria-live="polite"></p>
+          </div>
+          <div class="home-head__actions">
+            <span class="onda-aura onda-aura--sm" aria-hidden="true"></span>
+            <button id="newBtn" class="onda-primary-action" title="Neu"><span>Neu</span></button>
+          </div>
         </div>
         <div class="home-tools">
-          <input id="search" type="text" placeholder="Suchen …" spellcheck="false" />
+          <label class="onda-search-field">
+            <span class="visually-hidden">Dokumente durchsuchen</span>
+            <input id="search" type="search" placeholder="Dokumente durchsuchen …" spellcheck="false" />
+          </label>
           <button id="sortBtn" title="Sortierung wechseln"></button>
+        </div>
+        <div class="onda-list-head" aria-hidden="true">
+          <span>Name</span><span>Status</span><span>Bearbeitet</span>
         </div>
         <div id="doclist"></div>
         <div id="trash">
@@ -40,48 +76,42 @@
           <button id="sidebarCollapse" class="onda-icon-btn" title="Seitenleiste einklappen" aria-label="Seitenleiste einklappen" aria-controls="ondaSidebar" aria-expanded="true">‹</button>
         </div>
 
-        <button id="sidebarBack" class="onda-side-back" title="Zur Projektübersicht" aria-label="Zur Projektübersicht">
-          <span class="onda-side-back-chevron" aria-hidden="true">‹</span>
-          <span class="onda-side-back-label">Projekt</span>
-        </button>
-
-        <section class="onda-side-section">
-          <span class="onda-eyebrow">Projektverständnis</span>
-          <button id="pvCard" class="onda-pv-card" aria-haspopup="dialog" aria-controls="pvModal">
-            <span class="onda-pv-title">Projektverständnis</span>
-            <span class="onda-pv-claim">Noch nicht festgelegt</span>
+        <nav class="onda-project-nav" aria-label="Projekt">
+          <button id="sidebarBack" class="onda-side-back" title="Zur Projektübersicht" aria-label="Zur Projektübersicht">
+            <span class="onda-side-back-chevron" aria-hidden="true">‹</span>
+            <span class="onda-side-back-label">Projekt</span>
           </button>
-        </section>
 
-        <nav id="structureNav" class="onda-side-section" aria-label="Struktur">
-          <span class="onda-eyebrow">Struktur</span>
-          <!-- Struktur-Karten (.block-preview) werden von workspace.js gerendert (Area C) -->
+          <section class="onda-side-section">
+            <span class="onda-eyebrow">Projektverständnis</span>
+            <button id="pvCard" class="onda-pv-card" aria-haspopup="dialog" aria-controls="pvModal">
+              <span class="onda-pv-title">Projektverständnis</span>
+              <span class="onda-pv-claim">Noch nicht festgelegt</span>
+            </button>
+          </section>
+
+          <div id="structureNav" class="onda-side-section" role="navigation" aria-label="Struktur">
+            <span class="onda-eyebrow">Struktur</span>
+          </div>
+
+          <div id="zurueckgehalten" class="onda-side-zurueck" hidden></div>
+
+          <section id="erweiterungen" class="onda-side-section onda-side-erweiterungen" aria-label="Erweiterungen">
+            <span class="onda-eyebrow">Erweiterungen</span>
+          </section>
+
+          <section id="erkanntes" class="onda-side-section onda-side-erkanntes" aria-label="Erkanntes">
+            <span class="onda-eyebrow">Erkanntes</span>
+          </section>
+
+          <section class="onda-side-section onda-side-material">
+            <span class="onda-eyebrow">Material</span>
+            <button id="materialSources" class="onda-material-btn">
+              <span class="onda-material-label">Quellen im Projekt</span>
+              <span id="materialSourcesCount" class="onda-badge">0</span>
+            </button>
+          </section>
         </nav>
-
-        <!-- Zurückgehaltenes: was auf seinen Moment wartet, bleibt auffindbar.
-             Gerendert von workspace.js. -->
-        <div id="zurueckgehalten" class="onda-side-zurueck" hidden></div>
-
-        <!-- Zweiter Kanal. Bewusst ohne Zähler: eine Zahl neben "offen" macht aus
-             einem Angebot eine Hausaufgabe. Gerendert von workspace.js. -->
-        <section id="erweiterungen" class="onda-side-section onda-side-erweiterungen" aria-label="Erweiterungen">
-          <span class="onda-eyebrow">Erweiterungen</span>
-        </section>
-
-        <!-- Der erste Ort in Onda, der einem Menschen gehört und nicht einem Ding.
-             Jeder Satz ist zurücknehmbar — ohne das würde sich ein falscher in
-             jedem künftigen Text wiederholen. Gerendert von workspace.js. -->
-        <section id="erkanntes" class="onda-side-section onda-side-erkanntes" aria-label="Erkanntes">
-          <span class="onda-eyebrow">Erkanntes</span>
-        </section>
-
-        <section class="onda-side-section onda-side-material">
-          <span class="onda-eyebrow">Material</span>
-          <button id="materialSources" class="onda-material-btn">
-            <span class="onda-material-label">Quellen im Projekt</span>
-            <span id="materialSourcesCount" class="onda-badge">0</span>
-          </button>
-        </section>
 
         <div class="onda-side-footer">
           <span class="onda-avatar" aria-hidden="true">J</span>
@@ -122,12 +152,12 @@
             <button id="annotationUndo" class="onda-review-control" type="button" disabled>Rückgängig</button>
           </div>
         </section>
-        <main id="scroll">
+        <div id="scroll" role="region" aria-label="Schreibfläche">
           <div id="page">
             <textarea id="title" rows="1" placeholder="Titel" spellcheck="false"></textarea>
             <div id="editor"></div>
           </div>
-        </main>
+        </div>
         <div id="blockInsertLayer"></div>
         <aside id="localAgentLayer"></aside>
       </div>
@@ -136,6 +166,8 @@
       <aside id="evidenceWindow" hidden aria-label="Quellen und Fundstellen"></aside>
       <div id="agentLiveStatus" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true"></div>
     </section>
+
+    </main>
 
     <div id="saveAlert" hidden role="alert" aria-live="assertive" aria-atomic="true"></div>
 
