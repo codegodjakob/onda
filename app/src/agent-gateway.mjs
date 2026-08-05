@@ -30,7 +30,10 @@ export function hatSchluessel() { return aktiverTransport().hatSchluessel() }
 export function setzeSchluessel(schluessel) { return aktiverTransport().setzeSchluessel(schluessel) }
 export function loescheSchluessel() { return aktiverTransport().loescheSchluessel() }
 
-const WIEDERHOLBAR = new Set(['offline', 'ratenlimit', 'ueberlastet'])
+// 'unbekannt' meldet die Mac-Brücke für HTTP-Status, die sie nicht einordnen
+// kann — vorsichtig genau EIN zweiter Versuch, statt sie wie früher als
+// „schema = nicht wiederholbar" abzustempeln.
+const WIEDERHOLBAR = new Set(['offline', 'ratenlimit', 'ueberlastet', 'unbekannt'])
 
 function warte(ms) { return new Promise(r => setTimeout(r, ms)) }
 

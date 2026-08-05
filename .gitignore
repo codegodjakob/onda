@@ -1,6 +1,8 @@
 node_modules/
 app/dist/
 Schreibwerkzeug.app/
+Onda.app/
+releases/
 mac/AppIcon.iconset/
 .DS_Store
 .superpowers/

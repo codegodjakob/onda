@@ -25,6 +25,21 @@ enum Store {
     static var dataURL: URL { dir.appendingPathComponent("data.json") }
     static var backupURL: URL { dir.appendingPathComponent("data.backup.json") }
 
+    /// Datierte Backup-Generationen: data.backup-JJJJMMTT-HHMMSS-mmm.json.
+    /// Neben der unmittelbaren Vorstufe (data.backup.json) bleiben bis zu 5
+    /// Generationen mit mindestens 60 s Abstand erhalten — ein Fehler, der in
+    /// schneller Folge speichert, kann so nicht alle Rettungsanker vernichten.
+    static let backupPrefix = "data.backup-"
+    static let maxBackupGenerationen = 5
+    static var backupAbstandSekunden: TimeInterval = 60 // var: der Selbsttest setzt ihn auf 0
+
+    enum SaveErgebnis: Equatable {
+        case ok
+        case ungueltig            // kein gültiges JSON — wird nie geschrieben
+        case abgelehnt(String)    // Plausibilitätstor: beiseitegelegt statt überschrieben
+        case fehlgeschlagen       // Schreibfehler der Platte
+    }
+
     static func ensureDir() {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
     }
@@ -34,33 +49,141 @@ enum Store {
         return (try? JSONSerialization.jsonObject(with: d)) != nil
     }
 
-    /// Lädt den Datenbestand. Bei kaputter Datei: beiseite legen, Backup nutzen.
+    private static func stamp(_ datum: Date = Date()) -> String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone.current
+        f.dateFormat = "yyyyMMdd-HHmmss-SSS"
+        return f.string(from: datum)
+    }
+
+    /// Alle datierten Generationen, neueste zuerst (das Namensformat sortiert chronologisch).
+    static func backupGenerationen() -> [URL] {
+        let fm = FileManager.default
+        let namen = (try? fm.contentsOfDirectory(atPath: dir.path)) ?? []
+        return namen
+            .filter { $0.hasPrefix(backupPrefix) && $0.hasSuffix(".json") }
+            .sorted(by: >)
+            .map { dir.appendingPathComponent($0) }
+    }
+
+    /// Lädt den Datenbestand. Bei kaputter Datei: beiseitelegen, dann der Reihe
+    /// nach zurückfallen — unmittelbare Vorstufe, dann Generationen, neueste zuerst.
     static func load() -> String {
         let fm = FileManager.default
         guard let d = try? Data(contentsOf: dataURL), let s = String(data: d, encoding: .utf8) else {
             return "null"
         }
         if isValidJSON(s) { return s }
-        let stamp = Int(Date().timeIntervalSince1970)
-        try? fm.moveItem(at: dataURL, to: dir.appendingPathComponent("data.corrupt-\(stamp).json"))
-        if let bd = try? Data(contentsOf: backupURL), let bs = String(data: bd, encoding: .utf8), isValidJSON(bs) {
-            return bs
+        try? fm.moveItem(at: dataURL, to: dir.appendingPathComponent("data.corrupt-\(stamp()).json"))
+        for kandidat in [backupURL] + backupGenerationen() {
+            if let bd = try? Data(contentsOf: kandidat),
+               let bs = String(data: bd, encoding: .utf8), isValidJSON(bs) {
+                return bs
+            }
         }
         return "null"
     }
 
-    /// Speichert atomar; hebt den vorherigen Stand als Backup auf.
-    @discardableResult
-    static func save(_ s: String) -> Bool {
-        guard isValidJSON(s) else { return false }
-        ensureDir()
-        let fm = FileManager.default
-        if fm.fileExists(atPath: dataURL.path) {
-            try? fm.removeItem(at: backupURL)
-            try? fm.copyItem(at: dataURL, to: backupURL)
+    /// Prüft einen neuen Stand gegen den vorhandenen. nil = plausibel, sonst der Grund.
+    /// Zwei Regeln: die Dokument-Anzahl darf nicht von ≥1 auf 0 fallen, und die
+    /// Datenmenge darf nicht um mehr als 90 % schrumpfen. Beides sind die Spuren
+    /// eines Fehlers, der einen gültigen, aber leeren Zustand speichern will.
+    static func pruefePlausibilitaet(neu: String, alt: String) -> String? {
+        guard let altData = alt.data(using: .utf8),
+              let altObj = (try? JSONSerialization.jsonObject(with: altData)) as? [String: Any],
+              let altDocs = altObj["docs"] as? [Any], !altDocs.isEmpty else {
+            return nil // kein schützenswerter Altbestand
         }
-        guard let d = s.data(using: .utf8) else { return false }
-        do { try d.write(to: dataURL, options: .atomic); return true } catch { return false }
+        let neuData = neu.data(using: .utf8) ?? Data()
+        let neuObj = (try? JSONSerialization.jsonObject(with: neuData)) as? [String: Any]
+        let neuDocs = (neuObj?["docs"] as? [Any]) ?? []
+        if neuDocs.isEmpty { return "dokumente-auf-null" }
+        if neuData.count * 10 < altData.count { return "schrumpfung-ueber-90-prozent" }
+        return nil
+    }
+
+    /// Legt einen abgewiesenen Stand daneben, statt ihn zu verwerfen — falls die
+    /// Abweisung falsch war, ist nichts verloren.
+    private static func legeBeiseite(_ s: String) {
+        let fm = FileManager.default
+        var ziel = dir.appendingPathComponent("data.abgelehnt-\(stamp()).json")
+        var lauf = 2
+        while fm.fileExists(atPath: ziel.path) { // gleiche Millisekunde — nie überschreiben
+            ziel = dir.appendingPathComponent("data.abgelehnt-\(stamp())-\(lauf).json")
+            lauf += 1
+        }
+        try? s.data(using: .utf8)?.write(to: ziel, options: .atomic)
+    }
+
+    /// Hebt den aktuellen Datenbestand als Backup auf: immer als unmittelbare
+    /// Vorstufe, und als neue datierte Generation, wenn die jüngste alt genug ist
+    /// (oder `erzwungen`, etwa vor einem bewussten Ersetzen).
+    private static func sichereVorstufe(erzwungen: Bool) {
+        let fm = FileManager.default
+        guard fm.fileExists(atPath: dataURL.path) else { return }
+        try? fm.removeItem(at: backupURL)
+        try? fm.copyItem(at: dataURL, to: backupURL)
+
+        let generationen = backupGenerationen()
+        let juengste = generationen.first.flatMap {
+            (try? fm.attributesOfItem(atPath: $0.path))?[.modificationDate] as? Date
+        }
+        let faellig = juengste.map { Date().timeIntervalSince($0) >= backupAbstandSekunden } ?? true
+        guard erzwungen || faellig else { return }
+
+        var ziel = dir.appendingPathComponent("\(backupPrefix)\(stamp()).json")
+        var lauf = 2
+        while fm.fileExists(atPath: ziel.path) { // gleiche Millisekunde — Namen nie überschreiben
+            ziel = dir.appendingPathComponent("\(backupPrefix)\(stamp())-\(lauf).json")
+            lauf += 1
+        }
+        try? fm.copyItem(at: dataURL, to: ziel)
+
+        for alt in backupGenerationen().dropFirst(maxBackupGenerationen) {
+            try? fm.removeItem(at: alt)
+        }
+    }
+
+    /// Speichert atomar — aber nur, was das Plausibilitätstor passiert.
+    @discardableResult
+    static func save(_ s: String) -> SaveErgebnis {
+        guard isValidJSON(s) else { return .ungueltig }
+        ensureDir()
+        if let alt = try? String(contentsOf: dataURL, encoding: .utf8),
+           let grund = pruefePlausibilitaet(neu: s, alt: alt) {
+            legeBeiseite(s)
+            return .abgelehnt(grund)
+        }
+        sichereVorstufe(erzwungen: false)
+        guard let d = s.data(using: .utf8) else { return .ungueltig }
+        do { try d.write(to: dataURL, options: .atomic); return .ok } catch { return .fehlgeschlagen }
+    }
+
+    /// Bewusstes Ersetzen (Import, „Alle Daten löschen", bestätigte Rückfrage):
+    /// umgeht das Plausibilitätstor, sichert den Altbestand aber IMMER als
+    /// erzwungene Generation — der Weg zurück bleibt offen.
+    @discardableResult
+    static func ersetzen(_ s: String) -> SaveErgebnis {
+        guard isValidJSON(s) else { return .ungueltig }
+        ensureDir()
+        sichereVorstufe(erzwungen: true)
+        guard let d = s.data(using: .utf8) else { return .ungueltig }
+        do { try d.write(to: dataURL, options: .atomic); return .ok } catch { return .fehlgeschlagen }
+    }
+
+    /// Räumt beiseitegelegte Dateien (data.corrupt-*, data.abgelehnt-*) ab,
+    /// die älter als `aelterAlsTage` sind — 30 Tage sind genug Zeit, sie zu bemerken.
+    static func wartung(aelterAlsTage: Int = 30) {
+        let fm = FileManager.default
+        let grenze = Date().addingTimeInterval(-TimeInterval(aelterAlsTage) * 86_400)
+        let namen = (try? fm.contentsOfDirectory(atPath: dir.path)) ?? []
+        for name in namen where name.hasPrefix("data.corrupt-") || name.hasPrefix("data.abgelehnt-") {
+            let url = dir.appendingPathComponent(name)
+            guard let datum = (try? fm.attributesOfItem(atPath: url.path))?[.modificationDate] as? Date,
+                  datum < grenze else { continue }
+            try? fm.removeItem(at: url)
+        }
     }
 }
 
@@ -148,7 +271,7 @@ func runSelfTest() -> Never {
 
     // 2) Speichern + Laden mit Sonderzeichen
     let doc1 = "{\"docs\":[{\"id\":\"a\",\"title\":\"Tü👍st \\\"Zitat\\\" <b>\",\"body\":\"<p>ä ö ü ß 😀 &amp; — „deutsch“</p>\",\"updated\":1}],\"active\":\"a\"}"
-    check("speichern", Store.save(doc1))
+    check("speichern", Store.save(doc1) == .ok)
     check("laden-identisch", Store.load() == doc1)
 
     // 3) Backup hält den vorherigen Stand
@@ -166,24 +289,90 @@ func runSelfTest() -> Never {
     check("kaputtes-beiseitegelegt", quarantined)
 
     // 5) Ungültiges wird nie gespeichert
-    check("ungueltiges-abgelehnt", Store.save("{nope") == false)
+    check("ungueltiges-abgelehnt", Store.save("{nope") == .ungueltig)
 
-    // 6) Großer Text (~3 MB)
-    let big = String(repeating: "Lorem ipsum älterer Text mit Umlauten öäüß. ", count: 70_000)
-    let obj: [String: Any] = ["docs": [["id": "b", "title": "Groß", "body": big, "updated": 3]], "active": "b"]
-    let bigStr = String(data: try! JSONSerialization.data(withJSONObject: obj), encoding: .utf8)!
-    check("gross-speichern", Store.save(bigStr))
-    check("gross-laden", Store.load() == bigStr)
-
-    // 7) Viele schnelle Speichervorgänge hintereinander
+    // 6) Viele schnelle Speichervorgänge hintereinander
     var ok = true
     for i in 0..<50 {
         let s = "{\"docs\":[{\"id\":\"r\",\"title\":\"t\(i)\",\"body\":\"<p>\(i)</p>\",\"updated\":\(i)}],\"active\":\"r\"}"
-        if !Store.save(s) { ok = false }
+        if Store.save(s) != .ok { ok = false }
     }
     check("50x-schnell-speichern", ok && Store.load().contains("t49"))
 
-    // 8) Schlüsselbund-Helfer (eigener Selbsttest-Eintrag — der echte bleibt unberührt)
+    // 7) Großer Text (~3 MB)
+    let big = String(repeating: "Lorem ipsum älterer Text mit Umlauten öäüß. ", count: 70_000)
+    let obj: [String: Any] = ["docs": [["id": "b", "title": "Groß", "body": big, "updated": 3]], "active": "b"]
+    let bigStr = String(data: try! JSONSerialization.data(withJSONObject: obj), encoding: .utf8)!
+    check("gross-speichern", Store.save(bigStr) == .ok)
+    check("gross-laden", Store.load() == bigStr)
+
+    // 8) Plausibilitätstor: ein leerer oder stark geschrumpfter Stand wird
+    //    abgewiesen und beiseitegelegt — data.json bleibt unangetastet.
+    let leer = "{\"docs\":[],\"active\":null}"
+    check("leer-zustand-abgewiesen", Store.save(leer) == .abgelehnt("dokumente-auf-null"))
+    check("leer-zustand-nicht-geschrieben", Store.load() == bigStr)
+    let winzig = "{\"docs\":[{\"id\":\"w\",\"title\":\"w\",\"body\":\"<p>w</p>\",\"updated\":9}],\"active\":\"w\"}"
+    check("schrumpfung-abgewiesen", Store.save(winzig) == .abgelehnt("schrumpfung-ueber-90-prozent"))
+    check("schrumpfung-nicht-geschrieben", Store.load() == bigStr)
+    let abgelegt = (try? FileManager.default.contentsOfDirectory(atPath: Store.dir.path))?
+        .filter({ $0.hasPrefix("data.abgelehnt-") }).count ?? 0
+    check("abgewiesenes-beiseitegelegt", abgelegt == 2)
+    let halb = String(repeating: "Lorem ipsum älterer Text mit Umlauten öäüß. ", count: 35_000)
+    let halbObj: [String: Any] = ["docs": [["id": "h", "title": "Halb", "body": halb, "updated": 4]], "active": "h"]
+    let halbStr = String(data: try! JSONSerialization.data(withJSONObject: halbObj), encoding: .utf8)!
+    check("maessige-verkleinerung-erlaubt", Store.save(halbStr) == .ok)
+
+    // 9) Bewusstes Ersetzen umgeht das Tor, sichert den Altbestand aber erzwungen.
+    check("ersetzen-umgeht-tor", Store.ersetzen(leer) == .ok)
+    check("ersetzen-geschrieben", Store.load() == leer)
+    let neuesteGeneration = Store.backupGenerationen().first
+        .flatMap { try? String(contentsOf: $0, encoding: .utf8) }
+    check("ersetzen-sichert-vorstufe", neuesteGeneration == halbStr)
+
+    // 10) Rotation: höchstens 5 datierte Generationen, und der Rückfall
+    //     erreicht sie, wenn Datei UND unmittelbare Vorstufe kaputt sind.
+    Store.backupAbstandSekunden = 0
+    var rotStaende: [String] = []
+    for i in 0..<9 {
+        let s = "{\"docs\":[{\"id\":\"g\",\"title\":\"rot\(i)\",\"body\":\"<p>Generation \(i)</p>\",\"updated\":\(i)}],\"active\":\"g\"}"
+        rotStaende.append(s)
+        if Store.save(s) != .ok { ok = false }
+    }
+    check("rotation-speichert", ok)
+    check("rotation-max-generationen", Store.backupGenerationen().count == Store.maxBackupGenerationen)
+    try? "{kaputt!!".data(using: .utf8)!.write(to: Store.dataURL)
+    try? "{kaputt!!".data(using: .utf8)!.write(to: Store.backupURL)
+    check("rueckfall-auf-generation", Store.load() == rotStaende[7])
+    Store.backupAbstandSekunden = 60
+
+    // 11) Wartung: Beiseitegelegtes älter als 30 Tage wird abgeräumt, Junges bleibt.
+    let fm = FileManager.default
+    let altCorrupt = Store.dir.appendingPathComponent("data.corrupt-altlast.json")
+    let altAbgelehnt = Store.dir.appendingPathComponent("data.abgelehnt-altlast.json")
+    try? "{}".data(using: .utf8)!.write(to: altCorrupt)
+    try? "{}".data(using: .utf8)!.write(to: altAbgelehnt)
+    let vor40Tagen = Date().addingTimeInterval(-40 * 86_400)
+    try? fm.setAttributes([.modificationDate: vor40Tagen], ofItemAtPath: altCorrupt.path)
+    try? fm.setAttributes([.modificationDate: vor40Tagen], ofItemAtPath: altAbgelehnt.path)
+    Store.wartung(aelterAlsTage: 30)
+    check("wartung-raeumt-altes-ab", !fm.fileExists(atPath: altCorrupt.path) && !fm.fileExists(atPath: altAbgelehnt.path))
+    let jungeReste = (try? fm.contentsOfDirectory(atPath: Store.dir.path))?
+        .contains(where: { $0.hasPrefix("data.corrupt-") || $0.hasPrefix("data.abgelehnt-") }) ?? false
+    check("wartung-verschont-junges", jungeReste)
+
+    // 12) Fehler-Vokabular der LLM-Brücke: bekannte Status bleiben, Unbekanntes
+    //     heißt "unbekannt" (der Verteiler wiederholt es genau einmal).
+    check("fehlertyp-401", AppDelegate.fehlerTyp(fuerStatus: 401) == "kein-schluessel")
+    check("fehlertyp-403", AppDelegate.fehlerTyp(fuerStatus: 403) == "kein-schluessel")
+    check("fehlertyp-429", AppDelegate.fehlerTyp(fuerStatus: 429) == "ratenlimit")
+    check("fehlertyp-529", AppDelegate.fehlerTyp(fuerStatus: 529) == "ueberlastet")
+    check("fehlertyp-503", AppDelegate.fehlerTyp(fuerStatus: 503) == "ueberlastet")
+    check("fehlertyp-400", AppDelegate.fehlerTyp(fuerStatus: 400) == "schema")
+    check("fehlertyp-404", AppDelegate.fehlerTyp(fuerStatus: 404) == "schema")
+    check("fehlertyp-418-unbekannt", AppDelegate.fehlerTyp(fuerStatus: 418) == "unbekannt")
+    check("fehlertyp-0-unbekannt", AppDelegate.fehlerTyp(fuerStatus: 0) == "unbekannt")
+
+    // 13) Schlüsselbund-Helfer (eigener Selbsttest-Eintrag — der echte bleibt unberührt)
     let tService = "Onda-Selbsttest"
     _ = Keychain.loeschen(service: tService)
     check("keychain-anfangs-leer", Keychain.vorhanden(service: tService) == false)
@@ -254,9 +443,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
 
     func applicationDidFinishLaunching(_ n: Notification) {
         Store.cleanOrphanImages()
+        Store.wartung()
 
         let ucc = WKUserContentController()
         ucc.add(self, name: "store")
+        ucc.add(self, name: "ersetzen")
         ucc.add(self, name: "exportmd")
         ucc.add(self, name: "probe")
         ucc.add(self, name: "saveimg")
@@ -300,8 +491,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         webView.loadFileURL(htmlURL, allowingReadAccessTo: res)
 
         if let p = probePath {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
+            // 20 s Not-Aus: die Probe wartet drinnen selbst geduldig auf ihre
+            // Quittungen (bis zu 5 s Bild-Brücke + 8 s Save-Quittung).
+            DispatchQueue.main.asyncAfter(deadline: .now() + 20) {
                 try? "{\"error\":\"timeout\"}".write(toFile: p, atomically: true, encoding: .utf8)
+                try? FileManager.default.removeItem(at: Store.dir) // Wegwerf-Verzeichnis der Probe
                 exit(2)
             }
         }
@@ -311,10 +505,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         switch message.name {
         case "store":
             guard let s = message.body as? String else { return }
-            let ok = Store.save(s)
-            let cb = ok ? "window.__nativeSaveOk__ && window.__nativeSaveOk__()"
-                        : "window.__nativeSaveFail__ && window.__nativeSaveFail__()"
-            webView.evaluateJavaScript(cb, completionHandler: nil)
+            quittiereSave(Store.save(s))
+        case "ersetzen":
+            // Bewusster Umweg am Plausibilitätstor vorbei (Import, „Alle Daten
+            // löschen", bestätigte Rückfrage) — sichert vorher erzwungen.
+            guard let s = message.body as? String else { return }
+            quittiereSave(Store.ersetzen(s))
         case "exportmd":
             guard let s = message.body as? String, let d = s.data(using: .utf8),
                   let obj = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any],
@@ -379,6 +575,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         case "probe":
             if let p = probePath, let s = message.body as? String {
                 try? s.write(toFile: p, atomically: true, encoding: .utf8)
+                try? FileManager.default.removeItem(at: Store.dir) // Wegwerf-Verzeichnis der Probe
                 exit(0)
             }
         default: break
@@ -440,10 +637,55 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
     @objc func menuNewDoc() { webView.evaluateJavaScript("window.__newDocFromMenu__ && window.__newDocFromMenu__()", completionHandler: nil) }
     @objc func menuExport() { webView.evaluateJavaScript("window.__exportFromMenu__ && window.__exportFromMenu__()", completionHandler: nil) }
 
-    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        webView?.evaluateJavaScript("window.__flushForQuit__ && window.__flushForQuit__()", completionHandler: nil)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+    /// Quittiert einen Speichervorgang an die Oberfläche — und, falls gerade das
+    /// Beenden auf diese Quittung wartet, an macOS. Der Save selbst ist zu diesem
+    /// Zeitpunkt schon auf der Platte gelandet (oder eben nicht).
+    func quittiereSave(_ ergebnis: Store.SaveErgebnis) {
+        let cb: String
+        switch ergebnis {
+        case .ok:
+            cb = "window.__nativeSaveOk__ && window.__nativeSaveOk__()"
+        case .abgelehnt:
+            // Fällt auf den einfachen Fehler-Rückruf zurück, falls die geladene
+            // Oberfläche den Rückfrage-Rückruf noch nicht kennt. Beim Beenden
+            // gibt es keine Rückfrage mehr: die stellt sich im laufenden Betrieb
+            // in dem Moment, in dem die Abweisung passiert — ein Dialog während
+            // des Schließens käme zu spät und liefe gegen den Abbau der Fenster.
+            // Der abgewiesene Stand liegt als data.abgelehnt-* daneben.
+            cb = quitWartetAufSave
+                ? "window.__nativeSaveFail__ && window.__nativeSaveFail__()"
+                : "window.__nativeSaveRejected__ ? window.__nativeSaveRejected__() : (window.__nativeSaveFail__ && window.__nativeSaveFail__())"
+        case .ungueltig, .fehlgeschlagen:
+            cb = "window.__nativeSaveFail__ && window.__nativeSaveFail__()"
+        }
+        webView.evaluateJavaScript(cb, completionHandler: nil)
+        if quitWartetAufSave {
+            quitWartetAufSave = false
             NSApp.reply(toApplicationShouldTerminate: true)
+        }
+    }
+
+    var quitWartetAufSave = false
+
+    /// Beenden wartet auf die echte Save-Quittung statt auf einen blinden Timer:
+    /// __flushForQuit__ stößt in JS ein persist an, dessen store-Nachricht hier
+    /// synchron gespeichert und quittiert wird. Ein großzügiges Not-Timeout
+    /// beendet trotzdem, falls die Oberfläche hängt oder nichts mehr schickt.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard let webView = webView else { return .terminateNow }
+        quitWartetAufSave = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) { [weak self] in
+            guard let self = self, self.quitWartetAufSave else { return }
+            self.quitWartetAufSave = false
+            NSApp.reply(toApplicationShouldTerminate: true)
+        }
+        webView.evaluateJavaScript("!!(window.__flushForQuit__ && (window.__flushForQuit__(), true))") { [weak self] result, fehler in
+            guard let self = self, self.quitWartetAufSave else { return }
+            if fehler != nil || (result as? Bool) != true {
+                // Kein Flush registriert — es kommt keine Quittung, sofort beenden.
+                self.quitWartetAufSave = false
+                NSApp.reply(toApplicationShouldTerminate: true)
+            }
         }
         return .terminateLater
     }
@@ -515,13 +757,17 @@ extension AppDelegate {
     }()
 
     /// HTTP-Status → Fehler-Vokabular des Verteilers (agent-gateway.mjs).
+    /// Nur bekannte Anfragefehler heißen "schema" (nicht wiederholbar); alles
+    /// Unbekannte heißt ehrlich "unbekannt" — der Verteiler wagt dafür genau
+    /// EINEN vorsichtigen zweiten Versuch.
     static func fehlerTyp(fuerStatus status: Int) -> String {
         switch status {
+        case 400, 404, 405, 413, 422: return "schema" // fehlerhafte Anfrage — nicht wiederholbar
         case 401, 403: return "kein-schluessel"
         case 429: return "ratenlimit"
         case 529: return "ueberlastet"
         case 500...599: return "ueberlastet"
-        default: return "schema" // fehlerhafte Anfrage (z. B. 400) — nicht wiederholbar
+        default: return "unbekannt"
         }
     }
 
@@ -648,6 +894,13 @@ if args.contains("--selftest") { runSelfTest() }
 
 var probePath: String? = nil
 if let i = args.firstIndex(of: "--probe"), i + 1 < args.count { probePath = args[i + 1] }
+
+// Die Startprobe fasst NIE echte Daten an: eigenes Wegwerf-Verzeichnis wie der
+// Selbsttest, nach der Probe wieder entfernt.
+if probePath != nil {
+    Store.dir = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("onda-probe-\(UUID().uuidString)", isDirectory: true)
+}
 
 let app = NSApplication.shared
 let delegate = AppDelegate(probePath: probePath)

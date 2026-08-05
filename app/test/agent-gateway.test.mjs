@@ -94,6 +94,24 @@ test('kein-schluessel wird NICHT wiederholt', async () => {
   assert.equal(t.aufrufe.length, 1)
 })
 
+test('unbekannt (unklarer HTTP-Status der Brücke) wird genau EINMAL wiederholt', async () => {
+  const t = mockTransport([
+    (a, h) => h.onFehler({ typ: 'unbekannt', nachricht: 'HTTP 418' }),
+    (a, h) => h.onFertig({ text: 'Titel', usage: { ...USAGE }, stopReason: 'end_turn' }),
+  ])
+  frisch(t)
+  const { daten } = await runTask('titel', {})
+  assert.equal(daten, 'Titel')
+  assert.equal(t.aufrufe.length, 2)
+})
+
+test('unbekannt zweimal hintereinander -> Fehler nach genau zwei Versuchen', async () => {
+  const t = mockTransport([(a, h) => h.onFehler({ typ: 'unbekannt', nachricht: 'HTTP 418' })])
+  frisch(t)
+  await assert.rejects(runTask('titel', {}), f => f.typ === 'unbekannt')
+  assert.equal(t.aufrufe.length, 2)
+})
+
 test('refusal: Fehler typ abgelehnt, usage wird trotzdem gezählt', async () => {
   const t = mockTransport([(a, h) => h.onFertig({ text: '', usage: { ...USAGE }, stopReason: 'refusal' })])
   const welt = frisch(t)

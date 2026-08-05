@@ -289,15 +289,19 @@ function synchronizeAllProjectMemory() {
   })
 }
 
-export function persist() {
+function baueSpeicherlast() {
   synchronizeAllProjectMemory()
-  const payload = JSON.stringify({
+  return JSON.stringify({
     schemaVersion: SCHEMA,
     docs: state.docs, active: state.active,
     projects: state.projects, activeProject: state.activeProject,
     settings: state.settings,
     memoryStore: state.memoryStore,
   })
+}
+
+export function persist() {
+  const payload = baueSpeicherlast()
   if (NATIVE) {
     ackPending = true
     try { window.webkit.messageHandlers.store.postMessage(payload) }
@@ -307,8 +311,49 @@ export function persist() {
     catch (e) { setSaveState('error') }
   }
 }
-window.__nativeSaveOk__ = function () { ackPending = false; setSaveState('saved') }
-window.__nativeSaveFail__ = function () { ackPending = false; setSaveState('error') }
+
+// Bewusstes Speichern am Plausibilitätstor der Hülle vorbei — nur nach
+// ausdrücklicher Bestätigung. Die Hülle sichert vorher den Altbestand.
+function persistErzwingen() {
+  const payload = baueSpeicherlast()
+  const kanal = NATIVE && (window.webkit.messageHandlers.ersetzen || window.webkit.messageHandlers.store)
+  if (!kanal) return
+  ackPending = true
+  try { kanal.postMessage(payload) }
+  catch (e) { ackPending = false; setSaveState('error') }
+}
+
+// Die echte Quittung der Hülle: true/false, null = noch keine erhalten.
+// Die Startprobe leitet storageOk daraus ab, statt es zu behaupten.
+let lastNativeSaveOk = null
+let rejectedRueckfrageOffen = false
+let rejectedVomNutzerVerneint = false
+
+window.__nativeSaveOk__ = function () {
+  ackPending = false; lastNativeSaveOk = true
+  rejectedVomNutzerVerneint = false
+  setSaveState('saved')
+}
+window.__nativeSaveFail__ = function () { ackPending = false; lastNativeSaveOk = false; setSaveState('error') }
+
+// Die Hülle hat einen ungewöhnlich kleinen Stand abgewiesen (und beiseitegelegt).
+// Meist ist das ein Fehler — aber nach dem Löschen großer Texte kann es Absicht
+// sein, darum einmal nachfragen statt still in der Sackgasse stehen.
+window.__nativeSaveRejected__ = function () {
+  ackPending = false; lastNativeSaveOk = false
+  setSaveState('error')
+  if (rejectedRueckfrageOffen || rejectedVomNutzerVerneint) return
+  rejectedRueckfrageOffen = true
+  setTimeout(() => {
+    const trotzdem = window.confirm(
+      'Onda wollte gerade deutlich weniger speichern, als bisher vorhanden ist — '
+      + 'das passiert nach dem Löschen großer Texte, kann aber auch ein Fehler sein. '
+      + 'Zur Sicherheit wurde nichts überschrieben.\n\nJetzt trotzdem speichern?')
+    rejectedRueckfrageOffen = false
+    if (trotzdem) persistErzwingen()
+    else rejectedVomNutzerVerneint = true
+  }, 0)
+}
 
 let saveTimer = null
 export function scheduleSave() {
@@ -524,7 +569,11 @@ function replacePersistedState(nextState) {
   replacingPersistedState = true
   const payload = JSON.stringify(nextState)
   if (NATIVE) {
-    window.webkit.messageHandlers.store.postMessage(payload)
+    // Über den Ersetzen-Kanal: Import und „Alle Daten löschen" sind Absicht,
+    // das Plausibilitätstor der Hülle darf sie nicht abweisen. Die Hülle
+    // sichert den Altbestand vorher als datierte Generation.
+    const kanal = window.webkit.messageHandlers.ersetzen || window.webkit.messageHandlers.store
+    kanal.postMessage(payload)
     window.__NATIVE_DATA__ = nextState
   } else {
     localStorage.setItem('aiwt.v2', payload)
@@ -636,7 +685,12 @@ export function boot() {
       let imgBridge = false
       const done = () => {
         persist()
-        setTimeout(() => {
+        // Auf die echte Save-Quittung warten, statt blind eine halbe Sekunde zu
+        // schlafen: ohne sichtbares Fenster stellt WebKit Rückrufe träge zu,
+        // manchmal erst nach Sekunden. Not-Grenze: 8 Sekunden.
+        const start = Date.now()
+        const melde = () => {
+          if (ackPending && Date.now() - start < 8000) { setTimeout(melde, 100); return }
           window.webkit.messageHandlers.probe.postMessage(JSON.stringify({
             docCount: state.docs.length,
             firstTitle: docTitle(state.docs[0]),
@@ -644,9 +698,11 @@ export function boot() {
             ackOk: !ackPending,
             editorOk: !!state.editor && state.editor.isEditable,
             imgBridge,
-            storageOk: true,
+            // Aus der echten Quittung der Hülle abgeleitet — nicht behauptet.
+            storageOk: lastNativeSaveOk === true,
           }))
-        }, 500)
+        }
+        setTimeout(melde, 100)
       }
       if (window.webkit.messageHandlers.saveimg) {
         const reqId = 'probe-img'
@@ -655,7 +711,9 @@ export function boot() {
           id: reqId, ext: 'png',
           dataBase64: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
         }))
-        setTimeout(() => { if (imgPending[reqId]) { delete imgPending[reqId]; done() } }, 1500)
+        // Gleiche Geduld wie bei der Save-Quittung: die Bild-Antwort kommt ohne
+        // sichtbares Fenster manchmal erst nach Sekunden.
+        setTimeout(() => { if (imgPending[reqId]) { delete imgPending[reqId]; done() } }, 5000)
       } else { done() }
     }, 300)
   }
