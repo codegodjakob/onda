@@ -1,143 +1,15 @@
-/* Onda — Calm Technology: ruhig, klar, Peripherie statt Alarm. */
-
-/* Hausschriften: ABC Diatype (UI + Sans) · ABC Prophet (Serif) — Dinamo Edu-Lizenz, persönliche Nutzung */
-@font-face { font-family: "Diatype"; src: url("../fonts/Diatype-Regular.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
-@font-face { font-family: "Diatype"; src: url("../fonts/Diatype-Italic.woff2") format("woff2"); font-weight: 400; font-style: italic; font-display: swap; }
-@font-face { font-family: "Diatype"; src: url("../fonts/Diatype-Medium.woff2") format("woff2"); font-weight: 500; font-style: normal; font-display: swap; }
-@font-face { font-family: "Diatype"; src: url("../fonts/Diatype-Bold.woff2") format("woff2"); font-weight: 700; font-style: normal; font-display: swap; }
-@font-face { font-family: "Diatype"; src: url("../fonts/Diatype-BoldItalic.woff2") format("woff2"); font-weight: 700; font-style: italic; font-display: swap; }
-@font-face { font-family: "Literata"; src: url("../fonts/Literata-Var.woff2") format("woff2"); font-weight: 400 700; font-style: normal; font-display: swap; }
-@font-face { font-family: "Literata"; src: url("../fonts/Literata-VarItalic.woff2") format("woff2"); font-weight: 400 700; font-style: italic; font-display: swap; }
-
-/* Onda-Schriften: Hanken Grotesk (UI + Fließtext) · JetBrains Mono (Technisches) — selbst gehostet (OFL), woff2 */
-@font-face { font-family: "Hanken Grotesk"; src: url("../fonts/hanken-grotesk-regular.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
-@font-face { font-family: "Hanken Grotesk"; src: url("../fonts/hanken-grotesk-500.woff2") format("woff2"); font-weight: 500; font-style: normal; font-display: swap; }
-@font-face { font-family: "Hanken Grotesk"; src: url("../fonts/hanken-grotesk-600.woff2") format("woff2"); font-weight: 600; font-style: normal; font-display: swap; }
-@font-face { font-family: "Hanken Grotesk"; src: url("../fonts/hanken-grotesk-700.woff2") format("woff2"); font-weight: 700; font-style: normal; font-display: swap; }
-@font-face { font-family: "Hanken Grotesk"; src: url("../fonts/hanken-grotesk-800.woff2") format("woff2"); font-weight: 800; font-style: normal; font-display: swap; }
-@font-face { font-family: "JetBrains Mono"; src: url("../fonts/jetbrains-mono-regular.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
-@font-face { font-family: "JetBrains Mono"; src: url("../fonts/jetbrains-mono-500.woff2") format("woff2"); font-weight: 500; font-style: normal; font-display: swap; }
-
+/* Onda — Kompatibilitätsregeln während des schrittweisen UI-Neubaus. */
 :root {
-  color-scheme: light;
-
-  /* Papier → Tinte. Werte wortgleich aus design-system/tokens/colors.css.
-     Die App hatte eigene Abweichungen: --surface-2, die halbe Tintenleiter und
-     --text-tertiary standen zu hell (ink-400 statt ink-500). */
-  --paper: #fbfaf8; --surface: #ffffff; --surface-2: #f4f2ee; --surface-3: #ece9e3; --surface-inset: #f1efea;
-  --ink-950: #131210; --ink-900: #1c1a17; --ink-800: #2c2926; --ink-700: #423e39;
-  --ink-600: #57524b; --ink-500: #736d64; --ink-400: #948d82; --ink-300: #b6afa4;
-  --ink-200: #d5cfc5; --ink-100: #e7e2da; --ink-50: #f2efe9;
-  --line-soft: rgba(28,26,23,0.07); --line: rgba(28,26,23,0.12); --line-strong: rgba(28,26,23,0.2);
-
-  /* EIN Akzent: Sky, gedämpft und entsättigt. Keine Varianten — das System kennt
-     genau diese eine Farbe (design-system/tokens/colors.css). */
-  --sky-50: #f3f8fb; --sky-100: #e9f1f6; --sky-200: #dae7ef; --sky-300: #c1d7e5;
-  --sky-400: #a6c3d6; --sky-500: #8db2c9; --sky-600: #7ba1b9; --sky-700: #6a8fa7;
-  --accent: var(--sky-500); --accent-hover: var(--sky-600); --accent-active: var(--sky-700);
-  --accent-tint: var(--sky-100); --accent-tint-hover: var(--sky-200); --on-accent: #16232c;
-  --focus-ring: rgba(141,178,201,0.42);
-
-  /* Aura — der einzige Ort im System, an dem Farbe verläuft */
-  --aura-1: #eff6fa; --aura-2: #cdddea; --aura-3: #a3bfd3; --aura-4: #b2c9c4;
-  --gradient-aura: linear-gradient(115deg,var(--aura-1) 0%,var(--aura-2) 34%,var(--aura-3) 62%,var(--aura-4) 100%);
-  --gradient-surface: linear-gradient(180deg,#fbfaf8 0%,#f4f2ec 100%);
-  --shadow-glow: 0 0 0 1px rgba(166,195,214,0.34),0 4px 22px rgba(141,178,201,0.3);
-
-  /* KEINE Statusfarben. Das Design System ist hier ausdrücklich: Erfolg, Warnung und
-     Information sind neutral — Tinte auf gesenkter Fläche. Rot steht ALLEIN für Fehler
-     und Zerstörendes. Die App hatte Grün, Bernstein und Blau; drei Farben, die ständig
-     mitsprachen, ohne je etwas Zerstörendes zu meinen. */
-  --red-500: #b04a3f; --red-100: #f0dcd8;
-  --success: var(--text-secondary); --success-tint: var(--bg-sunken);
-  --warning: var(--text-secondary); --warning-tint: var(--bg-sunken);
-  --danger: var(--red-500); --danger-tint: var(--red-100);
-  --info: var(--text-secondary); --info-tint: var(--bg-sunken);
-
-  /* Alias-Ebene */
-  --bg-app: var(--paper); --bg-surface: var(--surface); --bg-raised: var(--surface);
-  --bg-sunken: var(--surface-2); --bg-inset: var(--surface-inset);
-  --bg-hover: rgba(28,26,23,0.04); --bg-active: rgba(28,26,23,0.07);
-  --text-primary: var(--ink-900); --text-secondary: var(--ink-600);
-  --text-tertiary: var(--ink-500); --text-disabled: var(--ink-300); --text-link: #41718c;
-  --border-subtle: var(--line-soft); --border-default: var(--line); --border-strong: var(--line-strong);
-
-  /* Typografie — folgt dem Onda Design System (design-system/tokens/typography.css).
-     Diatype war hier schon geladen, wurde aber nie benutzt: --font-sans zeigte auf
-     Hanken Grotesk. Beide Schriften lagen im Paket, eine davon wirkungslos.
-     Keine Mono-Schrift: Technisches steht in Diatype mit tabular-nums. */
-  --font-sans: "Diatype", "ABC Diatype", system-ui, -apple-system, sans-serif;
-  --font-mono: var(--font-sans);
-  /* DREI Gewichte: Text 400 · Label 500 · Titel 700. --fw-semibold ist eine Brücke
-     auf 500 — 600 gehört nicht zum System und stand 28-mal im Blatt. */
-  --fw-regular: 400; --fw-medium: 500; --fw-bold: 700; --fw-semibold: var(--fw-medium);
-
-  /* VIER Größen, mehr existiert nicht: Caption 12 · Text 15 · Titel 21 · Display 40.
-     Das Design System hat die Zwischengrade ausdrücklich entfernt, "damit keine
-     entstehen können" — die App hatte 13 und 16 wieder eingeführt und sie 85-mal
-     benutzt. Hierarchie entsteht über Gewicht und Farbe, nicht über weitere Grade.
-     Die Brücken-Marken --text-sm und --text-md sind aufgelöst: alle 85 Stellen
-     tragen jetzt ihre Rolle (--type-body / --type-label / --type-caption). */
-  --text-xs: 12px; --text-base: 15px; --text-xl: 21px; --text-4xl: 40px;
-
-  --leading-tight: 1.05; --leading-snug: 1.3; --leading-normal: 1.5; --leading-relaxed: 1.65;
-  --tracking-tighter: -0.04em; --tracking-tight: -0.02em; --tracking-normal: 0;
-  --tracking-wide: 0.02em; --tracking-wider: 0.08em;
-
-  /* Kontrastpaare aus dem System — eine Stelle, an der Größe, Gewicht und Zeilenhöhe
-     zusammen entschieden sind, statt an jedem Element neu. */
-  --type-display: var(--fw-bold) var(--text-4xl)/var(--leading-tight) var(--font-sans);
-  --type-title: var(--fw-bold) var(--text-xl)/var(--leading-snug) var(--font-sans);
-  --type-body: var(--fw-regular) var(--text-base)/var(--leading-normal) var(--font-sans);
-  --type-label: var(--fw-medium) var(--text-base)/var(--leading-snug) var(--font-sans);
-  --type-caption: var(--fw-regular) var(--text-xs)/var(--leading-snug) var(--font-sans);
-
-  /* Raum — Stufenleiter exakt wie design-system/tokens/spacing.css.
-     Die App hatte ab Stufe 7 eine eigene Leiter (28/32/40/48/64) und damit oberhalb
-     von 24px eine andere Sprache als das System (32/40/48/64/80). Genutzt war davon
-     genau eine Stufe, der Wechsel kostet also nichts. */
-  --space-0: 0; --space-px: 1px; --space-05: 2px;
-  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 20px;
-  --space-6: 24px; --space-7: 32px; --space-8: 40px; --space-9: 48px; --space-10: 64px;
-  --space-11: 80px; --space-12: 96px;
-  --sidebar-width: 264px; --topbar-height: 56px;
-  --container-sm: 640px; --container-md: 880px; --container-lg: 1120px; --container-reading: 680px;
-
-  /* Radius */
-  /* Radien folgen dem Design System (design-system/tokens/radius.css):
-     nur drei im Gebrauch — Pille für alle Bedienelemente, 24px für alle Flächen,
-     4px für Häkchen. Die App hatte vier abweichende Werte (6/8/10/18) und wirkte
-     dadurch kantig, wo das System weich sein will. */
-  --radius-control: 999px; --radius-card: 24px; --radius-overlay: 24px;
-  --radius-panel: 24px; --radius-pill: 999px; --radius-full: 999px;
-  --radius-sm: 4px;
-
-  /* Elevation */
-  --shadow-xs: 0 1px 2px rgba(28,26,23,0.05);
-  --shadow-sm: 0 1px 2px rgba(28,26,23,0.06),0 1px 1px rgba(28,26,23,0.04);
-  --shadow-md: 0 2px 4px rgba(28,26,23,0.05),0 6px 16px rgba(28,26,23,0.07);
-  --shadow-lg: 0 4px 8px rgba(28,26,23,0.06),0 16px 32px rgba(28,26,23,0.1);
-  --shadow-xl: 0 8px 16px rgba(28,26,23,0.08),0 28px 56px rgba(28,26,23,0.14);
-  --shadow-inset: inset 0 1px 2px rgba(28,26,23,0.07);
-  /* Fokus: EIN weicher Halo, 4px, keine Outline. */
-  --shadow-focus: 0 0 0 4px var(--focus-ring);
-
-  /* Motion */
-  --ease-out: cubic-bezier(0.16,1,0.3,1); --ease-spring: cubic-bezier(0.34,1.4,0.64,1);
-  --dur-fast: 120ms; --dur-quick: 180ms; --dur-normal: 240ms; --dur-slow: 360ms;
-
-  /* Legacy-Bruecke — bestehende Regeln erben Onda sofort */
   --bg: var(--surface); --bg2: var(--paper); --bg3: var(--surface-2);
   --txt: var(--text-primary); --txt2: var(--text-secondary); --txt3: var(--text-tertiary);
   --line2: var(--border-strong);
   --accentbg: var(--accent-tint); --cue: var(--warning-tint);
   --ok: var(--success); --warn: var(--warning);
-  --th1: var(--accent); --th2: var(--warning); --th3: var(--success); --th4: #9a86c4; --th5: var(--danger);
+  --th1: var(--accent); --th2: var(--warning); --th3: var(--success); --th4: var(--text-secondary); --th5: var(--danger);
   --r: var(--radius-card); --r2: var(--radius-overlay);
   --dur: var(--dur-quick); --ease: var(--ease-out); --shadow: var(--shadow-lg);
-  --doc-size: 16.5px; --doc-width: 700px; --doc-font: var(--font-sans); --sans: var(--font-sans);
-
-  /* V2-Namespace-Bruecke auf Onda */
+  --doc-size: var(--text-base); --doc-width: var(--container-reading); --doc-font: var(--font-sans); --sans: var(--font-sans);
+  --font-mono: var(--font-sans); --fw-semibold: var(--fw-medium);
   --v2-canvas: var(--bg-app); --v2-surface: var(--bg-surface);
   --v2-surface-soft: var(--surface-2); --v2-surface-active: var(--surface-inset);
   --v2-text: var(--text-primary); --v2-text-soft: var(--text-secondary);
@@ -167,39 +39,6 @@
   white-space: nowrap !important;
   border: 0 !important;
 }
-[data-theme="dark"] {
-  color-scheme: dark;
-  --paper: #141310; --surface: #1d1b17; --surface-2: #242019; --surface-3: #2d2820; --surface-inset: #100f0c;
-  --ink-950: #f4f1ea; --ink-900: #e4dfd5; --ink-800: #c4bdb1; --ink-700: #a8a094;
-  --ink-600: #8f887c; --ink-500: #79736a; --ink-400: #625d55; --ink-300: #4a463f;
-  --ink-200: #37342e; --ink-100: #2b2721; --ink-50: #26231d;
-  --line-soft: rgba(245,241,234,0.06); --line: rgba(245,241,234,0.11); --line-strong: rgba(245,241,234,0.18);
-  --bg-raised: var(--surface-2); --bg-sunken: var(--surface-inset); --bg-inset: var(--surface-inset);
-  --accent: var(--sky-400); --accent-hover: var(--sky-300); --accent-active: var(--sky-500);
-  --accent-tint: rgba(166,195,214,0.16); --accent-tint-hover: rgba(166,195,214,0.24);
-  --on-accent: #111c24; --focus-ring: rgba(166,195,214,0.45);
-  --gradient-surface: linear-gradient(180deg,#1d1b17 0%,#141310 100%);
-  --shadow-glow: 0 0 0 1px rgba(166,195,214,0.26),0 4px 26px rgba(166,195,214,0.36);
-  /* Auch dunkel: keine Statusfarben ausser Rot. */
-  --success: var(--text-secondary); --warning: var(--text-secondary); --info: var(--text-secondary);
-  --success-tint: var(--bg-sunken); --warning-tint: var(--bg-sunken); --info-tint: var(--bg-sunken);
-  --danger: #d98177; --danger-tint: rgba(217,129,119,0.18);
-  --bg-hover: rgba(244,241,234,0.05); --bg-active: rgba(244,241,234,0.09); --text-link: #8fbfe0;
-  --text-primary: #f4f1ea; --text-secondary: #c4bdb1; --text-tertiary: #8f887c;
-  --text-disabled: #5c574e; --text-link: #b5cfe0;
-  --shadow-xs: 0 1px 2px rgba(0,0,0,0.3);
-  --shadow-sm: 0 1px 2px rgba(0,0,0,0.3),0 2px 6px rgba(0,0,0,0.35);
-  --shadow-md: 0 2px 4px rgba(0,0,0,0.35),0 8px 20px rgba(0,0,0,0.45);
-  --shadow-lg: 0 4px 8px rgba(0,0,0,0.4),0 16px 36px rgba(0,0,0,0.55);
-  --shadow-xl: 0 8px 16px rgba(0,0,0,0.45),0 28px 56px rgba(0,0,0,0.6);
-}
-
-/* Keine Akzentvarianten. Das Design System kennt genau EINEN Akzent (Sky) und sagt
-   das ausdruecklich: "Keine Akzent-Varianten". Hier standen sechs, dazu ihre sechs
-   Dunkelmodus-Fassungen — zwoelf Bloecke, die aus dem einen Akzent des Systems eine
-   Farbauswahl machten. Ein data-accent-Attribut bleibt wirkungslos stehen; die
-   gespeicherte Einstellung schadet nicht, sie faerbt nur nichts mehr. */
-
 * { box-sizing: border-box; }
 html, body { height: 100%; }
 body {
@@ -207,7 +46,7 @@ body {
   background: var(--bg-app);
   color: var(--txt);
   font-family: var(--sans);
-  font-size: 14px;
+  font-size: var(--text-base);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
@@ -3088,7 +2927,7 @@ button.onda-aura:focus-visible {
   border-radius: var(--radius-card);
   background: var(--surface-inset);
   color: var(--text-primary);
-  font: var(--fw-regular) var(--text-base)/1.6 "Literata", Georgia, serif;
+  font: var(--fw-regular) var(--text-base)/1.6 var(--font-sans);
 }
 .source-reader-warning {
   margin: 0;
@@ -3308,7 +3147,7 @@ button.onda-aura:focus-visible {
 .research-candidate-excerpt {
   margin: 0;
   color: var(--text-primary);
-  font: var(--fw-regular) var(--text-base)/var(--leading-relaxed) "Literata", Georgia, serif;
+  font: var(--fw-regular) var(--text-base)/var(--leading-relaxed) var(--font-sans);
 }
 .research-candidate-limitation {
   margin: 0;
