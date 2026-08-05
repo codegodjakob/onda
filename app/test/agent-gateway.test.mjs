@@ -108,6 +108,39 @@ test('max_tokens: Lauf wird verworfen (typ schema), usage gezählt', async () =>
   assert.equal(welt.settings.usage.inputTokens, 10)
 })
 
+// Das Tor (Task 3) muss auch bei einem verworfenen Lauf wissen, was er gekostet hat —
+// das Gateway kennt die Zahlen (ergebnis.usage), warf sie an den vier throw-Stellen
+// nach sendeEinmal aber bislang weg. Transportfehler (sendeEinmal selbst) bleiben
+// unberührt: dort liegt keine Antwort und damit keine usage vor.
+test('refusal: geworfener Fehler trägt die usage des bezahlten Laufs', async () => {
+  initGateway({ getSettings: () => null, persist: null })
+  setzeTransportFuerTests({ sende: (anfrage, { onFertig }) => onFertig({ text: 'x', stopReason: 'refusal', usage: { input_tokens: 7, output_tokens: 3 } }), hatSchluessel: async () => true })
+  await assert.rejects(runTask('chat', { docText: 'T' }), fehler => fehler.typ === 'abgelehnt' && fehler.usage.input_tokens === 7)
+  setzeTransportFuerTests(null)
+})
+
+test('max_tokens: geworfener Fehler trägt die usage des bezahlten Laufs', async () => {
+  initGateway({ getSettings: () => null, persist: null })
+  setzeTransportFuerTests({ sende: (anfrage, { onFertig }) => onFertig({ text: 'x', stopReason: 'max_tokens', usage: { input_tokens: 11, output_tokens: 4 } }), hatSchluessel: async () => true })
+  await assert.rejects(runTask('chat', { docText: 'T' }), fehler => fehler.typ === 'schema' && fehler.usage.input_tokens === 11)
+  setzeTransportFuerTests(null)
+})
+
+test('ungültiges JSON bei Schema-Task: geworfener Fehler trägt die usage des bezahlten Laufs', async () => {
+  initGateway({ getSettings: () => null, persist: null })
+  setzeTransportFuerTests({ sende: (anfrage, { onFertig }) => onFertig({ text: 'kein JSON', stopReason: 'end_turn', usage: { input_tokens: 13, output_tokens: 6 } }), hatSchluessel: async () => true })
+  await assert.rejects(runTask('hinweise', { docText: 'T' }), fehler => fehler.typ === 'schema' && fehler.usage.input_tokens === 13)
+  setzeTransportFuerTests(null)
+})
+
+test('fehlende Pflichtfelder: geworfener Fehler trägt die usage des bezahlten Laufs', async () => {
+  initGateway({ getSettings: () => null, persist: null })
+  const kaputt = { hinweise: [{ kategorie: 'fakt' }] }
+  setzeTransportFuerTests({ sende: (anfrage, { onFertig }) => onFertig({ text: JSON.stringify(kaputt), stopReason: 'end_turn', usage: { input_tokens: 17, output_tokens: 9 } }), hatSchluessel: async () => true })
+  await assert.rejects(runTask('hinweise', { docText: 'T' }), fehler => fehler.typ === 'schema' && fehler.usage.input_tokens === 17)
+  setzeTransportFuerTests(null)
+})
+
 test('chat: onDelta wird durchgereicht, daten ist der Volltext', async () => {
   const t = mockTransport([(a, h) => {
     assert.equal(a.stream, true)

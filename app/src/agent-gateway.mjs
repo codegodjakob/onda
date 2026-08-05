@@ -96,22 +96,25 @@ export async function runTask(taskName, eingabe, optionen = {}) {
   if (hooks.persist) hooks.persist()
 
   // stop_reason VOR dem Inhalt prüfen (Vertrag).
+  // usage hängt an jedem hier geworfenen Fehler dran (im Unterschied zu Transportfehlern
+  // aus sendeEinmal, wo keine Antwort und damit keine usage vorliegt) — das Tor (Task 3)
+  // muss auch bei einem verworfenen Lauf wissen, was er gekostet hat.
   if (ergebnis.stopReason === 'refusal') {
     console.info('[agent] Lauf abgelehnt (refusal) — Task', taskName) // leise, kein Alarm
-    throw { typ: 'abgelehnt', nachricht: 'Der Agent hat diese Anfrage abgelehnt.' }
+    throw { typ: 'abgelehnt', nachricht: 'Der Agent hat diese Anfrage abgelehnt.', usage: ergebnis.usage }
   }
   if (ergebnis.stopReason === 'max_tokens') {
     console.info('[agent] Lauf verworfen (max_tokens, Antwort abgeschnitten) — Task', taskName)
-    throw { typ: 'schema', nachricht: 'Die Antwort wurde abgeschnitten (max_tokens) und verworfen.' }
+    throw { typ: 'schema', nachricht: 'Die Antwort wurde abgeschnitten (max_tokens) und verworfen.', usage: ergebnis.usage }
   }
 
   if (eintrag.schema) {
     let daten
     try { daten = JSON.parse(ergebnis.text) } catch (e) {
-      throw { typ: 'schema', nachricht: 'Die Antwort war kein gültiges JSON.' }
+      throw { typ: 'schema', nachricht: 'Die Antwort war kein gültiges JSON.', usage: ergebnis.usage }
     }
     if (!pruefePflichtfelder(daten, eintrag.schema)) {
-      throw { typ: 'schema', nachricht: 'In der Antwort fehlen Pflichtfelder.' }
+      throw { typ: 'schema', nachricht: 'In der Antwort fehlen Pflichtfelder.', usage: ergebnis.usage }
     }
     return { daten, usage: ergebnis.usage }
   }
