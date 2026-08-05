@@ -1,6 +1,7 @@
 node_modules/
 app/dist/
 Onda.app/
+releases/
 mac/AppIcon.iconset/
 .DS_Store
 .superpowers/

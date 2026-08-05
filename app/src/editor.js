@@ -271,15 +271,19 @@ function synchronizeAllProjectMemory() {
   })
 }
 
-export function persist() {
+function baueSpeicherlast() {
   synchronizeAllProjectMemory()
-  const payload = JSON.stringify({
+  return JSON.stringify({
     schemaVersion: SCHEMA,
     docs: state.docs, active: state.active,
     projects: state.projects, activeProject: state.activeProject,
     settings: state.settings,
     memoryStore: state.memoryStore,
   })
+}
+
+export function persist() {
+  const payload = baueSpeicherlast()
   if (NATIVE) {
     ackPending = true
     try { window.webkit.messageHandlers.store.postMessage(payload) }
@@ -298,8 +302,44 @@ function meldeNativeSpeicherung(ok) {
     rueckruf(ok)
   }
 }
-window.__nativeSaveOk__ = function () { meldeNativeSpeicherung(true) }
+
+// Bewusstes Speichern am Plausibilitätstor der Hülle vorbei — nur nach
+// ausdrücklicher Bestätigung. Die Hülle sichert vorher den Altbestand.
+function persistErzwingen() {
+  const payload = baueSpeicherlast()
+  const kanal = NATIVE && (window.webkit.messageHandlers.ersetzen || window.webkit.messageHandlers.store)
+  if (!kanal) return
+  ackPending = true
+  try { kanal.postMessage(payload) }
+  catch (e) { ackPending = false; setSaveState('error') }
+}
+
+let rejectedRueckfrageOffen = false
+let rejectedVomNutzerVerneint = false
+
+window.__nativeSaveOk__ = function () {
+  rejectedVomNutzerVerneint = false
+  meldeNativeSpeicherung(true)
+}
 window.__nativeSaveFail__ = function () { meldeNativeSpeicherung(false) }
+
+// Die Hülle hat einen ungewöhnlich kleinen Stand abgewiesen (und beiseitegelegt).
+// Meist ist das ein Fehler — aber nach dem Löschen großer Texte kann es Absicht
+// sein, darum einmal nachfragen statt still in der Sackgasse stehen.
+window.__nativeSaveRejected__ = function () {
+  meldeNativeSpeicherung(false)
+  if (rejectedRueckfrageOffen || rejectedVomNutzerVerneint) return
+  rejectedRueckfrageOffen = true
+  setTimeout(() => {
+    const trotzdem = window.confirm(
+      'Onda wollte gerade deutlich weniger speichern, als bisher vorhanden ist — '
+      + 'das passiert nach dem Löschen großer Texte, kann aber auch ein Fehler sein. '
+      + 'Zur Sicherheit wurde nichts überschrieben.\n\nJetzt trotzdem speichern?')
+    rejectedRueckfrageOffen = false
+    if (trotzdem) persistErzwingen()
+    else rejectedVomNutzerVerneint = true
+  }, 0)
+}
 
 function speichereProbeZustand() {
   return new Promise(resolve => {
@@ -533,7 +573,11 @@ function replacePersistedState(nextState) {
   replacingPersistedState = true
   const payload = JSON.stringify(nextState)
   if (NATIVE) {
-    window.webkit.messageHandlers.store.postMessage(payload)
+    // Über den Ersetzen-Kanal: Import und „Alle Daten löschen" sind Absicht,
+    // das Plausibilitätstor der Hülle darf sie nicht abweisen. Die Hülle
+    // sichert den Altbestand vorher als datierte Generation.
+    const kanal = window.webkit.messageHandlers.ersetzen || window.webkit.messageHandlers.store
+    kanal.postMessage(payload)
     window.__NATIVE_DATA__ = nextState
   } else {
     localStorage.setItem('aiwt.v2', payload)
