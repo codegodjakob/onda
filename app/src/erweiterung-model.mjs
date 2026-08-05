@@ -38,13 +38,27 @@ export const ART_ERKLAERUNG = Object.freeze({
 
 const ZUSTAENDE = new Set(['neu', 'gemerkt', 'weg'])
 
+// Eine Stelle liegt entweder im offenen Text oder in einem anderen Text desselben Projekts.
+// Die beiden Faelle unterscheiden sich in genau zwei Feldern:
+//   - offener Text: blockId zeigt auf den Baustein, docId ist null,
+//   - fremder Text: docId nennt das Dokument, blockId ist null (die Bausteinkennung eines
+//     fremden Textes gaebe es im offenen Editor nicht — siehe fremdeStelle).
+// docTitel ist eine Momentaufnahme des Titels. Sie kostet ein paar Zeichen und macht die
+// gespeicherte Stelle selbsterklaerend, auch wenn das Dokument spaeter umbenannt oder
+// geloescht wird. Ohne sie waere von einer weggeworfenen Verbindung nur eine Kennung uebrig,
+// die auf nichts mehr zeigt.
 function sichereStelle(rohe) {
   if (!rohe || typeof rohe !== 'object') return null
   const text = String(rohe.text || '')
   if (!text) return null
   const index = Number.isInteger(rohe.index) && rohe.index >= 0 ? rohe.index : null
   const laenge = Number.isInteger(rohe.laenge) && rohe.laenge > 0 ? rohe.laenge : text.length
-  return { text, index, laenge, blockId: rohe.blockId || null }
+  const docId = String(rohe.docId || '') || null
+  // Fail-closed gegen einen beschaedigten Speicher: eine Stelle, die zugleich einen fremden
+  // Text und einen Baustein des offenen nennt, ist beides nicht. Der fremde Text gewinnt,
+  // der Baustein faellt weg — sonst entstuende ein Knopf, der ins Leere spraenge.
+  const blockId = docId ? null : (rohe.blockId || null)
+  return { text, index, laenge, blockId, docId, docTitel: String(rohe.docTitel || '') }
 }
 
 // Selbstheilung wie ensureReasoningModel: ein beschaedigtes oder aelteres Dokument

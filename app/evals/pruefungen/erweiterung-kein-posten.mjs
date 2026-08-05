@@ -92,21 +92,34 @@ if (leereQueue.pendingCount !== 0 || leereQueue.current !== null || leereQueue.u
   fehler.push(`Gegenprobe: drei Erweiterungen ohne einen einzigen Hinweis ergeben pendingCount ${leereQueue.pendingCount} statt 0.`)
 }
 
-// --- Teil 2: die Zähl-Anzeigen kennen den Kanal nicht ------------------------
-// Beide Zahlen der Oberfläche (am Coach und an der Randspalte) werden in genau einem
-// Modul gezeichnet. Kommt dort das Wort Erweiterung nicht vor, kann keine Zahl eine
-// Erweiterung meinen.
-const panels = await lies('panels.js')
-if (/erweiterung/i.test(panels)) {
-  fehler.push('src/panels.js: das Modul mit den beiden Zählern kennt den Erweiterungs-Kanal — eine Zahl könnte ihn meinen.')
-}
-for (const zaehler of ['coachBadge', 'laneBadge']) {
-  if (!panels.includes(zaehler)) {
-    fehler.push(`src/panels.js: Zähler ${zaehler} nicht gefunden — die Prüfung misst nicht mehr, was sie messen soll.`)
+// --- Teil 2: die gelieferte Oberfläche kennt keinen Erweiterungs-Zähler ------
+// Bis zum 05.08.2026 prüfte dieser Teil `panels.js` — ein Modul, das nie ausgeliefert
+// wurde. Der Beleg maß Totes: er hätte auch dann bestanden, wenn die echte Oberfläche
+// voller Zähler gewesen wäre. Geprüft wird jetzt die Datei, die die Seitenspalte
+// wirklich zeichnet, und zusätzlich das gebaute Bündel — das ist das, was beim Nutzer
+// ankommt, und es lässt sich nicht durch eine ungenutzte Datei beruhigen.
+const oberflaeche = await lies('workspace.js')
+
+// Die Zähl-Anzeigen der lebenden Oberfläche. Steht in derselben Zeile wie eine dieser
+// Marken das Wort Erweiterung, könnte eine Zahl den zweiten Kanal meinen.
+const ZAEHL_MARKEN = ['onda-badge', 'rail-badge', 'pendingCount', 'Badge']
+for (const zeile of oberflaeche.split('\n')) {
+  if (!ZAEHL_MARKEN.some(marke => zeile.includes(marke))) continue
+  if (/erweiterung/i.test(zeile)) {
+    fehler.push(`src/workspace.js: eine Zähl-Anzeige nennt den Erweiterungs-Kanal — "${zeile.trim().slice(0, 90)}"`)
   }
 }
-if ((panels.match(/pendingCount/g) || []).length < 2) {
-  fehler.push('src/panels.js: die Zähler speisen sich nicht mehr beide aus der Hinweis-Warteschlange.')
+
+// Gegenprobe: gäbe es GAR keine Zähl-Anzeige mehr, prüfte die Schleife oben nichts und
+// wäre stillschweigend grün. Diese Zeile macht daraus einen sichtbaren Fehlschlag.
+if (!ZAEHL_MARKEN.some(marke => oberflaeche.includes(marke))) {
+  fehler.push('src/workspace.js: keine einzige Zähl-Anzeige gefunden — die Prüfung misst nicht mehr, was sie messen soll.')
+}
+
+// Und im ausgelieferten Bündel: der Abschnitt der Seitenspalte trägt keine Zahl.
+const buendel = await lies('../dist/editor.bundle.js').catch(() => '')
+if (buendel && /onda-side-erweiterungen[^"]*"[^)]{0,400}?badge/i.test(buendel)) {
+  fehler.push('dist/editor.bundle.js: der Erweiterungs-Abschnitt trägt im gelieferten Programm ein Abzeichen.')
 }
 
 // --- Teil 3: der Kanal klopft nicht an ---------------------------------------

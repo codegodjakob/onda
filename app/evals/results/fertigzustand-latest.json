@@ -1,19 +1,19 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": "2026-08-04.1",
+  "catalogVersion": "2026-08-05.1",
   "stage": "FERTIGZUSTAND",
   "iteration": 1,
-  "generatedAt": "2026-08-04T23:16:11.082Z",
-  "gitCommit": "a9ea12ec87d0b918e673e2e5b00ffa1d9e01b7aa",
+  "generatedAt": "2026-08-05T15:43:30.821Z",
+  "gitCommit": "edf21e77c2cc1f8ba2f1b9e9bde26613e344685e",
   "rubricScores": {
-    "truth": 4.28,
-    "authorship": 4.28,
-    "usefulness": 4.28,
-    "calm": 4.28,
-    "reliability": 4.28,
-    "access_privacy": 4.28
+    "truth": 4.42,
+    "authorship": 4.42,
+    "usefulness": 4.42,
+    "calm": 4.42,
+    "reliability": 4.42,
+    "access_privacy": 4.42
   },
-  "weightedScore": 4.28,
+  "weightedScore": 4.42,
   "scoreRationale": "Diese Werte sind AUS DER ABDECKUNG ABGELEITET, kein Qualitätsurteil: Anteil der Evals, die in diesem Lauf durch eine frisch ausgeführte Prüfung belegt sind. Der Katalog kennt keine Zuordnung von Evals zu Rubrikdimensionen, deshalb tragen alle sechs denselben Wert. Eine echte Rubrikbewertung verlangt begründete Einschätzung mit Belegen — sie steht aus.",
   "loops": [],
   "evals": [
@@ -1034,6 +1034,344 @@
           "kind": "unit",
           "path": "evals/results/laeufe/test-momente-model-test-mjs.log",
           "command": "node --test test/momente-model.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "KONTEXT-01",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/evals-pruefungen-kontext-alle-kanaele-mjs.log",
+          "command": "node evals/pruefungen/kontext-alle-kanaele.mjs"
+        },
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/test-onda-kontext-test-mjs.log",
+          "command": "node --test test/onda-kontext.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "KONTEXT-02",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/evals-pruefungen-kontext-alle-kanaele-mjs.log",
+          "command": "node evals/pruefungen/kontext-alle-kanaele.mjs"
+        },
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/test-onda-kontext-test-mjs.log",
+          "command": "node --test test/onda-kontext.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "KONTEXT-03",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "unit",
+          "path": "evals/results/laeufe/evals-pruefungen-kontext-alle-kanaele-mjs.log",
+          "command": "node evals/pruefungen/kontext-alle-kanaele.mjs"
+        },
+        {
+          "kind": "unit",
+          "path": "evals/results/laeufe/test-onda-kontext-test-mjs.log",
+          "command": "node --test test/onda-kontext.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "KONTEXT-04",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "unit",
+          "path": "evals/results/laeufe/test-onda-kontext-test-mjs.log",
+          "command": "node --test test/onda-kontext.test.mjs"
+        },
+        {
+          "kind": "unit",
+          "path": "evals/results/laeufe/test-erkanntes-model-test-mjs.log",
+          "command": "node --test test/erkanntes-model.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "KONTEXT-05",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "unit",
+          "path": "evals/results/laeufe/test-onda-kontext-test-mjs.log",
+          "command": "node --test test/onda-kontext.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "KONTEXT-06",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "unit",
+          "path": "evals/results/laeufe/test-onda-kontext-test-mjs.log",
+          "command": "node --test test/onda-kontext.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "MUSTER-01",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/evals-pruefungen-muster-pflicht-mjs.log",
+          "command": "node evals/pruefungen/muster-pflicht.mjs"
+        },
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/test-agent-findings-test-mjs.log",
+          "command": "node --test test/agent-findings.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "MUSTER-02",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "file-inspection",
+          "path": "evals/results/laeufe/evals-pruefungen-muster-pflicht-mjs.log",
+          "command": "node evals/pruefungen/muster-pflicht.mjs"
+        },
+        {
+          "kind": "file-inspection",
+          "path": "evals/results/laeufe/test-agent-tasks-test-mjs.log",
+          "command": "node --test test/agent-tasks.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "MUSTER-03",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "file-inspection",
+          "path": "evals/results/laeufe/evals-pruefungen-muster-pflicht-mjs.log",
+          "command": "node evals/pruefungen/muster-pflicht.mjs"
+        },
+        {
+          "kind": "file-inspection",
+          "path": "evals/results/laeufe/test-agent-prompts-test-mjs.log",
+          "command": "node --test test/agent-prompts.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "MUSTER-04",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "file-inspection",
+          "path": "evals/results/laeufe/evals-pruefungen-muster-pflicht-mjs.log",
+          "command": "node evals/pruefungen/muster-pflicht.mjs"
+        }
+      ]
+    },
+    {
+      "id": "MUSTER-05",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "unit",
+          "path": "evals/results/laeufe/evals-pruefungen-muster-pflicht-mjs.log",
+          "command": "node evals/pruefungen/muster-pflicht.mjs"
+        },
+        {
+          "kind": "unit",
+          "path": "evals/results/laeufe/test-erweiterungslauf-model-test-mjs.log",
+          "command": "node --test test/erweiterungslauf-model.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "TEXTART-01",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/evals-pruefungen-textart-tabelle-mjs.log",
+          "command": "node evals/pruefungen/textart-tabelle.mjs"
+        },
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/test-agent-findings-test-mjs.log",
+          "command": "node --test test/agent-findings.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "TEXTART-02",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "unit",
+          "path": "evals/results/laeufe/evals-pruefungen-textart-tabelle-mjs.log",
+          "command": "node evals/pruefungen/textart-tabelle.mjs"
+        },
+        {
+          "kind": "unit",
+          "path": "evals/results/laeufe/test-textart-regeln-test-mjs.log",
+          "command": "node --test test/textart-regeln.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "TEXTART-03",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "unit",
+          "path": "evals/results/laeufe/evals-pruefungen-textart-tabelle-mjs.log",
+          "command": "node evals/pruefungen/textart-tabelle.mjs"
+        },
+        {
+          "kind": "unit",
+          "path": "evals/results/laeufe/test-textart-regeln-test-mjs.log",
+          "command": "node --test test/textart-regeln.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "TEXTART-04",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "file-inspection",
+          "path": "evals/results/laeufe/evals-pruefungen-textart-tabelle-mjs.log",
+          "command": "node evals/pruefungen/textart-tabelle.mjs"
+        },
+        {
+          "kind": "file-inspection",
+          "path": "evals/results/laeufe/test-textart-regeln-test-mjs.log",
+          "command": "node --test test/textart-regeln.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "TEXTART-05",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "file-inspection",
+          "path": "evals/results/laeufe/evals-pruefungen-textart-tabelle-mjs.log",
+          "command": "node evals/pruefungen/textart-tabelle.mjs"
+        },
+        {
+          "kind": "file-inspection",
+          "path": "evals/results/laeufe/test-textart-regeln-test-mjs.log",
+          "command": "node --test test/textart-regeln.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "TEXTART-06",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/evals-pruefungen-textart-tabelle-mjs.log",
+          "command": "node evals/pruefungen/textart-tabelle.mjs"
+        },
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/test-hinweislauf-model-test-mjs.log",
+          "command": "node --test test/hinweislauf-model.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "PERSON-01",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/evals-pruefungen-person-speicher-mjs.log",
+          "command": "node evals/pruefungen/person-speicher.mjs"
+        },
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/test-erkanntes-model-test-mjs.log",
+          "command": "node --test test/erkanntes-model.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "PERSON-02",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "file-inspection",
+          "path": "evals/results/laeufe/evals-pruefungen-person-speicher-mjs.log",
+          "command": "node evals/pruefungen/person-speicher.mjs"
+        }
+      ]
+    },
+    {
+      "id": "PERSON-03",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/evals-pruefungen-person-speicher-mjs.log",
+          "command": "node evals/pruefungen/person-speicher.mjs"
+        },
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/test-erkanntes-model-test-mjs.log",
+          "command": "node --test test/erkanntes-model.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "PERSON-04",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "unit",
+          "path": "evals/results/laeufe/test-erkanntes-model-test-mjs.log",
+          "command": "node --test test/erkanntes-model.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "PERSON-05",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/evals-pruefungen-person-speicher-mjs.log",
+          "command": "node evals/pruefungen/person-speicher.mjs"
+        },
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/test-onda-kontext-test-mjs.log",
+          "command": "node --test test/onda-kontext.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "PERSON-06",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "unit",
+          "path": "evals/results/laeufe/test-erkanntes-model-test-mjs.log",
+          "command": "node --test test/erkanntes-model.test.mjs"
         }
       ]
     }

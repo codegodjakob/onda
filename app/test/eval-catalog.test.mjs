@@ -29,13 +29,13 @@ test('V2-Eval-Katalog lädt reproduzierbar und enthält den vollständigen Zielu
   const zusammenfassung = summarisiereEvalKatalog(katalog)
 
   assert.deepEqual(zusammenfassung, {
-    suites: 13,
-    evals: 95,
-    hardGates: 87,
+    suites: 17,
+    evals: 118,
+    hardGates: 110,
     scoredGates: 8,
     externalLiveGates: 6,
   })
-  assert.equal(flattenEvals(katalog).length, 95)
+  assert.equal(flattenEvals(katalog).length, 118)
 })
 
 test('V2-Eval-Katalog erfüllt alle Struktur- und Konsistenzregeln', async () => {
@@ -70,7 +70,7 @@ test('der rohe JSON-Katalog enthält keine doppelten Given/When/Then-Schlüssel 
   const roh = await readFile(KATALOG_PFAD, 'utf8')
   const evalObjekte = roh.split(/\n        \{\n          "id": "/).slice(1)
 
-  assert.equal(evalObjekte.length, 95)
+  assert.equal(evalObjekte.length, 118)
   for (const [index, ausschnitt] of evalObjekte.entries()) {
     const objekt = ausschnitt.split(/\n        \}(?:,|\n)/, 1)[0]
     for (const schluessel of ['given', 'when', 'then']) {
@@ -141,9 +141,9 @@ test('Eval-CLI prüft den Katalog und liefert eine maschinenlesbare Zusammenfass
 
   assert.equal(bericht.valid, true)
   assert.deepEqual(bericht.catalog, {
-    suites: 13,
-    evals: 95,
-    hardGates: 87,
+    suites: 17,
+    evals: 118,
+    hardGates: 110,
     scoredGates: 8,
     externalLiveGates: 6,
   })

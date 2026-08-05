@@ -3,6 +3,7 @@
 // Werte und uebernimmt das Ergebnis.
 import { findeAnker } from './anchor-verify.mjs'
 import { baueErweiterungKontext } from './erweiterung-kontext.mjs'
+import { baueNachbartexte } from './onda-kontext.mjs'
 import { blockFuerAnkerIndex } from './agent-findings.mjs'
 import { ANKER_ANZAHL, ERWEITERUNGS_ARTEN, fasseErweiterungenZusammen } from './erweiterung-model.mjs'
 
@@ -58,19 +59,103 @@ function einfacherHash(value) {
   return (hash >>> 0).toString(36)
 }
 
-function dedupeSchluessel(art, stellenTexte, gedanke) {
-  const stellen = [...stellenTexte].map(text => text.trim().toLowerCase()).sort().join('|')
+// Der Dedupe-Schluessel traegt seit den Querverbindungen auch die Herkunft jeder Stelle:
+// derselbe Satz kann in zwei Texten desselben Projekts stehen (Zitat, Wiederaufnahme,
+// Kopie eines Kapitels), und dann waeren zwei verschiedene Verbindungen fuer den Dedupe
+// dieselbe. Stellen im offenen Text tragen keine Herkunft — deren Schluessel bleibt damit
+// Zeichen fuer Zeichen derselbe wie vorher, und schon gespeicherte Erweiterungen kommen
+// nicht ploetzlich ein zweites Mal durch.
+function dedupeSchluessel(art, stellen, gedanke) {
+  const teile = [...(stellen || [])]
+    .map(stelle => {
+      const text = String(stelle?.text || '').trim().toLowerCase()
+      const herkunft = String(stelle?.docId || '')
+      return herkunft ? `${herkunft}␟${text}` : text
+    })
+    .sort()
+    .join('|')
   // feld hat keine Stelle — dort traegt der Gedanke selbst den Schluessel, sonst waeren
   // alle feld-Erweiterungen eines Textes fuer den Dedupe dasselbe.
-  const gedankenTeil = stellen ? '' : String(gedanke || '').trim().toLowerCase().slice(0, 120)
-  return `${art}::${stellen}::${gedankenTeil}`
+  const gedankenTeil = teile ? '' : String(gedanke || '').trim().toLowerCase().slice(0, 120)
+  return `${art}::${teile}::${gedankenTeil}`
+}
+
+// Ein Anker in einem FREMDEN Text muss laenger sein als einer im offenen. Grund: der offene
+// Text steht vor der Autorin oder dem Autor, eine kurze Wendung darin ist nachpruefbar. Eine
+// Stelle in einem Text, den niemand offen hat, ist es nicht — und »die Stadt« kommt in jedem
+// zweiten Absatz eines Projekts vor. Vierundzwanzig Zeichen sind grob drei bis vier Woerter:
+// kurz genug fuer eine echte Wendung, lang genug, dass ein Zufallstreffer praktisch ausfaellt.
+export const MIN_FREMD_ANKER_ZEICHEN = 24
+
+function gueltigeSpanne(index, laenge) {
+  return Number.isInteger(index) && index >= 0 && Number.isInteger(laenge) && laenge > 0
+}
+
+// Die Stelle im OFFENEN Text — unveraendert die Regel von vorher.
+function eigeneStelle(anker, docText, blocks) {
+  const treffer = findeAnker(docText, anker)
+  if (!treffer.gefunden) return null
+  const { index, laenge } = treffer
+  if (!gueltigeSpanne(index, laenge)) return null
+  // Der ECHTE Wortlaut aus dem Dokument, nicht die Schreibweise des Modells --
+  // sonst findet die Markierung die Stelle spaeter nicht wieder (Lehre aus H-1).
+  const text = String(docText || '').slice(index, index + laenge)
+  if (!text) return null
+  return { text, index, laenge, blockId: blockFuerAnkerIndex(blocks, index), docId: null, docTitel: '' }
+}
+
+// Die Stelle in einem der anderen Texte desselben Projekts. Der Suchraum wird groesser, die
+// Nachsicht nicht: gefunden heisst weiterhin woertlich gefunden, und zwar in genau EINEM
+// Text. Drei Gruende zu verwerfen, alle fail-closed:
+//   - der Anker steht nirgends: dasselbe Verwerfen wie bisher, nur mit mehr Orten geprueft,
+//   - er steht in mehreren Texten: dann ist unklar, welcher gemeint war — raten waere hier
+//     schlimmer als schweigen, denn die Karte behauptete eine Stelle, die niemand meinte,
+//   - er ist zu kurz (siehe MIN_FREMD_ANKER_ZEICHEN).
+//
+// blockId bleibt bewusst null. Die Seitenspalte macht aus einer Stelle mit blockId einen
+// Knopf, der im GERADE OFFENEN Editor zu diesem Baustein springt (workspace.js). Die
+// Bausteinkennung eines fremden Textes gaebe es dort nicht — der Knopf saehe aus wie ein Weg
+// und fuehrte nirgendwohin. Ohne blockId bleibt er still, und das ist die Wahrheit: die
+// Stelle liegt in einem anderen Text.
+function fremdeStelle(anker, nachbartexte) {
+  if (String(anker || '').trim().length < MIN_FREMD_ANKER_ZEICHEN) return null
+
+  let gefunden = null
+  for (const nachbar of (Array.isArray(nachbartexte) ? nachbartexte : [])) {
+    const volltext = String(nachbar?.volltext || '')
+    const docId = String(nachbar?.docId || '')
+    if (!volltext || !docId) continue
+    const treffer = findeAnker(volltext, anker)
+    if (!treffer.gefunden) continue
+    if (gefunden) return null // mehrdeutig
+    gefunden = { volltext, docId, titel: String(nachbar.titel || ''), ...treffer }
+  }
+  if (!gefunden) return null
+
+  const { index, laenge } = gefunden
+  if (!gueltigeSpanne(index, laenge)) return null
+  const text = gefunden.volltext.slice(index, index + laenge)
+  if (!text) return null
+  // Gespeichert wird die Stelle ueber ihren woertlichen Text plus die Dokumentkennung. Der
+  // Index ist nur ein Hinweis: er zeigt in die Textfassung, aus der er stammt, und der Text
+  // dahinter wird weitergeschrieben. Wiedergefunden wird eine Stelle deshalb wie eine
+  // Fundstelle ueberall sonst im Programm — ueber ihren Wortlaut (resolveFindingPlacement).
+  return { text, index, laenge, blockId: null, docId: gefunden.docId, docTitel: gefunden.titel }
 }
 
 // Wandelt EINE Modellantwort in eine speicherbare Erweiterung um. Fail-closed wie
 // hinweisZuFinding: falsche Ankerzahl, nicht auffindbarer Anker oder leerer Gedanke
 // heisst verwerfen, nie raten. Zwei gleiche Anker bei einer verbindung sind ebenfalls
 // keine Verbindung, sondern ein Modellfehler.
-export function erweiterungAusAntwort(rohe, docText, blocks, jetzt = Date.now()) {
+//
+// nachbartexte sind die anderen Texte desselben Projekts (baueNachbartexte, onda-kontext.mjs)
+// — genau die, die dem Modell im Prompt gezeigt wurden. Ein Anker darf jetzt auch dort liegen.
+// Was dabei NICHT nachgibt:
+//   - ein Anker, den es weder im offenen noch in einem der Nachbartexte gibt, verwirft die
+//     ganze Erweiterung. Der Suchraum ist groesser geworden, die Nachsicht nicht,
+//   - ohne nachbartexte verhaelt sich die Funktion Zeichen fuer Zeichen wie vorher,
+//   - wer ueberhaupt Stellen nennt, muss mindestens eine im offenen Text nennen (siehe unten).
+export function erweiterungAusAntwort(rohe, docText, blocks, jetzt = Date.now(), nachbartexte = []) {
   if (!rohe || typeof rohe !== 'object') return null
   const art = String(rohe.art || '')
   if (!ERWEITERUNGS_ARTEN.includes(art)) return null
@@ -86,20 +171,25 @@ export function erweiterungAusAntwort(rohe, docText, blocks, jetzt = Date.now())
 
   const stellen = []
   for (const anker of roheAnker) {
-    const treffer = findeAnker(docText, anker)
-    if (!treffer.gefunden) return null
-    const { index, laenge } = treffer
-    if (!Number.isInteger(index) || index < 0 || !Number.isInteger(laenge) || laenge <= 0) return null
-    // Der ECHTE Wortlaut aus dem Dokument, nicht die Schreibweise des Modells --
-    // sonst findet die Markierung die Stelle spaeter nicht wieder (Lehre aus H-1).
-    const text = String(docText || '').slice(index, index + laenge)
-    if (!text) return null
-    if (stellen.some(vorher => vorher.index === index)) return null
-    stellen.push({ text, index, laenge, blockId: blockFuerAnkerIndex(blocks, index) })
+    // Der offene Text zuerst: was hier steht, ist die naechstliegende und die pruefbarste
+    // Stelle. Erst wenn er den Anker nicht hat, kommen die Nachbartexte in Frage.
+    const stelle = eigeneStelle(anker, docText, blocks) || fremdeStelle(anker, nachbartexte)
+    if (!stelle) return null
+    // Dieselbe Stelle heisst jetzt: derselbe Text UND derselbe Index. Ohne den Textvergleich
+    // gaelte eine echte Verbindung zwischen Zeichen 40 hier und Zeichen 40 dort als Doppelung.
+    if (stellen.some(vorher => vorher.docId === stelle.docId && vorher.index === stelle.index)) return null
+    stellen.push(stelle)
   }
 
+  // Wer Stellen nennt, muss mindestens eine im offenen Text nennen. Lauter fremde Stellen
+  // waeren eine Beobachtung ueber Texte, die gerade niemand vor sich hat — sie haette in der
+  // Seitenspalte DIESES Textes nichts zu suchen, und jeder ihrer Knoepfe waere still. Der
+  // Kanal weitet den Horizont des offenen Textes; er kommentiert nicht das Projekt von aussen.
+  // feld hat gar keine Stelle und ist davon nicht betroffen (ANKER_ANZAHL.feld === 0).
+  if (stellen.length && !stellen.some(stelle => !stelle.docId)) return null
+
   return {
-    id: `erw-${jetzt.toString(36)}-${einfacherHash(dedupeSchluessel(art, stellen.map(s => s.text), gedanke))}`,
+    id: `erw-${jetzt.toString(36)}-${einfacherHash(dedupeSchluessel(art, stellen, gedanke))}`,
     art,
     status: 'neu',
     gedanke,
@@ -116,28 +206,21 @@ export function verarbeiteErweiterungsantwort({
   blocks,
   bestehende = [],
   jetzt = Date.now(),
+  nachbartexte = [],
 }) {
   const liste = Array.isArray(geliefert) ? geliefert : []
   const bekannt = new Set(
     (bestehende || [])
       .filter(Boolean)
-      .map(eintrag => dedupeSchluessel(
-        eintrag.art,
-        (eintrag.stellen || []).map(stelle => String(stelle.text || '')),
-        eintrag.gedanke,
-      )),
+      .map(eintrag => dedupeSchluessel(eintrag.art, eintrag.stellen || [], eintrag.gedanke)),
   )
 
   const uebernommen = []
   let verworfen = 0
   for (const rohe of liste) {
-    const erweiterung = erweiterungAusAntwort(rohe, docText, blocks, jetzt)
+    const erweiterung = erweiterungAusAntwort(rohe, docText, blocks, jetzt, nachbartexte)
     if (!erweiterung) { verworfen += 1; continue }
-    const schluessel = dedupeSchluessel(
-      erweiterung.art,
-      erweiterung.stellen.map(stelle => stelle.text),
-      erweiterung.gedanke,
-    )
+    const schluessel = dedupeSchluessel(erweiterung.art, erweiterung.stellen, erweiterung.gedanke)
     if (bekannt.has(schluessel)) { verworfen += 1; continue }
     bekannt.add(schluessel)
     uebernommen.push(erweiterung)
@@ -163,6 +246,7 @@ export async function versucheErweiterungslauf({
   verstaendnis,
   blocks,
   doc,
+  onda = null,
   runTask,
   setzeAgentStatus,
 }) {
@@ -183,6 +267,16 @@ export async function versucheErweiterungslauf({
     }
 
     const bestehende = doc?.erweiterungen || []
+    // Dieselbe Liste, die dem Modell im Prompt gezeigt wird, dient hier als Suchraum fuer die
+    // Anker. Sie MUSS aus derselben Quelle stammen: baueNachbartexte ist pur, und der Aufrufer
+    // reicht dasselbe onda-Buendel in beide Richtungen — einmal ueber ergaenzeOndaKontext in
+    // den Prompt, einmal hierher. Zeigte der Prompt eine andere Liste als die Pruefung sucht,
+    // wuerde jede Querverbindung stillschweigend verworfen.
+    //
+    // ACHTUNG: onda gehoert NICHT in baueErweiterungKontext. Der Aufrufer haengt die
+    // Wissensbloecke bereits an der Uebergabestelle zum Gateway an (ergaenzeOndaKontext in
+    // workspace.js); ein zweites Anhaengen hier wuerde jeden Block doppelt bezahlen.
+    const nachbartexte = baueNachbartexte(onda)
     const kontext = baueErweiterungKontext({
       verstaendnis,
       docText,
@@ -193,7 +287,7 @@ export async function versucheErweiterungslauf({
     setzeAgentStatus({ zustand: 'bereit' })
     const jetzt = Date.now()
     const { uebernommen, verworfen, gestartet } = verarbeiteErweiterungsantwort({
-      geliefert: daten?.erweiterungen, docText, blocks, bestehende, jetzt,
+      geliefert: daten?.erweiterungen, docText, blocks, bestehende, jetzt, nachbartexte,
     })
     return { gestartet: true, erfolg: true, uebernommen, verworfen, geliefertAnzahl: gestartet, zeit: jetzt }
   } catch (fehler) {

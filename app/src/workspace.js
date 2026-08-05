@@ -32,6 +32,7 @@ import {
 } from './verstaendnis-interview.mjs'
 import { baueDocText } from './agent-findings.mjs'
 import { pruefePausenAusloeser, versucheHinweislauf } from './hinweislauf-model.mjs'
+import { bilanziereRueckmeldung } from './rueckkopplung-model.mjs'
 import { darfAutomatischLaufen, versucheErweiterungslauf } from './erweiterungslauf-model.mjs'
 import {
   ART_ERKLAERUNG,
@@ -663,11 +664,23 @@ function erweiterungAnriss(text) {
 }
 
 function erweiterungStelleNode(erweiterung, stelle, index) {
-  const label = erweiterung.art === 'verbindung'
+  // Eine Stelle liegt entweder im offenen Text oder in einem anderen Text desselben
+  // Projekts (erweiterung-model.mjs). Der zweite Fall traegt einen docTitel und KEINE
+  // blockId -- der Knopf kann dort nicht hinspringen, weil der Baustein im gerade
+  // offenen Editor nicht existiert. Ohne den Titel stuende dort ein stiller Knopf mit
+  // einem Zitat, das im sichtbaren Text nirgends vorkommt: die Karte saehe kaputt aus,
+  // obwohl sie recht hat. Der Titel ist die Erklaerung dafuer.
+  const ausFremdemText = Boolean(stelle.docId)
+  const grundLabel = erweiterung.art === 'verbindung'
     ? (index === 0 ? 'Erste Stelle' : 'Zweite Stelle')
     : 'Zur Stelle'
+  const label = ausFremdemText
+    ? `${grundLabel} — aus „${stelle.docTitel || 'einem anderen Text'}“`
+    : grundLabel
+
   const knopf = createNode('button', 'onda-erw-stelle')
   knopf.type = 'button'
+  if (ausFremdemText) knopf.classList.add('is-fremd')
   knopf.append(
     createNode('span', 'onda-erw-stelle-label', label),
     createNode('span', 'onda-erw-stelle-zitat', erweiterungAnriss(stelle.text) || stelle.text),
@@ -1547,8 +1560,20 @@ function ensureInterviewMessage(workspace, project) {
 
 // Sammelt die Quellen, aus denen onda-kontext.mjs seine Wissensbloecke baut: Textsorte und
 // Stilprofil (project.languageProfile), den dokumentuebergreifenden Aussagen-Speicher
-// (project.argumentModel) und das Gedaechtnis (state.memoryStore). Rein lesend und synchron —
-// die Bloecke selbst entstehen erst im Kontext-Bauer, ohne DOM und ohne Uhr.
+// (project.argumentModel), die anderen Texte desselben Projekts (state.docs) und das
+// Gedaechtnis (state.memoryStore). Rein lesend und synchron — die Bloecke selbst entstehen
+// erst im Kontext-Bauer, ohne DOM und ohne Uhr.
+//
+// docs traegt die VOLLSTAENDIGEN Dokumente, nicht nur Kennung und Titel. Das ist kein
+// Versehen und darf nicht "aufgeraeumt" werden: onda-kontext.mjs baut daraus die
+// Geschwistertexte (baueNachbartexte) und liest dafuer doc.body, doc.updated und
+// doc.trashed. Ohne den Koerper saehe jede Anfrage weiterhin genau ein Dokument, und eine
+// Querverbindung zwischen zwei Texten waere nicht bloss ungebaut, sondern unmoeglich.
+// Gekostet wird davon nichts: welcher Teil eines Nachbartextes in den Prompt geraet und wie
+// viel, entscheidet allein die Obergrenze in onda-kontext.mjs.
+//
+// Gefiltert wird dort, nicht hier: state.docs enthaelt die Texte ALLER Projekte samt
+// Papierkorb, und die Auswahl gehoert in die pure, node-getestete Funktion.
 function ondaQuellen(doc = ctx?.activeDoc(), project = dokumentProjekt(doc)) {
   if (!project) return null
   return {
@@ -3356,6 +3381,12 @@ function istBeispielDokument(doc) {
   return doc?.projectId === EXAMPLE_PROJECT_ID
 }
 
+// Das Laufprotokoll traegt zweierlei: die Werte des LETZTEN Laufs (gestartet/verworfen/
+// uebernommen -- die ueberschreibt jeder neue Lauf, so war es immer) und daneben die
+// Summen ueber ALLE Laeufe dieses Dokuments. Die Summen sind neu und der Grund, warum es
+// dieses Protokoll ueberhaupt gibt: Bisher schrieb Onda seine eigene Trefferquote mit und
+// las davon nur die Signatur zur Entprellung. bilanziereRueckmeldung
+// (rueckkopplung-model.mjs) wertet sie jetzt aus -- siehe rueckkopplungsDaten unten.
 function hinweislaufProtokoll(workspace) {
   if (!workspace.hinweislauf || typeof workspace.hinweislauf !== 'object') {
     workspace.hinweislauf = {
@@ -3365,9 +3396,30 @@ function hinweislaufProtokoll(workspace) {
       verworfen: 0,
       uebernommen: 0,
       fehler: null,
+      laeufe: 0,
+      summeGeliefert: 0,
+      summeVerworfen: 0,
+      summeUebernommen: 0,
     }
   }
   return workspace.hinweislauf
+}
+
+// Was Onda ueber die eigene Trefferquote weiss -- ueber ALLE eigenen Dokumente hinweg.
+//
+// Das Beispielprojekt bleibt bewusst draussen: Seine Hinweise sind vorgefertigt und seine
+// Entscheidungen sind Probeklicks in einer Vorfuehrung. Sie als Vorlieben dieser Person zu
+// lesen, waere schlicht falsch -- dieselbe Grenze, die schon istBeispielDokument im Gate
+// zieht. Dokumente ohne Arbeitsflaeche (workspace) liefern nur ihre Findings; ein fehlendes
+// Protokoll ist kein Fehler, sondern ein Dokument, in dem noch kein Lauf stattfand.
+function rueckkopplungsDaten() {
+  return (ctx?.state?.docs || [])
+    .filter(doc => doc && doc.projectId !== EXAMPLE_PROJECT_ID)
+    .map(doc => ({
+      findings: doc.findings,
+      decisions: doc.decisions,
+      hinweislauf: doc.workspace?.hinweislauf || null,
+    }))
 }
 
 // Echte Initiative-Quelle: nach einem Lauf mit Grundursache oder Integritätsthema
@@ -3417,6 +3469,9 @@ async function fuehreHinweislaufAus({ grund = 'pause' } = {}) {
   const verstaendnis = project ? ensureProjectUnderstanding(project) : null
   // Wie alle anderen Werte hier SYNCHRON vor dem Aufruf eingesammelt (Fix-Runde 1, Finding 2).
   const ondaWissen = ondaQuellen(doc, project)
+  // Die Rueckkopplung: was bei dieser Person bisher getragen hat. Dokumentuebergreifend --
+  // deshalb hier und nicht in versucheHinweislauf, das nur das aktuelle Dokument sieht.
+  const rueckkopplung = bilanziereRueckmeldung({ dokumente: rueckkopplungsDaten() })
 
   const ergebnis = await versucheHinweislauf({
     hatDokument: Boolean(doc && workspace),
@@ -3448,6 +3503,7 @@ async function fuehreHinweislaufAus({ grund = 'pause' } = {}) {
     // Frage der Wahrhaftigkeit, und ihr Verwerfen kein "bewusst angenommenes Risiko".
     // Fehlt das Profil, bleibt es beim vorsichtigen Fall: alle vier binden.
     textart: project?.languageProfile?.genre || '',
+    rueckkopplung,
     // Textsorte, Aussagen-Speicher und Gedaechtnis (onda-kontext.mjs) kommen hier eine Ebene
     // spaeter dazu als bei Interview und Chat: den Kontext dieses Kanals baut
     // versucheHinweislauf selbst (hinweislauf-model.mjs), und diese Datei kann ihm nichts
@@ -3485,6 +3541,14 @@ async function fuehreHinweislaufAus({ grund = 'pause' } = {}) {
     verworfen: ergebnis.verworfen,
     uebernommen: ergebnis.uebernommen.length,
     fehler: null,
+    // Die Summen daneben, damit die Trefferquote nicht bei jedem Lauf vergessen wird.
+    // Vorher standen hier nur die drei Werte des letzten Laufs, und jeder neue Lauf
+    // ueberschrieb sie: Das Protokoll war eine Momentaufnahme, aus der sich nichts
+    // ableiten liess. `|| 0` faengt alte, gespeicherte Arbeitsflaechen ohne diese Felder ab.
+    laeufe: (Number(protokoll.laeufe) || 0) + 1,
+    summeGeliefert: (Number(protokoll.summeGeliefert) || 0) + ergebnis.geliefertAnzahl,
+    summeVerworfen: (Number(protokoll.summeVerworfen) || 0) + ergebnis.verworfen,
+    summeUebernommen: (Number(protokoll.summeUebernommen) || 0) + ergebnis.uebernommen.length,
   })
   const initiativeAnlass = ergebnis.grundursache
     || ergebnis.uebernommen.find(finding => isIntegrityCategory(finding.category))
@@ -3528,6 +3592,13 @@ async function fuehreErweiterungslaufAus({ vonHand = false } = {}) {
     verstaendnis,
     blocks,
     doc,
+    // Dasselbe Buendel zweimal, mit Absicht und in beide Richtungen:
+    //   - hier als onda, damit versucheErweiterungslauf daraus die Geschwistertexte ableitet
+    //     und einen Anker, der in einem von ihnen steht, wiederfindet statt ihn zu verwerfen,
+    //   - unten im runTask-Umschlag, damit dieselben Texte auch im Prompt stehen.
+    // Beides muss aus DERSELBEN Quelle kommen: sonst zeigte der Prompt andere Texte, als die
+    // Pruefung durchsucht, und jede Querverbindung fiele stillschweigend heraus.
+    onda: ondaWissen,
     // Dieselbe Klammer wie im Hinweislauf: den Kontext baut versucheErweiterungslauf selbst
     // (erweiterungslauf-model.mjs), die Wissensbloecke kommen an der Uebergabestelle zum
     // Gateway hinten an die volatiles. Fuer diesen Kanal ist vor allem der Aussagen-Speicher

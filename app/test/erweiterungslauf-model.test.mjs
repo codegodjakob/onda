@@ -2,12 +2,14 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   MINDESTZEICHEN,
+  MIN_FREMD_ANKER_ZEICHEN,
   darfAutomatischLaufen,
   erweiterungAusAntwort,
   pruefeErweiterungslaufGate,
   verarbeiteErweiterungsantwort,
   versucheErweiterungslauf,
 } from '../src/erweiterungslauf-model.mjs'
+import { baueNachbartexte, ergaenzeOndaKontext } from '../src/onda-kontext.mjs'
 import {
   ANKER_ANZAHL,
   ensureErweiterungen,
@@ -19,6 +21,35 @@ import {
 
 const LANGER_TEXT = 'Die Stadt wuchs schneller als ihre Leitungen. '.repeat(12)
 const BLOCKS = [{ id: 'b1', text: LANGER_TEXT }]
+
+// ---- Die anderen Texte desselben Projekts ------------------------------------
+// Die Nachbartexte kommen aus derselben Funktion wie im Prompt (baueNachbartexte,
+// onda-kontext.mjs) und nicht aus handgeschriebenen Objekten: eine Testfassung, die anders
+// aussieht als das, was der Prompt zeigt, bliebe gruen, waehrend die Verankerung im Betrieb
+// jede Querverbindung verwuerfe.
+const PROJEKT_ID = 'projekt-onda'
+const OFFENER_TEXT = { id: 'doc-offen', title: 'Kapitel 1' }
+
+function nachbarn(...koerper) {
+  return baueNachbartexte({
+    project: { id: PROJEKT_ID },
+    doc: OFFENER_TEXT,
+    docs: koerper.map((eintrag, index) => ({
+      id: eintrag.id || `doc-nachbar-${index}`,
+      title: eintrag.title || `Kapitel ${index + 2}`,
+      projectId: PROJEKT_ID,
+      updated: 1000 - index, // stabile Reihenfolge: der erste bleibt der erste
+      body: eintrag.body,
+    })),
+  })
+}
+
+const WASSER_TEXT = '<h2>Das Wassernetz</h2><p>Die Instandhaltung der Leitungen wurde über '
+  + 'Jahrzehnte aufgeschoben, weil niemand sie sah.</p><p>Erst der Rohrbruch machte sie zum '
+  + 'Thema einer Ratssitzung.</p>'
+const HAUSHALT_TEXT = '<h2>Der Haushalt</h2><p>Jede Investition in Sichtbares schlägt eine in '
+  + 'Unsichtbares, solange nur Sichtbares gewählt wird.</p><p>Das gilt für Brücken so wie für '
+  + 'Leitungen und für Personal.</p>'
 
 function gate(overrides = {}) {
   return pruefeErweiterungslaufGate({
@@ -177,6 +208,184 @@ test('ANKER_ANZAHL deckt genau die drei Arten ab', () => {
   assert.deepEqual(Object.keys(ANKER_ANZAHL).sort(), ['feld', 'verbindung', 'weiterfuehrung'])
 })
 
+// ---- Verankerung ueber Textgrenzen hinweg ------------------------------------
+// Der Widerspruch, den dieser Abschnitt aufloest: dieselbe Regel, die die Qualitaet sichert
+// (kein Anker, kein Eintrag), machte Querverbindungen unmoeglich. Aufgeloest wird er nicht,
+// indem die Regel nachgibt, sondern indem der SUCHRAUM waechst — um die anderen Texte
+// desselben Projekts und um keinen Zeichen mehr.
+
+test('eine Verbindung darf ihr zweites Ende in einem anderen Text des Projekts haben', () => {
+  const eintrag = erweiterungAusAntwort({
+    art: 'verbindung',
+    anker: [
+      'wuchs schneller als ihre Leitungen',
+      'Die Instandhaltung der Leitungen wurde über Jahrzehnte aufgeschoben',
+    ],
+    gedanke: 'Dein Text erzählt das Wachstum, der andere die Vernachlässigung — es ist dieselbe Sache.',
+    muster: 'Wo ein Text ein Tempo beschreibt, beschreibt ein anderer oft dessen Preis.',
+  }, LANGER_TEXT, BLOCKS, 1000, nachbarn({ id: 'doc-wasser', title: 'Das Wassernetz', body: WASSER_TEXT }))
+
+  assert.ok(eintrag, 'die Verbindung haette durchkommen muessen')
+  assert.equal(eintrag.stellen.length, 2)
+  assert.equal(eintrag.stellen[0].docId, null, 'die erste Stelle liegt im offenen Text')
+  assert.equal(eintrag.stellen[0].blockId, 'b1')
+  assert.equal(eintrag.stellen[1].docId, 'doc-wasser', 'die zweite Stelle nennt ihr Dokument')
+  assert.equal(eintrag.stellen[1].docTitel, 'Das Wassernetz')
+  assert.equal(eintrag.stellen[1].blockId, null, 'ein fremder Baustein waere ein Knopf ins Leere')
+  assert.match(eintrag.stellen[1].text, /Instandhaltung der Leitungen/)
+})
+
+// DIE Sicherung. Sie darf durch nichts von alledem weicher werden.
+test('ein erfundener Anker wird auch mit Nachbartexten verworfen', () => {
+  const erfunden = {
+    art: 'verbindung',
+    anker: ['wuchs schneller als ihre Leitungen', 'Dieser Satz steht in keinem einzigen Text'],
+    gedanke: 'Etwas.',
+    muster: 'Etwas.',
+  }
+  assert.equal(
+    erweiterungAusAntwort(erfunden, LANGER_TEXT, BLOCKS, 1000, nachbarn(
+      { body: WASSER_TEXT },
+      { body: HAUSHALT_TEXT },
+    )),
+    null,
+  )
+  // ... und ebenso, wenn gar keine Nachbartexte da sind
+  assert.equal(erweiterungAusAntwort(erfunden, LANGER_TEXT, BLOCKS, 1000, []), null)
+})
+
+test('ein Anker, der in ZWEI Nachbartexten steht, ist mehrdeutig und wird verworfen', () => {
+  const doppelt = 'Leitungen und Personal muessen ueber Jahrzehnte erhalten werden.'
+  const eintrag = erweiterungAusAntwort({
+    art: 'verbindung',
+    anker: ['wuchs schneller als ihre Leitungen', doppelt],
+    gedanke: 'Etwas.',
+    muster: 'Etwas.',
+  }, LANGER_TEXT, BLOCKS, 1000, nachbarn(
+    { body: `<p>${doppelt}</p><p>Und noch ein Absatz, damit der Text lang genug ist zum Mitschicken.</p>` },
+    { body: `<p>${doppelt}</p><p>Auch dieser Text braucht Laenge, sonst zaehlt er gar nicht mit.</p>` },
+  ))
+  assert.equal(eintrag, null, 'welcher Text gemeint war, ist unklar — raten waere schlimmer als schweigen')
+})
+
+test('ein zu kurzer Anker taugt in einem fremden Text nicht', () => {
+  const kurz = 'Das Wassernetz'
+  assert.ok(kurz.length < MIN_FREMD_ANKER_ZEICHEN)
+  const eintrag = erweiterungAusAntwort({
+    art: 'verbindung',
+    anker: ['wuchs schneller als ihre Leitungen', kurz],
+    gedanke: 'Etwas.',
+    muster: 'Etwas.',
+  }, LANGER_TEXT, BLOCKS, 1000, nachbarn({ body: WASSER_TEXT }))
+  assert.equal(eintrag, null, 'eine Wendung aus zwei Woertern zeigt in einem ungeoeffneten Text nirgendwohin')
+})
+
+test('lauter fremde Stellen sind keine Erweiterung DIESES Textes', () => {
+  const beideFremd = erweiterungAusAntwort({
+    art: 'verbindung',
+    anker: [
+      'Die Instandhaltung der Leitungen wurde über Jahrzehnte aufgeschoben',
+      'Jede Investition in Sichtbares schlägt eine in Unsichtbares',
+    ],
+    gedanke: 'Etwas.',
+    muster: 'Etwas.',
+  }, LANGER_TEXT, BLOCKS, 1000, nachbarn({ body: WASSER_TEXT }, { body: HAUSHALT_TEXT }))
+  assert.equal(beideFremd, null)
+
+  const weiterfuehrungFremd = erweiterungAusAntwort({
+    art: 'weiterfuehrung',
+    anker: ['Die Instandhaltung der Leitungen wurde über Jahrzehnte aufgeschoben'],
+    gedanke: 'Etwas.',
+    muster: 'Etwas.',
+  }, LANGER_TEXT, BLOCKS, 1000, nachbarn({ body: WASSER_TEXT }))
+  assert.equal(weiterfuehrungFremd, null, 'eine Weiterfuehrung fuehrt den OFFENEN Text weiter')
+})
+
+test('feld bleibt ohne Anker — auch die Nachbartexte aendern daran nichts', () => {
+  const eintrag = erweiterungAusAntwort({
+    art: 'feld',
+    anker: ['Die Instandhaltung der Leitungen wurde über Jahrzehnte aufgeschoben'],
+    gedanke: 'Etwas.',
+    muster: 'Etwas.',
+  }, LANGER_TEXT, BLOCKS, 1000, nachbarn({ body: WASSER_TEXT }))
+  assert.equal(eintrag, null)
+})
+
+test('ohne Nachbartexte verhaelt sich die Verankerung genau wie vorher', () => {
+  const rohe = {
+    art: 'verbindung',
+    anker: ['Die Stadt wuchs schneller', 'als ihre Leitungen'],
+    gedanke: 'Etwas.',
+    muster: 'Etwas.',
+  }
+  const ohne = erweiterungAusAntwort(rohe, LANGER_TEXT, BLOCKS, 1000)
+  const leer = erweiterungAusAntwort(rohe, LANGER_TEXT, BLOCKS, 1000, [])
+  assert.deepEqual(JSON.parse(JSON.stringify(ohne)), JSON.parse(JSON.stringify(leer)))
+  assert.equal(ohne.stellen.every(stelle => stelle.docId === null), true)
+})
+
+test('derselbe Satz in zwei Texten ist nicht dieselbe Verbindung', () => {
+  const satz = 'Die Instandhaltung der Leitungen wurde über Jahrzehnte aufgeschoben'
+  const zweiTexte = nachbarn(
+    { id: 'doc-a', body: WASSER_TEXT },
+    { id: 'doc-b', body: `<h2>Anderswo</h2><p>${satz}, sagte sie noch einmal.</p><p>Ein zweiter Absatz gibt dem Text Laenge.</p>` },
+  )
+  const ausA = erweiterungAusAntwort({
+    art: 'verbindung', anker: ['wuchs schneller als ihre Leitungen', satz], gedanke: 'g', muster: 'm',
+  }, LANGER_TEXT, BLOCKS, 1000, [zweiTexte[0]])
+  const ausB = erweiterungAusAntwort({
+    art: 'verbindung', anker: ['wuchs schneller als ihre Leitungen', satz], gedanke: 'g', muster: 'm',
+  }, LANGER_TEXT, BLOCKS, 1000, [zweiTexte[1]])
+
+  assert.equal(ausA.stellen[1].docId, 'doc-a')
+  assert.equal(ausB.stellen[1].docId, 'doc-b')
+  assert.notEqual(ausA.id, ausB.id, 'ohne die Herkunft im Schluessel waere die zweite eine Doppelung')
+
+  const ergebnis = verarbeiteErweiterungsantwort({
+    geliefert: [{ art: 'verbindung', anker: ['wuchs schneller als ihre Leitungen', satz], gedanke: 'g', muster: 'm' }],
+    docText: LANGER_TEXT,
+    blocks: BLOCKS,
+    bestehende: [ausA],
+    nachbartexte: [zweiTexte[1]],
+    jetzt: 2000,
+  })
+  assert.equal(ergebnis.uebernommen.length, 1, 'dieselbe Wendung in einem ANDEREN Text ist ein anderer Fund')
+})
+
+test('eine gespeicherte fremde Stelle ueberlebt das Neuladen', () => {
+  const eintrag = erweiterungAusAntwort({
+    art: 'verbindung',
+    anker: ['wuchs schneller als ihre Leitungen', 'Die Instandhaltung der Leitungen wurde über Jahrzehnte aufgeschoben'],
+    gedanke: 'g',
+    muster: 'm',
+  }, LANGER_TEXT, BLOCKS, 1000, nachbarn({ id: 'doc-wasser', title: 'Das Wassernetz', body: WASSER_TEXT }))
+
+  const doc = { erweiterungen: JSON.parse(JSON.stringify([eintrag])) }
+  ensureErweiterungen(doc)
+  const [wieder] = doc.erweiterungen
+  assert.equal(wieder.stellen[1].docId, 'doc-wasser')
+  assert.equal(wieder.stellen[1].docTitel, 'Das Wassernetz')
+  assert.equal(wieder.stellen[1].blockId, null)
+  assert.equal(wieder.stellen[0].docId, null)
+  assert.equal(wieder.stellen[0].blockId, 'b1')
+})
+
+test('eine beschaedigte Stelle mit Dokument UND Baustein verliert den Baustein', () => {
+  const doc = {
+    erweiterungen: [{
+      id: 'e1',
+      art: 'weiterfuehrung',
+      stellen: [{ text: 'irgendetwas', index: 0, laenge: 11, blockId: 'b1', docId: 'doc-fremd' }],
+      gedanke: 'g',
+      muster: 'm',
+      createdAt: 1,
+    }],
+  }
+  ensureErweiterungen(doc)
+  assert.equal(doc.erweiterungen[0].stellen[0].blockId, null, 'sonst spraenge der Knopf ins Leere')
+  assert.equal(doc.erweiterungen[0].stellen[0].docId, 'doc-fremd')
+})
+
 // ---- Verarbeitung ------------------------------------------------------------
 
 test('Verarbeitung zaehlt Uebernommenes und Verworfenes getrennt', () => {
@@ -326,6 +535,69 @@ test('Lauf: erreichte Monatsgrenze verhindert den Lauf', async () => {
   const ergebnis = await versucheErweiterungslauf(optionen)
   assert.equal(ergebnis.grund, 'monatsbudget-erreicht')
   assert.ok(!aufrufe.some(eintrag => eintrag.startsWith('runTask')))
+})
+
+// Der ganze Weg, so wie ihn workspace.js geht: dasselbe onda-Buendel einmal in den Prompt
+// (ergaenzeOndaKontext im runTask-Umschlag) und einmal in die Pruefung (onda). Weichen die
+// beiden Listen voneinander ab, zitiert das Modell aus der einen und die Pruefung sucht in
+// der anderen — jede Querverbindung fiele stillschweigend heraus, und niemand fande heraus,
+// warum. Dieser Test faengt genau das.
+test('Lauf: eine Querverbindung geht durch, und der Prompt zeigt genau das, was geprueft wird', async () => {
+  const ondaWissen = {
+    project: { id: PROJEKT_ID },
+    doc: OFFENER_TEXT,
+    docs: [{
+      id: 'doc-wasser',
+      title: 'Das Wassernetz',
+      projectId: PROJEKT_ID,
+      updated: 9000,
+      body: WASSER_TEXT,
+    }],
+  }
+  const anker = 'Die Instandhaltung der Leitungen wurde über Jahrzehnte aufgeschoben'
+  let gesehenerPrompt = ''
+
+  const { optionen } = laufBausteine({
+    onda: ondaWissen,
+    runTask: async (task, kontext) => {
+      gesehenerPrompt = ergaenzeOndaKontext(kontext, ondaWissen).volatiles.join('\n')
+      return {
+        daten: {
+          erweiterungen: [{
+            art: 'verbindung',
+            anker: ['wuchs schneller als ihre Leitungen', anker],
+            gedanke: 'Dein Wachstum und die aufgeschobene Instandhaltung sind dieselbe Rechnung.',
+            muster: 'Wo ein Text ein Tempo feiert, nennt ein anderer dessen Rechnung.',
+          }],
+        },
+      }
+    },
+  })
+
+  const ergebnis = await versucheErweiterungslauf(optionen)
+  assert.equal(ergebnis.erfolg, true)
+  assert.equal(ergebnis.verworfen, 0, 'die Verbindung haette nicht verworfen werden duerfen')
+  assert.equal(ergebnis.uebernommen.length, 1)
+  assert.equal(ergebnis.uebernommen[0].stellen[1].docId, 'doc-wasser')
+  assert.ok(gesehenerPrompt.includes(anker), 'das Modell muss den Anker im Prompt gesehen haben')
+})
+
+test('Lauf: ohne onda bleibt alles beim Alten — ein fremder Anker wird verworfen', async () => {
+  const { optionen } = laufBausteine({
+    runTask: async () => ({
+      daten: {
+        erweiterungen: [{
+          art: 'verbindung',
+          anker: ['wuchs schneller als ihre Leitungen', 'Die Instandhaltung der Leitungen wurde über Jahrzehnte aufgeschoben'],
+          gedanke: 'g',
+          muster: 'm',
+        }],
+      },
+    }),
+  })
+  const ergebnis = await versucheErweiterungslauf(optionen)
+  assert.equal(ergebnis.uebernommen.length, 0)
+  assert.equal(ergebnis.verworfen, 1)
 })
 
 test('Lauf: Fehler im Gateway wird still protokolliert, Sperre faellt trotzdem', async () => {

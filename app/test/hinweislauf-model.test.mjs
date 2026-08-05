@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { pruefeHinweislaufGate, pruefePausenAusloeser, verarbeiteHinweisantwort, versucheHinweislauf } from '../src/hinweislauf-model.mjs'
 import { baueDocText } from '../src/agent-findings.mjs'
+import { bilanziereRueckmeldung } from '../src/rueckkopplung-model.mjs'
 
 // ---- pruefeHinweislaufGate ---------------------------------------------------
 // Reihenfolge laut Task-Brief: kein Dokument -> Beispielprojekt -> Lauf schon aktiv ->
@@ -564,4 +565,50 @@ test('ohne Textart bleibt es beim vorsichtigen Fall', () => {
   assert.equal(uebernommen.length, 1)
   // Fail-closed: eine fehlende Textart nimmt niemandem eine Sicherung.
   assert.ok(uebernommen[0].claim, 'ohne Textart muss die Quellenfrage eine Integritaetsfrage bleiben')
+})
+
+// ---- Die Rueckkopplung reicht bis in die echte Anfrage durch ------------------
+// Dieselbe Lehre wie bei der Textart: Ein Parameter, den niemand uebergibt, ist eine
+// Leitung ohne Strom. versucheHinweislauf baut den Kontext selbst; wenn die Bilanz dort
+// nicht ankommt, sieht das Modell sie nie -- und alle Bilanz-Unit-Tests blieben gruen.
+
+test('die Rueckkopplungsbilanz erreicht den Kontext, den versucheHinweislauf an runTask gibt', async () => {
+  const findings = []
+  const decisions = []
+  const anlegen = (art, status, anzahl) => {
+    for (let i = 0; i < anzahl; i += 1) {
+      const id = `${art}-${status}-${i}`
+      findings.push({ id, kiKategorie: art, status })
+      decisions.push({ findingId: id, outcome: status })
+    }
+  }
+  anlegen('struktur', 'dismissed', 18)
+  anlegen('struktur', 'resolved', 2)
+  anlegen('fakt', 'resolved', 9)
+  anlegen('fakt', 'dismissed', 3)
+
+  let gesehenerKontext = null
+  await versucheHinweislauf(basisVersuch({
+    rueckkopplung: bilanziereRueckmeldung({ dokumente: [{ findings, decisions }] }),
+    runTask: async (task, kontext) => {
+      gesehenerKontext = kontext
+      return { daten: { hinweise: [] } }
+    },
+  }))
+  const text = (gesehenerKontext?.volatiles || []).join('\n')
+  assert.ok(text.includes('struktur: 18 von 20'), 'die Bilanz fehlt im Kontext des Laufs')
+  assert.ok(text.includes('Streiche keine Art aus deinem Repertoire'), text)
+})
+
+test('ohne Rueckkopplung sieht der Kontext genau aus wie zuvor', async () => {
+  let ohne = null
+  await versucheHinweislauf(basisVersuch({
+    runTask: async (task, kontext) => { ohne = kontext; return { daten: { hinweise: [] } } },
+  }))
+  let leer = null
+  await versucheHinweislauf(basisVersuch({
+    rueckkopplung: bilanziereRueckmeldung({ dokumente: [] }),
+    runTask: async (task, kontext) => { leer = kontext; return { daten: { hinweise: [] } } },
+  }))
+  assert.deepEqual(leer.volatiles, ohne.volatiles, 'eine leere Bilanz darf keinen Block erzeugen')
 })

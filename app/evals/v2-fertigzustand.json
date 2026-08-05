@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": "2026-08-04.1",
-  "target": "Onda — vollständiger Fertigzustand A–D samt Gestalt der Arbeitsoberfläche, zweitem Rückmeldungs-Kanal und Rhythmus nach Moment",
+  "catalogVersion": "2026-08-05.1",
+  "target": "Onda — vollständiger Fertigzustand A–D samt Gestalt der Arbeitsoberfläche, zweitem Rückmeldungs-Kanal, Rhythmus nach Moment, dem Wissen im Anfragekontext, dem Prinzip als Pflicht, der Textart als Maßstab und dem Ort, der einer Person gehört",
   "thresholds": {
     "allApplicableHardGatesMustPass": true,
     "minimumWeightedScore": 4.5,
@@ -1534,7 +1534,6 @@
             "app/src/erweiterung-model.mjs",
             "app/src/erweiterungslauf-model.mjs",
             "Rückmeldungs-Karte 04.08.2026: Erweiterungen werden nicht gezählt",
-            "app/src/panels.js",
             "app/src/workspace.js (fuehreErweiterungslaufAus)"
           ]
         },
@@ -1685,6 +1684,418 @@
             "Rückmeldungs-Karte 04.08.2026: drei Momente — sofort, beim Innehalten, beim Aufschauen",
             "app/src/momente-model.mjs",
             "app/src/agent-prompts.mjs (die acht Hinweisarten)"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "KONTEXT",
+      "name": "Was das Modell zu sehen bekommt",
+      "evals": [
+        {
+          "id": "KONTEXT-01",
+          "title": "Was das Projekt weiß, erreicht das Modell",
+          "gate": "hard",
+          "automation": "integration",
+          "given": "Für ein Projekt sind Textsorte und Stilprofil gesetzt, in anderen Texten desselben Projekts wird etwas behauptet, es ist Gedächtnis freigegeben und es steht Erkanntes im Personen-Speicher.",
+          "when": "Irgendeine Anfrage an das Modell gebaut wird — für Hinweise, für Erweiterungen, für das Gespräch oder für das Verständnis.",
+          "then": "Jeder dieser Wissensstände steht im tatsächlich abgeschickten Anfragekörper, und zwar in jedem Kanal. Ein Kanal, der das Wissen vergisst, ist kein fehlerhafter Test, sondern ein blinder Kanal: Dasselbe Modell antwortet dann je nach Anlass mit oder ohne Kenntnis desselben Projekts.",
+          "evidence": [
+            "Prüfung: markierte Zeichenfolgen aus jeder Wissensquelle im echten Anfragekörper aller Kanäle",
+            "Prüfung: jedes Modul, das einen Anfragekontext baut, hängt das Projektwissen an",
+            "Node-Test: der Nachtrag hängt hinten an und lässt die Eingabe unangetastet"
+          ],
+          "source": [
+            "Abstract: „Das System versteht den gesamten Kontext\"",
+            "app/src/onda-kontext.mjs",
+            "Umbau 05.08.2026: die kluge Hälfte an die blinde angeschlossen"
+          ]
+        },
+        {
+          "id": "KONTEXT-02",
+          "title": "Kein Wissensblock entwertet den Zwischenspeicher",
+          "gate": "hard",
+          "automation": "integration",
+          "given": "Eine Anfrage trägt Projektwissen mit.",
+          "when": "Der Anfragekörper zusammengesetzt ist.",
+          "then": "Als zwischengespeichert sind nur das Projektverständnis und der Dokumenttext markiert; jeder Wissensblock steht dahinter. Das ist kein Ordnungssinn, sondern Geld: Ein Wissensblock im Präfix würde den Zwischenspeicher entwerten, sobald sich irgendeine Projektangabe ändert, und jede Anfrage danach wäre voll zu bezahlen statt zu einem Zehntel.",
+          "evidence": [
+            "Prüfung: genau zwei Blöcke tragen die Zwischenspeicher-Markierung, und keiner davon enthält Projektwissen",
+            "Node-Test je Kanal: die Wissensblöcke stehen ganz hinten"
+          ],
+          "source": [
+            "app/src/onda-kontext.mjs",
+            "app/src/agent-tasks.mjs (Aufbau der Anfrage)"
+          ]
+        },
+        {
+          "id": "KONTEXT-03",
+          "title": "Was nicht bekannt ist, erzeugt keinen Block",
+          "gate": "hard",
+          "automation": "unit",
+          "given": "Ein Projekt ohne Angaben, ohne Aussagen, ohne freigegebenes Gedächtnis und ohne Erkanntes.",
+          "when": "Die Wissensblöcke gebaut werden.",
+          "then": "Es entsteht kein Block — kein leerer und keiner, in dem „unbekannt\" steht. Sonst bezahlte jede einzelne Anfrage dafür, mitzuteilen, dass nichts bekannt ist, und das Modell begänne zu raten, was es nicht weiß.",
+          "evidence": [
+            "Prüfung: ohne jede Angabe entstehen null Blöcke, und kein gebauter Block sagt „unbekannt\"",
+            "Node-Test: leere Einzelquellen erzeugen jeweils gar keinen Block"
+          ],
+          "source": [
+            "app/src/onda-kontext.mjs (Regel 3: ein leerer Wert erzeugt gar keinen Block)"
+          ]
+        },
+        {
+          "id": "KONTEXT-04",
+          "title": "Jeder Block hat eine begründete Obergrenze",
+          "gate": "hard",
+          "automation": "unit",
+          "given": "Mehr Aussagen und mehr Gedächtniseinträge, als in eine Anfrage gehören.",
+          "when": "Die Blöcke gebaut werden.",
+          "then": "Jeder Block hält seine Obergrenze ein, kürzt zu lange Einträge und nennt die Gesamtzahl, wenn er gekürzt hat. Beim Kürzen fällt zuerst das Unverbindliche: Eine für das Projekt bindende Festlegung weicht nie einer persönlichen Vorliebe. Jede Grenze wird bei jedem Lauf neu bezahlt, deshalb muss sie eine Zahl mit Begründung sein und keine gefühlte.",
+          "evidence": [
+            "Node-Test: die Obergrenze für den Aussagen-Speicher greift und die Gesamtzahl wird genannt",
+            "Node-Test: die Obergrenze für das Gedächtnis greift, bindende Einträge zuerst",
+            "Node-Test: lange Aussagen werden gekürzt statt in voller Länge bezahlt"
+          ],
+          "source": [
+            "app/src/onda-kontext.mjs (MAX_AUSSAGEN, MAX_GEDAECHTNIS)",
+            "app/src/erkanntes-model.mjs (PROMPT_GRENZE)"
+          ]
+        },
+        {
+          "id": "KONTEXT-05",
+          "title": "Ein beschädigter Speicher kostet keinen bezahlten Lauf",
+          "gate": "hard",
+          "automation": "unit",
+          "given": "Ein Sprachprofil oder ein Gedächtnisspeicher ist unbrauchbar, etwa weil er aus einem fremden Projekt stammt.",
+          "when": "Eine Anfrage an das Modell gebaut wird.",
+          "then": "Der Lauf findet statt, nur ohne diesen einen Block. Ein Wissensblock ist eine Zugabe; er darf einen bezahlten Lauf nie verhindern.",
+          "evidence": [
+            "Node-Test: ein beschädigtes Sprachprofil verhindert keinen Lauf, es fällt nur der Block weg"
+          ],
+          "source": [
+            "app/src/onda-kontext.mjs"
+          ]
+        },
+        {
+          "id": "KONTEXT-06",
+          "title": "Was in anderen Texten steht, reist mit Namen mit",
+          "gate": "hard",
+          "automation": "unit",
+          "given": "Ein Projekt mit mehreren Texten, in denen etwas behauptet wird, darunter Zurückgezogenes und Veraltetes.",
+          "when": "Eine Anfrage zum gerade offenen Text gebaut wird.",
+          "then": "Die Aussagen aus den anderen Texten stehen mit dem Titel ihres Textes darin; zurückgezogene und veraltete gar nicht. Ohne sie sieht das Modell nur den offenen Text und kann einem Kapitel widersprechen, das es nie gelesen hat.",
+          "evidence": [
+            "Node-Test: Aussagen aus anderen Texten nennen den Text beim Namen",
+            "Node-Test: veraltete und zurückgezogene Aussagen gehen gar nicht mit",
+            "Node-Test: Aussagen des offenen Textes gehen nur mit, wenn sie einen Belegstand tragen"
+          ],
+          "source": [
+            "Abstract: Cross-Pollination von Ideen",
+            "app/src/onda-kontext.mjs",
+            "app/src/claim-ledger.mjs (der einzige dokumentübergreifende Speicher)"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "MUSTER",
+      "name": "Das Prinzip hinter der Rückmeldung",
+      "evals": [
+        {
+          "id": "MUSTER-01",
+          "title": "Jede Rückmeldungsart trägt ihr Prinzip",
+          "gate": "hard",
+          "automation": "integration",
+          "given": "Alle Rückmeldungsarten beider Kanäle: die acht Hinweisarten und die drei Erweiterungsarten.",
+          "when": "Das Modell eine Rückmeldung abliefert.",
+          "then": "Jede von ihnen muss das übertragbare Prinzip mitliefern, und keine ist davon ausgenommen. Ein Hinweis, der nur diese eine Stelle repariert, macht diesen einen Text besser; das Prinzip dahinter macht die schreibende Person besser.",
+          "evidence": [
+            "Prüfung: beide Antwortformen führen das Prinzip als Pflichtfeld, über alle elf Arten",
+            "Prüfung: das Prinzip überlebt die Verarbeitung eines Hinweises",
+            "Node-Test: das Feld wandert in den gespeicherten Hinweis"
+          ],
+          "source": [
+            "Abstract: „hinter jedem Feedback das dahinterliegende System offenbaren\"",
+            "app/src/agent-tasks.mjs (HINWEISE_SCHEMA, ERWEITERUNGEN_SCHEMA)"
+          ]
+        },
+        {
+          "id": "MUSTER-02",
+          "title": "Das Prinzip lässt sich nicht stillschweigend weglassen",
+          "gate": "hard",
+          "automation": "file-inspection",
+          "given": "Ein Modell, dem das Verallgemeinern in diesem Fall schwerfällt.",
+          "when": "Die Form der Antwort festgelegt ist.",
+          "then": "Das Prinzip ist Pflichtfeld in einer geschlossenen Feldliste, nicht nur eine Bitte im Auftragstext. Steht es nicht in der Liste, kann das Modell es nicht einmal freiwillig nachreichen — die Bitte liefe jedes Mal ins Leere, ohne dass es irgendwo auffiele.",
+          "evidence": [
+            "Prüfung: das Prinzip steht in beiden Kanälen in der Pflichtliste, die Feldliste ist geschlossen und das Feld ist im Schema erklärt",
+            "Node-Test: die Feldreihenfolge steht fest — erst die Folge, dann das Prinzip, dann erst ein Vorschlag"
+          ],
+          "source": [
+            "app/src/agent-tasks.mjs",
+            "app/src/agent-prompts.mjs (HINWEIS_ANWEISUNG, ERWEITERUNG_ANWEISUNG)"
+          ]
+        },
+        {
+          "id": "MUSTER-03",
+          "title": "Das Prinzip ist mehr als die Beobachtung noch einmal",
+          "gate": "hard",
+          "automation": "file-inspection",
+          "given": "Der Auftragstext an das Modell.",
+          "when": "Er erklärt, was das Prinzip sein soll.",
+          "then": "Er verlangt einen Satz, der beim nächsten Text und bei einem anderen Thema von allein wieder trägt, und weist den Einzelfall ausdrücklich zurück. Ohne diese Unterscheidung schreibt ein Modell die Beobachtung ein zweites Mal, nur allgemeiner formuliert — und der ganze Ertrag wäre eine bezahlte Doppelung.",
+          "evidence": [
+            "Prüfung: beide Auftragstexte verlangen den nächsten Text, nicht diesen",
+            "Node-Test: der Auftragstext nennt das Prinzip in beiden Kanälen"
+          ],
+          "source": [
+            "app/src/agent-prompts.mjs"
+          ]
+        },
+        {
+          "id": "MUSTER-04",
+          "title": "Das Prinzip ist zu sehen, nicht nur gespeichert",
+          "gate": "hard",
+          "automation": "file-inspection",
+          "given": "Ein Hinweis und eine Erweiterung liegen vor.",
+          "when": "Die schreibende Person sie ansieht.",
+          "then": "Das Prinzip steht auf beiden. Ein Pflichtfeld, das nur in einer Datei liegt, ist für den Menschen davor nicht da — und dann wächst niemand daran.",
+          "evidence": [
+            "Prüfung: das Prinzip eines Hinweises und das einer Erweiterung werden beide gezeichnet"
+          ],
+          "source": [
+            "Abstract: der persönliche Erkenntnishorizont erweitert sich über die Zeit",
+            "app/src/workspace.js"
+          ]
+        },
+        {
+          "id": "MUSTER-05",
+          "title": "Ein fehlendes Prinzip wiegt in beiden Kanälen verschieden",
+          "gate": "hard",
+          "automation": "unit",
+          "given": "Eine Rückmeldung kommt ohne Prinzip zurück.",
+          "when": "Sie verarbeitet wird.",
+          "then": "Bei einer Erweiterung wird sie verworfen, bei einem Hinweis nicht. Bei der Erweiterung ist das Prinzip der ganze Ertrag; beim Hinweis trägt die Stelle auch allein, und ihn wegzuwerfen hieße, eine richtige Beobachtung wegen einer fehlenden Zugabe zu verlieren.",
+          "evidence": [
+            "Prüfung: eine Erweiterung ohne Prinzip wird verworfen, ein Hinweis ohne Prinzip bleibt",
+            "Node-Test: ein leeres Muster verwirft den Erweiterungseintrag"
+          ],
+          "source": [
+            "app/src/erweiterungslauf-model.mjs",
+            "app/src/agent-findings.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "TEXTART",
+      "name": "Was ein Text seinem Publikum schuldet",
+      "evals": [
+        {
+          "id": "TEXTART-01",
+          "title": "Die Textart entscheidet, was bindet",
+          "gate": "hard",
+          "automation": "integration",
+          "given": "Derselbe Hinweis auf einen fehlenden Beleg, einmal in einer wissenschaftlichen Arbeit und einmal auf einem Plakattext.",
+          "when": "Die schreibende Person ihn verwirft.",
+          "then": "In der Arbeit nimmt sie ein Risiko bewusst an, auf dem Plakat nicht. Ein Plakat hat für eine Fußnote keinen Platz; dort eine Risikoannahme zu verlangen, ist eine Mahnung für ein Versprechen, das niemand gegeben hat.",
+          "evidence": [
+            "Prüfung: derselbe verworfene Quellenhinweis endet in der Arbeit als angenommenes Risiko und auf dem Plakat als verworfen",
+            "Node-Test: die Umwandlung eines Hinweises wendet dieselbe Regel an wie die Entscheidung"
+          ],
+          "source": [
+            "Abstract: Texte jeglicher Art, vom Essay bis zur Prosa",
+            "app/src/textart-regeln.mjs",
+            "app/src/reasoning-model.mjs"
+          ]
+        },
+        {
+          "id": "TEXTART-02",
+          "title": "Eine fehlende Angabe nimmt keine Sicherung weg",
+          "gate": "hard",
+          "automation": "unit",
+          "given": "Die Textart ist nicht angegeben, unbekannt oder ein geerbter Name wie „constructor\".",
+          "when": "Entschieden wird, was bindet.",
+          "then": "Es binden dieselben vier Arten wie vorher, und nichts stürzt ab. Eine Sicherung fällt nicht weg, weil ein Feld leer geblieben ist.",
+          "evidence": [
+            "Prüfung: leere, unbekannte und geerbte Namen fallen auf die vorsichtigen vier zurück",
+            "Node-Test: ohne Textart bleibt die Sicherung bei jedem der vier Fälle"
+          ],
+          "source": [
+            "app/src/textart-regeln.mjs (STANDARD_INTEGRITAET, fail-closed)"
+          ]
+        },
+        {
+          "id": "TEXTART-03",
+          "title": "Die Regel kann nur enger machen, nie weiter",
+          "gate": "hard",
+          "automation": "unit",
+          "given": "Das Modell meldet eine Art als bindend, die die Textart gerade ausgeschlossen hat.",
+          "when": "Daraus eine Rückmeldung wird.",
+          "then": "Sie bindet trotzdem nicht. Zusätzliches darf das Modell melden, Abgeräumtes nicht zurückholen — sonst hätte ein Plakattext weiterhin Quellenfragen, nur weil der Auftragstext dem Modell das nahelegt.",
+          "evidence": [
+            "Prüfung: keine Textart macht eine Art bindend, die es ohne Textart nicht wäre",
+            "Node-Test: das Modell-Flag darf ergänzen, aber nichts zurückholen"
+          ],
+          "source": [
+            "app/src/textart-regeln.mjs",
+            "app/src/agent-findings.mjs"
+          ]
+        },
+        {
+          "id": "TEXTART-04",
+          "title": "Keine Textart fällt durch",
+          "gate": "hard",
+          "automation": "file-inspection",
+          "given": "Alle Textarten, die das Sprachprofil kennt.",
+          "when": "Gefragt wird, was bei ihnen bindet.",
+          "then": "Jede hat eine eigene entschiedene Zeile und eine tragfähige Begründung, und jede Zeile nennt nur Arten, die es wirklich gibt. Eine später hinzukommende Textart taucht sofort mit dem vorsichtigen Fall auf, statt still zu fehlen.",
+          "evidence": [
+            "Prüfung: die vollständige Tabelle Zeile für Zeile, mit Begründung und gegen die tatsächlichen Hinweisarten geprüft",
+            "Node-Test: die Textarten sind die des Sprachprofils, keine zweite Liste daneben"
+          ],
+          "source": [
+            "app/src/textart-regeln.mjs",
+            "app/src/language-profile.mjs (LANGUAGE_GENRES)"
+          ]
+        },
+        {
+          "id": "TEXTART-05",
+          "title": "Erfundenes schuldet nichts über die Welt",
+          "gate": "hard",
+          "automation": "file-inspection",
+          "given": "Ein Prosatext und ein Gedicht.",
+          "when": "Gefragt wird, was bei ihnen bindet.",
+          "then": "Bei Prosa bindet nur der Bruch im Gedankengang, bei Lyrik nichts. Eine erfundene Tatsache ist dort kein Verstoß, sondern das Handwerk; im Gedicht kann sogar der Widerspruch die Form sein. Das ist die einzige Textart, in der Onda gar keine Integritätsfrage kennt.",
+          "evidence": [
+            "Prüfung: Prosa bindet die Logik und nicht die Tatsache, Lyrik bindet nichts",
+            "Node-Test: Prosa und Lyrik stehen in der Textartenliste"
+          ],
+          "source": [
+            "Abstract: „bis hin zu Prosatexten\"",
+            "app/src/textart-regeln.mjs"
+          ]
+        },
+        {
+          "id": "TEXTART-06",
+          "title": "Die Textart erreicht die Entscheidung, nicht nur die Tabelle",
+          "gate": "hard",
+          "automation": "integration",
+          "given": "Ein Projekt mit gesetzter Textart und ein Hinweis dazu.",
+          "when": "Der Hinweis entsteht und später darüber entschieden wird.",
+          "then": "Die Textart reist am Hinweis mit, sodass auch die spätere Entscheidung sie kennt. Eine Regel, die gebaut ist und die niemand übergibt, wirkt nicht — sie sieht nur so aus.",
+          "evidence": [
+            "Prüfung: die Textart steht am umgewandelten Hinweis und bestimmt den Ausgang der Entscheidung",
+            "Node-Test: der Hinweislauf reicht die Textart des Projekts durch"
+          ],
+          "source": [
+            "app/src/hinweislauf-model.mjs",
+            "app/src/workspace.js (Textart aus dem Sprachprofil des Projekts)"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "PERSON",
+      "name": "Der Ort, der einem Menschen gehört",
+      "evals": [
+        {
+          "id": "PERSON-01",
+          "title": "Es gibt einen Ort, der einer Person gehört",
+          "gate": "hard",
+          "automation": "integration",
+          "given": "Eine Erkenntnis, die über diesen einen Text hinausreicht.",
+          "when": "Sie gespeichert wird.",
+          "then": "Sie liegt auf der persönlichen Ebene und gilt über alle Projekte, nicht an einem Dokument und nicht an einem Projekt, und sie trägt ihre Herkunft mit. Ohne einen solchen Ort stirbt jede Einsicht mit dem Text, in dem sie aufkam.",
+          "evidence": [
+            "Prüfung: der Eintrag liegt bei der Person, gilt über alle Projekte und trägt eine Herkunft",
+            "Node-Test: ein Prinzip wird auf der persönlichen Ebene über alle Projekte gespeichert"
+          ],
+          "source": [
+            "Abstract: „erweitert über die Zeit seinen persönlichen Erkenntnishorizont\"",
+            "app/src/erkanntes-model.mjs"
+          ]
+        },
+        {
+          "id": "PERSON-02",
+          "title": "Nur Angenommenes kommt hinein, über einen einzigen Weg",
+          "gate": "hard",
+          "automation": "file-inspection",
+          "given": "Eine Rückmeldung wird angenommen, eine andere verworfen.",
+          "when": "Der Personen-Speicher fortgeschrieben wird.",
+          "then": "Nur das Angenommene steht darin, und es gibt genau einen Weg hinein. Ein Prinzip aus etwas, das die schreibende Person gerade zurückgewiesen hat, wäre ihr in den Mund gelegt; und ein Speicher, der sich an mehreren Stellen selbst füllt, lässt sich später nicht mehr überblicken.",
+          "evidence": [
+            "Prüfung: genau ein Modul schreibt, und ein Hinweis wandert nur bei Annahme hinein"
+          ],
+          "source": [
+            "app/src/workspace.js",
+            "app/src/erkanntes-model.mjs"
+          ]
+        },
+        {
+          "id": "PERSON-03",
+          "title": "Jeder Satz lässt sich zurücknehmen",
+          "gate": "hard",
+          "automation": "integration",
+          "given": "Ein Satz im Personen-Speicher stimmt nicht.",
+          "when": "Er zurückgenommen wird.",
+          "then": "Er verschwindet aus der Liste und aus jeder künftigen Anfrage, alle seine Begegnungen auf einmal, und bleibt zugleich als überholt erhalten. Ohne die Rücknahme wiederholte sich ein falscher Satz in jedem künftigen Text — das ist das größte Risiko dieses ganzen Speichers.",
+          "evidence": [
+            "Prüfung: die Rücknahme erwischt alle Begegnungen und wirkt auch in der Anfrage",
+            "Node-Test: Überholtes bleibt gespeichert, nur nicht mehr aktiv"
+          ],
+          "source": [
+            "app/src/erkanntes-model.mjs"
+          ]
+        },
+        {
+          "id": "PERSON-04",
+          "title": "Was wiederkam, steht oben",
+          "gate": "hard",
+          "automation": "unit",
+          "given": "Ein Satz kam mehrfach auf, andere je einmal.",
+          "when": "Die Liste gezeigt oder in eine Anfrage gelegt wird.",
+          "then": "Der mehrfache steht oben und trägt die Zahl seiner Begegnungen. Genau das droht ein weiteres Mal gesagt zu werden — und genau daran zeigt sich, was noch nicht sitzt.",
+          "evidence": [
+            "Node-Test: was am häufigsten wiederkam, steht oben",
+            "Node-Test: derselbe Satz zweimal ergibt einen Eintrag mit zwei Begegnungen"
+          ],
+          "source": [
+            "app/src/erkanntes-model.mjs"
+          ]
+        },
+        {
+          "id": "PERSON-05",
+          "title": "Der Speicher verlangt Kürze, nicht Schweigen",
+          "gate": "hard",
+          "automation": "integration",
+          "given": "Ein Prinzip steht bereits im Personen-Speicher, und dieselbe Sache taucht im Text wieder auf.",
+          "when": "Die Anfrage an das Modell gebaut wird.",
+          "then": "Das Modell wird gebeten, sich kürzer zu fassen — nicht, zu schweigen. Ein System, das über Bekanntes schweigt, würde schlechter, je mehr es weiß; wer denselben Fehler zum fünften Mal macht, braucht den Hinweis am nötigsten.",
+          "evidence": [
+            "Prüfung: der Block verlangt Kürze und ausdrücklich kein Schweigen",
+            "Node-Test: erkannte Prinzipien landen im Prompt, aber nie im Zwischenspeicher-Präfix"
+          ],
+          "source": [
+            "app/src/onda-kontext.mjs",
+            "app/src/erkanntes-model.mjs"
+          ]
+        },
+        {
+          "id": "PERSON-06",
+          "title": "Zwei Einsichten verschmelzen nicht aus Versehen",
+          "gate": "hard",
+          "automation": "unit",
+          "given": "Zwei verschiedene Einsichten, die einander ähneln.",
+          "when": "Sie im Personen-Speicher abgeglichen werden.",
+          "then": "Sie bleiben zwei. Nur Schreibung, Satzzeichen und Leerraum machen keinen neuen Satz; eine unscharfe Ähnlichkeit würde zwei Einsichten zu einer verschmelzen, und dieser Schaden wiegt schwerer als die gesparte Zeile.",
+          "evidence": [
+            "Node-Test: der Abgleich bleibt bewusst stumpf — keine unscharfe Ähnlichkeit",
+            "Node-Test: Groß- und Kleinschreibung und Satzzeichen machen keinen neuen Satz"
+          ],
+          "source": [
+            "app/src/erkanntes-model.mjs (schluesselFuer)"
           ]
         }
       ]

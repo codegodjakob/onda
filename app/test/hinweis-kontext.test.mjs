@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { baueHinweisKontext } from '../src/hinweis-kontext.mjs'
 import { baueAnfrage } from '../src/agent-tasks.mjs'
 import { HINWEIS_ANWEISUNG } from '../src/agent-prompts.mjs'
+import { bilanziereRueckmeldung } from '../src/rueckkopplung-model.mjs'
 
 // PFLICHT (Lehre aus V-3, Fix-Runde 1, Finding 1): baueAnfrage (agent-tasks.mjs) konsumiert
 // ausschliesslich {verstaendnis, docText, volatiles, verlauf, anfrage}. Ein Kontext-Objekt mit
@@ -80,4 +81,56 @@ test('fehlender Aufruf ohne Argumente wirft nicht und liefert nur HINWEIS_ANWEIS
   assert.deepEqual(kontext.volatiles, [HINWEIS_ANWEISUNG])
   assert.equal(kontext.docText, '')
   assert.equal(kontext.verstaendnis, null)
+})
+
+// ---- Rueckkopplung -----------------------------------------------------------
+// Dieselbe Pflicht wie oben: Der Weg wird bis zum ECHTEN Request-Body gefahren. Eine
+// Bilanz, die nur in kontext.volatiles landet, aber von baueAnfrage nie ausgegeben wuerde,
+// waere genau der Fehler, gegen den diese Datei geschrieben ist.
+
+function machRueckkopplung() {
+  const findings = []
+  const decisions = []
+  const anlegen = (art, status, anzahl) => {
+    for (let i = 0; i < anzahl; i += 1) {
+      const id = `${art}-${status}-${i}`
+      findings.push({ id, kiKategorie: art, status })
+      decisions.push({ findingId: id, outcome: status })
+    }
+  }
+  anlegen('struktur', 'dismissed', 18)
+  anlegen('struktur', 'resolved', 2)
+  anlegen('fakt', 'resolved', 9)
+  anlegen('fakt', 'dismissed', 3)
+  return bilanziereRueckmeldung({ dokumente: [{ findings, decisions }] })
+}
+
+test('die Rueckkopplung erreicht den echten Request-Body und steht direkt hinter der Anweisung', () => {
+  const kontext = baueHinweisKontext({
+    verstaendnis: VERSTAENDNIS,
+    docText: 'Text',
+    entscheidungen: [{ anker: 'a', kategorie: 'fakt' }],
+    rueckkopplung: machRueckkopplung(),
+  })
+  assert.equal(kontext.volatiles[0], HINWEIS_ANWEISUNG)
+  assert.ok(kontext.volatiles[1].includes('struktur: 18 von 20'), kontext.volatiles[1])
+
+  const bodyJson = JSON.stringify(baueAnfrage('hinweise', kontext).body)
+  assert.ok(bodyJson.includes('struktur: 18 von 20'), 'die Bilanz fehlt im Request-Body')
+  assert.ok(bodyJson.includes('NÜTZLICHKEIT'), 'der Unterschied Nuetzlichkeit/Richtigkeit fehlt im Request-Body')
+})
+
+test('die Rueckkopplung bleibt volatil: kein cache_control, Praefix unveraendert', () => {
+  const kontext = baueHinweisKontext({ verstaendnis: VERSTAENDNIS, docText: 'Doktext', rueckkopplung: machRueckkopplung() })
+  const content = baueAnfrage('hinweise', kontext).body.messages[0].content
+  assert.ok(content[0].text.startsWith('<projektverstaendnis>'))
+  assert.ok(content[1].text.startsWith('<dokument>'))
+  for (const block of content.slice(2)) assert.ok(!('cache_control' in block), 'Volatiles duerfen kein cache_control tragen')
+})
+
+test('eine Bilanz ohne verwertbare Zahlen erzeugt KEINEN leeren Block', () => {
+  const leer = bilanziereRueckmeldung({ dokumente: [{ findings: [{ id: 'x', kiKategorie: 'struktur', status: 'dismissed' }], decisions: [] }] })
+  const kontext = baueHinweisKontext({ verstaendnis: null, docText: 'Text', rueckkopplung: leer })
+  assert.deepEqual(kontext.volatiles, [HINWEIS_ANWEISUNG])
+  assert.deepEqual(baueHinweisKontext({ docText: 'Text', rueckkopplung: null }).volatiles, [HINWEIS_ANWEISUNG])
 })

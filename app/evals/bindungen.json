@@ -213,9 +213,6 @@
     "ERWEITERUNG-03": [
       "test/erweiterungslauf-model.test.mjs"
     ],
-    "ERWEITERUNG-04": [
-      "evals/pruefungen/erweiterung-kein-posten.mjs"
-    ],
     "ERWEITERUNG-05": [
       "test/erweiterungslauf-model.test.mjs"
     ],
@@ -245,6 +242,95 @@
     ],
     "DESIGN-06": [
       "evals/pruefungen/umgestaltung-entschieden.mjs"
+    ],
+    "KONTEXT-01": [
+      "evals/pruefungen/kontext-alle-kanaele.mjs",
+      "test/onda-kontext.test.mjs"
+    ],
+    "KONTEXT-02": [
+      "evals/pruefungen/kontext-alle-kanaele.mjs",
+      "test/onda-kontext.test.mjs"
+    ],
+    "KONTEXT-03": [
+      "evals/pruefungen/kontext-alle-kanaele.mjs",
+      "test/onda-kontext.test.mjs"
+    ],
+    "KONTEXT-04": [
+      "test/onda-kontext.test.mjs",
+      "test/erkanntes-model.test.mjs"
+    ],
+    "KONTEXT-05": [
+      "test/onda-kontext.test.mjs"
+    ],
+    "KONTEXT-06": [
+      "test/onda-kontext.test.mjs"
+    ],
+    "MUSTER-01": [
+      "evals/pruefungen/muster-pflicht.mjs",
+      "test/agent-findings.test.mjs"
+    ],
+    "MUSTER-02": [
+      "evals/pruefungen/muster-pflicht.mjs",
+      "test/agent-tasks.test.mjs"
+    ],
+    "MUSTER-03": [
+      "evals/pruefungen/muster-pflicht.mjs",
+      "test/agent-prompts.test.mjs"
+    ],
+    "MUSTER-04": [
+      "evals/pruefungen/muster-pflicht.mjs"
+    ],
+    "MUSTER-05": [
+      "evals/pruefungen/muster-pflicht.mjs",
+      "test/erweiterungslauf-model.test.mjs"
+    ],
+    "TEXTART-01": [
+      "evals/pruefungen/textart-tabelle.mjs",
+      "test/agent-findings.test.mjs"
+    ],
+    "TEXTART-02": [
+      "evals/pruefungen/textart-tabelle.mjs",
+      "test/textart-regeln.test.mjs"
+    ],
+    "TEXTART-03": [
+      "evals/pruefungen/textart-tabelle.mjs",
+      "test/textart-regeln.test.mjs"
+    ],
+    "TEXTART-04": [
+      "evals/pruefungen/textart-tabelle.mjs",
+      "test/textart-regeln.test.mjs"
+    ],
+    "TEXTART-05": [
+      "evals/pruefungen/textart-tabelle.mjs",
+      "test/textart-regeln.test.mjs"
+    ],
+    "TEXTART-06": [
+      "evals/pruefungen/textart-tabelle.mjs",
+      "test/hinweislauf-model.test.mjs"
+    ],
+    "PERSON-01": [
+      "evals/pruefungen/person-speicher.mjs",
+      "test/erkanntes-model.test.mjs"
+    ],
+    "PERSON-02": [
+      "evals/pruefungen/person-speicher.mjs"
+    ],
+    "PERSON-03": [
+      "evals/pruefungen/person-speicher.mjs",
+      "test/erkanntes-model.test.mjs"
+    ],
+    "PERSON-04": [
+      "test/erkanntes-model.test.mjs"
+    ],
+    "PERSON-05": [
+      "evals/pruefungen/person-speicher.mjs",
+      "test/onda-kontext.test.mjs"
+    ],
+    "PERSON-06": [
+      "test/erkanntes-model.test.mjs"
+    ],
+    "ERWEITERUNG-04": [
+      "evals/pruefungen/erweiterung-kein-posten.mjs"
     ]
   },
   "_ungebunden_begruendung": {

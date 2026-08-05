@@ -53,8 +53,26 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 </plist>
 PLIST
 
-echo "— signiere (lokal) …"
-codesign --force -s - "$APP" 2>/dev/null
+# Signatur. Mit "-s -" (ad-hoc) bekommt die App bei JEDEM Bau eine neue Identitaet.
+# Der Schluesselbund merkt sich aber, welcher Identitaet er den Zugriff auf den
+# API-Schluessel erlaubt hat — nach dem naechsten Bau passt sie nicht mehr, und die
+# Passwortabfrage kommt erneut. "Immer erlauben" haelt damit nur bis zum naechsten Bau.
+#
+# Liegt ein eigenes Codesignatur-Zertifikat im Schluesselbund, wird damit signiert:
+# die Identitaet bleibt dann ueber alle Bauten hinweg dieselbe, und die Abfrage kommt
+# genau einmal. Ohne Zertifikat bleibt alles wie bisher — das hier nimmt nichts weg.
+#
+# Das Zertifikat anzulegen ist Jakobs Sache: es braucht sein Passwort.
+# Schluesselbundverwaltung > Zertifikatsassistent > Zertifikat erstellen,
+# Name "Onda Dev", selbstsigniertes Stammzertifikat, Zertifikatstyp Codesignatur.
+SIGNATUR_NAME="${ONDA_SIGNATUR:-Onda Dev}"
+if security find-certificate -c "$SIGNATUR_NAME" >/dev/null 2>&1; then
+  echo "— signiere mit „$SIGNATUR_NAME“ …"
+  codesign --force -s "$SIGNATUR_NAME" "$APP" 2>/dev/null
+else
+  echo "— signiere (lokal, ad-hoc) …"
+  codesign --force -s - "$APP" 2>/dev/null
+fi
 
 # Jeder Bau ersetzt das App-Paket. macOS merkt sich aber den alten Eintrag, und
 # `open Onda.app` scheitert danach stillschweigend — das Programm selbst startet

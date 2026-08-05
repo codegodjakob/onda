@@ -1,7 +1,16 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { MAX_AUSSAGEN, MAX_GEDAECHTNIS, baueOndaBloecke, ergaenzeOndaKontext } from '../src/onda-kontext.mjs'
+import {
+  MAX_AUSSAGEN,
+  MAX_GEDAECHTNIS,
+  MAX_NACHBARTEXTE,
+  MAX_NACHBAR_ZEICHEN,
+  baueNachbartexte,
+  baueOndaBloecke,
+  ergaenzeOndaKontext,
+  textAusKoerper,
+} from '../src/onda-kontext.mjs'
 import { baueHinweisKontext } from '../src/hinweis-kontext.mjs'
 import { baueErweiterungKontext } from '../src/erweiterung-kontext.mjs'
 import { baueChatKontext } from '../src/chat-kontext.mjs'
@@ -11,6 +20,7 @@ import { synchronizeClaimLedger } from '../src/claim-ledger.mjs'
 import { updateLanguageProfile } from '../src/language-profile.mjs'
 import { createMemoryEntry, ensureMemoryStore } from '../src/memory-model.mjs'
 import { schreibeErkanntes } from '../src/erkanntes-model.mjs'
+import { LANGUAGE_GENRES } from '../src/language-profile.mjs'
 
 // PFLICHT (Lehre aus V-3/H-2, siehe hinweis-kontext.test.mjs): baueAnfrage (agent-tasks.mjs)
 // konsumiert ausschliesslich {verstaendnis, docText, volatiles, verlauf, anfrage}. Ein Block,
@@ -26,6 +36,27 @@ const PROJEKT_ID = 'projekt-onda'
 const OFFENER_TEXT = { id: 'doc-offen', title: 'Kapitel 1' }
 const ANDERER_TEXT = { id: 'doc-anderer', title: 'Kapitel 2' }
 const ALLE_TEXTE = [OFFENER_TEXT, ANDERER_TEXT]
+
+// Ein echter Geschwistertext, so wie ihn der Editor speichert: HTML mit Bausteinkennungen,
+// Ueberschriften und Entitaeten. Handgeschrieben waere hier gefaehrlich — der Block wird
+// spaeter als Suchraum fuer Anker benutzt, und wenn die Testfassung anders aussieht als das
+// Gespeicherte, bliebe der Test gruen, waehrend die Verankerung danebenlaeuft.
+const NACHBAR_KOERPER = '<h2 data-block-id="b-n1">MARKANTE-NACHBAR-UEBERSCHRIFT-1c9e</h2>'
+  + '<p data-block-id="b-n2">MARKANTER-NACHBAR-ANFANG-4f2a beginnt mit einer eigenen These '
+  + '&#252;ber Wasser &amp; Leitungen.</p>'
+  + '<p data-block-id="b-n3">Danach folgt ein zweiter Absatz, damit dieser Text lang genug '
+  + 'ist, um &#252;berhaupt als Nachbar zu z&#228;hlen.</p>'
+
+function nachbarText(overrides = {}) {
+  return {
+    id: 'doc-nachbar',
+    title: 'Kapitel 3',
+    projectId: PROJEKT_ID,
+    updated: 5000,
+    body: NACHBAR_KOERPER,
+    ...overrides,
+  }
+}
 
 function sprachprofil(changes) {
   return updateLanguageProfile({ profile: null, projectId: PROJEKT_ID, changes, at: 1000 })
@@ -95,7 +126,7 @@ function vollstaendigeQuellen() {
   return {
     project: vollesProjekt(),
     doc: OFFENER_TEXT,
-    docs: ALLE_TEXTE,
+    docs: [...ALLE_TEXTE, nachbarText()],
     memoryStore: gedaechtnis([
       { level: 'project', content: 'MARKANTE-PROJEKTSTIMME-8c2e' },
       { level: 'personal', content: 'MARKANTE-VORLIEBE-4a7d' },
@@ -375,6 +406,8 @@ for (const kanal of KANAELE) {
       'MARKANTE-PROJEKTSTIMME-8c2e',
       'MARKANTE-VORLIEBE-4a7d',
       'MARKANTES-THEMENWISSEN-6b9f',
+      'MARKANTE-NACHBAR-UEBERSCHRIFT-1c9e',
+      'MARKANTER-NACHBAR-ANFANG-4f2a',
     ]) {
       assert.ok(bodyJson.includes(marke), `${marke} fehlt im Request-Body von ${kanal.name}`)
     }
@@ -388,8 +421,11 @@ for (const kanal of KANAELE) {
     assert.ok(gecacht[0].text.startsWith('<projektverstaendnis>'))
     assert.ok(gecacht[1].text.startsWith('<dokument>'))
     for (const block of gecacht) {
-      assert.doesNotMatch(block.text, /MARKANTES-FACH-7a3c|MARKANTE-FREMDAUSSAGE-3f6b|MARKANTE-PROJEKTSTIMME-8c2e/,
-        'ein Wissensblock im Cache-Praefix wuerde den Zwischenspeicher bei jeder Aenderung entwerten')
+      assert.doesNotMatch(
+        block.text,
+        /MARKANTES-FACH-7a3c|MARKANTE-FREMDAUSSAGE-3f6b|MARKANTE-PROJEKTSTIMME-8c2e|MARKANTER-NACHBAR-ANFANG-4f2a/,
+        'ein Wissensblock im Cache-Praefix wuerde den Zwischenspeicher bei jeder Aenderung entwerten',
+      )
     }
     for (const block of content.slice(2)) {
       assert.ok(!('cache_control' in block), 'Volatiles duerfen kein cache_control tragen')
@@ -404,7 +440,7 @@ for (const kanal of KANAELE) {
       ohne.volatiles,
       'die bisherigen Bloecke muessen unveraendert vorne stehen',
     )
-    assert.equal(mit.volatiles.length, ohne.volatiles.length + 3, 'drei Quellen, drei Bloecke')
+    assert.equal(mit.volatiles.length, ohne.volatiles.length + 4, 'vier Quellen, vier Bloecke')
   })
 
   test(`${kanal.name}: ohne onda bleibt der Kontext byte-gleich zu vorher`, () => {
@@ -423,7 +459,7 @@ test('ergaenzeOndaKontext haengt die Bloecke hinten an und laesst die Eingabe un
 
   assert.equal(JSON.stringify(kontext), vorher, 'ergaenzeOndaKontext darf nichts mutieren')
   assert.deepEqual(ergaenzt.volatiles.slice(0, kontext.volatiles.length), kontext.volatiles)
-  assert.equal(ergaenzt.volatiles.length, kontext.volatiles.length + 3)
+  assert.equal(ergaenzt.volatiles.length, kontext.volatiles.length + 4)
 
   const anfrage = baueAnfrage('hinweise', ergaenzt)
   const content = anfrage.body.messages[0].content
@@ -448,8 +484,102 @@ test('baueOndaBloecke ist pur: gleicher Eingang, byte-gleicher Ausgang, keine Mu
   assert.equal(JSON.stringify(quellen), vorher, 'Projekt, Dokument und Speicher bleiben unveraendert')
 })
 
-test('baueOndaBloecke liefert hoechstens drei Bloecke — je Quelle einen', () => {
-  assert.equal(baueOndaBloecke(vollstaendigeQuellen()).length, 3)
+test('baueOndaBloecke liefert je Quelle hoechstens einen Block', () => {
+  assert.equal(baueOndaBloecke(vollstaendigeQuellen()).length, 4)
+})
+
+// --- Die anderen Texte desselben Projekts -------------------------------------------------
+// Der Kern der Sache: bisher sah jede Anfrage genau EIN Dokument. Ein Gedanke, der zwei Texte
+// verbindet, war nicht bloss ungebaut — sein Anker wurde von der Eingangspruefung verworfen.
+
+test('ein Geschwistertext kommt mit Titel, Gliederung und Anfang in den Block', () => {
+  const bloecke = baueOndaBloecke({
+    project: { id: PROJEKT_ID },
+    doc: OFFENER_TEXT,
+    docs: [OFFENER_TEXT, nachbarText()],
+  })
+  assert.equal(bloecke.length, 1)
+  const [block] = bloecke
+  assert.match(block, /Die anderen Texte dieses Projekts/)
+  assert.match(block, /»Kapitel 3«/)
+  assert.match(block, /Gliederung: MARKANTE-NACHBAR-UEBERSCHRIFT-1c9e/)
+  assert.match(block, /Anfang: .*MARKANTER-NACHBAR-ANFANG-4f2a/)
+})
+
+test('der Block sagt dem Modell, dass ein Zitat daraus als Anker gilt — und dass Erfundenes faellt', () => {
+  const [block] = baueOndaBloecke({ project: { id: PROJEKT_ID }, doc: OFFENER_TEXT, docs: [nachbarText()] })
+  assert.match(block, /WÖRTLICH/)
+  assert.match(block, /gilt als Anker/)
+  assert.match(block, /verworfen/)
+})
+
+test('HTML und Entitaeten erreichen den Prompt nie', () => {
+  const [block] = baueOndaBloecke({ project: { id: PROJEKT_ID }, doc: OFFENER_TEXT, docs: [nachbarText()] })
+  assert.doesNotMatch(block, /<[a-z/]/i, 'ein Tag im Prompt kostet Tokens und sagt nichts')
+  assert.doesNotMatch(block, /&(amp|#\d+|#x[0-9a-f]+);/i)
+  assert.match(block, /über Wasser & Leitungen/, 'die Entitaeten muessen aufgeloest sein')
+})
+
+test('fremde Projekte, Papierkorb und der offene Text selbst sind keine Nachbarn', () => {
+  const offenMitKoerper = { ...nachbarText({ id: OFFENER_TEXT.id, title: 'Kapitel 1' }) }
+  const quellen = {
+    project: { id: PROJEKT_ID },
+    doc: OFFENER_TEXT,
+    docs: [
+      offenMitKoerper,
+      nachbarText({ id: 'doc-fremd', title: 'FREMDPROJEKT', projectId: 'ein-anderes-projekt' }),
+      nachbarText({ id: 'doc-muell', title: 'PAPIERKORB', trashed: true }),
+      nachbarText({ id: 'doc-leer', title: 'LEERES-BLATT', body: '<p>Zu kurz.</p>' }),
+    ],
+  }
+  assert.deepEqual(baueNachbartexte(quellen).map(n => n.docId), [])
+  assert.deepEqual(baueOndaBloecke(quellen), [], 'kein Nachbar heisst kein Block, nicht ein leerer')
+})
+
+test(`hoechstens ${MAX_NACHBARTEXTE} Nachbartexte, die zuletzt bearbeiteten zuerst`, () => {
+  const viele = Array.from({ length: MAX_NACHBARTEXTE + 4 }, (unused, index) => nachbarText({
+    id: `doc-n${index}`,
+    title: `Text ${index}`,
+    updated: 1000 + index,
+  }))
+  const nachbarn = baueNachbartexte({ project: { id: PROJEKT_ID }, doc: OFFENER_TEXT, docs: viele })
+  assert.equal(nachbarn.length, MAX_NACHBARTEXTE, 'die Obergrenze muss greifen')
+  assert.deepEqual(
+    nachbarn.map(n => n.titel),
+    ['Text 9', 'Text 8', 'Text 7', 'Text 6', 'Text 5', 'Text 4'],
+    'woran zuletzt gearbeitet wurde, steht dem offenen Text am naechsten',
+  )
+})
+
+test('ein langer Nachbartext wird nicht im vollen Wortlaut bezahlt', () => {
+  const lang = `<p>${'Die Stadt wuchs schneller als ihre Leitungen. '.repeat(200)}</p>`
+  const [block] = baueOndaBloecke({
+    project: { id: PROJEKT_ID },
+    doc: OFFENER_TEXT,
+    docs: [nachbarText({ body: lang })],
+  })
+  assert.ok(block.length < 1200, `Block ist ${block.length} Zeichen lang und damit ungekuerzt`)
+  assert.match(block, /…/, 'der Kuerzungspunkt fehlt')
+
+  // Gezeigt wird der Anfang, DURCHSUCHT wird spaeter der ganze Text — sonst zeigte der
+  // gespeicherte Index in einen Ausschnitt, den es in keinem Dokument gibt.
+  const [nachbar] = baueNachbartexte({ project: { id: PROJEKT_ID }, doc: OFFENER_TEXT, docs: [nachbarText({ body: lang })] })
+  assert.ok(nachbar.anfang.length <= MAX_NACHBAR_ZEICHEN)
+  assert.ok(nachbar.volltext.length > 8000, 'der Suchraum ist der ganze Text')
+})
+
+test('textAusKoerper trennt Bloecke und laesst nichts kleben', () => {
+  assert.equal(textAusKoerper('<p>Ende.</p><p>Anfang</p>'), 'Ende.\n\nAnfang')
+  assert.equal(textAusKoerper('<p>a<br>b</p>'), 'a\n\nb')
+  assert.equal(textAusKoerper(''), '')
+  assert.equal(textAusKoerper(null), '')
+  assert.equal(textAusKoerper('<p>&lt;nicht&gt; ein Tag</p>'), '<nicht> ein Tag')
+})
+
+test('ohne Projekt gibt es keine Nachbartexte — geraten wird nichts', () => {
+  assert.deepEqual(baueNachbartexte(), [])
+  assert.deepEqual(baueNachbartexte({ docs: [nachbarText()] }), [])
+  assert.deepEqual(baueNachbartexte({ project: {}, docs: [nachbarText()] }), [])
 })
 
 // ---- Was diese Person schon erkannt hat --------------------------------------
@@ -479,6 +609,25 @@ test('erkannte Prinzipien landen im Prompt, aber nie im Cache-Praefix', () => {
   assert.equal(gecacht.some(teil => /schon erkannt/.test(teil.text)), false)
 })
 
+test('erkannte Prinzipien erscheinen genau einmal und nie als projektfreigegebenes Wissen', () => {
+  let store = ensureMemoryStore(null)
+  const satz = 'Eine Zahl braucht ihre Herkunft.'
+  store = schreibeErkanntes(store, { satz, at: 1 }).store
+
+  const bloecke = baueOndaBloecke({
+    project: { id: PROJEKT_ID },
+    doc: OFFENER_TEXT,
+    memoryStore: store,
+  })
+  const prompt = bloecke.join('\n')
+  assert.equal(prompt.split(satz).length - 1, 1, 'dasselbe Prinzip kostet sonst doppelt Kontext')
+  assert.doesNotMatch(
+    prompt,
+    /freigegebenes Wissen[^\n]*Eine Zahl braucht ihre Herkunft/,
+    'persoenliches Erkanntes ist keine ausdrueckliche Projektfreigabe',
+  )
+})
+
 // Der Block sagt "wiederhole dich nicht", NICHT "schweige". Sonst wuerde das System
 // schlechter, je mehr es weiss -- und wer denselben Fehler zum fuenften Mal macht,
 // bekaeme genau dann keinen Hinweis mehr, wenn er ihn am noetigsten braucht.
@@ -487,4 +636,24 @@ test('der Block verlangt Kuerze, nicht Schweigen', () => {
   store = schreibeErkanntes(store, { satz: 'Kuerze schlaegt Fuelle.', at: 1 }).store
   const block = baueOndaBloecke({ memoryStore: store }).find(b => /schon erkannt/.test(b))
   assert.match(block, /NICHT, zu schweigen|sag es trotzdem/)
+})
+
+// Die Beschriftungsliste im Prompt muss ALLE Textarten kennen. Fehlt eine, faellt die
+// Zeile "Textsorte: ..." still aus dem Prompt -- und mit ihr die Stilmittel-Zuordnung und
+// die Integritaetsregeln, die beide daran haengen. Genau das war fuer prosa und lyrik der
+// Fall, nachdem sie zur Genre-Liste dazukamen: zwei von neun Textarten liefen leer, ohne
+// dass irgendetwas rot wurde.
+test('jede Textart aus LANGUAGE_GENRES erreicht den Prompt', () => {
+  for (const genre of LANGUAGE_GENRES) {
+    if (genre === 'other') continue // bewusst ohne Beschriftung
+    const project = { id: PROJEKT_ID, languageProfile: sprachprofil({ genre }) }
+    const block = baueOndaBloecke({ project }).find(b => /Textsorte:/.test(b))
+    assert.ok(block, `Textart ${genre} erscheint nicht im Prompt`)
+  }
+})
+
+test('eine unbestimmte Textart behauptet nichts', () => {
+  const project = { id: PROJEKT_ID, languageProfile: sprachprofil({ genre: 'other' }) }
+  const bloecke = baueOndaBloecke({ project })
+  assert.equal(bloecke.some(b => /Textsorte:/.test(b)), false)
 })

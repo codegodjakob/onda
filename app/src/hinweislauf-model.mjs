@@ -143,6 +143,12 @@ export async function versucheHinweislauf({
   findings,
   decisions,
   textart = '',
+  // Die Bilanz aus rueckkopplung-model.mjs (bilanziereRueckmeldung), über ALLE eigenen
+  // Dokumente gebildet — nicht über findings/decisions dieses einen Dokuments. Sie muss
+  // deshalb vom Aufrufer kommen: Diese Funktion sieht nur das aktuelle Dokument, die Frage
+  // "was trägt bei dieser Person" ist aber dokumentübergreifend. Fehlt sie, entsteht kein
+  // Block, und der Lauf sieht aus wie zuvor.
+  rueckkopplung = null,
   runTask,
   setzeAgentStatus,
 }) {
@@ -173,6 +179,7 @@ export async function versucheHinweislauf({
       docText,
       entscheidungen: fasseEntscheidungenZusammen(findings, decisions),
       offeneHinweise: fasseOffeneHinweiseZusammen(findings),
+      rueckkopplung,
     })
     // Bereich W (Aura/Statuszeile) atmet ausschliesslich am echten Gateway-Zustand -- wie in
     // starteVerstaendnisEntwurf/sendeInterviewAntwort muss jeder echte runTask-Aufruf ihn setzen.

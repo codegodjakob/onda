@@ -9,8 +9,11 @@ import {
   LANGUAGE_GENRES,
   LANGUAGE_MEDIA,
   LANGUAGE_REGIONS,
+  activeWritingStyle,
   buildLanguageContext,
+  defineWritingStyle,
   ensureLanguageProfile,
+  selectWritingStyle,
   setOrthographyAutomation,
   updateLanguageProfile,
 } from './language-profile.mjs'
@@ -26,6 +29,9 @@ import {
   recordLanguageReport,
 } from './language-report.mjs'
 
+// prosa und lyrik ergaenzt am 05.08.2026: LANGUAGE_GENRES kannte sie schon, diese Liste
+// nicht — die Auswahl zeigte dafuer zwei leere Zeilen, und wer eine davon traf, sah
+// hinterher ein leeres Feld.
 const GENRE_LABELS = Object.freeze({
   scientific: 'Wissenschaftlich',
   essay: 'Essay',
@@ -33,6 +39,8 @@ const GENRE_LABELS = Object.freeze({
   web: 'Webtext',
   marketing: 'Marketing',
   campaign: 'Kampagne',
+  prosa: 'Prosa',
+  lyrik: 'Lyrik',
   other: 'Sonstig',
 })
 const MEDIA_LABELS = Object.freeze({
@@ -273,7 +281,32 @@ export function createLanguageUi({
     const assumptions = inputField('Annahmen', profile.audienceState.assumptions.join('\n'), 2)
     const resistances = inputField('Widerstände', profile.audienceState.resistances.join('\n'), 2)
     const commonGround = inputField('Geteilte Grundlage', profile.audienceState.commonGround.join('\n'), 2)
-    const houseStyle = inputField('Hausstil, eine Regel je Zeile', profile.houseStyle.join('\n'), 3)
+    // Schreibstile: eine Autorin hat mehrere und schreibt in diesem Projekt in einem davon.
+    // Die Auswahl wechselt sofort — sonst zeigte das Formular die Regeln des einen und
+    // speicherte sie in den anderen.
+    const active = activeWritingStyle(profile)
+    const styleSelect = selectField(
+      'Schreibstil',
+      profile.styles.map(style => [style.id, style.name]),
+      active.id,
+    )
+    styleSelect.addEventListener('change', () => {
+      try {
+        project.languageProfile = selectWritingStyle({
+          profile: project.languageProfile,
+          projectId: project.id,
+          styleId: styleSelect.value,
+          at: Date.now(),
+        })
+        persist(project)
+        render(body, project, 'Schreibstil gewechselt. Das Formular zeigt jetzt seine Regeln; nicht Gespeichertes ist verworfen.')
+      } catch (error) {
+        render(body, project, error?.message || 'Der Schreibstil konnte nicht gewechselt werden.')
+      }
+    })
+    const styleName = inputField('Name des Schreibstils', active.name, 1)
+    const stylePurpose = inputField('Wofür dieser Stil da ist', active.purpose, 1)
+    const houseStyle = inputField('Regeln dieses Stils, eine Regel je Zeile', active.rules.join('\n'), 3)
     const save = createNode('button', 'language-primary', 'Kontextprofil speichern')
     save.type = 'submit'
     form.append(
@@ -288,13 +321,17 @@ export function createLanguageUi({
       labelledField('Annahmen', assumptions),
       labelledField('Widerstände', resistances),
       labelledField('Geteilte Grundlage', commonGround),
-      labelledField('Hausstil, eine Regel je Zeile', houseStyle),
+      labelledField('Schreibstil', styleSelect),
+      labelledField('Name des Schreibstils', styleName),
+      labelledField('Wofür dieser Stil da ist', stylePurpose),
+      labelledField('Regeln dieses Stils, eine Regel je Zeile', houseStyle),
       save,
     )
     form.addEventListener('submit', event => {
       event.preventDefault()
       try {
-        project.languageProfile = updateLanguageProfile({
+        const at = Date.now()
+        let next = updateLanguageProfile({
           profile: project.languageProfile,
           projectId: project.id,
           changes: {
@@ -313,8 +350,25 @@ export function createLanguageUi({
             },
             houseStyle: cleanList(houseStyle.value),
           },
-          at: Date.now(),
+          at,
         })
+        // Ein neuer Name legt einen neuen Stil an, statt den alten umzubenennen. Damit
+        // bleibt der bisherige Stil erhalten, wenn jemand einen zweiten daneben aufmacht —
+        // und genau darum geht es bei mehreren Stilen.
+        const gewuenschterName = styleName.value.trim()
+        const gewuenschterZweck = stylePurpose.value.trim()
+        const bisher = activeWritingStyle(next)
+        if (gewuenschterName && (gewuenschterName !== bisher.name || gewuenschterZweck !== bisher.purpose)) {
+          next = defineWritingStyle({
+            profile: next,
+            projectId: project.id,
+            name: gewuenschterName,
+            purpose: gewuenschterZweck,
+            rules: cleanList(houseStyle.value),
+            at,
+          })
+        }
+        project.languageProfile = next
         persist(project)
         render(body, project, 'Kontextprofil gespeichert. Die Angaben gelten bindend für diese Sprachprüfung.')
       } catch (error) {
@@ -341,6 +395,7 @@ export function createLanguageUi({
       ['Medium', profile.medium ? MEDIA_LABELS[profile.medium] : 'noch offen'],
       ['Zielzustand', languageContext.known.goal || 'noch offen'],
       ['Sprachregion', profile.region ? REGION_LABELS[profile.region] : 'noch offen'],
+      ['Schreibstil', activeWritingStyle(profile)?.name || 'noch offen'],
     ]
     entries.forEach(([term, value]) => {
       grid.append(createNode('dt', '', term), createNode('dd', '', value))

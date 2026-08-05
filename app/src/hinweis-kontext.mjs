@@ -9,6 +9,7 @@
 // tatsächlichen baueAnfrage-Vertrag (Vorbild: verstaendnis-kontext.mjs).
 import { HINWEIS_ANWEISUNG } from './agent-prompts.mjs'
 import { baueOndaBloecke } from './onda-kontext.mjs'
+import { formuliereRueckkopplung } from './rueckkopplung-model.mjs'
 
 function kompakteListeHinweis(label, liste) {
   const eintraege = Array.isArray(liste) ? liste : []
@@ -24,14 +25,27 @@ function kompakteListeHinweis(label, liste) {
 // (onda-kontext.mjs). Diese Blöcke stehen bewusst GANZ HINTEN in den volatiles: Anweisung und
 // Entscheidungslage sind der Auftrag, das Projektwissen ist der Hintergrund dazu. Ohne onda
 // entstehen keine Blöcke, und der Kontext sieht aus wie zuvor.
+//
+// rueckkopplung: die Bilanz aus rueckkopplung-model.mjs (bilanziereRueckmeldung) über MEHRERE
+// Dokumente — welche Hinweisart bei dieser Person bisher getragen hat und welche nicht. Der
+// Block steht direkt HINTER der Anweisung und VOR den Listen: Er ist keine Sachinformation
+// über das Projekt, sondern eine Nachjustierung des Auftrags selbst ("bei dieser Art
+// besonders streng prüfen"), und die gehört neben die Anweisung, auf die sie sich bezieht.
+// Volatil bleibt er in jedem Fall — er ändert sich mit jeder Autorentscheidung und dürfte den
+// gecachten Präfix nie berühren. Ohne verwertbare Zahlen entsteht KEIN Block (fail-closed,
+// siehe formuliereRueckkopplung).
 export function baueHinweisKontext({
   verstaendnis = null,
   docText = '',
   entscheidungen = [],
   offeneHinweise = [],
+  rueckkopplung = null,
   onda = null,
 } = {}) {
   const volatiles = [HINWEIS_ANWEISUNG]
+
+  const rueckkopplungHinweis = rueckkopplung ? formuliereRueckkopplung(rueckkopplung) : null
+  if (rueckkopplungHinweis) volatiles.push(rueckkopplungHinweis)
 
   const entscheidungenHinweis = kompakteListeHinweis(
     'Bereits entschiedene Hinweise — nicht wiederholen, auch nicht in neuer Verkleidung',
