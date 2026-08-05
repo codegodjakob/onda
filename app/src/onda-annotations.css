@@ -28,7 +28,13 @@
 .onda-review-bar[hidden] { display: none; }
 .onda-review-bar__summary { display: flex; align-items: baseline; gap: var(--space-2); min-width: 0; font: var(--type-body); }
 .onda-review-bar__eyebrow { color: var(--text-primary); font-weight: var(--fw-medium); }
+.onda-review-bar__notice { display: inline-flex; align-items: center; gap: var(--space-2); color: var(--text-tertiary); font: var(--type-caption); }
+.onda-review-bar__notice[hidden] { display: none; }
+.onda-review-bar__notice button { padding: 0; border: 0; background: transparent; color: var(--text-link); font: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 .onda-review-bar__actions { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-2); }
+.onda-mode-switch { display: inline-flex; padding: var(--space-1); border-radius: var(--radius-control); background: var(--bg-surface); }
+.onda-mode-switch button { min-height: 32px; padding: 0 var(--space-3); border: 0; border-radius: var(--radius-control); background: transparent; color: var(--text-secondary); font: var(--type-label); cursor: pointer; }
+.onda-mode-switch button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); }
 .onda-review-control, .onda-review-icon {
   min-height: 40px; padding: 0 var(--space-3); border: 0; border-radius: var(--radius-control);
   background: transparent; color: var(--text-secondary); font: var(--type-label); cursor: pointer;
@@ -110,6 +116,14 @@
 .aura-title-correction__field { display: flex; flex-direction: column; gap: var(--space-2); }
 .aura-title-correction__label { color: var(--text-tertiary); font: var(--type-caption); }
 .aura-title-correction__input { width: 100%; min-height: 48px; padding: 0 var(--space-4); border: 1px solid var(--border-default); border-radius: var(--radius-control); background: var(--bg-sunken); color: var(--text-primary); font: var(--type-title); }
+.aura-rejection { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-4); border-radius: var(--radius-panel); background: var(--bg-sunken); }
+.aura-rejection__title { margin: 0; font: var(--type-label); color: var(--text-primary); }
+.aura-rejection__intro { margin: 0; font: var(--type-body); color: var(--text-secondary); }
+.aura-rejection__choices { display: grid; gap: var(--space-2); }
+.aura-rejection__choice { display: grid; gap: var(--space-1); min-height: 60px; padding: var(--space-3) var(--space-4); border: 1px solid var(--border-default); border-radius: var(--radius-panel); background: var(--bg-surface); color: var(--text-primary); text-align: left; cursor: pointer; }
+.aura-rejection__choice:hover { border-color: var(--accent); }
+.aura-rejection__choice strong { font: var(--type-label); }
+.aura-rejection__choice span { color: var(--text-secondary); font: var(--type-caption); }
 
 @keyframes onda-annotation-in { from { opacity: 0; transform: translateY(6px); } }
 @media (max-width: 1040px) {

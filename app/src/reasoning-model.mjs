@@ -18,6 +18,7 @@ const UNDERSTANDING_DEFAULTS = Object.freeze({
 
 const PRIORITY_RANK = Object.freeze({ critical: 0, high: 1, normal: 2, low: 3 })
 const INTEGRITY_CATEGORIES = new Set(['fact', 'source', 'citation', 'method', 'logic'])
+const INTEGRITY_ANNOTATION_CATEGORIES = Object.freeze({ beleg: 'source', faktencheck: 'fact', widerspruch: 'logic' })
 const COMPLETED_STATUSES = new Set(['resolved', 'dismissed', 'superseded'])
 
 function cleanList(value) {
@@ -292,7 +293,13 @@ export function decideFinding(doc, findingId, decision, at = Date.now()) {
   if (decision.kind === 'reject') {
     // Die Textart reist am Finding mit (agent-findings.mjs hinweisZuFinding). Ohne sie
     // entscheidet dieselbe Vier-Arten-Regel wie bisher.
-    outcome = isIntegrityCategory(finding.category, finding.textart) ? 'risk-accepted' : 'dismissed'
+    const exactIntegrityCategory = INTEGRITY_ANNOTATION_CATEGORIES[finding.anmerkungsart]
+    const exactIntegrity = exactIntegrityCategory
+      ? isIntegrityCategory(exactIntegrityCategory, finding.textart)
+      : false
+    outcome = isIntegrityCategory(finding.category, finding.textart) || exactIntegrity
+      ? 'risk-accepted'
+      : 'dismissed'
   }
   finding.status = outcome
   finding.decidedAt = at

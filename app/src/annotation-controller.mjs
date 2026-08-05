@@ -1,9 +1,10 @@
-import { resolveAnnotationPresentation } from './annotation-contract.mjs'
+import { isAnnotationKindAllowed, resolveAnnotationPresentation } from './annotation-contract.mjs'
 
 const ANNOTATION_MODES = new Set(['text', 'notiz'])
 const PRIORITY_RANK = Object.freeze({ fehler: 0, empfehlung: 1, geschmack: 2 })
 const SAFE_CORRECTION_KINDS = new Set(['rechtschreibung', 'grammatik', 'zeichensetzung'])
 const MAX_UNDO_OPERATIONS = 20
+const SUPPRESSION_SCOPES = new Set(['once', 'document', 'personal'])
 
 function plainObject(value) {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value))
@@ -35,7 +36,78 @@ export function normalizeAnnotationWorkspace(value = {}) {
   workspace.suppressedAnnotations = Array.isArray(workspace.suppressedAnnotations)
     ? [...new Set(workspace.suppressedAnnotations.filter(id => typeof id === 'string' && id.trim()))]
     : []
+  workspace.annotationSuppressions = Array.isArray(workspace.annotationSuppressions)
+    ? workspace.annotationSuppressions.filter(plainObject)
+    : []
+  workspace.pendingRejectionFindingId = typeof workspace.pendingRejectionFindingId === 'string'
+    && workspace.pendingRejectionFindingId.trim()
+    ? workspace.pendingRejectionFindingId.trim()
+    : null
+  workspace.lastAnnotationRejection = plainObject(workspace.lastAnnotationRejection)
+    ? workspace.lastAnnotationRejection
+    : null
   return workspace
+}
+
+export function acceptsKindInMode(mode, kind) {
+  return isAnnotationKindAllowed(mode === 'notiz' ? 'notiz' : 'text', kind)
+}
+
+export function annotationSignature(finding = {}) {
+  const kind = resolveAnnotationPresentation(finding).kind
+  const target = String(finding?.target || finding?.short || '')
+    .trim()
+    .toLocaleLowerCase('de-DE')
+    .replace(/\s+/g, ' ')
+  return `${kind}|${target}`
+}
+
+export function createSuppressionStore({ documentRecords = [], personalRecords = [] } = {}) {
+  const documents = Array.isArray(documentRecords) ? documentRecords : []
+  const personal = Array.isArray(personalRecords) ? personalRecords : []
+  const all = () => [...documents, ...personal].filter(plainObject)
+
+  return {
+    reject({ findingId = null, signature, documentId = null, scope = 'once', at = Date.now() } = {}) {
+      const normalizedScope = SUPPRESSION_SCOPES.has(scope) ? scope : 'once'
+      const record = {
+        id: `suppression-${normalizedScope}-${Number(at) || 0}-${all().length}`,
+        findingId: typeof findingId === 'string' ? findingId : null,
+        signature: String(signature || ''),
+        documentId: typeof documentId === 'string' ? documentId : null,
+        scope: normalizedScope,
+        at: Number.isFinite(at) ? at : Date.now(),
+      }
+      if (normalizedScope === 'personal') personal.push(record)
+      else documents.push(record)
+      return record
+    },
+
+    suppresses(signature, documentId) {
+      return all().some(record => (
+        record.signature === signature
+        && (
+          record.scope === 'personal'
+          || (record.scope === 'document' && record.documentId === documentId)
+        )
+      ))
+    },
+
+    revoke(id) {
+      for (const records of [documents, personal]) {
+        const index = records.findIndex(record => record?.id === id)
+        if (index >= 0) {
+          records.splice(index, 1)
+          return true
+        }
+      }
+      return false
+    },
+
+    records() {
+      return all().map(record => ({ ...record }))
+    },
+  }
 }
 
 export function orderedAnnotations(findings, _moment = 'aufschauen') {

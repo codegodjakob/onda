@@ -125,6 +125,14 @@ test('records rejection of an integrity finding as accepted risk', () => {
   assert.equal(getFindingQueue(doc).acceptedRisks.length, 1)
 })
 
+test('exakte Beleg-, Fakten- und Widerspruchsarten bleiben Integritätsentscheidungen', () => {
+  for (const anmerkungsart of ['beleg', 'faktencheck', 'widerspruch']) {
+    const doc = { findings: [{ id: anmerkungsart, status: 'open', category: 'content', anmerkungsart }] }
+    const finding = decideFinding(doc, anmerkungsart, { kind: 'reject' }, 42)
+    assert.equal(finding.status, 'risk-accepted', anmerkungsart)
+  }
+})
+
 test('zeichnet den gewählten Verwerfungsumfang nachvollziehbar auf', () => {
   const doc = { findings: [{ id: 'style', status: 'open', category: 'wording' }] }
 

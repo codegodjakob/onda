@@ -1,7 +1,10 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  acceptsKindInMode,
   annotationSummary,
+  annotationSignature,
+  createSuppressionStore,
   createAnnotationController,
   normalizeAnnotationWorkspace,
   orderedAnnotations,
@@ -103,3 +106,33 @@ test('kaputte Adapter oder leere Warteschlange bleiben ruhig und deterministisch
   assert.deepEqual(controller.undoLast(), { ok: false, reason: 'nothing-to-undo' })
 })
 
+test('Notizmodus lässt nur Notizarten, Textmodus nur Textarten zu', () => {
+  assert.equal(acceptsKindInMode('notiz', 'rechtschreibung'), false)
+  assert.equal(acceptsKindInMode('notiz', 'nachfrage'), true)
+  assert.equal(acceptsKindInMode('text', 'nachfrage'), false)
+  assert.equal(acceptsKindInMode('text', 'grammatik'), true)
+})
+
+test('Verwerfungsumfänge bleiben getrennt und widerrufbar', () => {
+  const store = createSuppressionStore()
+  const documentRecord = store.reject({
+    findingId: 'f-1', signature: 'wortwahl|sehr gut', documentId: 'a', scope: 'document', at: 1,
+  })
+  assert.equal(store.suppresses('wortwahl|sehr gut', 'a'), true)
+  assert.equal(store.suppresses('wortwahl|sehr gut', 'b'), false)
+
+  const personalRecord = store.reject({
+    findingId: 'f-2', signature: 'ton|man-du', documentId: 'a', scope: 'personal', at: 2,
+  })
+  assert.equal(store.suppresses('ton|man-du', 'b'), true)
+  assert.equal(store.revoke(personalRecord.id), true)
+  assert.equal(store.suppresses('ton|man-du', 'b'), false)
+  assert.equal(store.records().some(record => record.id === documentRecord.id), true)
+})
+
+test('einmalige Verwerfung unterdrückt keinen künftigen ähnlichen Fund', () => {
+  const store = createSuppressionStore()
+  store.reject({ findingId: 'f-1', signature: 'satzstil|lang', documentId: 'a', scope: 'once', at: 1 })
+  assert.equal(store.suppresses('satzstil|lang', 'a'), false)
+  assert.equal(annotationSignature({ anmerkungsart: 'satzstil', target: '  Sehr   lang  ' }), 'satzstil|sehr lang')
+})

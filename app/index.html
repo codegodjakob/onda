@@ -105,8 +105,16 @@
           <div class="onda-review-bar__summary">
             <span class="onda-review-bar__eyebrow">Anmerkungen</span>
             <span id="annotationReviewSummary">Keine offenen Anmerkungen</span>
+            <span id="annotationRejectionNotice" class="onda-review-bar__notice" hidden>
+              <span id="annotationRejectionText"></span>
+              <button id="annotationRejectionUndo" type="button">Entscheidung zurücknehmen</button>
+            </span>
           </div>
           <div class="onda-review-bar__actions">
+            <div class="onda-mode-switch" role="group" aria-label="Arbeitsmodus">
+              <button type="button" data-annotation-mode="text" aria-pressed="true">Text</button>
+              <button type="button" data-annotation-mode="notiz" aria-pressed="false">Notizen</button>
+            </div>
             <button id="annotationBulkAccept" class="onda-review-control" type="button" hidden>Sichere Korrekturen übernehmen</button>
             <button id="annotationQuietToggle" class="onda-review-control" type="button" aria-pressed="false">Ruhig</button>
             <button id="annotationPrevious" class="onda-review-icon" type="button" aria-label="Vorherige Anmerkung"></button>

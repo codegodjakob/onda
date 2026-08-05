@@ -93,7 +93,13 @@ import { createArgumentUi } from './argument-ui.mjs'
 import { createLanguageUi } from './language-ui.mjs'
 import { analyzeArgumentImpact } from './argument-graph.mjs'
 import { createAuditUi } from './audit-ui.mjs'
-import { annotationSummary, createAnnotationController } from './annotation-controller.mjs'
+import {
+  acceptsKindInMode,
+  annotationSignature,
+  annotationSummary,
+  createAnnotationController,
+  createSuppressionStore,
+} from './annotation-controller.mjs'
 import { renderAnnotation } from './annotation-components.mjs'
 import { resolveAnnotationPresentation } from './annotation-contract.mjs'
 import {
@@ -335,6 +341,18 @@ function scrollThreadToLatest(messages) {
 function activeWorkspace() {
   const doc = ctx?.activeDoc()
   return doc ? ensureWorkspaceState(doc) : null
+}
+
+function suppressionStoreFor(doc = ctx?.activeDoc(), workspace = activeWorkspace()) {
+  if (!ctx?.state || !doc || !workspace) return createSuppressionStore()
+  if (!ctx.state.memoryStore || typeof ctx.state.memoryStore !== 'object') ctx.state.memoryStore = {}
+  if (!Array.isArray(ctx.state.memoryStore.annotationSuppressions)) {
+    ctx.state.memoryStore.annotationSuppressions = []
+  }
+  return createSuppressionStore({
+    documentRecords: workspace.annotationSuppressions,
+    personalRecords: ctx.state.memoryStore.annotationSuppressions,
+  })
 }
 
 // Das offene Dokument bestimmt sein Projekt — nicht ctx.activeProjectObj().
@@ -2260,8 +2278,12 @@ function planeMomentwechsel() {
 function visiblePassageFindingRecords(doc, blocks) {
   ensureReasoningModel(doc)
   const moment = momentJetzt(doc?.id)
+  const workspace = activeWorkspace()
+  const suppressionStore = suppressionStoreFor(doc, workspace)
   const records = []
   for (const finding of doc.findings.filter(candidate => candidate?.status === 'open')) {
+    if (!acceptsKindInMode(workspace?.annotationMode, finding.anmerkungsart)) continue
+    if (suppressionStore.suppresses(annotationSignature(finding), doc.id)) continue
     // Der Rhythmus folgt der Art, nicht dem Kanal (momente-model.mjs): eine
     // Formulierung darf sofort erscheinen, eine Strukturfrage erst beim Aufschauen.
     // Zurueckgehalten heisst nur zurueckgehalten -- der Hinweis bleibt bestehen und
@@ -2581,18 +2603,83 @@ function decideAndAdvance(finding, decision, { refresh = true, restoreFocus = tr
 }
 
 function handleSuggestionReject(finding) {
-  const isIntegrity = isIntegrityCategory(finding.category)
-    || ['beleg', 'faktencheck', 'widerspruch'].includes(finding.anmerkungsart)
-  if (!isIntegrity) {
-    decideAndAdvance(finding, { kind: 'reject' })
-    return
-  }
   const workspace = activeWorkspace()
-  workspace.riskConfirmationFindingId = finding.id
-  workspace.riskReason = ''
-  riskConfirmationFocusRequest = true
+  workspace.pendingRejectionFindingId = finding.id
   ctx.scheduleSave()
   refreshWorkspace()
+}
+
+function commitAnnotationRejection(finding, scope) {
+  const doc = ctx.activeDoc()
+  const workspace = activeWorkspace()
+  if (!doc || !workspace || finding.status !== 'open') return
+  const record = suppressionStoreFor(doc, workspace).reject({
+    findingId: finding.id,
+    signature: annotationSignature(finding),
+    documentId: doc.id,
+    scope,
+    at: Date.now(),
+  })
+  workspace.pendingRejectionFindingId = null
+  const decision = decideAndAdvance(finding, { kind: 'reject', rejectionScope: scope }, { refresh: false, restoreFocus: false })
+  workspace.lastAnnotationRejection = {
+    recordId: record.id,
+    findingId: finding.id,
+    decisionId: decision?.id || null,
+    scope,
+  }
+  refreshWorkspace()
+  announceAgentStatus(scope === 'once'
+    ? 'Diese Anmerkung wurde verworfen. Ähnliche Hinweise dürfen später wieder erscheinen.'
+    : scope === 'document'
+      ? 'Diese Art Hinweis wird in diesem Text nicht erneut vorgeschlagen.'
+      : 'Diese Entscheidung gilt als persönliche Präferenz, bis du sie zurücknimmst.')
+}
+
+function renderRejectionScope(finding) {
+  const workspace = activeWorkspace()
+  if (workspace?.pendingRejectionFindingId !== finding.id) return null
+  const panel = createNode('section', 'aura-rejection')
+  panel.setAttribute('aria-label', 'Folge des Verwerfens wählen')
+  panel.append(
+    createNode('h3', 'aura-rejection__title', 'Was soll Onda daraus lernen?'),
+    createNode('p', 'aura-rejection__intro', 'Wähle, ob nur diese einzelne Anmerkung verschwindet oder ob Onda ähnliche Hinweise künftig zurückhalten soll.'),
+  )
+  const choices = createNode('div', 'aura-rejection__choices')
+  const options = [
+    ['once', 'Nur diese Anmerkung', 'Der aktuelle Hinweis verschwindet. Ein ähnlicher Hinweis darf später wieder erscheinen.'],
+    ['document', 'In diesem Text nicht mehr', 'Onda hält denselben Hinweis in diesem Dokument künftig zurück. Andere Texte bleiben unberührt.'],
+    ['personal', 'Als persönliche Präferenz merken', 'Onda hält denselben Hinweis auch in anderen Projekten zurück, bis du diese Entscheidung widerrufst.'],
+  ]
+  options.forEach(([scope, title, description]) => {
+    const button = createNode('button', 'aura-rejection__choice')
+    button.type = 'button'
+    button.append(createNode('strong', '', title), createNode('span', '', description))
+    button.addEventListener('click', () => commitAnnotationRejection(finding, scope))
+    choices.append(button)
+  })
+  panel.append(choices)
+  return panel
+}
+
+function undoLatestRejection() {
+  const doc = ctx?.activeDoc()
+  const workspace = activeWorkspace()
+  const latest = workspace?.lastAnnotationRejection
+  if (!doc || !workspace || !latest) return false
+  suppressionStoreFor(doc, workspace).revoke(latest.recordId)
+  const finding = doc.findings.find(candidate => candidate.id === latest.findingId)
+  if (finding) {
+    finding.status = 'open'
+    delete finding.decidedAt
+  }
+  if (latest.decisionId) doc.decisions = doc.decisions.filter(decision => decision.id !== latest.decisionId)
+  workspace.activeAnnotationId = latest.findingId
+  workspace.lastAnnotationRejection = null
+  ctx.scheduleSave()
+  refreshWorkspace()
+  announceAgentStatus('Die Verwerfung wurde zurückgenommen. Der Hinweis ist wieder offen.')
+  return true
 }
 
 function authorizedFindingBlock(finding) {
@@ -2940,8 +3027,11 @@ function renderAnnotationReviewBar() {
   const workspace = activeWorkspace()
   const bar = document.getElementById('annotationReviewBar')
   if (!bar || !doc || !workspace) return
-  const summary = annotationSummary(doc.findings)
-  bar.hidden = summary.total === 0 && workspace.undoStack.length === 0
+  const modeFindings = (Array.isArray(doc.findings) ? doc.findings : []).filter(finding => (
+    acceptsKindInMode(workspace.annotationMode, finding.anmerkungsart)
+  ))
+  const summary = annotationSummary(modeFindings)
+  bar.hidden = summary.total === 0 && workspace.undoStack.length === 0 && !workspace.lastAnnotationRejection
   const label = document.getElementById('annotationReviewSummary')
   if (label) {
     label.textContent = summary.total
@@ -2949,7 +3039,7 @@ function renderAnnotationReviewBar() {
       : 'Keine offenen Anmerkungen'
   }
   const bulk = document.getElementById('annotationBulkAccept')
-  const safeCount = (Array.isArray(doc.findings) ? doc.findings : []).filter(finding => (
+  const safeCount = modeFindings.filter(finding => (
     finding.status === 'open'
     && ['rechtschreibung', 'grammatik', 'zeichensetzung'].includes(finding.anmerkungsart)
     && finding.action
@@ -2969,6 +3059,19 @@ function renderAnnotationReviewBar() {
   if (next) next.disabled = summary.total < 2 || workspace.quietAnnotations
   const undo = document.getElementById('annotationUndo')
   if (undo) undo.disabled = workspace.undoStack.length === 0
+  document.querySelectorAll('[data-annotation-mode]').forEach(button => {
+    button.setAttribute('aria-pressed', String(button.dataset.annotationMode === workspace.annotationMode))
+  })
+  const rejectionNotice = document.getElementById('annotationRejectionNotice')
+  const rejectionText = document.getElementById('annotationRejectionText')
+  if (rejectionNotice) rejectionNotice.hidden = !workspace.lastAnnotationRejection
+  if (rejectionText && workspace.lastAnnotationRejection) {
+    rejectionText.textContent = workspace.lastAnnotationRejection.scope === 'once'
+      ? 'Ein Hinweis wurde verworfen.'
+      : workspace.lastAnnotationRejection.scope === 'document'
+        ? 'Eine Regel gilt jetzt für diesen Text.'
+        : 'Eine persönliche Präferenz ist aktiv.'
+  }
 }
 
 function scheduleLocalPosition(blockId) {
@@ -3040,6 +3143,10 @@ function renderLocalFinding() {
   const isStale = resolution.placementKind === 'stale'
   if (resolution.migrated) ctx.scheduleSave()
 
+  if (workspace.pendingRejectionFindingId && workspace.pendingRejectionFindingId !== finding?.id) {
+    workspace.pendingRejectionFindingId = null
+  }
+
   if (localFeedbackError && localFeedbackError.findingId !== finding?.id) localFeedbackError = null
 
   if (
@@ -3073,6 +3180,8 @@ function renderLocalFinding() {
   if (ownVersion) surface.append(ownVersion)
   const riskConfirmation = renderIntegrityRiskConfirmation(finding)
   if (riskConfirmation) surface.append(riskConfirmation)
+  const rejectionScope = renderRejectionScope(finding)
+  if (rejectionScope) surface.append(rejectionScope)
   if (localFeedbackError?.findingId === finding.id) {
     const error = createNode('p', 'local-finding-error', localFeedbackError.message)
     error.setAttribute('role', 'status')
@@ -3897,6 +4006,7 @@ async function fuehreHinweislaufAus({ grund = 'pause' } = {}) {
     blocks,
     findings: doc?.findings,
     decisions: doc?.decisions,
+    annotationMode: workspace?.annotationMode || 'text',
     // Die Textart entscheidet, welche Hinweisarten Integritaetsfragen sind
     // (textart-regeln.mjs). Bei einem Plakattext ist eine fehlende Quellenangabe keine
     // Frage der Wahrhaftigkeit, und ihr Verwerfen kein "bewusst angenommenes Risiko".
@@ -4414,6 +4524,11 @@ export function initWorkspace(context) {
     annotationController?.setQuiet(!workspace?.quietAnnotations)
     refreshWorkspace()
   }
+  const switchAnnotationMode = event => {
+    annotationController?.setMode(event.currentTarget.dataset.annotationMode)
+    momentVonHand = true
+    refreshWorkspace()
+  }
   const acceptSafeAnnotations = () => {
     const result = annotationController?.acceptAllSafeCorrections()
     if (result?.ok) announceAgentStatus(`${result.count} sichere Korrekturen übernommen. Rückgängig bleibt einzeln möglich.`)
@@ -4521,6 +4636,10 @@ export function initWorkspace(context) {
   listen(document.getElementById('annotationQuietToggle'), 'click', toggleQuietAnnotations)
   listen(document.getElementById('annotationBulkAccept'), 'click', acceptSafeAnnotations)
   listen(document.getElementById('annotationUndo'), 'click', undoAnnotation)
+  listen(document.getElementById('annotationRejectionUndo'), 'click', undoLatestRejection)
+  document.querySelectorAll('[data-annotation-mode]').forEach(button => (
+    listen(button, 'click', switchAnnotationMode)
+  ))
   listenEditor('selectionUpdate', onSelectionUpdate)
   listenEditor('update', onEditorUpdate)
 

@@ -116,6 +116,31 @@ async function runEditor(browser) {
   await page.getByRole('button', { name: 'Rückgängig' }).click()
   assert.equal(await page.locator('#editor .ProseMirror').textContent().then(text => text.includes(seeded.target)), true)
   assert.equal(await page.evaluate(() => window.AIWT.state.docs.find(doc => doc.id === window.AIWT.state.active).findings.find(item => item.id === 'onda-editor-smoke').status), 'open')
+
+  await page.getByRole('button', { name: 'Original behalten' }).click()
+  const consequence = page.getByRole('region', { name: 'Folge des Verwerfens wählen' })
+  await consequence.waitFor({ state: 'visible' })
+  assert.match(await consequence.textContent(), /ähnlicher Hinweis darf später wieder erscheinen/)
+  assert.match(await consequence.textContent(), /Andere Texte bleiben unberührt/)
+  assert.match(await consequence.textContent(), /anderen Projekten zurück/)
+  await consequence.getByRole('button', { name: /In diesem Text nicht mehr/ }).click()
+  assert.equal(await page.evaluate(() => window.AIWT.state.docs.find(doc => doc.id === window.AIWT.state.active).findings.find(item => item.id === 'onda-editor-smoke').status), 'dismissed')
+  await page.getByRole('button', { name: 'Entscheidung zurücknehmen' }).click()
+  assert.equal(await page.evaluate(() => window.AIWT.state.docs.find(doc => doc.id === window.AIWT.state.active).findings.find(item => item.id === 'onda-editor-smoke').status), 'open')
+
+  await page.evaluate(({ blockId, target }) => {
+    window.AIWT.__workspaceTestBridge.injectFinding({
+      id: 'onda-note-smoke', status: 'open', placement: 'passage', blockId,
+      target, short: 'Was genau soll aus dieser Notiz werden?',
+      why: 'Die Notiz ist noch offen.', folge: 'Erst die Antwort erlaubt eine Ausformulierung.',
+      anmerkungsart: 'nachfrage', createdAt: -2, thread: [],
+    })
+  }, seeded)
+  await page.getByRole('button', { name: 'Notizen', exact: true }).click()
+  await page.locator('[data-annotation-form="dialogue"][data-annotation-kind="nachfrage"]').waitFor({ state: 'visible' })
+  assert.equal(await page.locator('[data-annotation-kind="satzstil"]').count(), 0)
+  await page.getByRole('button', { name: 'Text', exact: true }).click()
+  await page.locator('[data-annotation-kind="satzstil"]').waitFor({ state: 'visible' })
   await page.close()
 }
 
