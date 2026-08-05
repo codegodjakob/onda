@@ -24,7 +24,7 @@
 //      nicht das Wort "unbekannt". Das Modell soll nicht raten, was es nicht weiss.
 import { buildLanguageContext } from './language-profile.mjs'
 import { buildStyleMemoryContext, retrieveMemoryContext } from './memory-retrieval.mjs'
-import { erkanntesFuerPrompt } from './erkanntes-model.mjs'
+import { ERKANNTES_TYP, erkanntesFuerPrompt } from './erkanntes-model.mjs'
 
 // 'other'/'Sonstig' ist eine bewusste Wahl der Autorin oder des Autors, sagt dem Modell aber
 // nichts ueber den Text — leerer Label heisst: dieses Feld erzeugt keinen Eintrag.
@@ -303,8 +303,15 @@ function gedaechtnisBlock(project, doc, memoryStore) {
 
   const stimme = liste(stil.projectVoice).map(inhalt => kuerze(inhalt, MAX_GEDAECHTNIS_ZEICHEN))
   const vorlieben = liste(stil.personalPreferences).map(inhalt => kuerze(inhalt, MAX_GEDAECHTNIS_ZEICHEN))
+  // Prinzipien gehoeren NICHT hierher, obwohl retrieveMemoryContext sie mitliefert: sie
+  // liegen auf der persoenlichen Ebene mit allProjects und gelten damit fuer jedes Projekt.
+  // Sie haben unten ihren eigenen Block (erkanntesBlock). Ungefiltert stuende derselbe Satz
+  // zweimal im Prompt — bei JEDEM Lauf doppelt bezahlt (Regel 1 im Modulkopf). Und die
+  // Ueberschrift hier waere schlicht falsch: "ausdruecklich fuer dieses Projekt freigegeben"
+  // behauptet eine Entscheidung, die bei einem projektuebergreifenden Prinzip niemand
+  // getroffen hat. Der Typ ist die Grenze, nicht der Wortlaut — darum aus dem Modell geholt.
   const wissen = records
-    .filter(record => record?.entry?.type !== 'voice')
+    .filter(record => record?.entry?.type !== 'voice' && record?.entry?.type !== ERKANNTES_TYP)
     .map(record => kuerze(record.entry?.content, MAX_GEDAECHTNIS_ZEICHEN))
     .filter(Boolean)
 
