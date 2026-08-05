@@ -206,6 +206,98 @@ export function replaceFindingTarget(editor, target, replacement, blockId = null
   return true
 }
 
+export function insertAnchoredText(editor, {
+  blockId = null,
+  target,
+  text,
+  position = 'after',
+} = {}) {
+  if (typeof target !== 'string' || !target || typeof text !== 'string' || !text) return false
+  const replacement = position === 'before' ? `${text}${target}` : `${target}${text}`
+  return replaceFindingTarget(editor, target, replacement, blockId)
+}
+
+export function applyAnchoredReplacements(editor, replacements = []) {
+  if (!editor || !Array.isArray(replacements) || !replacements.length) return false
+  const ranges = []
+  for (const replacement of replacements) {
+    const target = String(replacement?.target || '')
+    const blockId = String(replacement?.blockId || '')
+    if (!target || !blockId || typeof replacement?.replacement !== 'string') return false
+    const matches = []
+    editor.state.doc.forEach((topNode, topPos) => {
+      if (topNode.attrs.blockId !== blockId) return
+      if (topNode.isTextblock) matches.push(...findTextRanges(topNode, topPos, target))
+      else {
+        topNode.descendants((node, relativePos) => {
+          if (!node.isTextblock) return
+          matches.push(...findTextRanges(node, topPos + 1 + relativePos, target))
+          return false
+        })
+      }
+    })
+    if (matches.length !== 1) return false
+    ranges.push({ ...matches[0], replacement: replacement.replacement })
+  }
+  ranges.sort((left, right) => right.from - left.from)
+  if (ranges.some((range, index) => index > 0 && range.to > ranges[index - 1].from)) return false
+  const tr = ranges.reduce(
+    (transaction, range) => transaction.insertText(range.replacement, range.from, range.to),
+    editor.state.tr,
+  )
+  editor.view.dispatch(tr.scrollIntoView())
+  editor.view.focus()
+  return true
+}
+
+export function moveTopLevelBlock(editor, {
+  fromBlockId,
+  toBlockId,
+  position = 'after',
+} = {}) {
+  if (!editor || !fromBlockId || !toBlockId || fromBlockId === toBlockId) return false
+  let source = null
+  let target = null
+  editor.state.doc.forEach((node, pos) => {
+    if (node.attrs.blockId === fromBlockId) source = { node, pos }
+    if (node.attrs.blockId === toBlockId) target = { node, pos }
+  })
+  if (!source || !target) return false
+
+  const tr = editor.state.tr.delete(source.pos, source.pos + source.node.nodeSize)
+  const mappedTargetPos = tr.mapping.map(target.pos, -1)
+  const mappedTarget = tr.doc.nodeAt(mappedTargetPos)
+  if (!mappedTarget) return false
+  const insertionPos = position === 'before'
+    ? mappedTargetPos
+    : mappedTargetPos + mappedTarget.nodeSize
+  tr.insert(insertionPos, source.node)
+  editor.view.dispatch(tr.scrollIntoView())
+  editor.view.focus()
+  return true
+}
+
+export function insertSemanticHeading(editor, {
+  afterBlockId,
+  blockId = createBlockId(),
+  text,
+  level = 2,
+} = {}) {
+  if (!editor || !afterBlockId || !String(text || '').trim()) return null
+  const block = getEditorBlocks(editor).find(item => item.id === afterBlockId)
+  if (!block || getEditorBlocks(editor).some(item => item.id === blockId)) return null
+  const headingType = editor.state.schema.nodes.heading
+  if (!headingType) return null
+  const safeLevel = Number.isInteger(level) && level >= 1 && level <= 3 ? level : 2
+  const node = headingType.create(
+    { blockId, semanticRole: 'heading', level: safeLevel },
+    editor.state.schema.text(String(text).trim()),
+  )
+  editor.view.dispatch(editor.state.tr.insert(block.pos + block.nodeSize, node).scrollIntoView())
+  editor.view.focus()
+  return blockId
+}
+
 export function replaceAnchoredText(editor, {
   blockId,
   start,
