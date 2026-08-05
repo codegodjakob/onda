@@ -4,6 +4,7 @@ import { readFile, mkdir } from 'node:fs/promises'
 import { extname, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
+import AxeBuilder from '@axe-core/playwright'
 
 import { ALL_ANNOTATION_KINDS } from '../src/annotation-contract.mjs'
 
@@ -234,6 +235,55 @@ async function runSurfaces(browser) {
   await page.close()
 }
 
+async function runAccessibility(browser) {
+  const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, reducedMotion: 'reduce' })
+  const page = await context.newPage()
+  await openExample(page)
+  const seeded = await page.evaluate(() => {
+    const block = window.AIWT.__blockIdentityTestBridge.getBlocks().find(candidate => candidate.text.length > 24)
+    const target = block.text.slice(0, 28)
+    window.AIWT.__workspaceTestBridge.injectFinding({
+      id: 'onda-a11y', status: 'open', placement: 'passage', blockId: block.id,
+      target, action: `${target} präzise`, short: 'Diese Formulierung kann genauer werden.',
+      why: 'Die Aussage wird schneller verständlich.', folge: 'Die Bedeutung bleibt erhalten.',
+      anmerkungsart: 'satzstil', createdAt: -5,
+    })
+    return block.id
+  })
+  assert.ok(seeded)
+
+  for (const width of [1280, 1024, 720, 320]) {
+    await page.setViewportSize({ width, height: 900 })
+    await page.waitForTimeout(30)
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
+    assert.ok(overflow <= 1, `${width}px: ${overflow}px horizontaler Überlauf`)
+    assert.equal(await page.locator('#editor .ProseMirror').isVisible(), true)
+  }
+
+  const mobileTargets = await page.locator('#sidebarReopen, #ondaAura').evaluateAll(nodes => nodes.map(node => {
+    const rect = node.getBoundingClientRect()
+    return { id: node.id, width: rect.width, height: rect.height }
+  }))
+  mobileTargets.forEach(target => {
+    assert.ok(target.width >= 44 && target.height >= 44, `${target.id}: ${target.width}×${target.height}px`)
+  })
+
+  await page.locator('#sidebarReopen').focus()
+  await page.keyboard.press('Enter')
+  assert.equal(await page.locator('#ondaSidebar').isVisible(), true)
+  await page.locator('#sidebarCollapse').focus()
+  await page.keyboard.press('Enter')
+  await page.locator('#sidebarReopen').waitFor({ state: 'visible' })
+
+  const motion = await page.locator('[data-annotation-form]').first().evaluate(node => getComputedStyle(node).animationDuration)
+  assert.ok(parseFloat(motion) <= 0.001, `Reduzierte Bewegung dauert ${motion}`)
+
+  const axe = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze()
+  const severe = axe.violations.filter(item => ['critical', 'serious'].includes(item.impact))
+  assert.deepEqual(severe.map(item => ({ id: item.id, targets: item.nodes.map(node => node.target) })), [])
+  await context.close()
+}
+
 const browser = await chromium.launch({ headless: true })
 try {
   if (requestedSection === 'all' || requestedSection === 'components') await runComponents(browser)
@@ -241,6 +291,7 @@ try {
   if (requestedSection === 'all' || requestedSection === 'editor') await runEditor(browser)
   if (requestedSection === 'all' || requestedSection === 'shell') await runShell(browser)
   if (requestedSection === 'all' || requestedSection === 'surfaces') await runSurfaces(browser)
+  if (requestedSection === 'all' || requestedSection === 'accessibility') await runAccessibility(browser)
   console.log(`ONDA UI ${requestedSection}: PASS`)
 } finally {
   await browser.close()
