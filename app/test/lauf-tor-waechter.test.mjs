@@ -12,8 +12,12 @@ import { fileURLToPath } from 'node:url'
 const SRC_URL = new URL('../src/', import.meta.url)
 const SRC_DIR = fileURLToPath(SRC_URL)
 
+// { recursive: true } (Node 22), damit ein kuenftiger Unterordner (z.B. app/src/kanaele/
+// neuer-kanal.mjs) den Waechter nicht blind macht -- ein flaches readdirSync wuerde
+// Unterverzeichnisse und alles darin stillschweigend uebergehen. Liefert relative Pfade mit
+// '/'-Trennzeichen, die new URL(name, SRC_URL) korrekt gegen SRC_URL aufloest.
 function leseQuelldateien() {
-  return readdirSync(SRC_DIR)
+  return readdirSync(SRC_DIR, { recursive: true })
     .filter((name) => name.endsWith('.js') || name.endsWith('.mjs'))
     .map((name) => ({ name, quelle: readFileSync(new URL(name, SRC_URL), 'utf8') }))
 }
@@ -41,11 +45,30 @@ const TRANSPORT_PFAD = /['"]\.\/agent-transport(?:\.mjs)?['"]/.source
 const RUNTASK_AUSNAHMEN = []
 const ERLAUBTE_RUNTASK_IMPORTEURE = new Set(['lauf-tor.mjs', ...RUNTASK_AUSNAHMEN])
 
-// Findet jeden Ausdruck, der die Bindung runTask aus agent-gateway ins Modul holt:
+// Findet jeden Ausdruck, der die Bindung runTask aus agent-gateway ins Modul holt -- ausser
+// dem Sammel-Re-Export (export * from ...), der unten separat und OHNE Ausnahme gefuehrt
+// wird (siehe findeSternReExportGateway). Diese Funktion hier wird nur fuer Dateien
+// ausgewertet, die NICHT in ERLAUBTE_RUNTASK_IMPORTEURE stehen (siehe pruefeQuelle) -- das
+// ist korrekt fuer alle vier Zweige unten, denn lauf-tor.mjs braucht keinen von ihnen: es holt
+// runTask ausschliesslich per benanntem Import mit Alias (import { runTask as gatewayRunTask }).
 // - statischer Import:      import { runTask } from './agent-gateway.mjs'  (auch mit Alias:
 //                            "runTask as x" -- der ORIGINALNAME zaehlt, nicht der lokale)
 // - Re-Export:               export { runTask } from './agent-gateway.mjs' (selbe Regex, weil
 //                            "import|export ... from" beide Formen abdeckt)
+// - Namespace-Import:        import * as gateway from './agent-gateway.mjs' -- macht JEDE
+//                            Bindung erreichbar (gateway.runTask(...)), ohne dass das Wort
+//                            "runTask" irgendwo im importierenden Modul auftaucht -- die
+//                            namensbasierte Pruefung der anderen Zweige greift hier nicht.
+//                            Ausserhalb von lauf-tor.mjs gibt es dafuer keinen legitimen
+//                            Grund: die erlaubten Namen (hatSchluessel, initGateway,
+//                            setzeSchluessel, loescheSchluessel, setzeTransportFuerTests) werden
+//                            im Baum durchweg benannt importiert -- ein Namespace-Import selbst
+//                            ist darum schon der Verstoss, unabhaengig davon, ob runTask sichtbar
+//                            aufgerufen wird.
+// - Default-Import:          import gateway from './agent-gateway.mjs' -- agent-gateway.mjs hat
+//                            keinen Default-Export, ein solcher Import waere ohnehin ein Bug,
+//                            aber billig mitzupruefen, damit er nicht als unentdeckter vierter
+//                            Weg am Tor vorbei durchgeht.
 // - dynamischer Import:      const { runTask } = await import('./agent-gateway.mjs') -- hier
 //                            reicht der billige Check "Zeile erwaehnt sowohl den Import-Aufruf
 //                            als auch das Wort runTask", denn im Baum gibt es aktuell keinen
@@ -60,11 +83,25 @@ function findeRunTaskImporte(quelle) {
   while ((m = staticRe.exec(quelle))) {
     if (/\brunTask\b/.test(m[1])) treffer.push(m[0].trim())
   }
+  const namespaceRe = new RegExp(`\\bimport\\s*\\*\\s*as\\s*\\w+\\s*from\\s*${GATEWAY_PFAD}`, 'g')
+  while ((m = namespaceRe.exec(quelle))) treffer.push(m[0].trim())
+  const defaultRe = new RegExp(`\\bimport\\s+[A-Za-z_$][\\w$]*\\s*from\\s*${GATEWAY_PFAD}`, 'g')
+  while ((m = defaultRe.exec(quelle))) treffer.push(m[0].trim())
   const dynamicRe = new RegExp(`[^\\n]*\\bimport\\s*\\(\\s*${GATEWAY_PFAD}\\s*\\)[^\\n]*`, 'g')
   while ((m = dynamicRe.exec(quelle))) {
     if (/\brunTask\b/.test(m[0])) treffer.push(m[0].trim())
   }
   return treffer
+}
+
+// Sammel-Re-Export (export * from './agent-gateway.mjs', auch mit "as x"-Namensraum) wuerde
+// runTask stillschweigend an jeden weiterreichen, der die re-exportierende Datei importiert --
+// IMMER ein Verstoss, OHNE Ausnahme fuer lauf-tor.mjs: das Tor exportiert sein eigenes
+// bewachtes torRunTask (ueber fuehreLaufAus), nicht das rohe Gateway-runTask, braucht also
+// diesen Weg so wenig wie jede andere Datei.
+function findeSternReExportGateway(quelle) {
+  const re = new RegExp(`\\bexport\\s*\\*\\s*(?:as\\s*\\w+\\s*)?from\\s*${GATEWAY_PFAD}`, 'g')
+  return quelle.match(re) || []
 }
 
 // Regel 2: agent-transport.mjs ist nur vom Gateway aus erreichbar. Anders als bei Regel 1
@@ -105,6 +142,11 @@ function pruefeQuelle(dateiname, quelle) {
     for (const treffer of findeRunTaskImporte(bereinigt)) {
       verstoesse.push(`Regel 1 (runTask nur ueber das Tor) verletzt in ${dateiname}: ${treffer}`)
     }
+  }
+
+  // Ohne Ausnahme fuer lauf-tor.mjs (siehe Begruendung an findeSternReExportGateway).
+  for (const treffer of findeSternReExportGateway(bereinigt)) {
+    verstoesse.push(`Regel 1 (kein Sammel-Re-Export von agent-gateway) verletzt in ${dateiname}: ${treffer}`)
   }
 
   if (dateiname !== 'agent-gateway.mjs') {
@@ -152,6 +194,43 @@ test('ein Re-Export von runTask wird ebenfalls erkannt', () => {
   const weitergereicht = "export { runTask } from './agent-gateway.mjs'"
   const verstoesse = pruefeQuelle('weiterreicher.mjs', weitergereicht)
   assert.ok(verstoesse.length > 0, 'ein Re-Export von runTask oeffnet denselben Weg am Tor vorbei')
+})
+
+// Review-Fund (Gap 1): der klammer-verankerte Regex fuer benannte Imports sieht einen
+// Namespace-Import nicht -- "gateway.runTask(...)" enthaelt das Wort runTask nirgends im
+// Quelltext des importierenden Moduls, nur im ZUGRIFF auf das Namespace-Objekt. Ohne diesen
+// Test wuerde die Luecke unbemerkt bleiben, denn der bestehende Baum nutzt keine
+// Namespace-Importe (siehe Report) -- der Test beweist, dass der Waechter die Umgehung trotzdem
+// faengt, sollte sie je auftauchen.
+test('ein Namespace-Import von agent-gateway wird als Verstoss erkannt (auch ohne das Wort runTask im Text)', () => {
+  const vergessenerKanal =
+    "import * as gateway from './agent-gateway.mjs'\n" +
+    "export async function fuehreNeuenKanalAus() { return gateway.runTask('chat', {}) }"
+  const verstoesse = pruefeQuelle('namespace-kanal.mjs', vergessenerKanal)
+  assert.ok(
+    verstoesse.length > 0,
+    'ein Namespace-Import von agent-gateway macht runTask erreichbar, ohne dass "runTask" im Quelltext steht -- muss trotzdem erkannt werden',
+  )
+})
+
+// Review-Fund (Gap 1): ein Sammel-Re-Export wuerde runTask an jeden Importeur der
+// re-exportierenden Datei weiterreichen -- keine Ausnahme, auch nicht fuer lauf-tor.mjs
+// (Begruendung an findeSternReExportGateway).
+test('ein Stern-Re-Export von agent-gateway wird als Verstoss erkannt, ausnahmslos', () => {
+  const sammelReExport = "export * from './agent-gateway.mjs'"
+  assert.ok(pruefeQuelle('barrel.mjs', sammelReExport).length > 0, 'ein Sammel-Re-Export oeffnet runTask fuer jeden Importeur')
+  assert.ok(
+    pruefeQuelle('lauf-tor.mjs', sammelReExport).length > 0,
+    'auch lauf-tor.mjs selbst darf agent-gateway nicht per Sammel-Re-Export weiterreichen',
+  )
+})
+
+test('die Ausnahmenliste zu Regel 1 ist leer und darf es bleiben (Minor-Fund)', () => {
+  assert.equal(
+    RUNTASK_AUSNAHMEN.length,
+    0,
+    'RUNTASK_AUSNAHMEN darf nur schrumpfen und muss leer enden -- ein neuer Eintrag waere ein neuer, stillschweigend genehmigter Weg am Tor vorbei',
+  )
 })
 
 test('workspace.js besitzt keine eigenen Sperr-Variablen mehr (Regel 3)', () => {
