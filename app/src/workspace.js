@@ -17,14 +17,15 @@ import {
 import { Plugin, PluginKey } from '@tiptap/pm/state'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import { applySettings } from './ui.js'
-import { hatSchluessel, setzeSchluessel, loescheSchluessel, runTask } from './agent-gateway.mjs'
+import { hatSchluessel, setzeSchluessel, loescheSchluessel } from './agent-gateway.mjs'
 // Das Lauf-Tor (Issue #12): Sperre, Signatur, Buchung und Journal fuer jeden bezahlten
-// Lauf. Interview- und Chat-Kanal laufen bereits ausschliesslich hierueber — ihr eigenes
-// runTask kommt nicht mehr aus agent-gateway.mjs, sondern als Parameter von fuehreLaufAus'
+// Lauf. Alle vier Kanaele (Interview, Chat, Hinweis, Erweiterung, Task 8 schliesst die
+// Reihe) laufen jetzt ausschliesslich hierueber — kein Kanal importiert runTask mehr
+// direkt aus agent-gateway.mjs, jeder bekommt es als Parameter von fuehreLaufAus'
 // laufFn (siehe starteVerstaendnisEntwurf/sendeInterviewAntwort, sendeAgentenChat/
-// sendeLocalChat unten). Der modulweite runTask-Import bleibt vorerst fuer Hinweis- und
-// Erweiterungslauf bestehen (noch nicht ans Tor angeschlossen).
-import { fuehreLaufAus, kanalGesperrt } from './lauf-tor.mjs'
+// sendeLocalChat, fuehreHinweislaufAus, fuehreErweiterungslaufAus).
+import { fuehreLaufAus, kanalGesperrt, torJournal } from './lauf-tor.mjs'
+import { letzteBezahlteSignatur } from './lauf-journal.mjs'
 import { aktuellerAgentStatus, beiAgentStatus, setzeAgentStatus, statuszeileFuer } from './agent-status.mjs'
 import { EXAMPLE_PROJECT_ID, seedBodySignature } from './example-seed.mjs'
 import { MODELLE, TASK_TABLE } from './agent-tasks.mjs'
@@ -122,7 +123,11 @@ let hinweislaufTimer = null
 // Zweiter Kanal (Erweiterungen): eigene Sperre, damit ein Erweiterungslauf und ein
 // Hinweislauf einander nicht ausschliessen -- es sind zwei verschiedene Fragen an
 // denselben Text, und der Cache-Praefix ist derselbe, also kostet der zweite wenig.
-let erweiterungslaufAktiv = false
+// Die Sperre selbst (frueher hier als erweiterungslaufAktiv) lebt jetzt im Lauf-Tor
+// (lauf-tor.mjs, Task 8) — kanalGesperrt('erweiterung') fragt sie ab, fuehreLaufAus
+// setzt/loest sie synchron. Hier bleibt nur noch erweiterungslaufTimer, der
+// Zeitgeber-Griff fuer den Aufschauen-Ausloeser (planeErweiterungslauf/
+// clearErweiterungslaufTimer).
 let erweiterungslaufTimer = null
 // Zeitgeber fuer den Momentwechsel: wenn genug Ruhe vergangen ist, darf mehr sichtbar
 // werden. Ohne diesen Zeitgeber erschiene das Zurueckgehaltene erst beim naechsten
@@ -823,7 +828,7 @@ function renderErweiterungen() {
   // warten zu muessen.
   const fragen = createNode('button', 'onda-erw-fragen', 'Was fällt dir noch ein?')
   fragen.type = 'button'
-  fragen.disabled = erweiterungslaufAktiv || istBeispielDokument(doc)
+  fragen.disabled = kanalGesperrt('erweiterung') || istBeispielDokument(doc) // Sperre wohnt im Tor (Task 8), nicht mehr in einem lokalen Feld
   fragen.addEventListener('click', () => { starteErweiterungslauf() })
   kinder.push(fragen)
 
@@ -3488,23 +3493,47 @@ async function fuehreErweiterungslaufAus({ vonHand = false } = {}) {
   const project = dokumentProjekt(doc)
   const verstaendnis = project ? ensureProjectUnderstanding(project) : null
 
-  const ergebnis = await versucheErweiterungslauf({
-    hatDokument: Boolean(doc && workspace),
-    istBeispielprojekt: istBeispielDokument(doc),
-    verstaendnisOffen: verstaendnis ? istInterviewOffen(verstaendnis) : false,
-    laeuftBereits: erweiterungslaufAktiv,
-    docText,
-    vonHand,
-    sperreSetzen: wert => { erweiterungslaufAktiv = wert },
-    hatSchluessel,
-    istNochDasselbeDokument: () => ctx.activeDoc()?.id === docId,
-    beansprucheKostenfreigabe: () => beansprucheAutomatikKosten('erweiterung', { docId, grund: vonHand ? 'hand' : 'aufschauen' }),
-    verstaendnis,
-    blocks,
-    doc,
-    runTask,
-    setzeAgentStatus,
-  })
+  // Kanal-Sperre und Signatur wandern ins Lauf-Tor (lauf-tor.mjs, Task 8): laeuftBereits/
+  // sperreSetzen an versucheErweiterungslauf werden darum reine No-ops -- die Kanal-Sperre
+  // prueft und haelt das Tor (fuehreLaufAus); das Modell behaelt seine Parameter fuer die
+  // Modell-Tests (erweiterungslauf-model.test.mjs). BEWUSSTE VERHALTENSSCHAERFUNG (der Kern
+  // von Issue #12, KEIN Momente-Verhalten): bisher lebte die Merkliste "wofuer wurde schon
+  // bezahlt" nur in der Modul-Variable letzteErweiterungsSignatur und vergass sie beim
+  // Neustart -- die App bezahlte denselben Text danach ein zweites Mal. Jetzt liegt die
+  // Merkliste im Journal (data.json) und ueberlebt den Neustart -- genau die Fehlerklasse
+  // aus fuenf Fixes in neun Tagen.
+  const ergebnis = await fuehreLaufAus(
+    {
+      kanal: 'erweiterung',
+      ausloeser: vonHand ? 'hand' : 'aufschauen',
+      signatur: erweiterungsSignatur(docId, docText),
+      einmalJeSignatur: !vonHand,
+    },
+    ({ runTask }) => versucheErweiterungslauf({
+      hatDokument: Boolean(doc && workspace),
+      istBeispielprojekt: istBeispielDokument(doc),
+      verstaendnisOffen: verstaendnis ? istInterviewOffen(verstaendnis) : false,
+      laeuftBereits: false, // die Kanal-Sperre prueft und haelt das Tor (fuehreLaufAus)
+      docText,
+      vonHand,
+      sperreSetzen: () => {}, // das Modell behaelt seine Parameter fuer die Modell-Tests
+      hatSchluessel,
+      istNochDasselbeDokument: () => ctx.activeDoc()?.id === docId,
+      beansprucheKostenfreigabe: () => beansprucheAutomatikKosten('erweiterung', { docId, grund: vonHand ? 'hand' : 'aufschauen' }),
+      verstaendnis,
+      blocks,
+      doc,
+      runTask,
+      setzeAgentStatus,
+    }),
+  )
+
+  // Das Tor loest kanalGesperrt('erweiterung') in SEINEM EIGENEN finally (lauf-tor.mjs) --
+  // das laeuft NACH dem letzten Rendern innerhalb dieser Funktion. Ohne diesen Nachrender
+  // bliebe der „Was fällt dir noch ein?"-Knopf (fragen.disabled = kanalGesperrt('erweiterung'))
+  // optisch UND funktional deaktiviert, auf allen Pfaden -- gestartet:false, Fehler UND Erfolg
+  // (siehe sendeAgentenChat fuer dasselbe Muster).
+  if (ctx) refreshWorkspace()
 
   if (!ergebnis.gestartet) {
     if (ergebnis.grund === 'monatsbudget-erreicht') {
@@ -3516,12 +3545,10 @@ async function fuehreErweiterungslaufAus({ vonHand = false } = {}) {
   }
   if (!ergebnis.erfolg) return ergebnis
 
-  // Nach JEDEM erfolgreichen Lauf, gleich welcher Ausloeser ihn startete -- genau wie
-  // beim Hinweislauf, wo protokoll.signatur in fuehreHinweislaufAus selbst gesetzt wird.
-  // Vorher stand die Fortschreibung nur im automatischen Zweig, und ein Lauf von Hand
-  // setzte sie sogar auf null zurueck: dann sah der Zeitgeber 24 ms spaeter einen
-  // unveraenderten Text mit unbekannter Signatur und bezahlte ihn ein zweites Mal.
-  letzteErweiterungsSignatur = erweiterungsSignatur(docId, docText)
+  // Die Fortschreibung der alten Modul-Variable entfaellt: der Journal-Eintrag IST die
+  // Merkliste jetzt (das Tor schreibt ihn in schliesseLauf, BEVOR fuehreLaufAus zurueckkehrt --
+  // siehe planeErweiterungslauf, dessen darfAutomatischLaufen-Check direkt danach bereits den
+  // frischen Eintrag sieht, keine Luecke).
   ergebnis.uebernommen.forEach(erweiterung => doc.erweiterungen.push(erweiterung))
   // Bewusst KEIN ergaenzeEchteInitiative und keine Zahl irgendwo: eine Erweiterung
   // klopft nicht an. Sie liegt in der Seitenspalte, bis jemand hinschaut.
@@ -3537,9 +3564,10 @@ function clearErweiterungslaufTimer() {
 // Der Erweiterungslauf gehoert zum Moment des Aufschauens (momente-model.mjs).
 // Er wird deshalb genau dann geplant, wenn die lange Ruhe erreicht ist -- nicht bei
 // jeder Schreibpause. Ein Lauf je Textstand: die Signatur merkt sich, wozu schon
-// gefragt wurde, damit dieselbe Ruhe nicht zweimal bezahlt wird.
-let letzteErweiterungsSignatur = null
-
+// gefragt wurde, damit dieselbe Ruhe nicht zweimal bezahlt wird. Die Merkliste selbst
+// (frueher hier als letzteErweiterungsSignatur) lebt jetzt im Journal (lauf-tor.mjs/
+// lauf-journal.mjs, Task 8) und ueberlebt damit den Neustart -- siehe die
+// Verhaltensschaerfung oben in fuehreErweiterungslaufAus.
 function erweiterungsSignatur(docId, docText) {
   return `${docId}:${seedBodySignature(docText)}`
 }
@@ -3549,7 +3577,7 @@ function planeErweiterungslauf() {
   const docId = ctx?.activeDoc()?.id || null
   const inputState = initiativeInputState(docId)
   if (!docId || !inputState || !Number.isFinite(inputState.lastInputAt)) return
-  if (erweiterungslaufAktiv || isComposing || !editorViewIsVisibleFor(docId)) return
+  if (kanalGesperrt('erweiterung') || isComposing || !editorViewIsVisibleFor(docId)) return
 
   const restzeit = AUFSCHAUEN_MS - (Date.now() - inputState.lastInputAt)
   const generation = inputState.generation
@@ -3559,7 +3587,11 @@ function planeErweiterungslauf() {
     if (!aktuell || aktuell.generation !== generation) return
     if (!editorViewIsVisibleFor(docId) || isComposing) return
     const signatur = erweiterungsSignatur(docId, baueDocText(getEditorBlocks(ctx.editor)))
-    if (!darfAutomatischLaufen(signatur, letzteErweiterungsSignatur)) return
+    // Gegen letzteBezahlteSignatur aus dem JOURNAL, nicht mehr gegen eine fluechtige
+    // Modul-Variable: das Tor schreibt den Journal-Eintrag in schliesseLauf VOR dem
+    // Rueckkehren aus fuehreLaufAus (lauf-tor.mjs), darum sieht dieser Check nach einem
+    // Lauf immer schon den frischen Stand -- keine Luecke zwischen Bezahlen und Merken.
+    if (!darfAutomatischLaufen(signatur, letzteBezahlteSignatur(torJournal(), 'erweiterung'))) return
     fuehreErweiterungslaufAus({ vonHand: false })
   }, Math.max(24, restzeit))
 }
