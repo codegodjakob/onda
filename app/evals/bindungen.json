@@ -438,6 +438,28 @@
       "test/rueckkopplung-model.test.mjs",
       "test/hinweis-kontext.test.mjs",
       "test/v2-smoke.mjs"
+    ],
+    "ONDA-UI-01": ["evals/run-onda-ui-quality.mjs"],
+    "ONDA-UI-02": ["evals/run-onda-ui-quality.mjs"],
+    "ONDA-UI-03": ["evals/run-onda-ui-quality.mjs"],
+    "ONDA-UI-04": ["evals/run-onda-ui-quality.mjs"],
+    "ONDA-UI-05": ["evals/run-onda-ui-quality.mjs"],
+    "ONDA-UI-06": ["evals/run-onda-ui-quality.mjs"],
+    "ONDA-UI-07": ["evals/run-onda-ui-quality.mjs"],
+    "ONDA-UI-08": ["evals/run-onda-ui-quality.mjs"],
+    "ONDA-UI-09": ["evals/run-onda-ui-quality.mjs"],
+    "ONDA-UI-10": ["evals/run-onda-ui-quality.mjs"],
+    "ONDA-UI-11": ["evals/run-onda-ui-quality.mjs"],
+    "ONDA-UI-12": ["evals/run-onda-ui-quality.mjs"],
+    "ONDA-UI-13": ["evals/run-onda-ui-quality.mjs"],
+    "ONDA-UI-14": ["evals/run-onda-ui-quality.mjs"],
+    "ONDA-UI-15": ["evals/run-onda-ui-quality.mjs"],
+    "ONDA-UI-16": ["evals/run-onda-ui-quality.mjs"],
+    "ONDA-UI-17": ["evals/run-onda-ui-quality.mjs"],
+    "ONDA-UI-19": ["evals/run-onda-ui-quality.mjs"],
+    "ONDA-UI-20": ["evals/run-onda-ui-quality.mjs"],
+    "ONDA-UI-21": ["evals/run-onda-ui-quality.mjs"],
+    "ONDA-UI-22": ["evals/run-onda-ui-quality.mjs"]
     ]
   },
   "_ungebunden_begruendung": {},
@@ -445,6 +467,7 @@
     "INV-06": "Offline-Wuerde braucht die Abnahme in der gebauten Mac-App bei wirklich getrenntem Netz und hinterlegtem Providerzugang.",
     "EFFECT-06": "Nutzerstudie mit echten Leserinnen und Lesern — von niemandem automatisierbar.",
     "SYSTEM-03": "Die statische Sicherheitsinspektion ist automatisiert; die abschliessende Keychain- und Prozessinspektion braucht die gebaute, signierte Mac-App mit einem echten Schluessel.",
-    "SYSTEM-09": "Die deterministische Kernlogik ist automatisiert; der letzte Paritaetsbeleg braucht denselben echten Providerlauf im Browser- und Mac-Brueckenpfad."
+    "SYSTEM-09": "Die deterministische Kernlogik ist automatisiert; der letzte Paritaetsbeleg braucht denselben echten Providerlauf im Browser- und Mac-Brueckenpfad.",
+    "ONDA-UI-18": "Der bereits hinterlegte Schlüssel wird ausschließlich über den nativen Status- und Transportpfad für einen minimalen schema-validierten Lauf verwendet; sein Wert wird nie gelesen oder protokolliert."
   }
 }

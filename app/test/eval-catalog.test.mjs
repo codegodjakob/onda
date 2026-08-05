@@ -20,6 +20,7 @@ const EXTERNE_LIVE_GATES = [
   'EFFECT-06',
   'SYSTEM-03',
   'SYSTEM-09',
+  'ONDA-UI-18',
 ]
 
 test('V2-Eval-Katalog lädt reproduzierbar und enthält den vollständigen Zielumfang', async () => {
@@ -27,13 +28,13 @@ test('V2-Eval-Katalog lädt reproduzierbar und enthält den vollständigen Zielu
   const zusammenfassung = summarisiereEvalKatalog(katalog)
 
   assert.deepEqual(zusammenfassung, {
-    suites: 18,
-    evals: 130,
-    hardGates: 122,
+    suites: 19,
+    evals: 152,
+    hardGates: 144,
     scoredGates: 8,
-    externalLiveGates: 4,
+    externalLiveGates: 5,
   })
-  assert.equal(flattenEvals(katalog).length, 130)
+  assert.equal(flattenEvals(katalog).length, 152)
 })
 
 test('V2-Eval-Katalog erfüllt alle Struktur- und Konsistenzregeln', async () => {
@@ -54,6 +55,21 @@ test('alle Eval-IDs sind eindeutig und gehören zur umgebenden Suite', async () 
   }
 })
 
+test('alle 22 Onda-UI-Abnahmekriterien sind harte Katalog-Gates', async () => {
+  const katalog = await ladeEvalKatalog(KATALOG_PFAD)
+  const gates = flattenEvals(katalog).filter(eintrag => eintrag.id.startsWith('ONDA-UI-'))
+  assert.deepEqual(
+    gates.map(eintrag => eintrag.id),
+    Array.from({ length: 22 }, (_, index) => `ONDA-UI-${String(index + 1).padStart(2, '0')}`),
+  )
+  assert.ok(gates.every(eintrag => (
+    eintrag.gate === 'hard'
+    && eintrag.automation
+    && eintrag.evidence.length
+    && eintrag.source.length
+  )))
+})
+
 test('Rubrikgewichte ergeben exakt 1 und externe Live-Gates sind explizit bekannt', async () => {
   const katalog = await ladeEvalKatalog(KATALOG_PFAD)
   const gewicht = katalog.rubric.reduce((summe, dimension) => summe + dimension.weight, 0)
@@ -68,7 +84,7 @@ test('der rohe JSON-Katalog enthält keine doppelten Given/When/Then-Schlüssel 
   const roh = await readFile(KATALOG_PFAD, 'utf8')
   const evalObjekte = roh.split(/\n        \{\n          "id": "/).slice(1)
 
-  assert.equal(evalObjekte.length, 130)
+  assert.equal(evalObjekte.length, 152)
   for (const [index, ausschnitt] of evalObjekte.entries()) {
     const objekt = ausschnitt.split(/\n        \}(?:,|\n)/, 1)[0]
     for (const schluessel of ['given', 'when', 'then']) {
@@ -170,11 +186,11 @@ test('Eval-CLI prüft den Katalog und liefert eine maschinenlesbare Zusammenfass
 
   assert.equal(bericht.valid, true)
   assert.deepEqual(bericht.catalog, {
-    suites: 18,
-    evals: 130,
-    hardGates: 122,
+    suites: 19,
+    evals: 152,
+    hardGates: 144,
     scoredGates: 8,
-    externalLiveGates: 4,
+    externalLiveGates: 5,
   })
   assert.equal(bericht.result, null)
 })
