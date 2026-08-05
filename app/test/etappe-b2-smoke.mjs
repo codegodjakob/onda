@@ -103,7 +103,37 @@ async function createPlan(page) {
   await page.locator('#researchClaim').fill('In dieser Stichprobe war die Fehlerrate nach einer Sitzung niedriger.')
   await page.locator('#researchBudget').fill('9')
   await page.locator('#researchPlanSubmit').click()
-  await page.locator('#researchRunView[data-status="planned"]').waitFor()
+  // Lastfest gemacht, nachdem dieser Warteschritt unter paralleler Testlast zweimal
+  // in ein stummes 30-s-Timeout lief (17 instrumentierte Wiederholungsläufe unter
+  // Kunstlast konnten es nicht reproduzieren — die Ursache ist umgebungsabhängig).
+  // Drei Härtungen, ohne die Zusicherung zu schwächen:
+  // 1. Es wird auf BEIDE möglichen Ausgänge des Submits gewartet: den geplanten
+  //    Lauf ODER die Fehler-Statuszeile des Formulars (die vorher niemand las).
+  // 2. Scheitert der Plan, bricht der Test SOFORT mit dem wörtlichen Grund ab,
+  //    statt 30 s ins Leere zu warten.
+  // 3. Das Fenster ist grosszuegig (60 s) fuer echte Verhungerung unter Last —
+  //    eine echte Regression scheitert bei jedem Fenster, nur eben mit Befund.
+  try {
+    await page.locator('#researchRunView[data-status="planned"], #researchPlanStatus:not(:empty)')
+      .first().waitFor({ timeout: 60_000 })
+  } catch (fehler) {
+    const diagnose = await page.evaluate(() => ({
+      formularDa: !!document.getElementById('researchPlanForm'),
+      laufStatus: document.getElementById('researchRunView')?.dataset?.status || null,
+      status: document.getElementById('researchPlanStatus')?.textContent || null,
+      frage: document.getElementById('researchQuestion')?.value ?? null,
+      aussage: document.getElementById('researchClaim')?.value ?? null,
+      budget: document.getElementById('researchBudget')?.value ?? null,
+    })).catch(evalFehler => ({ diagnoseFehler: evalFehler.message }))
+    fehler.message += `\nDiagnose beim Timeout: ${JSON.stringify(diagnose)}`
+    throw fehler
+  }
+  // Direkt aus dem Dokument lesen (kein Locator): im Erfolgsfall ist das Formular
+  // samt Statuszeile bereits ersetzt, ein wartender Locator wuerde hier stallen.
+  const statusText = await page.evaluate(() => document.getElementById('researchPlanStatus')?.textContent || '')
+  assert.equal(statusText.trim(), '',
+    `Plan wurde nicht angelegt — die Statuszeile meldet: "${statusText.trim()}"`)
+  await page.locator('#researchRunView[data-status="planned"]').waitFor({ timeout: 60_000 })
 }
 
 async function runResearchFlow(browser) {
