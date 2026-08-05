@@ -38,6 +38,14 @@ Außerdem festgeschrieben (war schon richtig): ein abgerissener Lauf gilt nie
 als fertig, und eine mitten in der SSE-Zeile zerrissene Nachricht sickert
 weder durch noch wirft sie den Parser.
 
+**Nachtrag aus dem Review dieser Etappe:** Die erste Fassung des
+Neustart-Handlers im Chat leerte die halbe Nachricht nur, statt sie zu
+entfernen — eine leere Nachricht wirft die Thread-Normalisierung aber beim
+nächsten Neuzeichnen still aus dem Verlauf, und die fertige Antwort des
+zweiten Versuchs wäre dann verwaist gewesen. Der Handler entfernt die halbe
+Nachricht jetzt ganz; das erste Delta des zweiten Versuchs baut sie sauber
+neu auf (`workspace.js`).
+
 ## Prüfung 2 · Zwei Fenster auf demselben Dokument
 
 **Datei:** `app/test/zwei-fenster.test.mjs`
