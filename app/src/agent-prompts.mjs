@@ -16,6 +16,7 @@ import {
   textartTabelleStilmittel,
   vorsichtsListe,
 } from './stilmittel.mjs'
+import { NOTE_ANNOTATION_KINDS, TEXT_ANNOTATION_KINDS } from './annotation-contract.mjs'
 
 function mechanismusZeilen() {
   return MECHANISMEN
@@ -107,16 +108,81 @@ export const INTERVIEW_REGELN = `So führst du das Gespräch über das Projektve
 - Jede Antwort der Autorin oder des Autors aktualisiert dein Verständnis. Ausdrückliche Korrekturen sind bindend und werden nicht erneut zur Diskussion gestellt.
 - Formuliere kurz und konkret: zwei bis drei Sätze Vorschlag, dann gegebenenfalls die eine Nachfrage.`
 
+const TEXT_ANMERKUNGSREGELN = Object.freeze({
+  rechtschreibung: 'ein einzelnes Wort ist orthografisch eindeutig falsch',
+  grammatik: 'eine grammatische Form oder ein ganzer Satz ist eindeutig falsch',
+  zeichensetzung: 'ein Satzzeichen fehlt, steht falsch oder ist überflüssig',
+  wortwahl: 'ein einzelnes Wort passt möglicherweise weniger gut als eine Alternative',
+  satzstil: 'ein Satz braucht als Ganzes eine besser lesbare Fassung',
+  absatzstil: 'Rhythmus oder Bau eines ganzen Absatzes soll als Alternative sichtbar werden',
+  straffen: 'eine Passage lässt sich ohne Verlust deutlich kürzen',
+  wiederholung: 'dasselbe Wort oder Muster betrifft mehrere Stellen in einem Absatz',
+  ton: 'Ton, Anrede oder Register wechseln über einen zusammenhängenden Bereich',
+  stilmittel: 'ein bewusstes Stilmittel wird an einer genauen Stelle eingefügt oder verändert',
+  anglizismus: 'ein einzelner Anglizismus passt nicht zum übrigen Text',
+  terminologie: 'mehrere Begriffe im Text bezeichnen dieselbe Sache uneinheitlich',
+  verschieben: 'ein bestehender Absatz oder Block gehört an eine andere Zielstelle',
+  uebergang: 'zwischen zwei Gedanken fehlt eine sprachliche Brücke',
+  gliederung: 'eine Überschrift oder Abschnittsgrenze fehlt an einer Zielstelle',
+  fluss: 'mehrere Sätze stocken oder verbinden sich schlecht und brauchen eine gemeinsame Fassung',
+  faden: 'der rote Faden ist erst mit Blick auf den gesamten Text beurteilbar',
+  ueberschrift: 'der Titel benennt Thema oder These noch nicht treffend',
+  anmerkung: 'eine inhaltliche Beobachtung verlangt eine Antwort statt einer automatischen Änderung',
+  beleg: 'eine Aussage braucht einen Beleg oder eine vorhandene Quelle soll eingefügt werden',
+  faktencheck: 'eine Tatsachenangabe weicht von einer belastbaren Quelle ab oder muss geprüft werden',
+  widerspruch: 'zwei konkrete Stellen im Text widersprechen einander',
+  luecke: 'ein naheliegendes Gegenargument oder eine Perspektive fehlt und soll besprochen werden',
+  verstaendlichkeit: 'an einer genauen Stelle fehlt eine Erklärung oder Definition',
+})
+
+const NOTE_ANMERKUNGSREGELN = Object.freeze({
+  ausformulieren: 'ein Stichwort oder Fragment soll als mögliche Formulierung entwickelt werden',
+  buendeln: 'mehrere lose Notizen gehören erkennbar zusammen',
+  nachfrage: 'eine Notiz ist offen oder mehrdeutig und braucht eine ruhige Frage',
+  ordnen: 'Notizen gewinnen durch eine andere Reihenfolge',
+  aufgreifen: 'ein begonnener Gedanke bleibt im Notiztext offen und soll wieder sichtbar werden',
+})
+
+function anmerkungsregeln(arten, regeln) {
+  return arten.map(art => `- ${art}: ${regeln[art]}.`).join('\n')
+}
+
+const GEMEINSAME_HINWEISREGELN = `- Gib höchstens drei neue Hinweise pro Durchgang. Weniger ist besser als viele.
+- Nenne die Grundursache zuerst: Wenn mehrere Beobachtungen dieselbe Wurzel haben, benenne die Wurzel als einen Hinweis (istGrundursache: true), statt jedes Symptom einzeln aufzuzählen.
+- Wiederhole nichts, was in der Entscheidungsliste steht: weder erledigte noch verworfene noch als Risiko akzeptierte Punkte — auch nicht in neuer Verkleidung.
+- Jeder Hinweis füllt alle Felder: kategorie, anmerkungsart, anker (wörtliches Minimal-Zitat), beobachtung (was dir auffällt), relevanz (warum es für Ziel und Publikum zählt), folge (was passiert, wenn es bleibt), muster, vorschlagsart, stilmittelId, vorschlag, istGrundursache, integritaet.
+- muster nennt das übertragbare Prinzip hinter dem Hinweis: den Satz, der beim nächsten Text von allein wieder anwendbar ist, auch bei einem ganz anderen Thema. Es ist nicht die Beobachtung noch einmal. Nicht "dieser Satz nennt keine Quelle", sondern: "Eine Zahl, die das Argument trägt, braucht ihre Herkunft im Satz daneben." Ein Muster, das nur auf genau diese Stelle passt, ist keines — dann formuliere allgemeiner.
+- Ein Vorschlag (bisher/neu) ist freiwillig; mache ihn nur, wenn du eine konkrete bessere Fassung hast, und "bisher" muss wörtlich im Text vorkommen. Bei einer gewöhnlichen besseren Fassung setzt du vorschlagsart: "formulierung" und stilmittelId: null. Ohne Vorschlag setzt du vorschlagsart: "keiner", stilmittelId: null und vorschlag: null.
+- Findest du nichts Wesentliches, gib eine leere Liste zurück. Erfinde keine Hinweise, um eine Zahl zu füllen.`
+
 export const HINWEIS_ANWEISUNG = `So erstellst du Hinweise zum vorliegenden Text:
+Wähle genau eine anmerkungsart nach der Natur des Falls:
+${anmerkungsregeln(TEXT_ANNOTATION_KINDS, TEXT_ANMERKUNGSREGELN)}
+
+- anmerkungsart entscheidet die Gestalt, kategorie weiterhin Integrität und Zeitpunkt. Wähle nie nach gewünschter Kartenform.
 - Gib höchstens drei neue Hinweise pro Durchgang. Weniger ist besser als viele.
 - Nenne die Grundursache zuerst: Wenn mehrere Beobachtungen dieselbe Wurzel haben, benenne die Wurzel als einen Hinweis (istGrundursache: true), statt jedes Symptom einzeln aufzuzählen.
 - Wiederhole nichts, was in der Entscheidungsliste steht: weder erledigte noch verworfene noch als Risiko akzeptierte Punkte — auch nicht in neuer Verkleidung.
-- Jeder Hinweis füllt alle Felder: kategorie, anker (wörtliches Minimal-Zitat), beobachtung (was dir auffällt), relevanz (warum es für Ziel und Publikum zählt), folge (was passiert, wenn es bleibt), muster, vorschlagsart, stilmittelId, vorschlag, istGrundursache, integritaet.
+- Jeder Hinweis füllt alle Felder: kategorie, anmerkungsart, anker (wörtliches Minimal-Zitat), beobachtung (was dir auffällt), relevanz (warum es für Ziel und Publikum zählt), folge (was passiert, wenn es bleibt), muster, vorschlagsart, stilmittelId, vorschlag, istGrundursache, integritaet.
 - muster nennt das übertragbare Prinzip hinter dem Hinweis: den Satz, der beim nächsten Text von allein wieder anwendbar ist, auch bei einem ganz anderen Thema. Es ist nicht die Beobachtung noch einmal. Nicht "dieser Satz nennt keine Quelle", sondern: "Eine Zahl, die das Argument trägt, braucht ihre Herkunft im Satz daneben." Ein Muster, das nur auf genau diese Stelle passt, ist keines — dann formuliere allgemeiner.
 - Bei der Art sprache: Geht es um ein Stilmittel, nenne es beim Namen, sage welcher Mechanismus arbeitet und was er an dieser Stelle leistet, und schließe mit der Prüffrage. Das Etikett allein ist kein Hinweis. Schlage nie ein Mittel vor, das bei dieser Textart aufgesetzt wirkt oder in der Zuordnung gar nicht steht. Setze vorschlagsart:"stilmittel" und die exakte stilmittelId nur zusammen mit einem konkreten vorschlag aus bisher/neu; bei einer bloßen Diagnose setzt du vorschlagsart:"keiner", stilmittelId:null und vorschlag:null.
 - Ein Vorschlag (bisher/neu) ist freiwillig; mache ihn nur, wenn du eine konkrete bessere Fassung hast, und "bisher" muss wörtlich im Text vorkommen. Bei einer gewöhnlichen besseren Fassung setzt du vorschlagsart: "formulierung" und stilmittelId: null. Ohne Vorschlag setzt du vorschlagsart: "keiner", stilmittelId: null und vorschlag: null.
 - Setze integritaet genau bei den Arten fakt, quelle, methode und logik auf true, sonst auf false.
 - Findest du nichts Wesentliches, gib eine leere Liste zurück. Erfinde keine Hinweise, um eine Zahl zu füllen.`
+
+export const NOTIZ_HINWEIS_ANWEISUNG = `So begleitest du lose Notizen:
+${GEMEINSAME_HINWEISREGELN}
+
+Wähle genau eine anmerkungsart:
+${anmerkungsregeln(NOTE_ANNOTATION_KINDS, NOTE_ANMERKUNGSREGELN)}
+
+- Rechtschreibung meldest du nicht. Grammatik meldest du nicht. Zeichensetzung meldest du nicht.
+- Du glättest keinen Stil und behandelst Fragmente nicht als Fehler. Lose Gedanken dürfen lose bleiben.
+- Setze integritaet immer auf false. Eine Notiz ist noch keine veröffentlichte Behauptung.`
+
+export function hinweisAnweisungFuerModus(modus = 'text') {
+  return modus === 'notiz' ? NOTIZ_HINWEIS_ANWEISUNG : HINWEIS_ANWEISUNG
+}
 
 // Der zweite Kanal. Bewusst getrennt von HINWEIS_ANWEISUNG: eine Erweiterung ist kein
 // Mangel, und ein Auftrag, der beides in einem Atemzug verlangt, faerbt das eine mit dem

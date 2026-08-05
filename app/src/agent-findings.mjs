@@ -3,6 +3,7 @@
 // Normalisierung: reasoning-model.mjs normalizeFinding). Kein DOM, node-testbar.
 
 import { istIntegritaetsfrage, istVonDerTextartAusgeschlossen } from './textart-regeln.mjs'
+import { normalizeAnnotationFinding } from './annotation-contract.mjs'
 
 // Mapping abgeleitet aus dem bestehenden Code (reasoning-model.mjs):
 // INTEGRITY_CATEGORIES = fact/source/citation/method/logic; Passage-Findings mit
@@ -98,7 +99,7 @@ export function hinweisZuFinding(hinweis, ankerErgebnis, blockId, docText, jetzt
   const action = vorschlagAnwendbar ? anker.replace(bisher, neu) : ''
 
   const finding = {
-    id: `ki-${jetzt.toString(36)}-${einfacherHash(`${hinweis.kategorie}|${anker}`)}`,
+    id: `ki-${jetzt.toString(36)}-${einfacherHash(`${hinweis.kategorie}|${hinweis.anmerkungsart || ''}|${anker}`)}`,
     kind: hinweis.kategorie === 'sprache' ? 'form' : 'inhalt',
     form: vorschlagAnwendbar ? 'mark' : 'note',
     status: 'open',
@@ -116,6 +117,7 @@ export function hinweisZuFinding(hinweis, ankerErgebnis, blockId, docText, jetzt
     category,
     kategorie: String(hinweis.kategorie || ''),
     kiKategorie: String(hinweis.kategorie || ''),
+    anmerkungsart: hinweis.anmerkungsart == null ? undefined : String(hinweis.anmerkungsart),
     textart: String(textart || ''),
     vorschlagsart: String(hinweis.vorschlagsart || (vorschlag ? 'formulierung' : 'keiner')),
     stilmittelId: hinweis.stilmittelId == null ? null : String(hinweis.stilmittelId),
@@ -130,7 +132,7 @@ export function hinweisZuFinding(hinweis, ankerErgebnis, blockId, docText, jetzt
   if (istIntegritaet(hinweis.kategorie, hinweis.integritaet, textart)) {
     finding.claim = target
   }
-  return finding
+  return normalizeAnnotationFinding(finding)
 }
 
 // Volatiler Prompt-Teil: was bereits entschieden wurde, darf nie wieder

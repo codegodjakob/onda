@@ -6,6 +6,7 @@
 
 import { SYSTEM_COACH } from './agent-prompts.mjs'
 import { STILMITTEL } from './stilmittel.mjs'
+import { NOTE_ANNOTATION_KINDS, TEXT_ANNOTATION_KINDS } from './annotation-contract.mjs'
 
 export const API_URL = 'https://api.anthropic.com/v1/messages'
 export const API_VERSION = '2023-06-01'
@@ -43,6 +44,11 @@ export const HINWEISE_SCHEMA = Object.freeze({
             type: 'string',
             enum: ['fakt', 'quelle', 'methode', 'logik', 'struktur', 'wirkung', 'erklaerung', 'sprache'],
           },
+          anmerkungsart: {
+            type: 'string',
+            enum: TEXT_ANNOTATION_KINDS,
+            description: 'Die genaue Onda-Anmerkungsart. Sie bestimmt die fallgerechte Darstellung; die grobe kategorie bleibt für Integrität und Zeitpunkt erhalten.',
+          },
           anker: { type: 'string', description: 'Wörtliches Minimal-Zitat aus dem Text, keine Paraphrase.' },
           beobachtung: { type: 'string' },
           relevanz: { type: 'string' },
@@ -78,7 +84,7 @@ export const HINWEISE_SCHEMA = Object.freeze({
           istGrundursache: { type: 'boolean' },
           integritaet: { type: 'boolean' },
         },
-        required: ['kategorie', 'anker', 'beobachtung', 'relevanz', 'folge', 'muster', 'vorschlagsart', 'stilmittelId', 'vorschlag', 'istGrundursache', 'integritaet'],
+        required: ['kategorie', 'anmerkungsart', 'anker', 'beobachtung', 'relevanz', 'folge', 'muster', 'vorschlagsart', 'stilmittelId', 'vorschlag', 'istGrundursache', 'integritaet'],
         additionalProperties: false,
       },
     },
@@ -86,6 +92,35 @@ export const HINWEISE_SCHEMA = Object.freeze({
   required: ['hinweise'],
   additionalProperties: false,
 })
+
+function schemaMitAnmerkungsarten(schema, arten) {
+  const item = schema.properties.hinweise.items
+  return Object.freeze({
+    ...schema,
+    properties: Object.freeze({
+      ...schema.properties,
+      hinweise: Object.freeze({
+        ...schema.properties.hinweise,
+        items: Object.freeze({
+          ...item,
+          properties: Object.freeze({
+            ...item.properties,
+            anmerkungsart: Object.freeze({
+              ...item.properties.anmerkungsart,
+              enum: arten,
+            }),
+          }),
+        }),
+      }),
+    }),
+  })
+}
+
+export const HINWEISE_NOTIZ_SCHEMA = schemaMitAnmerkungsarten(HINWEISE_SCHEMA, NOTE_ANNOTATION_KINDS)
+
+export function hinweiseSchemaFuerModus(modus = 'text') {
+  return modus === 'notiz' ? HINWEISE_NOTIZ_SCHEMA : HINWEISE_SCHEMA
+}
 
 // Der zweite Kanal (Erweiterungen). anker ist hier eine LISTE, weil die Zahl der Stellen
 // zur Art gehoert: weiterfuehrung eine, verbindung zwei, feld keine. Ein einzelnes
@@ -208,7 +243,8 @@ export function baueAnfrage(task, kontext = {}) {
     messages,
   }
   if (eintrag.stream) body.stream = true
-  if (eintrag.schema) body.output_config = { format: { type: 'json_schema', schema: eintrag.schema } }
+  const schema = task === 'hinweise' ? hinweiseSchemaFuerModus(kontext.annotationMode) : eintrag.schema
+  if (schema) body.output_config = { format: { type: 'json_schema', schema } }
 
   return {
     url: API_URL,

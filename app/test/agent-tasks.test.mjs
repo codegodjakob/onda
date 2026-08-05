@@ -47,7 +47,7 @@ test('Schemata verbieten Zusatzfelder und verlangen Pflichtfelder', () => {
   assert.deepEqual(hinweis.properties.kategorie.enum,
     ['fakt', 'quelle', 'methode', 'logik', 'struktur', 'wirkung', 'erklaerung', 'sprache'])
   assert.deepEqual(hinweis.required,
-    ['kategorie', 'anker', 'beobachtung', 'relevanz', 'folge', 'muster', 'vorschlagsart', 'stilmittelId', 'vorschlag', 'istGrundursache', 'integritaet'])
+    ['kategorie', 'anmerkungsart', 'anker', 'beobachtung', 'relevanz', 'folge', 'muster', 'vorschlagsart', 'stilmittelId', 'vorschlag', 'istGrundursache', 'integritaet'])
   assert.deepEqual(hinweis.properties.vorschlagsart.enum, ['keiner', 'formulierung', 'stilmittel'])
   assert.ok(hinweis.properties.stilmittelId.anyOf[0].enum.includes('alliteration'))
   assert.deepEqual(hinweis.properties.stilmittelId.anyOf[1], { type: 'null' })

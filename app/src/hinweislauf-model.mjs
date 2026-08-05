@@ -5,6 +5,7 @@ import { dedupeHinweise, findeAnker } from './anchor-verify.mjs'
 import { blockFuerAnkerIndex, fasseEntscheidungenZusammen, fasseOffeneHinweiseZusammen, hinweisZuFinding } from './agent-findings.mjs'
 import { baueHinweisKontext } from './hinweis-kontext.mjs'
 import { darfVorgeschlagenWerden, stilmittel } from './stilmittel.mjs'
+import { isAnnotationKindAllowed } from './annotation-contract.mjs'
 
 // Echte Modellantworten tragen die beiden strukturierten Felder, weil das JSON-Schema sie
 // verlangt. Aeltere lokale Fixtures und gespeicherte Antworten bleiben lesbar: Fehlen BEIDE,
@@ -23,6 +24,13 @@ function pruefeVorschlag(hinweis, textart) {
   if (art === 'formulierung') return id === null && hatVorschlag
   if (art !== 'stilmittel' || hinweis?.kategorie !== 'sprache' || !hatVorschlag) return false
   return Boolean(stilmittel(id)) && darfVorgeschlagenWerden(id, textart)
+}
+
+// Persistierte Antworten vor Einführung der genauen Art bleiben lesbar. Sobald das Feld
+// vorhanden ist, gilt dagegen der geschlossene Modusvertrag vollständig.
+export function pruefeAnmerkungsart(hinweis, annotationMode = 'text') {
+  if (!Object.prototype.hasOwnProperty.call(hinweis || {}, 'anmerkungsart')) return true
+  return isAnnotationKindAllowed(annotationMode, hinweis?.anmerkungsart)
 }
 
 // Reihenfolge bewusst: kein Dokument -> Beispielprojekt -> Lauf schon aktiv -> leerer Text ->
@@ -59,6 +67,7 @@ export function verarbeiteHinweisantwort({
   decisions = [],
   jetzt = Date.now(),
   textart = '',
+  annotationMode = 'text',
 }) {
   const geliefertListe = Array.isArray(geliefert) ? geliefert : []
   const frisch = dedupeHinweise(geliefertListe, findings, decisions)
@@ -66,6 +75,7 @@ export function verarbeiteHinweisantwort({
   const uebernommen = []
 
   frisch.forEach(hinweis => {
+    if (!pruefeAnmerkungsart(hinweis, annotationMode)) { verworfen += 1; return }
     if (!pruefeVorschlag(hinweis, textart)) { verworfen += 1; return }
     const ankerErgebnis = findeAnker(docText, hinweis?.anker)
     if (!ankerErgebnis.gefunden) { verworfen += 1; return }
@@ -164,6 +174,7 @@ export async function versucheHinweislauf({
   findings,
   decisions,
   textart = '',
+  annotationMode = 'text',
   // Die Bilanz aus rueckkopplung-model.mjs (bilanziereRueckmeldung), über ALLE eigenen
   // Dokumente gebildet — nicht über findings/decisions dieses einen Dokuments. Sie muss
   // deshalb vom Aufrufer kommen: Diese Funktion sieht nur das aktuelle Dokument, die Frage
@@ -201,6 +212,7 @@ export async function versucheHinweislauf({
       entscheidungen: fasseEntscheidungenZusammen(findings, decisions),
       offeneHinweise: fasseOffeneHinweiseZusammen(findings),
       rueckkopplung,
+      annotationMode,
     })
     // Bereich W (Aura/Statuszeile) atmet ausschliesslich am echten Gateway-Zustand -- wie in
     // starteVerstaendnisEntwurf/sendeInterviewAntwort muss jeder echte runTask-Aufruf ihn setzen.
@@ -209,7 +221,7 @@ export async function versucheHinweislauf({
     setzeAgentStatus({ zustand: 'bereit' })
     const jetzt = Date.now()
     const { uebernommen, verworfen, gestartet, grundursache } = verarbeiteHinweisantwort({
-      geliefert: daten?.hinweise, docText, blocks, findings, decisions, jetzt, textart,
+      geliefert: daten?.hinweise, docText, blocks, findings, decisions, jetzt, textart, annotationMode,
     })
     return { gestartet: true, erfolg: true, uebernommen, verworfen, geliefertAnzahl: gestartet, grundursache, zeit: jetzt }
   } catch (fehler) {

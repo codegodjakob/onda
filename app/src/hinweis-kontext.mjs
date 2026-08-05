@@ -7,7 +7,7 @@
 // die Entscheidungsliste nie zu sehen, während alle Unit-Tests trotzdem grün blieben, wenn sie
 // nur den Zwischenwert prüfen. Dieses Modul übersetzt die Hinweislauf-Rohdaten auf den
 // tatsächlichen baueAnfrage-Vertrag (Vorbild: verstaendnis-kontext.mjs).
-import { HINWEIS_ANWEISUNG } from './agent-prompts.mjs'
+import { hinweisAnweisungFuerModus } from './agent-prompts.mjs'
 import { baueOndaBloecke } from './onda-kontext.mjs'
 import { aktiveRueckkopplung, formuliereRueckkopplung } from './rueckkopplung-model.mjs'
 
@@ -41,8 +41,9 @@ export function baueHinweisKontext({
   offeneHinweise = [],
   rueckkopplung = null,
   onda = null,
+  annotationMode = 'text',
 } = {}) {
-  const volatiles = [HINWEIS_ANWEISUNG]
+  const volatiles = [hinweisAnweisungFuerModus(annotationMode)]
 
   // Nur eine ausdruecklich freigegebene, versionierte Kalibrierung darf den Auftrag
   // beeinflussen. Eine rohe Bilanz ist Diagnose, keine Policy.
@@ -64,5 +65,5 @@ export function baueHinweisKontext({
 
   if (onda) volatiles.push(...baueOndaBloecke(onda))
 
-  return { verstaendnis, docText, volatiles }
+  return { verstaendnis, docText, volatiles, annotationMode: annotationMode === 'notiz' ? 'notiz' : 'text' }
 }
