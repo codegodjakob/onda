@@ -91,6 +91,9 @@ export async function fuehreLaufAus(beschreibung, laufFn) {
   if (typeof laufFn !== 'function') throw new Error('Lauf-Tor: laufFn fehlt')
 
   if (sperren.has(kanal)) return { gestartet: false, grund: 'lauf-aktiv' }
+  // `signatur` bewusst mitgeprueft (nicht nur einmalJeSignatur): eine leere/null Signatur blockt
+  // NIE -- ohne Signatur laesst sich "derselbe Stand wie zuletzt" nicht behaupten, und die vier
+  // Kanaele liefern in der Praxis ohnehin immer eine.
   if (einmalJeSignatur && signatur && signatur === letzteBezahlteSignatur(aktivesJournal(), kanal)) {
     return { gestartet: false, grund: 'unveraendert' }
   }

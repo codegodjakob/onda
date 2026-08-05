@@ -35,8 +35,14 @@ function ohneKommentarzeilen(quelle) {
     .join('\n')
 }
 
-const GATEWAY_PFAD = /['"]\.\/agent-gateway(?:\.mjs)?['"]/.source
-const TRANSPORT_PFAD = /['"]\.\/agent-transport(?:\.mjs)?['"]/.source
+// Branch-Review-Nacharbeit (Finding 1, Important): vorher matchte dies NUR './agent-gateway'
+// (gleicher Ordner). Ein kuenftiger Unterordner wie app/src/kanaele/neuer-kanal.mjs muesste das
+// Modul zwangslaeufig relativ nach OBEN importieren ('../agent-gateway.mjs',
+// '../../agent-gateway.mjs' usw.) -- so ein Import entkam allen drei Regeln, obwohl
+// leseQuelldateien() selbst schon rekursiv scannt (siehe Kommentar dort). (?:\.\.?\/)+ matcht
+// eine oder mehrere Folgen von './' oder '../' vor dem Dateinamen. Transport-Pfad analog.
+const GATEWAY_PFAD = /['"](?:\.\.?\/)+agent-gateway(?:\.mjs)?['"]/.source
+const TRANSPORT_PFAD = /['"](?:\.\.?\/)+agent-transport(?:\.mjs)?['"]/.source
 
 // Regel 1: welche Dateien duerfen runTask NEBEN lauf-tor.mjs aus agent-gateway importieren.
 // Nach Task 4 (editor.js hat runTask abgegeben) ist diese Ausnahmenliste LEER -- und SIE IST
@@ -52,7 +58,13 @@ const ERLAUBTE_RUNTASK_IMPORTEURE = new Set(['lauf-tor.mjs', ...RUNTASK_AUSNAHME
 // ist korrekt fuer alle vier Zweige unten, denn lauf-tor.mjs braucht keinen von ihnen: es holt
 // runTask ausschliesslich per benanntem Import mit Alias (import { runTask as gatewayRunTask }).
 // - statischer Import:      import { runTask } from './agent-gateway.mjs'  (auch mit Alias:
-//                            "runTask as x" -- der ORIGINALNAME zaehlt, nicht der lokale)
+//                            "runTask as x" -- der ORIGINALNAME zaehlt, nicht der lokale). Ein
+//                            optionaler Default-Bezeichner VOR der Klammer wird toleriert und
+//                            haengt den Named-Import-Scan nicht aus (Branch-Review-Nacharbeit,
+//                            Finding 3): "import gateway, { runTask } from './agent-gateway.mjs'"
+//                            enthielt runTask vorher in einer Klammer, die die alte Regex (die
+//                            direkt nach "import"/"export" eine oeffnende "{" verlangte) gar
+//                            nicht erst fand, weil "gateway, " dazwischenstand.
 // - Re-Export:               export { runTask } from './agent-gateway.mjs' (selbe Regex, weil
 //                            "import|export ... from" beide Formen abdeckt)
 // - Namespace-Import:        import * as gateway from './agent-gateway.mjs' -- macht JEDE
@@ -69,16 +81,25 @@ const ERLAUBTE_RUNTASK_IMPORTEURE = new Set(['lauf-tor.mjs', ...RUNTASK_AUSNAHME
 //                            keinen Default-Export, ein solcher Import waere ohnehin ein Bug,
 //                            aber billig mitzupruefen, damit er nicht als unentdeckter vierter
 //                            Weg am Tor vorbei durchgeht.
-// - dynamischer Import:      const { runTask } = await import('./agent-gateway.mjs') -- hier
-//                            reicht der billige Check "Zeile erwaehnt sowohl den Import-Aufruf
-//                            als auch das Wort runTask", denn im Baum gibt es aktuell keinen
-//                            einzigen dynamischen Import (gegengeprueft) -- dieser Zweig ist
-//                            Vorsorge, kein beobachtetes Muster.
+// - dynamischer Import:      const { runTask } = await import('./agent-gateway.mjs') -- JEDER
+//                            dynamische Import von agent-gateway ausserhalb lauf-tor.mjs ist ein
+//                            Verstoss, unabhaengig davon, ob das Wort "runTask" auf derselben
+//                            Zeile auftaucht (Branch-Review-Nacharbeit, Finding 2: die alte Regex
+//                            verlangte "runTask" auf derselben Zeile wie import(...) und entkam
+//                            damit einem zweizeiligen Muster wie "const modul = await
+//                            import('./agent-gateway.mjs')" gefolgt von "modul.runTask(...)" auf
+//                            der naechsten Zeile). Dieselbe Begruendung wie beim
+//                            Namespace-Import: ausserhalb von lauf-tor.mjs gibt es dafuer keinen
+//                            legitimen Grund -- niemand ausser dem Tor braucht das Modul als
+//                            Ganzes.
 // [^}]* darf ueber Zeilenumbrueche laufen (kein "." im Zeichensatz-Ausschluss), weil manche
 // Imports im Baum mehrzeilig sind (siehe lauf-tor.mjs selbst, Import aus lauf-journal.mjs).
 function findeRunTaskImporte(quelle) {
   const treffer = []
-  const staticRe = new RegExp(`\\b(?:import|export)\\s*\\{([^}]*)\\}\\s*from\\s*${GATEWAY_PFAD}`, 'g')
+  const staticRe = new RegExp(
+    `\\b(?:import|export)\\s*(?:[A-Za-z_$][\\w$]*\\s*,\\s*)?\\{([^}]*)\\}\\s*from\\s*${GATEWAY_PFAD}`,
+    'g',
+  )
   let m
   while ((m = staticRe.exec(quelle))) {
     if (/\brunTask\b/.test(m[1])) treffer.push(m[0].trim())
@@ -87,10 +108,8 @@ function findeRunTaskImporte(quelle) {
   while ((m = namespaceRe.exec(quelle))) treffer.push(m[0].trim())
   const defaultRe = new RegExp(`\\bimport\\s+[A-Za-z_$][\\w$]*\\s*from\\s*${GATEWAY_PFAD}`, 'g')
   while ((m = defaultRe.exec(quelle))) treffer.push(m[0].trim())
-  const dynamicRe = new RegExp(`[^\\n]*\\bimport\\s*\\(\\s*${GATEWAY_PFAD}\\s*\\)[^\\n]*`, 'g')
-  while ((m = dynamicRe.exec(quelle))) {
-    if (/\brunTask\b/.test(m[0])) treffer.push(m[0].trim())
-  }
+  const dynamicRe = new RegExp(`\\bimport\\s*\\(\\s*${GATEWAY_PFAD}\\s*\\)`, 'g')
+  while ((m = dynamicRe.exec(quelle))) treffer.push(m[0].trim())
   return treffer
 }
 
@@ -222,6 +241,76 @@ test('ein Stern-Re-Export von agent-gateway wird als Verstoss erkannt, ausnahmsl
   assert.ok(
     pruefeQuelle('lauf-tor.mjs', sammelReExport).length > 0,
     'auch lauf-tor.mjs selbst darf agent-gateway nicht per Sammel-Re-Export weiterreichen',
+  )
+})
+
+// Branch-Review-Nacharbeit (Finding 1, Important): ein Kanal in einem Unterordner
+// (app/src/kanaele/neuer-kanal.mjs) muss agent-gateway zwangslaeufig relativ nach OBEN
+// importieren -- die alte Regex ('\.\/agent-gateway', nur gleicher Ordner) haette das nicht
+// gesehen, obwohl leseQuelldateien() den Unterordner selbst schon rekursiv scannt. Zwei Stufen
+// ('../../agent-gateway.mjs') decken zugleich ab, dass (?:\.\.?\/)+ mehr als eine Ebene traegt.
+test('ein unterordner-relativer Import von runTask entkommt dem Waechter nicht', () => {
+  const kanalEinStufeHoeher =
+    "import { runTask } from '../agent-gateway.mjs'\n" +
+    "export async function fuehreNeuenKanalAus() { return runTask('chat', {}) }"
+  const kanalZweiStufenHoeher =
+    "import { runTask } from '../../agent-gateway.mjs'\n" +
+    "export async function fuehreNeuenKanalAus() { return runTask('chat', {}) }"
+  assert.ok(
+    pruefeQuelle('kanaele/neuer-kanal.mjs', kanalEinStufeHoeher).length > 0,
+    "ein Import von '../agent-gateway.mjs' muss als Regel-1-Verstoss erkannt werden",
+  )
+  assert.ok(
+    pruefeQuelle('kanaele/tief/neuer-kanal.mjs', kanalZweiStufenHoeher).length > 0,
+    "ein Import von '../../agent-gateway.mjs' muss ebenfalls erkannt werden",
+  )
+})
+
+// Dieselbe Luecke traf Regel 2 (Transport nur vom Gateway) -- derselbe Pfad-Regex-Baustein,
+// darum dieselbe Nachbesserung, hier gegen agent-transport.mjs statt agent-gateway.mjs geprueft.
+test('ein unterordner-relativer Import von agent-transport entkommt Regel 2 nicht', () => {
+  const kanal = "import { irgendwas } from '../agent-transport.mjs'"
+  const verstoesse = pruefeQuelle('kanaele/neuer-kanal.mjs', kanal).filter((v) => v.startsWith('Regel 2'))
+  assert.ok(verstoesse.length > 0, "ein Import von '../agent-transport.mjs' muss als Regel-2-Verstoss erkannt werden")
+})
+
+// Branch-Review-Nacharbeit (Finding 2, Minor): die alte dynamicRe verlangte "runTask" auf
+// DERSELBEN Zeile wie der import(...)-Aufruf -- ein zweizeiliges Muster (Zuweisung des Moduls
+// in einer Zeile, Zugriff auf runTask in der naechsten) entkam. Jetzt zaehlt JEDER dynamische
+// Import von agent-gateway ausserhalb lauf-tor.mjs als Verstoss, unabhaengig von der Zeile.
+test('ein zweizeiliger dynamischer Import von agent-gateway wird ebenfalls erkannt', () => {
+  const vergessenerKanal =
+    "export async function fuehreNeuenKanalAus() {\n" +
+    "  const modul = await import('./agent-gateway.mjs')\n" +
+    "  return modul.runTask('chat', {})\n" +
+    '}'
+  const verstoesse = pruefeQuelle('zweizeiliger-kanal.mjs', vergessenerKanal)
+  assert.ok(
+    verstoesse.length > 0,
+    'ein dynamischer Import von agent-gateway ist immer ein Verstoss, auch wenn runTask erst in einer spaeteren Zeile auftaucht',
+  )
+})
+
+// Ledger T10: defaultRe (Default-Import, "import gateway from './agent-gateway.mjs'") hatte
+// bisher keinen eigenen Test, obwohl agent-gateway.mjs gar keinen Default-Export besitzt und ein
+// solcher Import ohnehin ein Bug waere -- billig mitgeprueft, aber bislang unbewiesen.
+test('ein Default-Import von agent-gateway wird als Verstoss erkannt', () => {
+  const vergessenerKanal = "import gateway from './agent-gateway.mjs'"
+  const verstoesse = pruefeQuelle('default-kanal.mjs', vergessenerKanal)
+  assert.ok(verstoesse.length > 0, "ein Default-Import von agent-gateway.mjs muss erkannt werden, auch ohne Default-Export dort")
+})
+
+// Ledger T10: die Kombiform (Default- + benannter Import in einem Ausdruck) entging der alten
+// staticRe -- die verlangte eine oeffnende "{" DIREKT nach "import"/"export", und "gateway, "
+// stand dazwischen. Die Regex traegt jetzt einen optionalen Default-Bezeichner vor der Klammer.
+test('die Kombiform aus Default- und benanntem Import (runTask) wird erkannt', () => {
+  const vergessenerKanal =
+    "import gateway, { runTask } from './agent-gateway.mjs'\n" +
+    "export async function fuehreNeuenKanalAus() { return runTask('chat', {}) }"
+  const verstoesse = pruefeQuelle('kombi-kanal.mjs', vergessenerKanal)
+  assert.ok(
+    verstoesse.length > 0,
+    "die Kombiform 'import gateway, { runTask } from ...' muss als Regel-1-Verstoss erkannt werden",
   )
 })
 

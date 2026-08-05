@@ -224,7 +224,11 @@ export async function fuehreChatVorgangAus({ laeuftBereits, sperreSetzen, setzeS
     return { gestartet: true, ...(chatErgebnis && typeof chatErgebnis === 'object' ? chatErgebnis : {}) }
   } catch (fehler) {
     setzeStatus({ zustand: 'fehler', fehlerTyp: fehler?.typ })
-    return { gestartet: true, erfolg: false }
+    // Branch-Review-Nacharbeit (Finding 4): fehler-Feld auch hier durchreichen, wie im
+    // Erfolgspfad oben (chatErgebnis) und im Lauf-Tor (fuehreLaufAus) -- sonst journalisiert
+    // ein Wurf aus verdichte()/chatte() SELBST (das Sicherheitsnetz, siehe Kommentar oben)
+    // immer als 'unbekannt' statt mit dem tatsaechlichen Fehlertyp.
+    return { gestartet: true, erfolg: false, fehler: fehler?.typ }
   } finally {
     sperreSetzen(false)
   }

@@ -393,7 +393,7 @@ test('Fix-Runde 1, Finding 1 (Critical): zwei kollidierende Ausloeser -> runTask
   const hatSchluessel = () => schluesselWartet.then(() => true) // haengt wie ein echter Keychain-/Bridge-Aufruf
 
   const eingabe = () => basisVersuch({
-    laeuftBereits: sperre, // wird bei jedem Aufruf FRISCH gelesen -- wie hinweislaufAktiv in workspace.js
+    laeuftBereits: sperre, // wird bei jedem Aufruf FRISCH gelesen -- wie das Sperren-Register im Lauf-Tor (sperren/kanalGesperrt, lauf-tor.mjs)
     sperreSetzen: wert => { sperre = wert },
     hatSchluessel,
     runTask: async () => { runTaskAufrufe += 1; return { daten: { hinweise: [] } } },

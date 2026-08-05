@@ -207,10 +207,16 @@ export function pruefeJournalInvariante(journal) {
   return verstoesse
 }
 
-// Merkt sich, dass eine Karte (Hinweis oder Erweiterung) zum ersten Mal erschienen ist --
-// der Messpunkt für die spätere Momente-Kalibrierung (Task 9). Dedupliziert je findingId:
-// ein zweites Erscheinen derselben Karte ist kein neues Ereignis. Fehlende findingId ist
-// ein no-op statt eines Fehlers -- der Aufrufer (Render-Pfad) soll nie deswegen abstürzen.
+// Merkt sich, dass eine Karte zum ersten Mal erschienen ist -- der Messpunkt für die spätere
+// Momente-Kalibrierung (Task 9). `art` ist hier bewusst offen gehalten (Hinweis ODER
+// Erweiterung, siehe artVon in momente-model.mjs), aber verdrahtet ist heute nur der
+// Hinweis-Zweig: workspace.js ruft merkeKarteGezeigt() ausschließlich aus currentPassageFinding
+// auf, das nur Randkarten mit placement:'passage' aus getFindingQueue (Hinweise) durchläuft.
+// Erweiterungen (doc.erweiterungen) laufen über einen eigenen Render-Pfad (renderErweiterungen)
+// und speisen diesen Haken bislang nicht — bewusst außen vor gelassen, Issue-#12-Zuschnitt statt
+// Versehen. Dedupliziert je findingId: ein zweites Erscheinen derselben Karte ist kein neues
+// Ereignis. Fehlende findingId ist ein no-op statt eines Fehlers -- der Aufrufer (Render-Pfad)
+// soll nie deswegen abstürzen.
 export function merkeGezeigt(journal, { findingId, art, moment, jetzt } = {}) {
   if (!findingId) return false
   if (!journal || !Array.isArray(journal.gezeigt)) return false
