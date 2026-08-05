@@ -1,11 +1,11 @@
 # Plan: Den vollstaendigen Onda-Zielzustand schliessen
 
-**Erstellt am 05.08.2026. Status: in Umsetzung.**
+**Erstellt am 05.08.2026. Status: abgeschlossen und frisch verifiziert.**
 
 ## Ziel und unverrueckbare Abnahme
 
 Dieser Plan ersetzt den 77-Eval-Zwischenstand als Arbeitsgrundlage. Ausgangspunkt ist
-der Katalog `app/evals/v2-fertigzustand.json` in Fassung `2026-08-05.1` mit 118 Evals
+der Katalog `app/evals/v2-fertigzustand.json` in Fassung `2026-08-05.2` mit 130 Evals
 und der darueberliegende Arbeitsstand. Fertig bedeutet nicht, dass jede Zeile gruen
 eingefaerbt wurde, sondern:
 

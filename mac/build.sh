@@ -77,7 +77,7 @@ SIGNATUR_NAME="${ONDA_SIGNATUR:-Onda Dev}"
 # nicht: sie besagt nur, dass ein FREMDER Rechner der Signatur nicht traut. Hier geht es
 # allein um eine ueber alle Bauten stabile Identitaet.
 if security find-identity -p codesigning 2>/dev/null | grep -Fq "\"$SIGNATUR_NAME\""; then
-  echo "— signiere mit „$SIGNATUR_NAME“ …"
+  echo "— signiere mit „${SIGNATUR_NAME}“ …"
   codesign --force -s "$SIGNATUR_NAME" "$APP" 2>/dev/null
 else
   echo "— signiere (lokal, ad-hoc) …"

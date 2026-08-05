@@ -1,6 +1,7 @@
 node_modules/
 app/dist/
 Schreibwerkzeug.app/
+Onda.app/
 mac/AppIcon.iconset/
 .DS_Store
 .superpowers/
@@ -17,3 +18,7 @@ app/evals/results/laeufe/
 !.scratch/*/
 !.scratch/*/prototyp/
 !.scratch/*/prototyp/**
+
+# Lokale Wayfinder-Arbeitsstände; nur der kuratierte Prototyp darüber wird versioniert.
+.scratch/rueckmeldung/issues/
+.scratch/rueckmeldung/map.md
