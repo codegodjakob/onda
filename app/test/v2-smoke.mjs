@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
+import { collapseProjectSidebar, ensureProjectSidebarOpen } from './helpers/onda-navigation.mjs'
 
 const require = createRequire(import.meta.url)
 const { chromium } = require('playwright')
@@ -201,11 +202,11 @@ async function runDesktop(browser) {
   assert.equal(await shelf.locator('.black-spine, .status-dot').count(), 0)
 
   // Seitenleiste einklappen/ausklappen persistiert in settings.sidebarCollapsed
-  await page.locator('#sidebarCollapse').click()
+  await collapseProjectSidebar(page)
   assert.equal(await page.locator('#editorView').evaluate(n => n.classList.contains('is-sidebar-collapsed')), true)
   assert.equal(await page.locator('#sidebarReopen').isVisible(), true)
   assert.equal(await page.evaluate(() => AIWT.state.settings.sidebarCollapsed), true)
-  await page.locator('#sidebarReopen').click()
+  await ensureProjectSidebarOpen(page)
   assert.equal(await page.locator('#editorView').evaluate(n => n.classList.contains('is-sidebar-collapsed')), false)
   assert.equal(await page.locator('#sidebarReopen').isHidden(), true)
   assert.equal(await page.evaluate(() => AIWT.state.settings.sidebarCollapsed), false)
@@ -325,7 +326,7 @@ async function runMobile(browser) {
   assert.equal(await page.locator('#structureNav .block-preview').count() > 0, true)
 
   // collapse -> editor full width, drawer off-canvas, no horizontal overflow
-  await page.locator('#sidebarCollapse').click()
+  await collapseProjectSidebar(page)
   await page.waitForFunction(() => document.getElementById('editorView').classList.contains('is-sidebar-collapsed'))
   const collapsed = await page.evaluate(() => {
     const sidebar = document.getElementById('ondaSidebar').getBoundingClientRect()
@@ -338,7 +339,7 @@ async function runMobile(browser) {
   assert.ok(collapsed.overflow <= 1, `Horizontales Overflow (collapsed): ${collapsed.overflow}px`)
 
   // reopen the drawer
-  await page.locator('#sidebarReopen').click()
+  await ensureProjectSidebarOpen(page)
   await page.waitForFunction(() => !document.getElementById('editorView').classList.contains('is-sidebar-collapsed'))
   assert.equal(await page.locator('#ondaSidebar').isVisible(), true)
 
@@ -1472,7 +1473,7 @@ async function runTask5MobileFeedback(browser) {
   })
   const page = await context.newPage()
   await openExample(page)
-  await page.locator('#sidebarCollapse').click()
+  await collapseProjectSidebar(page, { touch: true })
 
   const local = page.locator('#localAgentLayer [data-finding-id]')
   await expectVisible(local)
@@ -1941,7 +1942,7 @@ async function runTask6Mobile(browser) {
   await page.waitForTimeout(260)
   await page.screenshot({ path: `${screenshotDir}/aiwt-v2-task6-mobile-widget.png`, fullPage: true })
   await widget.locator('[data-close-agent]').tap()
-  await page.locator('#sidebarCollapse').tap()
+  await collapseProjectSidebar(page, { touch: true })
 
   const fixture = await injectTask6PassageFinding(page, false)
   const local = page.locator(`#localAgentLayer [data-finding-id="${fixture.findingId}"]`)
@@ -2533,7 +2534,7 @@ async function runTask7Scenarios(browser, mobile) {
     page.on('pageerror', error => errors.push(error.message))
     await openExample(page)
     if (mobile && !['base', 'shelf'].includes(name)) {
-      await page.locator('#sidebarCollapse').tap()
+      await collapseProjectSidebar(page, { touch: true })
     }
     await prepareTask7Scenario(page, name)
     await assertTask7CommonLayout(page, name, mobile)
@@ -2608,10 +2609,10 @@ async function runTask7KeyboardAndMotion(browser) {
   })
   assert.equal(await page.locator('.bubble, .bb-b, .bb-i, .bb-u, .bb-s, .bb-hl').count(), 0)
 
-  await page.locator('#sidebarCollapse').click()
+  await collapseProjectSidebar(page)
   await assertReducedTransition(page, '#ondaSidebar')
-  await page.locator('#sidebarReopen').click()
-  await page.locator('#sidebarCollapse').click()
+  await ensureProjectSidebarOpen(page)
+  await collapseProjectSidebar(page)
 
   const finding = page.locator('#localAgentLayer [data-finding-id]')
   await finding.locator('.local-finding-summary').click()
@@ -2637,7 +2638,7 @@ async function runTask7KeyboardAndMotion(browser) {
   await page.keyboard.press('Escape')
   assert.equal(await page.locator('#agentWidget').isHidden(), true)
 
-  await page.locator('#sidebarReopen').click()
+  await ensureProjectSidebarOpen(page)
   await page.locator('#pvCard').click()
   await expectVisible(page.locator('#pvModal[role="dialog"]'))
   await page.keyboard.press('Escape')

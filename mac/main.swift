@@ -462,8 +462,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
     var window: NSWindow!
     var webView: WKWebView!
     let probePath: String?
+    let liveProbePath: String?
+    var liveProbeRequestCount = 0
 
-    init(probePath: String?) { self.probePath = probePath }
+    init(probePath: String?, liveProbePath: String?) {
+        self.probePath = probePath
+        self.liveProbePath = liveProbePath
+    }
 
     func applicationDidFinishLaunching(_ n: Notification) {
         Store.cleanOrphanImages()
@@ -479,9 +484,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         ucc.add(self, name: "openurl")
         ucc.add(self, name: "llmkey")
         ucc.add(self, name: "llm")
+        ucc.add(self, name: "liveprobe")
 
         let data = Store.load()
-        let js = "window.__NATIVE_DATA__ = \(data); window.__PROBE__ = \(probePath != nil ? "true" : "false");"
+        let js = "window.__NATIVE_DATA__ = \(data); window.__PROBE__ = \(probePath != nil ? "true" : "false"); window.__LIVE_LLM_PROBE__ = \(liveProbePath != nil ? "true" : "false");"
         ucc.addUserScript(WKUserScript(source: js, injectionTime: .atDocumentStart, forMainFrameOnly: true))
 
         let cfg = WKWebViewConfiguration()
@@ -505,7 +511,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         window.setFrameAutosaveName("OndaMain")
         if window.frame.width < 300 { window.center() }
 
-        if probePath == nil {
+        if probePath == nil && liveProbePath == nil {
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
         }
@@ -520,6 +526,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
             DispatchQueue.main.asyncAfter(deadline: .now() + 20) {
                 try? "{\"error\":\"timeout\"}".write(toFile: p, atomically: true, encoding: .utf8)
                 try? FileManager.default.removeItem(at: Store.dir) // Wegwerf-Verzeichnis der Probe
+                exit(2)
+            }
+        }
+        if let p = liveProbePath {
+            // Der echte Lauf bleibt auf genau eine Anfrage begrenzt. Der Timeout-
+            // Beleg enthält keine Antwort- oder Schlüsselwerte.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 180) {
+                let safe = "{\"passed\":false,\"keyPresent\":false,\"requestCount\":0,\"nativeRequestCount\":\(self.liveProbeRequestCount),\"task\":\"hinweise\",\"model\":\"claude-opus-5\",\"durationMs\":180000,\"usage\":{\"inputTokens\":0,\"outputTokens\":0,\"cacheReadInputTokens\":0,\"cacheCreationInputTokens\":0},\"annotationKind\":null,\"schemaValid\":false,\"errorType\":\"abgebrochen\"}"
+                try? safe.write(toFile: p, atomically: true, encoding: .utf8)
+                try? FileManager.default.removeItem(at: Store.dir)
                 exit(2)
             }
         }
@@ -595,6 +611,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
                          "status": ["vorhanden": Keychain.vorhanden()]])
         case "llm":
             guard let obj = message.body as? [String: Any] else { return }
+            if liveProbePath != nil { liveProbeRequestCount += 1 }
             handleLlm(obj)
         case "probe":
             if let p = probePath, let s = message.body as? String {
@@ -602,6 +619,48 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
                 try? FileManager.default.removeItem(at: Store.dir) // Wegwerf-Verzeichnis der Probe
                 exit(0)
             }
+        case "liveprobe":
+            guard let p = liveProbePath,
+                  let s = message.body as? String,
+                  let d = s.data(using: .utf8),
+                  let obj = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any] else { return }
+            // Whitelist statt Durchreichen: Selbst bei kompromittiertem Webcode kann
+            // der persistierte Nachweis keine Anfrage, Antwort oder Header enthalten.
+            let usageIn = obj["usage"] as? [String: Any] ?? [:]
+            func ganzeZahl(_ key: String, aus quelle: [String: Any]) -> Int {
+                max(0, (quelle[key] as? NSNumber)?.intValue ?? 0)
+            }
+            let arten = Set(["rechtschreibung", "grammatik", "zeichensetzung", "wortwahl", "satzstil", "absatzstil", "straffen", "wiederholung", "ton", "stilmittel", "anglizismus", "terminologie", "verschieben", "uebergang", "gliederung", "fluss", "faden", "ueberschrift", "anmerkung", "beleg", "faktencheck", "widerspruch", "luecke", "verstaendlichkeit"])
+            let fehlertypen = Set(["kein-schluessel", "offline", "ratenlimit", "ueberlastet", "schema", "abgelehnt", "abgebrochen", "unbekannt"])
+            let art = obj["annotationKind"] as? String
+            let fehler = obj["errorType"] as? String
+            let genauEineAnfrage = liveProbeRequestCount == 1 && ganzeZahl("requestCount", aus: obj) == 1
+            let schemaGueltig = obj["schemaValid"] as? Bool == true && art.map(arten.contains) == true
+            let gemeldetBestanden = obj["passed"] as? Bool == true
+            let bestanden = genauEineAnfrage && schemaGueltig && gemeldetBestanden
+            let safe: [String: Any] = [
+                "passed": bestanden,
+                "keyPresent": obj["keyPresent"] as? Bool == true,
+                "requestCount": ganzeZahl("requestCount", aus: obj),
+                "nativeRequestCount": liveProbeRequestCount,
+                "task": "hinweise",
+                "model": "claude-opus-5",
+                "durationMs": ganzeZahl("durationMs", aus: obj),
+                "usage": [
+                    "inputTokens": ganzeZahl("inputTokens", aus: usageIn),
+                    "outputTokens": ganzeZahl("outputTokens", aus: usageIn),
+                    "cacheReadInputTokens": ganzeZahl("cacheReadInputTokens", aus: usageIn),
+                    "cacheCreationInputTokens": ganzeZahl("cacheCreationInputTokens", aus: usageIn),
+                ],
+                "annotationKind": art.map(arten.contains) == true ? art! : NSNull(),
+                "schemaValid": schemaGueltig,
+                "errorType": fehler.map(fehlertypen.contains) == true ? fehler! : NSNull(),
+            ]
+            if let safeData = try? JSONSerialization.data(withJSONObject: safe, options: [.prettyPrinted, .sortedKeys]) {
+                try? safeData.write(to: URL(fileURLWithPath: p), options: .atomic)
+            }
+            try? FileManager.default.removeItem(at: Store.dir)
+            exit(bestanden ? 0 : 2)
         default: break
         }
     }
@@ -918,17 +977,20 @@ if args.contains("--selftest") { runSelfTest() }
 
 var probePath: String? = nil
 if let i = args.firstIndex(of: "--probe"), i + 1 < args.count { probePath = args[i + 1] }
+var liveProbePath: String? = nil
+if let i = args.firstIndex(of: "--llm-probe"), i + 1 < args.count { liveProbePath = args[i + 1] }
 
 // Die Startprobe fasst NIE echte Daten an: eigenes Wegwerf-Verzeichnis wie der
 // Selbsttest, nach der Probe wieder entfernt.
-if probePath != nil {
+if probePath != nil || liveProbePath != nil {
     Store.dir = URL(fileURLWithPath: NSTemporaryDirectory())
         .appendingPathComponent("onda-probe-\(UUID().uuidString)", isDirectory: true)
 }
 
 let app = NSApplication.shared
-let delegate = AppDelegate(probePath: probePath)
+let delegate = AppDelegate(probePath: probePath, liveProbePath: liveProbePath)
 app.delegate = delegate
-app.setActivationPolicy(probePath == nil ? .regular : .accessory)
-if probePath == nil { buildMenus(delegate) }
+let istProbe = probePath != nil || liveProbePath != nil
+app.setActivationPolicy(istProbe ? .accessory : .regular)
+if !istProbe { buildMenus(delegate) }
 app.run()

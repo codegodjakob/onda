@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
+import { openMaterialLibrary } from './helpers/onda-navigation.mjs'
 
 const baseUrl = process.env.AIWT_URL || 'http://127.0.0.1:4173/'
 
@@ -21,11 +22,7 @@ async function freshProject(page) {
 }
 
 async function openLibrary(page) {
-  if (!await page.locator('#materialSources').isVisible()) {
-    await page.evaluate(() => window.AIWT.openDoc(window.AIWT.state.active))
-  }
-  await page.locator('#materialSources').click()
-  await waitForLibraryReady(page)
+  await openMaterialLibrary(page)
 }
 
 async function importSource(page, {

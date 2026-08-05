@@ -18,6 +18,7 @@ export const ETAPPE_A_HINWEISE = Object.freeze({
   hinweise: [
     {
       kategorie: 'logik',
+      anmerkungsart: 'widerspruch',
       anker: 'erst versteht und dann urteilt',
       beobachtung: 'Die Reihenfolge ist als Produktprinzip formuliert.',
       relevanz: 'Sie entscheidet darüber, ob spätere Hinweise den Projektzweck berücksichtigen.',
@@ -31,6 +32,7 @@ export const ETAPPE_A_HINWEISE = Object.freeze({
     },
     {
       kategorie: 'quelle',
+      anmerkungsart: 'beleg',
       anker: 'DIESE FUNDSTELLE EXISTIERT NICHT IM TEXT',
       beobachtung: 'Diese Modellbehauptung besitzt keinen gültigen Anker.',
       relevanz: 'Ein erfundener Anker darf nie als belastbarer Hinweis erscheinen.',

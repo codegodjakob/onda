@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
+import { ensureProjectSidebarOpen } from './helpers/onda-navigation.mjs'
 
 const baseUrl = process.env.AIWT_URL || 'http://127.0.0.1:4173/'
 const ORIGINAL_TASK = 'CANARY-ALPHA: Eine belastbare Analyse schreiben'
@@ -92,6 +93,7 @@ async function seedTwoProjects(page) {
 }
 
 async function openMemory(page) {
+  await ensureProjectSidebarOpen(page)
   await page.locator('#pvCard').click()
   await page.locator('#pvModal').waitFor({ state: 'visible' })
   await page.locator('#memoryOpen').click()

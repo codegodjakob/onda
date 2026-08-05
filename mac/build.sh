@@ -43,7 +43,9 @@ rm -rf AppIcon.iconset
 # „Über Onda" zeigt, welcher Stand wirklich läuft. Ein „+" hinter dem
 # Commit heißt: aus ungesichertem Stand gebaut.
 COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo unbekannt)"
-if [ -n "$(git status --porcelain)" ]; then
+# Persönliche Arbeitsnotizen unter .scratch gehören nicht zum App-Artefakt und
+# dürfen dessen reproduzierbaren Baustand nicht als verändert markieren.
+if [ -n "$(git -C .. status --porcelain -- . ':(exclude).scratch/**')" ]; then
 	COMMIT="${COMMIT}+"
 fi
 DATUM="$(date +%Y-%m-%d)"

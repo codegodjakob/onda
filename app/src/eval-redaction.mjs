@@ -13,5 +13,11 @@ export function redactSecrets(value) {
 
 export function containsSecretMarker(value) {
   const text = String(value || '')
-  return /authorization\s*[:=]|x-api-key\s*[:=]|api-key\s*[:=]|\bsk-ant-|\bsk-/iu.test(text)
+  // Bereits redigierte Headernamen dürfen im Nachweis stehen; gefährlich ist
+  // nur ein Wert, den redactSecrets noch verändern würde.
+  return redactSecrets(text) !== text
+}
+
+export function processArgumentsAreSecretFree(argumentsList) {
+  return !containsSecretMarker((argumentsList || []).map(value => String(value)).join(' '))
 }

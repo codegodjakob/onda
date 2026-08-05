@@ -7,6 +7,7 @@ import { chromium } from 'playwright'
 import AxeBuilder from '@axe-core/playwright'
 
 import { ALL_ANNOTATION_KINDS } from '../src/annotation-contract.mjs'
+import { ensureProjectSidebarOpen } from './helpers/onda-navigation.mjs'
 
 const appRoot = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const requestedSection = process.argv.includes('--section')
@@ -170,19 +171,26 @@ async function runShell(browser) {
     await mkdir(directory, { recursive: true })
     for (const width of [1440, 1024, 720, 320]) {
       await page.setViewportSize({ width, height: 1000 })
+      await page.locator('#editorView').evaluate(async node => {
+        await Promise.all(node.getAnimations({ subtree: true }).map(animation => animation.finished.catch(() => {})))
+      })
       await page.screenshot({ path: resolve(directory, `onda-editor-${width}.png`), fullPage: true })
     }
     await page.setViewportSize({ width: 1280, height: 900 })
+    await ensureProjectSidebarOpen(page)
     await page.getByRole('button', { name: 'Zur Projektübersicht' }).click()
     await page.screenshot({ path: resolve(directory, 'onda-library-1280.png'), fullPage: true })
     await page.setViewportSize({ width: 320, height: 760 })
     await page.screenshot({ path: resolve(directory, 'onda-library-320.png'), fullPage: true })
-    await page.locator('#doclist .doc').filter({ hasText: 'Beispiel: Calm Technology' }).click()
     await page.locator('#doclist .doc').first().click()
   }
 
   await page.setViewportSize({ width: 320, height: 760 })
   await page.waitForTimeout(50)
+  const annotationNavigation = await page.locator('#annotationPrevious, #annotationNext').evaluateAll(nodes => (
+    nodes.map(node => Math.round(node.getBoundingClientRect().top))
+  ))
+  assert.equal(annotationNavigation[0], annotationNavigation[1], 'Vorherige und nächste Anmerkung müssen mobil ein Bedienpaar bleiben')
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
   assert.ok(overflow <= 1, `Die App laeuft mobil ${overflow}px horizontal ueber`)
   assert.equal(await page.locator('#editor .ProseMirror').isVisible(), true)

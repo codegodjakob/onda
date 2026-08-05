@@ -11,13 +11,15 @@ import { containsSecretMarker, redactSecrets } from '../src/eval-redaction.mjs'
 const execFile = promisify(execFileCallback)
 const here = dirname(fileURLToPath(import.meta.url))
 const appRoot = resolve(here, '..')
-const resultPath = resolve(here, 'results/onda-ui-latest.json')
 const logRoot = resolve(here, 'results/onda-ui-runs')
+const qualitativeRubricPath = resolve(here, 'onda-ui-rubric.json')
 const liveNative = process.argv.includes('--live-native')
+const resultName = liveNative ? 'onda-ui-live-latest.json' : 'onda-ui-automated-latest.json'
+const resultPath = resolve(here, 'results', resultName)
 const iterationArgument = process.argv.find(argument => argument.startsWith('--iteration='))
 const iteration = Number(iterationArgument?.split('=')[1] || process.env.ITERATION || 1)
 
-const checks = Object.freeze([
+const checks = [
   {
     id: 'contract',
     command: process.execPath,
@@ -53,7 +55,15 @@ const checks = Object.freeze([
     command: 'npm',
     args: ['run', 'build'],
   },
-])
+]
+if (liveNative) {
+  checks.push({
+    id: 'native-live',
+    command: process.execPath,
+    args: ['evals/run-native-live-probe.mjs'],
+  })
+}
+Object.freeze(checks)
 
 const criterionChecks = Object.freeze({
   'ONDA-UI-01': ['contract', 'browser'],
@@ -73,6 +83,7 @@ const criterionChecks = Object.freeze({
   'ONDA-UI-15': ['contract', 'workspace', 'browser'],
   'ONDA-UI-16': ['browser'],
   'ONDA-UI-17': ['accessibility', 'browser'],
+  'ONDA-UI-18': ['native-live'],
   'ONDA-UI-19': ['contract', 'operations', 'gateway', 'workspace', 'browser', 'accessibility', 'build'],
   'ONDA-UI-20': ['contract', 'browser'],
   'ONDA-UI-21': ['gateway', 'browser'],
@@ -86,7 +97,7 @@ const rubricDimensions = Object.freeze([
   ['interactionSafety', 'Entscheidungsklarheit und Reversibilit채t', ['ONDA-UI-04', 'ONDA-UI-12', 'ONDA-UI-13']],
   ['responsive', 'Responsive Robustheit', ['ONDA-UI-16']],
   ['accessibility', 'Barrierefreiheit', ['ONDA-UI-17']],
-  ['reliability', 'Funktionale Zuverl채ssigkeit', ['ONDA-UI-15', 'ONDA-UI-19', 'ONDA-UI-21', 'ONDA-UI-22']],
+  ['reliability', 'Funktionale Zuverl채ssigkeit', ['ONDA-UI-15', 'ONDA-UI-18', 'ONDA-UI-19', 'ONDA-UI-21', 'ONDA-UI-22']],
 ])
 
 async function runCheck(check) {
@@ -118,12 +129,6 @@ async function runCheck(check) {
   }
 }
 
-function scoreFor(ids, byCriterion) {
-  const applicable = ids.map(id => byCriterion.get(id)).filter(Boolean)
-  if (!applicable.length) return 0
-  return Number((5 * applicable.filter(item => item.status === 'passed').length / applicable.length).toFixed(2))
-}
-
 await mkdir(logRoot, { recursive: true })
 const checkResults = []
 for (const check of checks) {
@@ -138,16 +143,31 @@ const uiEntries = flattenEvals(catalog).filter(entry => entry.id.startsWith('OND
 const byCheck = new Map(checkResults.map(result => [result.id, result]))
 const criteria = uiEntries.map(entry => {
   if (entry.id === 'ONDA-UI-18') {
+    if (liveNative) {
+      const evidence = [byCheck.get('native-live')].filter(Boolean)
+      const passed = evidence.length === 1 && evidence[0].passed
+      return {
+        criterion: entry.id,
+        title: entry.title,
+        gate: entry.gate,
+        status: passed ? 'passed' : 'failed',
+        score: passed ? 5 : 0,
+        evidence: evidence.map(result => ({
+          kind: result.id,
+          path: result.evidence,
+          command: result.command,
+          durationMs: result.durationMs,
+        })),
+      }
+    }
     return {
       criterion: entry.id,
       title: entry.title,
       gate: entry.gate,
-      status: liveNative ? 'failed' : 'not-run',
-      score: liveNative ? 0 : null,
+      status: 'not-run',
+      score: null,
       evidence: [],
-      note: liveNative
-        ? 'Der native Live-Adapter ist noch nicht an den Onda-Runner gebunden.'
-        : 'Bewusst ausgelassen: --without-live greift nie auf einen echten Schl체ssel zu.',
+      note: 'Bewusst ausgelassen: Ohne --live-native greift der Lauf nie auf einen echten Schl체ssel zu.',
     }
   }
   const required = criterionChecks[entry.id] || []
@@ -168,15 +188,16 @@ const criteria = uiEntries.map(entry => {
   }
 })
 
-const byCriterion = new Map(criteria.map(item => [item.criterion, item]))
+const qualitativeRubric = JSON.parse(await readFile(qualitativeRubricPath, 'utf8'))
 const dimensions = Object.fromEntries(rubricDimensions.map(([id, label, ids]) => [id, {
   label,
-  score: scoreFor(ids, byCriterion),
+  score: qualitativeRubric.current.dimensions[id].score,
+  rationale: qualitativeRubric.current.dimensions[id].rationale,
   evidence: ids,
 }]))
 const dimensionScores = Object.values(dimensions).map(item => item.score)
 const average = Number((dimensionScores.reduce((sum, score) => sum + score, 0) / dimensionScores.length).toFixed(2))
-const automatable = criteria.filter(item => item.criterion !== 'ONDA-UI-18')
+const automatable = liveNative ? criteria : criteria.filter(item => item.criterion !== 'ONDA-UI-18')
 const hardGatesPass = automatable.every(item => item.status === 'passed')
 const gitCommit = (await execFile('git', ['rev-parse', 'HEAD'], { cwd: appRoot })).stdout.trim()
 
@@ -189,7 +210,13 @@ const report = {
   iteration,
   threshold: 4.6,
   criteria,
-  rubric: { dimensions, average, passed: average >= 4.6 },
+  rubric: {
+    source: 'evals/onda-ui-rubric.json',
+    iteration: qualitativeRubric.current.iteration,
+    dimensions,
+    average,
+    passed: average >= qualitativeRubric.threshold,
+  },
   summary: {
     passed: criteria.filter(item => item.status === 'passed').length,
     failed: criteria.filter(item => item.status === 'failed').length,
@@ -203,5 +230,5 @@ if (containsSecretMarker(safeReport)) throw new Error('Der Onda-UI-Bericht enth�
 await mkdir(dirname(resultPath), { recursive: true })
 await writeFile(resultPath, `${safeReport}\n`, 'utf8')
 process.stdout.write(`Onda UI: ${report.summary.passed}/${criteria.length} bestanden, ${report.summary.notRun} bewusst ausgelassen, Score ${average}/5\n`)
-process.stdout.write(`Ergebnis: evals/results/onda-ui-latest.json\n`)
+process.stdout.write(`Ergebnis: evals/results/${resultName}\n`)
 if (!hardGatesPass || !report.rubric.passed || (liveNative && report.summary.failed)) process.exitCode = 1

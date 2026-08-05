@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { chromium, firefox, webkit } from 'playwright'
+import { ensureProjectSidebarOpen } from './helpers/onda-navigation.mjs'
 
 const baseUrl = process.env.AIWT_URL || 'http://127.0.0.1:4173/'
 const CENTRAL = 'Das Angebot garantiert jeder Gemeinde warscheinlich sinkende Kosten.'
@@ -136,6 +137,7 @@ async function openLanguageDossier(page) {
   if (!await page.locator('#pvCard').isVisible()) {
     await page.evaluate(() => window.AIWT.openDoc(window.AIWT.state.active))
   }
+  await ensureProjectSidebarOpen(page)
   await page.locator('#pvCard').click()
   await page.locator('#pvModal').waitFor({ state: 'visible' })
   await page.locator('#languageOpen').click()

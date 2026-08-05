@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 1,
+  "evaluatedAt": "2026-08-05",
+  "threshold": 4.6,
+  "maxIterations": 5,
+  "method": "Visuelle Prüfung der festgelegten Desktop-, Tablet- und Mobilansichten in Hell und Dunkel gegen das lokale Onda Design System; Funktions-, Tastatur- und Axe-Belege bleiben separate Hard Gates.",
+  "iterations": [
+    {
+      "iteration": 1,
+      "average": 4.63,
+      "findings": [
+        "Mobile Screenshots zeigten den laufenden Sidebar-Abdunkelungsübergang statt des Ruhezustands.",
+        "Vorherige und nächste Anmerkung trennten sich bei 320 Pixeln in verschiedene Zeilen.",
+        "Mehrere ältere Browser-Smokes behandelten außerhalb des Viewports als nicht sichtbar und folgten dadurch nicht der mobilen Navigation."
+      ],
+      "changes": [
+        "Alle mobilen Smoke-Flows auf einen gemeinsamen, animationsbewussten Sidebar-Pfad vereinheitlicht.",
+        "Screenshot-Matrix wartet auf den tatsächlichen visuellen Ruhezustand.",
+        "Anmerkungsnavigation als untrennbares Bedienpaar und als klare mobile Zwei-Zeilen-Anordnung umgesetzt."
+      ]
+    },
+    {
+      "iteration": 2,
+      "average": 4.89,
+      "findings": [],
+      "changes": [
+        "Desktop-, Tablet- und Mobilaufnahmen erneut erzeugt und visuell geprüft.",
+        "Alle 29 Anmerkungsarten in Hell und Dunkel erneut gerendert.",
+        "Keine weitere visuelle Änderung: Qualitätswert liegt über der Schwelle und die Bildprüfung zeigt keinen neuen reproduzierbaren Mangel."
+      ]
+    }
+  ],
+  "current": {
+    "iteration": 2,
+    "average": 4.89,
+    "allNonExternalHardGatesPass": true,
+    "remainingExternalGate": "ONDA-UI-18",
+    "dimensions": {
+      "designSystem": {
+        "label": "Designsystemtreue",
+        "score": 4.9,
+        "rationale": "ABC Diatype, vier Größen, drei Gewichte, Sky als einziger Akzent, Aura nur für KI-Präsenz, Pillen und 24-Pixel-Flächen sind in Shell und Anmerkungen konsistent."
+      },
+      "caseFit": {
+        "label": "Passende Gestalt je Anwendungsfall",
+        "score": 4.9,
+        "rationale": "Korrektur, Umschreibung, Einfügung, Zielplatz, Bereich, Quelle, Vergleich, Dialog und Titel besitzen eigene, handlungsnahe Formen; Text- und Notizmodus bleiben getrennt."
+      },
+      "hierarchyCalm": {
+        "label": "Visuelle Hierarchie und Ruhe",
+        "score": 4.8,
+        "rationale": "Schreibblatt und Text bleiben dominant; Navigation, Review-Leiste und Karten sind ruhig abgestuft. Die informationsreiche Anmerkungsgalerie bleibt bewusst eine Prüffläche, nicht die Produktansicht."
+      },
+      "interactionSafety": {
+        "label": "Entscheidungsklarheit und Reversibilität",
+        "score": 5,
+        "rationale": "Übernehmen, Original behalten, eigene Fassung, sichere Sammelkorrektur, Rückgängig und dreistufiger Verwerfungsumfang sind sichtbar und eindeutig."
+      },
+      "responsive": {
+        "label": "Responsive Robustheit",
+        "score": 4.9,
+        "rationale": "1440, 1024, 720 und 320 Pixel bleiben ohne horizontalen Überlauf; die Randkarte wandert unter den Text und mobile Navigation bleibt zusammen."
+      },
+      "accessibility": {
+        "label": "Barrierefreiheit",
+        "score": 5,
+        "rationale": "Axe WCAG 2.1 A/AA ohne serious/critical Befunde, 44-Pixel-Ziele, Tastaturpfade, Fokusführung und reduzierte Bewegung sind belegt."
+      },
+      "reliability": {
+        "label": "Funktionale Zuverlässigkeit",
+        "score": 4.7,
+        "rationale": "Unit-, Browser-, Build-, Performance- und Native-Selbsttests sind grün. Der einmalige echte Lauf ist separat als externes Hard Gate wegen des macOS-Schlüsselbunddialogs offen."
+      }
+    },
+    "evidence": [
+      "evals/results/screenshots/onda-editor-1440.png",
+      "evals/results/screenshots/onda-editor-1024.png",
+      "evals/results/screenshots/onda-editor-720.png",
+      "evals/results/screenshots/onda-editor-320.png",
+      "evals/results/screenshots/onda-library-1280.png",
+      "evals/results/screenshots/onda-library-320.png",
+      "evals/results/screenshots/annotation-lab-light-1280.png",
+      "evals/results/screenshots/annotation-lab-light-320.png",
+      "evals/results/screenshots/annotation-lab-dark-1280.png",
+      "evals/results/screenshots/annotation-lab-dark-320.png"
+    ]
+  }
+}

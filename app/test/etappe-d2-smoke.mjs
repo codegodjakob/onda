@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { chromium, firefox, webkit } from 'playwright'
+import { ensureProjectSidebarOpen } from './helpers/onda-navigation.mjs'
 
 const baseUrl = process.env.AIWT_URL || 'http://127.0.0.1:4173/'
 
@@ -172,6 +173,7 @@ async function seedD2Project(page) {
 }
 
 async function openAudit(page) {
+  await ensureProjectSidebarOpen(page)
   await page.locator('#pvCard').click()
   await page.locator('#pvModal').waitFor({ state: 'visible' })
   await page.getByRole('button', { name: 'Schlussaudit und Export öffnen' }).click()

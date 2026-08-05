@@ -2,121 +2,121 @@ TAP version 13
 # Subtest: Onda kennt exakt 24 Text- und fünf Notizarten
 ok 1 - Onda kennt exakt 24 Text- und fünf Notizarten
   ---
-  duration_ms: 0.548625
+  duration_ms: 0.394042
   type: 'test'
   ...
 # Subtest: jede Anmerkungsart besitzt einen vollständigen unveränderlichen Darstellungsvertrag
 ok 2 - jede Anmerkungsart besitzt einen vollständigen unveränderlichen Darstellungsvertrag
   ---
-  duration_ms: 0.595208
+  duration_ms: 0.462375
   type: 'test'
   ...
 # Subtest: die Natur des Hinweises bestimmt neun unterschiedliche Darstellungsformen
 ok 3 - die Natur des Hinweises bestimmt neun unterschiedliche Darstellungsformen
   ---
-  duration_ms: 0.13975
+  duration_ms: 0.118209
   type: 'test'
   ...
 # Subtest: Prioritäten entsprechen Fehler, Empfehlung und Geschmack aus der Referenz
 ok 4 - Prioritäten entsprechen Fehler, Empfehlung und Geschmack aus der Referenz
   ---
-  duration_ms: 0.053542
+  duration_ms: 0.044
   type: 'test'
   ...
 # Subtest: Text- und Notizmodus lassen nur ihre eigenen Arten zu
 ok 5 - Text- und Notizmodus lassen nur ihre eigenen Arten zu
   ---
-  duration_ms: 0.057417
+  duration_ms: 0.048917
   type: 'test'
   ...
 # Subtest: Legacy-Findings werden sicher normalisiert ohne das Original zu verändern
 ok 6 - Legacy-Findings werden sicher normalisiert ohne das Original zu verändern
   ---
-  duration_ms: 0.070625
+  duration_ms: 0.071792
   type: 'test'
   ...
 # Subtest: vorhandene genaue Art gewinnt und Stilmittel-Metadaten schlagen die grobe Kategorie
 ok 7 - vorhandene genaue Art gewinnt und Stilmittel-Metadaten schlagen die grobe Kategorie
   ---
-  duration_ms: 0.049416
+  duration_ms: 0.045833
   type: 'test'
   ...
 # Subtest: unbekannte oder kaputte Findings fallen auf eine subjektive Anmerkung zurück
 ok 8 - unbekannte oder kaputte Findings fallen auf eine subjektive Anmerkung zurück
   ---
-  duration_ms: 0.045166
+  duration_ms: 0.045041
   type: 'test'
   ...
 # Subtest: Textmodus-Schema erlaubt exakt die 24 Textarten und verlangt anmerkungsart
 ok 9 - Textmodus-Schema erlaubt exakt die 24 Textarten und verlangt anmerkungsart
   ---
-  duration_ms: 0.398667
+  duration_ms: 0.419333
   type: 'test'
   ...
 # Subtest: Notizmodus-Schema erlaubt ausschließlich die fünf Notizarten
 ok 10 - Notizmodus-Schema erlaubt ausschließlich die fünf Notizarten
   ---
-  duration_ms: 0.0525
+  duration_ms: 0.052709
   type: 'test'
   ...
 # Subtest: Anfrage verwendet das Schema des ausdrücklich gewählten Arbeitsmodus
 ok 11 - Anfrage verwendet das Schema des ausdrücklich gewählten Arbeitsmodus
   ---
-  duration_ms: 0.091209
+  duration_ms: 0.09375
   type: 'test'
   ...
 # Subtest: Prompts erklären die genaue Art positiv und schützen lose Notizen vor Korrekturen
 ok 12 - Prompts erklären die genaue Art positiv und schützen lose Notizen vor Korrekturen
   ---
-  duration_ms: 0.070916
+  duration_ms: 0.080584
   type: 'test'
   ...
 # Subtest: Verarbeitung verwirft eine genaue Art aus dem falschen Modus, liest Legacy aber weiter
 ok 13 - Verarbeitung verwirft eine genaue Art aus dem falschen Modus, liest Legacy aber weiter
   ---
-  duration_ms: 0.452292
+  duration_ms: 0.443708
   type: 'test'
   ...
 # Subtest: Onda-Tokens besitzen genau vier Schriftgrößen und drei Gewichte
 ok 14 - Onda-Tokens besitzen genau vier Schriftgrößen und drei Gewichte
   ---
-  duration_ms: 3.215584
+  duration_ms: 2.844875
   type: 'test'
   ...
 # Subtest: Sky, 24-Pixel-Flächen, Pillen und Aura sind kanonisch definiert
 ok 15 - Sky, 24-Pixel-Flächen, Pillen und Aura sind kanonisch definiert
   ---
-  duration_ms: 0.65075
+  duration_ms: 0.592583
   type: 'test'
   ...
 # Subtest: Tokenquelle wird vor Kompatibilitäts- und Komponenten-CSS geladen
 ok 16 - Tokenquelle wird vor Kompatibilitäts- und Komponenten-CSS geladen
   ---
-  duration_ms: 0.4075
+  duration_ms: 0.43275
   type: 'test'
   ...
 # Subtest: Legacy-Styles laden keine zweite Schriftfamilie mehr
 ok 17 - Legacy-Styles laden keine zweite Schriftfamilie mehr
   ---
-  duration_ms: 0.846334
+  duration_ms: 0.886958
   type: 'test'
   ...
 # Subtest: Onda-Icons verwenden die eine Linienregel und zugängliche Namen
 ok 18 - Onda-Icons verwenden die eine Linienregel und zugängliche Namen
   ---
-  duration_ms: 0.545625
+  duration_ms: 0.552917
   type: 'test'
   ...
 # Subtest: Gerenderte Bedienelemente verwenden keine Unicode-Ersatzsymbole
 ok 19 - Gerenderte Bedienelemente verwenden keine Unicode-Ersatzsymbole
   ---
-  duration_ms: 1.792
+  duration_ms: 1.729292
   type: 'test'
   ...
 # Subtest: Sky ist der einzige auswählbare Akzent
 ok 20 - Sky ist der einzige auswählbare Akzent
   ---
-  duration_ms: 1.393083
+  duration_ms: 1.4435
   type: 'test'
   ...
 1..20
@@ -127,5 +127,5 @@ ok 20 - Sky ist der einzige auswählbare Akzent
 # cancelled 0
 # skipped 0
 # todo 0
-# duration_ms 43.707333
+# duration_ms 42.5655
 

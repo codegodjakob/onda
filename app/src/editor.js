@@ -29,6 +29,7 @@ import { ensureFinalAuditStore } from './final-audit.mjs'
 import { emptyLocalState } from './data-control.mjs'
 import { pruefeNativeBruecken } from './native-probe-model.mjs'
 import { initOndaShell } from './onda-shell.mjs'
+import { runLiveNativeProbe, sendeEinmalUeberNativeBruecke } from './live-native-probe.mjs'
 
 // ---------- Sanfte Markierung (Peripherie): eine flüchtige Dekoration ----------
 // Zeigt eine Passage kurz an, OHNE das Dokument zu ändern — sie wird nicht
@@ -708,6 +709,16 @@ export function boot() {
         // dass der serialisierte Zustand die Swift-Speicherschicht erreicht hat.
         storageOk: ackOk,
       }))
+    })()
+  }
+
+  if (NATIVE && window.__LIVE_LLM_PROBE__ && window.webkit.messageHandlers.liveprobe) {
+    void (async () => {
+      const bericht = await runLiveNativeProbe({
+        hatSchluessel,
+        senden: sendeEinmalUeberNativeBruecke,
+      })
+      window.webkit.messageHandlers.liveprobe.postMessage(JSON.stringify(bericht))
     })()
   }
 }

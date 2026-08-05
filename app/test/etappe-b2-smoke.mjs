@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
+import { openMaterialLibrary } from './helpers/onda-navigation.mjs'
 
 const baseUrl = process.env.AIWT_URL || 'http://127.0.0.1:4173/'
 
@@ -14,14 +15,7 @@ async function freshProject(page, name = 'B2 Recherche') {
 }
 
 async function openLibrary(page) {
-  if (!await page.locator('#materialSources').isVisible()) {
-    await page.evaluate(() => window.AIWT.openDoc(window.AIWT.state.active))
-  }
-  await page.locator('#materialSources').click()
-  await page.locator('#materialModal').waitFor({ state: 'visible' })
-  await page.locator('#materialModal').evaluate(async node => {
-    await Promise.all(node.getAnimations({ subtree: true }).map(animation => animation.finished.catch(() => {})))
-  })
+  await openMaterialLibrary(page)
 }
 
 async function installAdapter(page, delay = 0) {

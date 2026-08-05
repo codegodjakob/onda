@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { chromium, firefox, webkit } from 'playwright'
+import { ensureProjectSidebarOpen, openMaterialLibrary } from './helpers/onda-navigation.mjs'
 
 const baseUrl = process.env.AIWT_URL || 'http://127.0.0.1:4173/'
 const CENTRAL = 'Die Intervention senkt die Fehlerrate allgemein.'
@@ -166,6 +167,7 @@ async function openArgumentDossier(page) {
   if (!await page.locator('#pvCard').isVisible()) {
     await page.evaluate(() => window.AIWT.openDoc(window.AIWT.state.active))
   }
+  await ensureProjectSidebarOpen(page)
   await page.locator('#pvCard').click()
   await page.locator('#pvModal').waitFor({ state: 'visible' })
   await page.locator('#argumentOpen').click()
@@ -392,8 +394,7 @@ async function runArgumentFlow(browser) {
 
   await page.keyboard.press('Escape')
   await page.evaluate(docId => window.AIWT.openDoc(docId), ids.alphaDocId)
-  await page.locator('#materialSources').click()
-  await page.locator('#materialModal').waitFor({ state: 'visible' })
+  await openMaterialLibrary(page)
   const replicationSource = page.locator('.source-library-item').filter({ hasText: 'Unabhängige Replikation' })
   await replicationSource.getByRole('button', { name: 'Als zurückgezogen markieren' }).click()
   await page.locator('#materialModal .source-library-status.is-retracted').waitFor({ state: 'visible' })
