@@ -1,4 +1,5 @@
 {
+  "_veraltet": "VERALTET UND ENTWERTET (05.08.2026, Issue #15): Die Rubrikwerte in dieser Datei wurden seinerzeit von Hand eingetragen, und viele Belege zeigen auf die Ergebnisdatei der Vorstufe statt auf eine frische Pruefung. Diese Datei ist ein historisches Dokument der Etappe, kein gueltiger Messwert. Der einzige gueltige Stand ist der frische Lauf: evals/results/fertigzustand-latest.json (node evals/run-fertigzustand.mjs).",
   "schemaVersion": 1,
   "catalogVersion": "2026-07-30.1",
   "stage": "C1",

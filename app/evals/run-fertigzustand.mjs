@@ -6,6 +6,10 @@
 // heißen, weil ein früherer Lauf das gesagt hatte. Diese Weiterreichung ist
 // bauartbedingt blind gegen spätere Regressionen — hier gibt es sie nicht.
 // Ohne gebundene, jetzt gelaufene Prüfung ist ein Eval nicht bestanden.
+//
+// Der Lauf bewacht auch den Maßstab selbst: Er hinterlegt im Ergebnis, womit
+// er gemessen hat (Katalog samt Bindungen), und meldet jede inhaltliche
+// Abweichung vom letzten Lauf als eigenen Abschnitt „Maßstab geändert".
 
 import { execFile } from 'node:child_process'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
@@ -14,6 +18,12 @@ import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { flattenEvals, ladeEvalKatalog, validiereEvalErgebnisse } from '../src/eval-catalog.mjs'
 import { runQualityRubric } from './run-quality-rubric.mjs'
+import {
+  belegartAusVollzug,
+  formatiereMassstabAenderungen,
+  massstabSchnappschuss,
+  vergleicheMassstab,
+} from '../src/massstab-waechter.mjs'
 
 const ausfuehren = promisify(execFile)
 const hier = dirname(fileURLToPath(import.meta.url))
@@ -30,6 +40,23 @@ const { bindungen, _ungebunden_begruendung: ungebunden, _live_gates: liveGates }
 
 const evals = flattenEvals(katalog)
 const liveIds = new Set(katalog.externalLiveGateIds)
+
+// --- Maßstabs-Wächter: Womit misst dieser Lauf, und womit maß der letzte? ----
+// Jeder Lauf hinterlegt seinen Maßstab (Katalog samt Bindungen) im Ergebnis.
+// Weicht der aktuelle davon ab, erscheint das unten als eigener Abschnitt
+// „Maßstab geändert" — niemals stumm. Fehlt der Vergleichsstand (erster Lauf,
+// gelöschte Ergebnisdatei), wird auch DAS gesagt, statt „unverändert" zu raten.
+const massstab = massstabSchnappschuss(katalog, bindungen)
+let vorherigerLauf = null
+try {
+  vorherigerLauf = JSON.parse(await readFile(ergebnisPfad, 'utf8'))
+} catch {
+  vorherigerLauf = null
+}
+const massstabAenderungen = vergleicheMassstab(vorherigerLauf?.massstab, massstab)
+const massstabVergleich = massstabAenderungen === null
+  ? { status: 'kein-vergleichsstand', aenderungen: [] }
+  : { status: massstabAenderungen.length ? 'geaendert' : 'unveraendert', aenderungen: massstabAenderungen }
 
 // Jede Prüfdatei einmal bewerten, auch wenn mehrere Evals sie teilen. Ein abgestürzter
 // Playwright-Prozess ist kein Produkturteil: genau dieser klar erkennbare Infrastrukturfehler
@@ -49,6 +76,11 @@ for (const [index, datei] of pruefungen.entries()) {
   // erfolgreich durch, ohne je ihre Belegzeile zu drucken. Beides verfaelscht.
   const istTestDatei = datei.endsWith('.test.mjs')
   const argumente = istTestDatei ? ['--test', datei] : [datei]
+  // Belegart aus dem Vollzug, nicht aus der Katalog-Behauptung: „browser" gibt
+  // es nur, wenn diese Datei wirklich einen Browser startet (Playwright lädt).
+  let quelltext = ''
+  try { quelltext = await readFile(resolve(appWurzel, datei), 'utf8') } catch { quelltext = '' }
+  const belegart = belegartAusVollzug(datei, quelltext)
   const start = Date.now()
   let ok = false
   let ausgabe = ''
@@ -73,7 +105,7 @@ for (const [index, datei] of pruefungen.entries()) {
     }
   }
   await writeFile(protokoll, ausgabe, 'utf8')
-  laufErgebnis.set(datei, { ok, protokoll: `evals/results/laeufe/${name}.log`, dauerMs: Date.now() - start })
+  laufErgebnis.set(datei, { ok, belegart, protokoll: `evals/results/laeufe/${name}.log`, dauerMs: Date.now() - start })
   process.stdout.write(`  [${index + 1}/${pruefungen.length}] ${ok ? '✓' : '✗'} ${datei}\n`)
 }
 
@@ -93,7 +125,7 @@ const ergebnisEvals = evals.map(eintrag => {
       || (Number.isFinite(score) && score >= katalog.thresholds.minimumDimensionScore)
     const allesOk = laeufe.every(lauf => lauf?.ok) && scoreOk
     const belege = gebunden.map((datei, i) => ({
-      kind: eintrag.automation === 'user-study' ? 'user-study' : belegArtFuer(eintrag.automation),
+      kind: laeufe[i]?.belegart ?? belegartAusVollzug(datei, ''),
       path: laeufe[i]?.protokoll || datei,
       command: datei.endsWith('.test.mjs') ? `node --test ${datei}` : `node ${datei}`,
     }))
@@ -177,6 +209,8 @@ const ergebnis = {
   rubricRationales: qualitaet.rubricRationales,
   coverage: { passed: zaehler.passed, applicable: anwendbar, ratio: Number(anteil.toFixed(4)) },
   loops,
+  massstabVergleich,
+  massstab,
   evals: ergebnisEvals,
 }
 
@@ -185,11 +219,26 @@ await mkdir(dirname(ergebnisPfad), { recursive: true })
 await writeFile(ergebnisPfad, `${JSON.stringify(ergebnis, null, 2)}\n`, 'utf8')
 
 process.stdout.write('\n')
+if (massstabVergleich.status === 'geaendert') {
+  // Der Abschnitt steht VOR den Zahlen: Wer den Wert liest, soll zuerst
+  // erfahren, dass sich das Maß geändert hat, mit dem er gemessen wurde.
+  const seit = vorherigerLauf?.generatedAt ? ` (letzter Lauf: ${vorherigerLauf.generatedAt})` : ''
+  process.stdout.write(`MASSSTAB GEÄNDERT${seit} — dieser Lauf misst anders als der letzte:\n`)
+  for (const zeile of formatiereMassstabAenderungen(massstabVergleich.aenderungen)) {
+    process.stdout.write(`  · ${zeile}\n`)
+  }
+  process.stdout.write('\n')
+}
 process.stdout.write(`Bestanden:      ${zaehler.passed}\n`)
 process.stdout.write(`Nicht belegt:   ${zaehler.failed}\n`)
 process.stdout.write(`Live-Gates:     ${zaehler['external-open']}\n`)
 process.stdout.write(`Qualität:       ${qualitaet.weightedScore} / 5  (Gold-, Kontrast- und Vollausgabe-Rubrik)\n`)
 process.stdout.write(`Abdeckung:      ${Math.round(anteil * 100)} % der anwendbaren Evals frisch belegt\n`)
+process.stdout.write(`Maßstab:        ${{
+  geaendert: `GEÄNDERT — ${massstabVergleich.aenderungen.length} Änderung(en), Abschnitt oben`,
+  unveraendert: 'unverändert gegenüber dem letzten Lauf',
+  'kein-vergleichsstand': 'kein Vergleichsstand vom letzten Lauf — Schnappschuss jetzt hinterlegt',
+}[massstabVergleich.status]}\n`)
 process.stdout.write(`Ergebnis:       evals/results/fertigzustand-latest.json\n`)
 const schwellenFehler = []
 if (zaehler.failed) schwellenFehler.push(`${zaehler.failed} anwendbare Evals sind nicht bestanden.`)
@@ -210,8 +259,3 @@ if (fehler.length) {
   process.stderr.write(`\nSchema-Fehler:\n  ${fehler.join('\n  ')}\n`)
 }
 if (fehler.length || schwellenFehler.length) process.exitCode = 1
-
-function belegArtFuer(automation) {
-  const erlaubt = new Set(katalog.evidenceKinds)
-  return erlaubt.has(automation) ? automation : 'integration'
-}

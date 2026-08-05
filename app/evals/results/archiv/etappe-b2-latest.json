@@ -1,4 +1,5 @@
 {
+  "_veraltet": "VERALTET UND ENTWERTET (05.08.2026, Issue #15): Die Rubrikwerte in dieser Datei wurden seinerzeit von Hand eingetragen, und viele Belege zeigen auf die Ergebnisdatei der Vorstufe statt auf eine frische Pruefung. Diese Datei ist ein historisches Dokument der Etappe, kein gueltiger Messwert. Der einzige gueltige Stand ist der frische Lauf: evals/results/fertigzustand-latest.json (node evals/run-fertigzustand.mjs).",
   "schemaVersion": 1,
   "catalogVersion": "2026-07-30.1",
   "stage": "B2",
@@ -43,22 +44,46 @@
     {
       "id": "INV-01",
       "status": "passed",
-      "evidence": [{ "kind": "integration", "path": "evals/results/etappe-b1-latest.json", "command": "node evals/run-v2-evals.mjs --result evals/results/etappe-b1-latest.json" }]
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/etappe-b1-latest.json",
+          "command": "node evals/run-v2-evals.mjs --result evals/results/etappe-b1-latest.json"
+        }
+      ]
     },
     {
       "id": "INV-02",
       "status": "passed",
-      "evidence": [{ "kind": "integration", "path": "test/research-synthesis.test.mjs", "command": "node --test test/research-synthesis.test.mjs test/provenance-model.test.mjs" }]
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "test/research-synthesis.test.mjs",
+          "command": "node --test test/research-synthesis.test.mjs test/provenance-model.test.mjs"
+        }
+      ]
     },
     {
       "id": "INV-03",
       "status": "passed",
-      "evidence": [{ "kind": "integration", "path": "test/research-synthesis.test.mjs", "command": "node --test test/research-synthesis.test.mjs test/evidence-bundle.test.mjs" }]
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "test/research-synthesis.test.mjs",
+          "command": "node --test test/research-synthesis.test.mjs test/evidence-bundle.test.mjs"
+        }
+      ]
     },
     {
       "id": "INV-04",
       "status": "passed",
-      "evidence": [{ "kind": "browser", "path": "test/etappe-b2-smoke.mjs", "command": "node test/etappe-b2-smoke.mjs" }]
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "test/etappe-b2-smoke.mjs",
+          "command": "node test/etappe-b2-smoke.mjs"
+        }
+      ]
     },
     {
       "id": "INV-05",
@@ -69,146 +94,312 @@
     {
       "id": "INV-06",
       "status": "external-open",
-      "evidence": [{ "kind": "browser", "path": "test/v2-smoke.mjs", "command": "node test/v2-smoke.mjs" }],
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "test/v2-smoke.mjs",
+          "command": "node test/v2-smoke.mjs"
+        }
+      ],
       "note": "Der Browser-Offlinepfad ist geprüft; der geforderte Mac-Live-Test ohne Netz bleibt extern offen."
     },
     {
       "id": "INV-07",
       "status": "passed",
-      "evidence": [{ "kind": "browser", "path": "test/v2-smoke.mjs", "command": "node test/v2-smoke.mjs" }]
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "test/v2-smoke.mjs",
+          "command": "node test/v2-smoke.mjs"
+        }
+      ]
     },
     {
       "id": "INV-08",
       "status": "passed",
-      "evidence": [{ "kind": "fixture", "path": "evals/fixtures/recherchequalitaet.mjs", "command": "npm run eval:b2-quality" }]
+      "evidence": [
+        {
+          "kind": "fixture",
+          "path": "evals/fixtures/recherchequalitaet.mjs",
+          "command": "npm run eval:b2-quality"
+        }
+      ]
     },
     {
       "id": "INV-09",
       "status": "passed",
-      "evidence": [{ "kind": "unit", "path": "test/research-quality.test.mjs", "command": "node --test test/research-quality.test.mjs" }]
+      "evidence": [
+        {
+          "kind": "unit",
+          "path": "test/research-quality.test.mjs",
+          "command": "node --test test/research-quality.test.mjs"
+        }
+      ]
     },
     {
       "id": "WORK-01",
       "status": "passed",
-      "evidence": [{ "kind": "browser", "path": "test/etappe-a-smoke.mjs", "command": "node test/etappe-a-smoke.mjs" }]
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "test/etappe-a-smoke.mjs",
+          "command": "node test/etappe-a-smoke.mjs"
+        }
+      ]
     },
     {
       "id": "WORK-02",
       "status": "passed",
-      "evidence": [{ "kind": "browser", "path": "test/etappe-a-smoke.mjs", "command": "node test/etappe-a-smoke.mjs" }]
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "test/etappe-a-smoke.mjs",
+          "command": "node test/etappe-a-smoke.mjs"
+        }
+      ]
     },
     {
       "id": "WORK-03",
       "status": "passed",
-      "evidence": [{ "kind": "integration", "path": "evals/results/etappe-b1-latest.json", "command": "node evals/run-v2-evals.mjs --result evals/results/etappe-b1-latest.json" }]
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/etappe-b1-latest.json",
+          "command": "node evals/run-v2-evals.mjs --result evals/results/etappe-b1-latest.json"
+        }
+      ]
     },
     {
       "id": "WORK-04",
       "status": "passed",
-      "evidence": [{ "kind": "browser", "path": "test/etappe-a-smoke.mjs", "command": "node test/etappe-a-smoke.mjs" }]
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "test/etappe-a-smoke.mjs",
+          "command": "node test/etappe-a-smoke.mjs"
+        }
+      ]
     },
     {
       "id": "WORK-05",
       "status": "passed",
-      "evidence": [{ "kind": "browser", "path": "test/v2-smoke.mjs", "command": "node test/v2-smoke.mjs" }]
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "test/v2-smoke.mjs",
+          "command": "node test/v2-smoke.mjs"
+        }
+      ]
     },
     {
       "id": "WORK-06",
       "status": "passed",
-      "evidence": [{ "kind": "browser", "path": "test/v2-smoke.mjs", "command": "node test/v2-smoke.mjs" }]
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "test/v2-smoke.mjs",
+          "command": "node test/v2-smoke.mjs"
+        }
+      ]
     },
     {
       "id": "WORK-07",
       "status": "passed",
-      "evidence": [{ "kind": "browser", "path": "test/v2-smoke.mjs", "command": "node test/v2-smoke.mjs" }]
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "test/v2-smoke.mjs",
+          "command": "node test/v2-smoke.mjs"
+        }
+      ]
     },
     {
       "id": "WORK-08",
       "status": "passed",
-      "evidence": [{ "kind": "persistence", "path": "test/decision-log-smoke.mjs", "command": "node test/decision-log-smoke.mjs" }]
+      "evidence": [
+        {
+          "kind": "persistence",
+          "path": "test/decision-log-smoke.mjs",
+          "command": "node test/decision-log-smoke.mjs"
+        }
+      ]
     },
     {
       "id": "EVID-01",
       "status": "passed",
-      "evidence": [{ "kind": "integration", "path": "test/research-synthesis.test.mjs", "command": "node --test test/research-synthesis.test.mjs test/source-model.test.mjs" }]
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "test/research-synthesis.test.mjs",
+          "command": "node --test test/research-synthesis.test.mjs test/source-model.test.mjs"
+        }
+      ]
     },
     {
       "id": "EVID-02",
       "status": "passed",
-      "evidence": [{ "kind": "browser", "path": "test/etappe-b2-smoke.mjs", "command": "node test/etappe-b2-smoke.mjs" }]
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "test/etappe-b2-smoke.mjs",
+          "command": "node test/etappe-b2-smoke.mjs"
+        }
+      ]
     },
     {
       "id": "EVID-03",
       "status": "passed",
-      "evidence": [{ "kind": "integration", "path": "test/research-synthesis.test.mjs", "command": "node --test test/research-synthesis.test.mjs" }]
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "test/research-synthesis.test.mjs",
+          "command": "node --test test/research-synthesis.test.mjs"
+        }
+      ]
     },
     {
       "id": "EVID-04",
       "status": "passed",
-      "evidence": [{ "kind": "fixture", "path": "evals/fixtures/evidenzqualitaet.mjs", "command": "npm run eval:b1-quality" }]
+      "evidence": [
+        {
+          "kind": "fixture",
+          "path": "evals/fixtures/evidenzqualitaet.mjs",
+          "command": "npm run eval:b1-quality"
+        }
+      ]
     },
     {
       "id": "EVID-05",
       "status": "passed",
-      "evidence": [{ "kind": "integration", "path": "test/citation-audit.test.mjs", "command": "node --test test/citation-audit.test.mjs" }]
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "test/citation-audit.test.mjs",
+          "command": "node --test test/citation-audit.test.mjs"
+        }
+      ]
     },
     {
       "id": "EVID-06",
       "status": "passed",
-      "evidence": [{ "kind": "integration", "path": "test/citation-audit.test.mjs", "command": "node --test test/citation-audit.test.mjs" }]
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "test/citation-audit.test.mjs",
+          "command": "node --test test/citation-audit.test.mjs"
+        }
+      ]
     },
     {
       "id": "EVID-07",
       "status": "passed",
-      "evidence": [{ "kind": "integration", "path": "test/citation-audit.test.mjs", "command": "node --test test/citation-audit.test.mjs" }]
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "test/citation-audit.test.mjs",
+          "command": "node --test test/citation-audit.test.mjs"
+        }
+      ]
     },
     {
       "id": "EVID-08",
       "status": "passed",
-      "evidence": [{ "kind": "integration", "path": "test/research-synthesis.test.mjs", "command": "node --test test/research-synthesis.test.mjs test/evidence-bundle.test.mjs" }]
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "test/research-synthesis.test.mjs",
+          "command": "node --test test/research-synthesis.test.mjs test/evidence-bundle.test.mjs"
+        }
+      ]
     },
     {
       "id": "RESEARCH-01",
       "status": "passed",
-      "evidence": [{ "kind": "integration", "path": "test/research-run.test.mjs", "command": "node --test test/research-run.test.mjs test/research-orchestrator.test.mjs" }]
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "test/research-run.test.mjs",
+          "command": "node --test test/research-run.test.mjs test/research-orchestrator.test.mjs"
+        }
+      ]
     },
     {
       "id": "RESEARCH-02",
       "status": "external-open",
       "evidence": [
-        { "kind": "integration", "path": "test/research-synthesis.test.mjs", "command": "node --test test/research-synthesis.test.mjs" },
-        { "kind": "browser", "path": "test/etappe-b2-smoke.mjs", "command": "node test/etappe-b2-smoke.mjs" }
+        {
+          "kind": "integration",
+          "path": "test/research-synthesis.test.mjs",
+          "command": "node --test test/research-synthesis.test.mjs"
+        },
+        {
+          "kind": "browser",
+          "path": "test/etappe-b2-smoke.mjs",
+          "command": "node test/etappe-b2-smoke.mjs"
+        }
       ],
       "note": "Metadaten-, Abstract- und Originalverträge sind lokal geprüft; ein echter Suchprovider mit realen Originalquellen bleibt als Live-Gate offen."
     },
     {
       "id": "RESEARCH-03",
       "status": "external-open",
-      "evidence": [{ "kind": "integration", "path": "test/research-adapter.test.mjs", "command": "node --test test/research-adapter.test.mjs" }],
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "test/research-adapter.test.mjs",
+          "command": "node --test test/research-adapter.test.mjs"
+        }
+      ],
       "note": "Paywall-, Preprint- und Repositoriumswege sind als legaler Adaptervertrag geprüft; Rechtmäßigkeit und Erreichbarkeit realer Wege bleiben live offen."
     },
     {
       "id": "RESEARCH-04",
       "status": "passed",
-      "evidence": [{ "kind": "unit", "path": "test/research-run.test.mjs", "command": "node --test test/research-run.test.mjs test/research-orchestrator.test.mjs" }]
+      "evidence": [
+        {
+          "kind": "unit",
+          "path": "test/research-run.test.mjs",
+          "command": "node --test test/research-run.test.mjs test/research-orchestrator.test.mjs"
+        }
+      ]
     },
     {
       "id": "RESEARCH-05",
       "status": "passed",
-      "evidence": [{ "kind": "fixture", "path": "evals/fixtures/recherchequalitaet.mjs", "command": "npm run eval:b2-quality" }]
+      "evidence": [
+        {
+          "kind": "fixture",
+          "path": "evals/fixtures/recherchequalitaet.mjs",
+          "command": "npm run eval:b2-quality"
+        }
+      ]
     },
     {
       "id": "RESEARCH-06",
       "status": "passed",
       "evidence": [
-        { "kind": "integration", "path": "test/research-orchestrator.test.mjs", "command": "node --test test/research-orchestrator.test.mjs test/research-synthesis.test.mjs" },
-        { "kind": "browser", "path": "test/etappe-b2-smoke.mjs", "command": "node test/etappe-b2-smoke.mjs" }
+        {
+          "kind": "integration",
+          "path": "test/research-orchestrator.test.mjs",
+          "command": "node --test test/research-orchestrator.test.mjs test/research-synthesis.test.mjs"
+        },
+        {
+          "kind": "browser",
+          "path": "test/etappe-b2-smoke.mjs",
+          "command": "node test/etappe-b2-smoke.mjs"
+        }
       ]
     },
     {
       "id": "RESEARCH-07",
       "status": "passed",
-      "evidence": [{ "kind": "integration", "path": "test/research-adapter.test.mjs", "command": "node --test test/research-adapter.test.mjs test/research-orchestrator.test.mjs" }]
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "test/research-adapter.test.mjs",
+          "command": "node --test test/research-adapter.test.mjs test/research-orchestrator.test.mjs"
+        }
+      ]
     },
     {
       "id": "MEMORY-01",
@@ -417,57 +608,117 @@
     {
       "id": "SYSTEM-01",
       "status": "passed",
-      "evidence": [{ "kind": "browser", "path": "test/etappe-b2-smoke.mjs", "command": "node test/etappe-b2-smoke.mjs" }]
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "test/etappe-b2-smoke.mjs",
+          "command": "node test/etappe-b2-smoke.mjs"
+        }
+      ]
     },
     {
       "id": "SYSTEM-02",
       "status": "passed",
       "evidence": [
-        { "kind": "persistence", "path": "test/etappe-b2-smoke.mjs", "command": "node test/etappe-b2-smoke.mjs" },
-        { "kind": "persistence", "path": "../mac/main.swift", "command": "swiftc -O -warnings-as-errors -swift-version 5 -o /tmp/aiwt-b2-selftest ../mac/main.swift && /tmp/aiwt-b2-selftest --selftest" }
+        {
+          "kind": "persistence",
+          "path": "test/etappe-b2-smoke.mjs",
+          "command": "node test/etappe-b2-smoke.mjs"
+        },
+        {
+          "kind": "persistence",
+          "path": "../mac/main.swift",
+          "command": "swiftc -O -warnings-as-errors -swift-version 5 -o /tmp/aiwt-b2-selftest ../mac/main.swift && /tmp/aiwt-b2-selftest --selftest"
+        }
       ]
     },
     {
       "id": "SYSTEM-03",
       "status": "external-open",
       "evidence": [
-        { "kind": "security-inspection", "path": "src/research-adapter.mjs", "command": "node --test test/research-adapter.test.mjs test/research-orchestrator.test.mjs" },
-        { "kind": "security-inspection", "path": "src/agent-transport.mjs", "command": "node --test test/agent-transport.test.mjs" }
+        {
+          "kind": "security-inspection",
+          "path": "src/research-adapter.mjs",
+          "command": "node --test test/research-adapter.test.mjs test/research-orchestrator.test.mjs"
+        },
+        {
+          "kind": "security-inspection",
+          "path": "src/agent-transport.mjs",
+          "command": "node --test test/agent-transport.test.mjs"
+        }
       ],
       "note": "Browser-, Adapter- und Brückenvertrag sind geprüft; der reale macOS-Keychain- und Export-Live-Test bleibt extern offen."
     },
     {
       "id": "SYSTEM-04",
       "status": "passed",
-      "evidence": [{ "kind": "browser", "path": "test/v2-smoke.mjs", "command": "node test/v2-smoke.mjs" }]
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "test/v2-smoke.mjs",
+          "command": "node test/v2-smoke.mjs"
+        }
+      ]
     },
     {
       "id": "SYSTEM-05",
       "status": "passed",
       "evidence": [
-        { "kind": "browser", "path": "test/v2-smoke.mjs", "command": "node test/v2-smoke.mjs" },
-        { "kind": "browser", "path": "test/etappe-b2-smoke.mjs", "command": "node test/etappe-b2-smoke.mjs" }
+        {
+          "kind": "browser",
+          "path": "test/v2-smoke.mjs",
+          "command": "node test/v2-smoke.mjs"
+        },
+        {
+          "kind": "browser",
+          "path": "test/etappe-b2-smoke.mjs",
+          "command": "node test/etappe-b2-smoke.mjs"
+        }
       ]
     },
     {
       "id": "SYSTEM-06",
       "status": "passed",
-      "evidence": [{ "kind": "browser", "path": "test/v2-smoke.mjs", "command": "node test/v2-smoke.mjs" }]
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "test/v2-smoke.mjs",
+          "command": "node test/v2-smoke.mjs"
+        }
+      ]
     },
     {
       "id": "SYSTEM-07",
       "status": "passed",
-      "evidence": [{ "kind": "browser", "path": "test/performance-smoke.mjs", "command": "node test/performance-smoke.mjs" }]
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "test/performance-smoke.mjs",
+          "command": "node test/performance-smoke.mjs"
+        }
+      ]
     },
     {
       "id": "SYSTEM-08",
       "status": "passed",
-      "evidence": [{ "kind": "integration", "path": "test/settings-model.test.mjs", "command": "node --test test/settings-model.test.mjs test/hinweislauf-model.test.mjs" }]
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "test/settings-model.test.mjs",
+          "command": "node --test test/settings-model.test.mjs test/hinweislauf-model.test.mjs"
+        }
+      ]
     },
     {
       "id": "SYSTEM-09",
       "status": "external-open",
-      "evidence": [{ "kind": "browser", "path": "test/etappe-a-smoke.mjs", "command": "node test/etappe-a-smoke.mjs" }],
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "test/etappe-a-smoke.mjs",
+          "command": "node test/etappe-a-smoke.mjs"
+        }
+      ],
       "note": "Gateway-Schema, Streaming und Fehlerverhalten sind per injizierter Transportschicht geprüft; ein echter Modellanbieter-Call mit Nutzerschlüssel bleibt extern offen."
     },
     {
