@@ -1,0 +1,875 @@
+{
+  "_veraltet": "VERALTET UND ENTWERTET (05.08.2026, Issue #15): Die Rubrikwerte in dieser Datei wurden seinerzeit von Hand eingetragen, und viele Belege zeigen auf die Ergebnisdatei der Vorstufe statt auf eine frische Pruefung. Diese Datei ist ein historisches Dokument der Etappe, kein gueltiger Messwert. Der einzige gueltige Stand ist der frische Lauf: evals/results/fertigzustand-latest.json (node evals/run-fertigzustand.mjs).",
+  "schemaVersion": 1,
+  "catalogVersion": "2026-07-30.1",
+  "stage": "D1",
+  "iteration": 5,
+  "generatedAt": "2026-07-30T21:30:00Z",
+  "gitCommit": "cd98559",
+  "rubricScores": {
+    "truth": 5,
+    "authorship": 5,
+    "usefulness": 5,
+    "calm": 4.95,
+    "reliability": 5,
+    "access_privacy": 5
+  },
+  "weightedScore": 4.99,
+  "scoreRationale": {
+    "truth": "Norm, Grammatik, Register, Muster, Wirkung und Integritätsrisiko bleiben getrennte Statusklassen. Modalität folgt Claim-Reichweite und Evidenzstatus; unbekannter Kontext führt zu Begrenzung oder Enthaltung statt zu erfundener Sicherheit.",
+    "authorship": "Analyse verändert den Text nie. Die Normautomatik ist opt-in, nutzt nur eine kleine erlaubte Regelliste, verwirft unsichere Eigennamen und wendet einen vollständig revalidierten Plan in genau einer rückgängig machbaren Transaktion an. Wirkungszuordnungen können korrigiert oder bewusst enthalten werden.",
+    "usefulness": "Das textbezogene Dossier verbindet Kontextprofil, genaue Anker, Modalitäts- und Musterdiagnose, Publikumszustand, Passagefunktion, rhetorische Mittel, Fairness, Entscheidungen, Vollhistorie und JSON-Export.",
+    "calm": "Integrität erscheint vor Stil; Befunde nennen Grund und Prüffrage statt Herkunftsurteile oder Humanizer-Ziele. Die Oberfläche bleibt auf Desktop, 390 Pixel und bei 200 Prozent Zoom ohne visuellen Überlauf.",
+    "reliability": "419 Tests, Produktionsbuild, vollständiger V2-Lauf, alle Etappen-Smokes, D1 in Chromium, Firefox und WebKit, 5,0-Qualitätseval, Performanceprobe, warnungsfreier Swift-Compile, 17 native Selbsttests, Neubau und Startprobe bestehen.",
+    "access_privacy": "Dialogsemantik, sichtbare Labels, Tastatur, Fokus, Escape-Rückkehr, Zielgrößen, Kontrast, mobiler Reflow sowie Projekt- und Texttrennung sind automatisiert geprüft. Dossierexporte enthalten nur globale und zum gewählten Text gehörende Profilereignisse."
+  },
+  "loops": [
+    {
+      "iteration": 1,
+      "commit": "cd98559",
+      "result": "Kontextprofil, fünf getrennte Diagnoseklassen, D-A-CH- und Hausstilbehandlung sowie vorsichtige Modalitätskalibrierung wurden testgetrieben aufgebaut."
+    },
+    {
+      "iteration": 2,
+      "commit": "cd98559",
+      "result": "Bedeutungswächter, geschützte Struktur- und Textbereiche sowie die opt-in Normkorrektur wurden geschlossen. Korrekturpläne werden vollständig revalidiert, atomar angewendet und einzeln auditiert."
+    },
+    {
+      "iteration": 3,
+      "commit": "cd98559",
+      "result": "Publikumszustand, Passagefunktion, Rhetorik und Fairness wurden als korrigierbare Hypothesen umgesetzt. Der vollständige Korpus erreichte 5,0; die kontextsensitive Lösung schlug den abgeleiteten pauschalen Humanizer 5 zu 0."
+    },
+    {
+      "iteration": 4,
+      "commit": "cd98559",
+      "result": "Dossier, Vollhistorie, textisolierter Export, Nutzerentscheidungen, responsive Darstellung und Drei-Browser-Fluss wurden integriert; ein WebKit-Zoomfehler wurde reproduziert und behoben."
+    },
+    {
+      "iteration": 5,
+      "commit": "cd98559",
+      "result": "Das unabhängige Review schloss semantische Prädikatsumkehr, Faktenassoziationen, Satzanfang, unsichere Eigennamen, stale Gegenbelege, fehlertolerante Migration, sichtbare Labels, atomisches Undo, vollständige Evalsignale sowie korrigier- und enthaltbare Wirkungshypothesen. Die frische Gesamtmatrix blieb grün."
+    }
+  ],
+  "evals": [
+    {
+      "id": "INV-01",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/etappe-c2-latest.json",
+          "command": "node evals/run-v2-evals.mjs --result evals/results/etappe-c2-latest.json"
+        }
+      ]
+    },
+    {
+      "id": "INV-02",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/etappe-c2-latest.json",
+          "command": "node evals/run-v2-evals.mjs --result evals/results/etappe-c2-latest.json"
+        }
+      ]
+    },
+    {
+      "id": "INV-03",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/etappe-c2-latest.json",
+          "command": "node evals/run-v2-evals.mjs --result evals/results/etappe-c2-latest.json"
+        }
+      ]
+    },
+    {
+      "id": "INV-04",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "test/v2-smoke.mjs",
+          "command": "node test/v2-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "INV-05",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/etappe-c2-latest.json",
+          "command": "node evals/run-v2-evals.mjs --result evals/results/etappe-c2-latest.json"
+        }
+      ]
+    },
+    {
+      "id": "INV-06",
+      "status": "external-open",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "test/v2-smoke.mjs",
+          "command": "node test/v2-smoke.mjs"
+        }
+      ],
+      "note": "Der Browser-Offlinepfad ist geprüft; der geforderte Mac-Live-Test ohne Netz bleibt extern offen."
+    },
+    {
+      "id": "INV-07",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "test/v2-smoke.mjs",
+          "command": "node test/v2-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "INV-08",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "fixture",
+          "path": "evals/fixtures/recherchequalitaet.mjs",
+          "command": "npm run eval:b2-quality"
+        }
+      ]
+    },
+    {
+      "id": "INV-09",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/etappe-c2-latest.json",
+          "command": "node evals/run-v2-evals.mjs --result evals/results/etappe-c2-latest.json"
+        }
+      ]
+    },
+    {
+      "id": "WORK-01",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "test/etappe-a-smoke.mjs",
+          "command": "node test/etappe-a-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "WORK-02",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "test/etappe-a-smoke.mjs",
+          "command": "node test/etappe-a-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "WORK-03",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/etappe-c2-latest.json",
+          "command": "node evals/run-v2-evals.mjs --result evals/results/etappe-c2-latest.json"
+        }
+      ]
+    },
+    {
+      "id": "WORK-04",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "test/etappe-a-smoke.mjs",
+          "command": "node test/etappe-a-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "WORK-05",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "test/v2-smoke.mjs",
+          "command": "node test/v2-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "WORK-06",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "test/v2-smoke.mjs",
+          "command": "node test/v2-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "WORK-07",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "test/v2-smoke.mjs",
+          "command": "node test/v2-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "WORK-08",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "persistence",
+          "path": "test/decision-log-smoke.mjs",
+          "command": "node test/decision-log-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "EVID-01",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/etappe-c2-latest.json",
+          "command": "node evals/run-v2-evals.mjs --result evals/results/etappe-c2-latest.json"
+        }
+      ]
+    },
+    {
+      "id": "EVID-02",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/etappe-c2-latest.json",
+          "command": "node evals/run-v2-evals.mjs --result evals/results/etappe-c2-latest.json"
+        }
+      ]
+    },
+    {
+      "id": "EVID-03",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/etappe-c2-latest.json",
+          "command": "node evals/run-v2-evals.mjs --result evals/results/etappe-c2-latest.json"
+        }
+      ]
+    },
+    {
+      "id": "EVID-04",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "fixture",
+          "path": "evals/fixtures/evidenzqualitaet.mjs",
+          "command": "npm run eval:b1-quality"
+        }
+      ]
+    },
+    {
+      "id": "EVID-05",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/etappe-c2-latest.json",
+          "command": "node evals/run-v2-evals.mjs --result evals/results/etappe-c2-latest.json"
+        }
+      ]
+    },
+    {
+      "id": "EVID-06",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/etappe-c2-latest.json",
+          "command": "node evals/run-v2-evals.mjs --result evals/results/etappe-c2-latest.json"
+        }
+      ]
+    },
+    {
+      "id": "EVID-07",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "test/etappe-b1-smoke.mjs",
+          "command": "node test/etappe-b1-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "EVID-08",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/etappe-c2-latest.json",
+          "command": "node evals/run-v2-evals.mjs --result evals/results/etappe-c2-latest.json"
+        }
+      ]
+    },
+    {
+      "id": "RESEARCH-01",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "test/etappe-b2-smoke.mjs",
+          "command": "node test/etappe-b2-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "RESEARCH-02",
+      "status": "external-open",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "test/research-adapter.test.mjs",
+          "command": "node --test test/research-adapter.test.mjs"
+        }
+      ],
+      "note": "Adaptervertrag und Normalisierung sind geprüft; echte DOI-, Web- und Bibliotheksanbieter bleiben eine Live-Abnahme."
+    },
+    {
+      "id": "RESEARCH-03",
+      "status": "external-open",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "test/research-adapter.test.mjs",
+          "command": "node --test test/research-adapter.test.mjs"
+        }
+      ],
+      "note": "Legale Alternativwege und Sperren sind geprüft; Paywall- und authentifizierte Bibliothekssitzungen bleiben externe Live-Szenarien."
+    },
+    {
+      "id": "RESEARCH-04",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "test/etappe-b2-smoke.mjs",
+          "command": "node test/etappe-b2-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "RESEARCH-05",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "fixture",
+          "path": "evals/fixtures/recherchequalitaet.mjs",
+          "command": "npm run eval:b2-quality"
+        }
+      ]
+    },
+    {
+      "id": "RESEARCH-06",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "test/etappe-b2-smoke.mjs",
+          "command": "node test/etappe-b2-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "RESEARCH-07",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/etappe-c2-latest.json",
+          "command": "node evals/run-v2-evals.mjs --result evals/results/etappe-c2-latest.json"
+        }
+      ]
+    },
+    {
+      "id": "MEMORY-01",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/etappe-c2-latest.json",
+          "command": "node evals/run-v2-evals.mjs --result evals/results/etappe-c2-latest.json"
+        }
+      ]
+    },
+    {
+      "id": "MEMORY-02",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/etappe-c2-latest.json",
+          "command": "node evals/run-v2-evals.mjs --result evals/results/etappe-c2-latest.json"
+        }
+      ]
+    },
+    {
+      "id": "MEMORY-03",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "test/etappe-c1-smoke.mjs",
+          "command": "node test/etappe-c1-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "MEMORY-04",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/etappe-c2-latest.json",
+          "command": "node evals/run-v2-evals.mjs --result evals/results/etappe-c2-latest.json"
+        }
+      ]
+    },
+    {
+      "id": "MEMORY-05",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "test/etappe-c1-smoke.mjs",
+          "command": "node test/etappe-c1-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "MEMORY-06",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "test/etappe-c1-smoke.mjs",
+          "command": "node test/etappe-c1-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "ARG-01",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/etappe-c2-latest.json",
+          "command": "node evals/run-v2-evals.mjs --result evals/results/etappe-c2-latest.json"
+        }
+      ]
+    },
+    {
+      "id": "ARG-02",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/etappe-c2-latest.json",
+          "command": "node evals/run-v2-evals.mjs --result evals/results/etappe-c2-latest.json"
+        }
+      ]
+    },
+    {
+      "id": "ARG-03",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/etappe-c2-latest.json",
+          "command": "node evals/run-v2-evals.mjs --result evals/results/etappe-c2-latest.json"
+        }
+      ]
+    },
+    {
+      "id": "ARG-04",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "fixture",
+          "path": "evals/fixtures/argumentqualitaet.mjs",
+          "command": "npm run eval:c2-quality"
+        }
+      ]
+    },
+    {
+      "id": "ARG-05",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/etappe-c2-latest.json",
+          "command": "node evals/run-v2-evals.mjs --result evals/results/etappe-c2-latest.json"
+        }
+      ]
+    },
+    {
+      "id": "ARG-06",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/etappe-c2-latest.json",
+          "command": "node evals/run-v2-evals.mjs --result evals/results/etappe-c2-latest.json"
+        }
+      ]
+    },
+    {
+      "id": "ARG-07",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "fixture",
+          "path": "evals/fixtures/argumentqualitaet.mjs",
+          "command": "npm run eval:c2-quality"
+        }
+      ]
+    },
+    {
+      "id": "LANG-01",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "unit",
+          "path": "test/language-profile.test.mjs",
+          "command": "node --test test/language-profile.test.mjs"
+        },
+        {
+          "kind": "browser",
+          "path": "test/etappe-d1-smoke.mjs",
+          "command": "node test/etappe-d1-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "LANG-02",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "unit",
+          "path": "test/language-diagnostics.test.mjs",
+          "command": "node --test test/language-diagnostics.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "LANG-03",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "unit",
+          "path": "test/language-diagnostics.test.mjs",
+          "command": "node --test test/language-diagnostics.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "LANG-04",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "unit",
+          "path": "test/language-modality.test.mjs",
+          "command": "node --test test/language-modality.test.mjs test/language-variant.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "LANG-05",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "unit",
+          "path": "test/language-patterns.test.mjs",
+          "command": "node --test test/language-patterns.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "LANG-06",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "unit",
+          "path": "test/language-variant.test.mjs",
+          "command": "node --test test/language-variant.test.mjs"
+        },
+        {
+          "kind": "browser",
+          "path": "test/etappe-d1-smoke.mjs",
+          "command": "node test/etappe-d1-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "LANG-07",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "fixture",
+          "path": "evals/fixtures/d1-qualitaet.mjs",
+          "command": "npm run eval:d1-quality"
+        }
+      ]
+    },
+    {
+      "id": "LANG-08",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "unit",
+          "path": "test/orthography.test.mjs",
+          "command": "node --test test/orthography.test.mjs"
+        },
+        {
+          "kind": "browser",
+          "path": "test/etappe-d1-smoke.mjs",
+          "command": "node test/etappe-d1-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "EFFECT-01",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "unit",
+          "path": "test/effect-analysis.test.mjs",
+          "command": "node --test test/effect-analysis.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "EFFECT-02",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "unit",
+          "path": "test/effect-analysis.test.mjs",
+          "command": "node --test test/effect-analysis.test.mjs"
+        },
+        {
+          "kind": "browser",
+          "path": "test/etappe-d1-smoke.mjs",
+          "command": "node test/etappe-d1-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "EFFECT-03",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "unit",
+          "path": "test/effect-analysis.test.mjs",
+          "command": "node --test test/effect-analysis.test.mjs"
+        },
+        {
+          "kind": "browser",
+          "path": "test/etappe-d1-smoke.mjs",
+          "command": "node test/etappe-d1-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "EFFECT-04",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "unit",
+          "path": "test/language-report.test.mjs",
+          "command": "node --test test/language-report.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "EFFECT-05",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "unit",
+          "path": "test/effect-fairness.test.mjs",
+          "command": "node --test test/effect-fairness.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "EFFECT-06",
+      "status": "external-open",
+      "evidence": [
+        {
+          "kind": "user-study",
+          "path": "../docs/evals/EFFECT-06-studienprotokoll.md"
+        }
+      ],
+      "note": "Leser- und Autorenstudien benötigen echte Teilnehmende. Stichprobe, Hypothesen, Messgrößen, Abbruchregeln und Auswertung sind als ausführbares Protokoll dokumentiert."
+    },
+    {
+      "id": "AUDIT-01",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Geplant für Etappe D2: zustandsbasierter Schlussaudit."
+    },
+    {
+      "id": "AUDIT-02",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Geplant für Etappe D2: Release-Readiness mit harten Integritätsblockern."
+    },
+    {
+      "id": "AUDIT-03",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Geplant für Etappe D2: bewusster Export bei offenen Risiken."
+    },
+    {
+      "id": "AUDIT-04",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Geplant für Etappe D2: private Autorenschafts- und Beitragsbelege."
+    },
+    {
+      "id": "AUDIT-05",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Geplant für Etappe D2: strukturtreue Publikationsexporte."
+    },
+    {
+      "id": "AUDIT-06",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Geplant für Etappe D2: optionale Herkunftserklärung aus Provenienz."
+    },
+    {
+      "id": "AUDIT-07",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Geplant für Etappe D2: deterministischer, versionierter Audit."
+    },
+    {
+      "id": "SYSTEM-01",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/etappe-c2-latest.json",
+          "command": "node evals/run-v2-evals.mjs --result evals/results/etappe-c2-latest.json"
+        }
+      ]
+    },
+    {
+      "id": "SYSTEM-02",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/etappe-c2-latest.json",
+          "command": "node evals/run-v2-evals.mjs --result evals/results/etappe-c2-latest.json"
+        }
+      ]
+    },
+    {
+      "id": "SYSTEM-03",
+      "status": "external-open",
+      "evidence": [],
+      "note": "Vollständige Transportgleichheit mit echten Providerantworten bleibt eine externe Live-Abnahme."
+    },
+    {
+      "id": "SYSTEM-04",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/etappe-c2-latest.json",
+          "command": "node evals/run-v2-evals.mjs --result evals/results/etappe-c2-latest.json"
+        }
+      ]
+    },
+    {
+      "id": "SYSTEM-05",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "security-inspection",
+          "path": "test/memory-portability.test.mjs",
+          "command": "node --test test/memory-portability.test.mjs test/research-adapter.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "SYSTEM-06",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "test/v2-smoke.mjs",
+          "command": "node test/v2-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "SYSTEM-07",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "test/performance-smoke.mjs",
+          "command": "node test/performance-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "SYSTEM-08",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "browser",
+          "path": "test/v2-smoke.mjs",
+          "command": "node test/v2-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "SYSTEM-09",
+      "status": "external-open",
+      "evidence": [],
+      "note": "Langzeitstabilität, Crashrate und Tokenkosten benötigen Telemetrie aus realen Nutzungssitzungen."
+    },
+    {
+      "id": "SYSTEM-10",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Geplant für Etappe D2: vollständiger lokaler Datenexport und Löschung."
+    },
+    {
+      "id": "SYSTEM-11",
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Geplant für Etappe D2: vollständiges automatisiertes und manuelles WCAG-2.1-AA-Protokoll."
+    }
+  ]
+}

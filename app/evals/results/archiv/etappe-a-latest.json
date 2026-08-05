@@ -1,52 +1,53 @@
 {
+  "_veraltet": "VERALTET UND ENTWERTET (05.08.2026, Issue #15): Die Rubrikwerte in dieser Datei wurden seinerzeit von Hand eingetragen, und viele Belege zeigen auf die Ergebnisdatei der Vorstufe statt auf eine frische Pruefung. Diese Datei ist ein historisches Dokument der Etappe, kein gueltiger Messwert. Der einzige gueltige Stand ist der frische Lauf: evals/results/fertigzustand-latest.json (node evals/run-fertigzustand.mjs).",
   "schemaVersion": 1,
   "catalogVersion": "2026-07-30.1",
-  "stage": "B1",
+  "stage": "A",
   "iteration": 5,
-  "generatedAt": "2026-07-30T14:54:56Z",
-  "gitCommit": "15fbece",
+  "generatedAt": "2026-07-30T14:19:00Z",
+  "gitCommit": "dd4dbaf",
   "rubricScores": {
-    "truth": 4.9,
+    "truth": 4.7,
     "authorship": 4.8,
-    "usefulness": 4.7,
+    "usefulness": 4.6,
     "calm": 4.7,
-    "reliability": 4.9,
-    "access_privacy": 4.7
+    "reliability": 4.7,
+    "access_privacy": 4.5
   },
-  "weightedScore": 4.8,
+  "weightedScore": 4.69,
   "scoreRationale": {
-    "truth": "Originale und Fundstellen werden mit SHA-256 geprüft; nicht importierte, veränderte oder zurückgezogene Belege können kein verifiziertes Wissen erzeugen. Zitat-, Paraphrase-, Metadaten- und Verzeichniskonflikte werden konkret ausgewiesen.",
-    "authorship": "Nutzertext, Agenteneinordnung, Recherchematerial, Fundstellen und Belegwissen tragen getrennte Provenienz. Das Quellenmodell ändert keinen Editorinhalt und ungeprüfte Angaben sind nicht kopierbar.",
-    "usefulness": "Quellenimport, exakte Fundstelle und claim-spezifisches Belegbündel bilden einen vollständigen sichtbaren Arbeitsfluss. Vertiefende Grenzen bleiben optional aufklappbar, während der belegte Zusammenhang im Reader vollständig sichtbar ist.",
-    "calm": "Der Dialog kehrt nach Import zur Quellenliste zurück, hält die Aussage beim Lesen sichtbar und stellt Fokus nach Escape wieder her. Der schmale 390×844-Fluss bleibt ohne horizontalen Überlauf.",
-    "reliability": "271 Logiktests, vollständiger V2-Browserlauf, B1-/A-Smokes, Persistenz-Roundtrip, Build, native Selftests und Startprobe bestehen. Die Quellen-UI ist von der zentralen Workspace-Orchestrierung getrennt.",
-    "access_privacy": "Der B1-Kernfluss ist per Tastatur bedienbar, projektfremde Evidenz wird fail-closed abgewiesen und nur sichere HTTPS-Originale werden extern geöffnet. Vollständiges WCAG-AA und der echte Keychain-Live-Test bleiben spätere beziehungsweise externe Gates."
+    "truth": "Anker werden lokal verifiziert, ungültige Modellanker verworfen und Demoquellen aus echten Projekten gefiltert. Live-Provider- und vollständige Evidenzketten bleiben ausdrücklich offen.",
+    "authorship": "Agentenläufe verändern den Editor nicht; nur bewusste Übernahmen erzeugen Textentscheidungen. Eigene Fassungen und der resultierende Wortlaut bleiben im Verlauf erhalten.",
+    "usefulness": "Projektverständnis läuft vor Hinweisen, Grundursachen priorisieren abhängige Symptome und Gespräche erhalten echten lokalen Kontext.",
+    "calm": "Fehler, Budgetpausen und Offlinezustände bleiben ruhig; Fokus, IME, reduzierte Bewegung und schmale Ansichten sind im Browser geprüft.",
+    "reliability": "249 Logiktests, vollständiger Browser-Smoke, dedizierte Etappen-Evals, native Selftests und Startprobe decken die Kernpfade ab.",
+    "access_privacy": "Kernflüsse sind tastaturbedienbar und Schlüssel bleiben außerhalb des App-Zustands; vollständiges WCAG-AA- und Live-Keychain-Gate folgt in D2 beziehungsweise extern."
   },
   "loops": [
     {
       "iteration": 1,
-      "commit": "00b485d",
-      "result": "Quelle, Locator, Belegbündel und Zitierprüfung wurden als fail-closed Domänenmodule mit 15 kontrastiven RED/GREEN-Tests aufgebaut."
+      "commit": "14a7908",
+      "result": "Echter globaler und lokaler Chat, sichtbarer Entscheidungsverlauf, stabiler Browser-Smoke und warnungsfreie native Startprobe."
     },
     {
       "iteration": 2,
-      "commit": "15fbece",
-      "result": "Typisierter Import, SHA-256, Reader, Reload, Seiten-, Abschnitts- und Zeitfundstellen sowie Rücknahme liefen im echten Browserfluss."
+      "commit": "2f60e2d",
+      "result": "Automatische Läufe werden oberhalb einer lokalen Monatsgrenze blockiert; genau eine bewusste Ausnahme ist möglich."
     },
     {
       "iteration": 3,
-      "commit": "15fbece",
-      "result": "Die EVID-04-Goldrubrik scheiterte zunächst mit 4,4/5 an zu knappen Begründungen; präzisere Stärken und Grenzen erhöhten denselben unveränderten Prüfer auf 5,0/5."
+      "commit": "3a33e26",
+      "result": "Verständnis läuft nachweislich vor Hinweisen; alle Entscheidungsarten zeigen ihren resultierenden Wortlaut; Schreiben bleibt während langsamer Agentenläufe reaktionsfähig."
     },
     {
       "iteration": 4,
-      "commit": "15fbece",
-      "result": "Visuelle Prüfung reduzierte die Formulardichte und korrigierte die Scrollposition; Provenienz trennt Nutzertext, Agentenbefund, Recherchematerial und Belegwissen."
+      "commit": "aa604a8",
+      "result": "Die bewusste Einzelfreigabe nimmt einen budgetpausierten Verständnislauf trotz bereits sichtbarer Pausennachricht zuverlässig wieder auf."
     },
     {
       "iteration": 5,
-      "commit": "15fbece",
-      "result": "Quellen-UI wurde aus der Workspace-Orchestrierung getrennt; vollständige Regression, Performance, Browser, native Selftests, Neubau und Startprobe bestanden."
+      "commit": "dd4dbaf",
+      "result": "Der zentrale Aura-Knopf besitzt trotz seiner ID-spezifischen Ruhe-Regel wieder einen sichtbar berechneten Tastatur-Fokusring."
     }
   ],
   "evals": [
@@ -68,35 +69,15 @@
     },
     {
       "id": "INV-02",
-      "status": "passed",
-      "evidence": [
-        {
-          "kind": "integration",
-          "path": "test/provenance-model.test.mjs",
-          "command": "node --test test/provenance-model.test.mjs"
-        },
-        {
-          "kind": "browser",
-          "path": "test/etappe-b1-smoke.mjs",
-          "command": "node test/etappe-b1-smoke.mjs"
-        }
-      ]
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Vollständige Provenienz über Quelle, Evidenz, Gedächtnis und Export wird in B1, C1 und D2 geschlossen."
     },
     {
       "id": "INV-03",
-      "status": "passed",
-      "evidence": [
-        {
-          "kind": "unit",
-          "path": "test/source-model.test.mjs",
-          "command": "node --test test/source-model.test.mjs test/locator-model.test.mjs test/evidence-bundle.test.mjs"
-        },
-        {
-          "kind": "browser",
-          "path": "test/v2-smoke.mjs",
-          "command": "node test/v2-smoke.mjs"
-        }
-      ]
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Ungültige Textanker werden bereits verworfen; die vollständige Source-/Evidence-Store-Grenze entsteht in B1."
     },
     {
       "id": "INV-04",
@@ -300,116 +281,51 @@
     },
     {
       "id": "EVID-01",
-      "status": "passed",
-      "evidence": [
-        {
-          "kind": "fixture",
-          "path": "test/source-model.test.mjs",
-          "command": "node --test test/source-model.test.mjs"
-        },
-        {
-          "kind": "persistence",
-          "path": "test/etappe-b1-smoke.mjs",
-          "command": "node test/etappe-b1-smoke.mjs"
-        }
-      ]
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe B1: typisierter Quellenimport mit Original, Metadaten und Prüfsumme."
     },
     {
       "id": "EVID-02",
-      "status": "passed",
-      "evidence": [
-        {
-          "kind": "unit",
-          "path": "test/locator-model.test.mjs",
-          "command": "node --test test/locator-model.test.mjs"
-        },
-        {
-          "kind": "browser",
-          "path": "test/etappe-b1-smoke.mjs",
-          "command": "node test/etappe-b1-smoke.mjs"
-        }
-      ]
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe B1: überprüfbare Fundstellen in Reader und Player."
     },
     {
       "id": "EVID-03",
-      "status": "passed",
-      "evidence": [
-        {
-          "kind": "integration",
-          "path": "test/evidence-bundle.test.mjs",
-          "command": "node --test test/evidence-bundle.test.mjs"
-        },
-        {
-          "kind": "browser",
-          "path": "test/etappe-b1-smoke.mjs",
-          "command": "node test/etappe-b1-smoke.mjs"
-        }
-      ]
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe B1: claim-spezifische Belegbündel."
     },
     {
       "id": "EVID-04",
-      "status": "passed",
-      "evidence": [
-        {
-          "kind": "fixture",
-          "path": "evals/fixtures/evidenzqualitaet.mjs",
-          "command": "npm run eval:b1-quality"
-        },
-        {
-          "kind": "unit",
-          "path": "test/b1-quality.test.mjs",
-          "command": "node --test test/b1-quality.test.mjs"
-        }
-      ]
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe B1: begründete Quellenqualität pro Claim."
     },
     {
       "id": "EVID-05",
-      "status": "passed",
-      "evidence": [
-        {
-          "kind": "integration",
-          "path": "test/citation-audit.test.mjs",
-          "command": "node --test test/citation-audit.test.mjs"
-        }
-      ]
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe B1: Zitat-/Paraphrase-Abgleich zur Fundstelle."
     },
     {
       "id": "EVID-06",
-      "status": "passed",
-      "evidence": [
-        {
-          "kind": "integration",
-          "path": "test/citation-audit.test.mjs",
-          "command": "node --test test/citation-audit.test.mjs"
-        }
-      ]
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe B1: bibliografische Identitätsprüfung."
     },
     {
       "id": "EVID-07",
-      "status": "passed",
-      "evidence": [
-        {
-          "kind": "integration",
-          "path": "test/citation-audit.test.mjs",
-          "command": "node --test test/citation-audit.test.mjs"
-        }
-      ]
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe B1/D2: Konsistenz zwischen Textzitaten und Literaturverzeichnis."
     },
     {
       "id": "EVID-08",
-      "status": "passed",
-      "evidence": [
-        {
-          "kind": "integration",
-          "path": "test/source-model.test.mjs",
-          "command": "node --test test/source-model.test.mjs test/evidence-bundle.test.mjs"
-        },
-        {
-          "kind": "browser",
-          "path": "test/etappe-b1-smoke.mjs",
-          "command": "node test/etappe-b1-smoke.mjs"
-        }
-      ]
+      "status": "future-stage",
+      "evidence": [],
+      "note": "Etappe B1: Evidenzstatus über Korrektur, Rücknahme und Versionen."
     },
     {
       "id": "RESEARCH-01",
@@ -670,11 +586,6 @@
           "kind": "persistence",
           "path": "test/decision-log-smoke.mjs",
           "command": "node test/decision-log-smoke.mjs"
-        },
-        {
-          "kind": "persistence",
-          "path": "test/etappe-b1-smoke.mjs",
-          "command": "node test/etappe-b1-smoke.mjs"
         }
       ]
     },
@@ -696,11 +607,6 @@
           "kind": "persistence",
           "path": "../mac/main.swift",
           "command": "swiftc -O -swift-version 5 -o /tmp/aiwt-selftest ../mac/main.swift && /tmp/aiwt-selftest --selftest"
-        },
-        {
-          "kind": "persistence",
-          "path": "test/etappe-b1-smoke.mjs",
-          "command": "node test/etappe-b1-smoke.mjs"
         }
       ]
     },
@@ -724,11 +630,6 @@
           "kind": "browser",
           "path": "test/v2-smoke.mjs",
           "command": "AIWT_TASK7_ONLY=1 node test/v2-smoke.mjs"
-        },
-        {
-          "kind": "browser",
-          "path": "test/etappe-b1-smoke.mjs",
-          "command": "node test/etappe-b1-smoke.mjs"
         }
       ]
     },
@@ -740,11 +641,6 @@
           "kind": "browser",
           "path": "test/v2-smoke.mjs",
           "command": "node test/v2-smoke.mjs"
-        },
-        {
-          "kind": "browser",
-          "path": "test/etappe-b1-smoke.mjs",
-          "command": "node test/etappe-b1-smoke.mjs"
         }
       ]
     },

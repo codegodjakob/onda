@@ -9,10 +9,15 @@
 // Geprüft wird auf zwei Wegen, weil einer allein nicht reicht:
 //   1. Am Verhalten: die Warteschlange bekommt ein Dokument mit Hinweisen UND
 //      Erweiterungen und darf trotzdem nur die Hinweise kennen.
-//   2. An der Bauweise: das Modul, das die beiden Zähler zeichnet, kennt das Wort
-//      Erweiterung nicht — es kann sie also strukturell nicht anzeigen. Und der
-//      Erweiterungslauf ruft keinen der beiden Wege auf, über die der Agent sonst
-//      von sich aus anklopft.
+//   2. An der Bauweise, und zwar am LEBENDEN Code: Jedes Modul, das diese
+//      Prüfung liest oder ausführt, muss vom Einstieg (editor.js) aus
+//      erreichbar sein — sonst misst sie eine Leiche (genau das war passiert:
+//      sie las panels.js, das längst nicht mehr im Bundle war). Die eine
+//      sichtbare Warte-Zahl (renderZurueckgehalten in workspace.js) zählt nur
+//      Hinweise und kennt den Erweiterungs-Kanal nicht; der Bereich, der
+//      Erweiterungen zeigt (renderErweiterungen), zeichnet keine Zahl. Und der
+//      Erweiterungslauf ruft keinen der beiden Wege auf, über die der Agent
+//      sonst von sich aus anklopft.
 //
 // Was hier NICHT geprüft wird: wie die Seitenspalte aussieht. Das ist Gestalt und
 // gehört in die Browser-Prüfung, nicht hierher.
@@ -40,6 +45,37 @@ function lies(datei) {
 // würde die Prüfung genau diesen Satz finden und falsch Alarm schlagen.
 function ohneKommentare(text) {
   return text.split('\n').map(zeile => zeile.replace(/\/\/.*$/, '')).join('\n')
+}
+
+// Schneidet den Körper einer auf oberster Ebene deklarierten Funktion heraus.
+// Null, wenn es sie nicht mehr gibt — das ist dann ein eigener Fehlschlag,
+// keine stillschweigend übersprungene Prüfung.
+function funktionsKoerper(quelltext, signatur) {
+  const start = quelltext.indexOf(signatur)
+  if (start < 0) return null
+  const rest = quelltext.slice(start)
+  const ende = rest.indexOf('\n}\n')
+  return ende > 0 ? rest.slice(0, ende) : rest
+}
+
+// Die Erreichbarkeits-Wache: verfolgt jede import-Kante vom Einstieg aus.
+// Ein Modul, das hier nicht auftaucht, ist nicht im Bundle — Aussagen über
+// seinen Quelltext sagen nichts über die App aus.
+async function erreichbareModule() {
+  const gesehen = new Set()
+  const warteschlange = ['editor.js']
+  while (warteschlange.length) {
+    const datei = warteschlange.pop()
+    if (gesehen.has(datei)) continue
+    gesehen.add(datei)
+    let text
+    try { text = await lies(datei) } catch { continue }
+    const muster = /(?:import\s[^'"]*?|from\s*|import\()\s*['"](\.[^'"]+)['"]/g
+    for (const treffer of text.matchAll(muster)) {
+      warteschlange.push(new URL(treffer[1], new URL(datei, src)).pathname.split('/src/').pop())
+    }
+  }
+  return gesehen
 }
 
 const ERWEITERUNGEN = [
@@ -92,34 +128,55 @@ if (leereQueue.pendingCount !== 0 || leereQueue.current !== null || leereQueue.u
   fehler.push(`Gegenprobe: drei Erweiterungen ohne einen einzigen Hinweis ergeben pendingCount ${leereQueue.pendingCount} statt 0.`)
 }
 
-// --- Teil 2: die Zähl-Anzeigen kennen den Kanal nicht ------------------------
-// Beide Zahlen der Oberfläche (am Coach und an der Randspalte) werden in genau einem
-// Modul gezeichnet. Kommt dort das Wort Erweiterung nicht vor, kann keine Zahl eine
-// Erweiterung meinen.
-const panels = await lies('panels.js')
-if (/erweiterung/i.test(panels)) {
-  fehler.push('src/panels.js: das Modul mit den beiden Zählern kennt den Erweiterungs-Kanal — eine Zahl könnte ihn meinen.')
-}
-for (const zaehler of ['coachBadge', 'laneBadge']) {
-  if (!panels.includes(zaehler)) {
-    fehler.push(`src/panels.js: Zähler ${zaehler} nicht gefunden — die Prüfung misst nicht mehr, was sie messen soll.`)
+// --- Teil 2: die Zähl-Anzeige kennt den Kanal nicht — im LEBENDEN Code -------
+// Zuerst die Wache: Alles, worüber diese Prüfung eine Aussage macht, muss vom
+// Einstieg aus erreichbar sein. Diese Prüfung las früher panels.js — ein Modul,
+// das längst nicht mehr im Bundle war. Eine Messung an totem Code beweist nichts.
+const erreichbar = await erreichbareModule()
+for (const modul of ['workspace.js', 'reasoning-model.mjs', 'erweiterung-model.mjs']) {
+  if (!erreichbar.has(modul)) {
+    fehler.push(`src/${modul} ist vom Einstieg (editor.js) aus nicht erreichbar — diese Prüfung würde eine Leiche messen.`)
   }
 }
-if ((panels.match(/pendingCount/g) || []).length < 2) {
-  fehler.push('src/panels.js: die Zähler speisen sich nicht mehr beide aus der Hinweis-Warteschlange.')
+
+// Die eine sichtbare Warte-Zahl der Oberfläche zeichnet renderZurueckgehalten
+// in workspace.js. Kommt dort das Wort Erweiterung nicht vor und speist sich
+// die Zahl aus den Hinweisen (findings), kann sie strukturell keine
+// Erweiterung meinen.
+const workspaceQuelle = ohneKommentare(await lies('workspace.js'))
+const warteZahl = funktionsKoerper(workspaceQuelle, 'function renderZurueckgehalten')
+if (!warteZahl) {
+  fehler.push('src/workspace.js: renderZurueckgehalten nicht gefunden — die Warte-Zahl wurde umbenannt oder entfernt.')
+} else {
+  if (/erweiterung/i.test(warteZahl)) {
+    fehler.push('src/workspace.js: renderZurueckgehalten kennt den Erweiterungs-Kanal — die Warte-Zahl könnte ihn meinen.')
+  }
+  if (!warteZahl.includes('findings')) {
+    fehler.push('src/workspace.js: renderZurueckgehalten zählt nicht mehr aus den Hinweisen (findings).')
+  }
+  if (!warteZahl.includes('onda-zurueck-zahl')) {
+    fehler.push('src/workspace.js: renderZurueckgehalten zeichnet die Warte-Zahl nicht mehr — die Prüfung misst nicht mehr, was sie messen soll.')
+  }
+}
+
+// Und die Gegenrichtung: der Bereich, der Erweiterungen zeigt, zeichnet keine
+// Zahl. Eine Zahl neben einem Angebot wäre wieder ein offener Posten.
+const erwBereich = funktionsKoerper(workspaceQuelle, 'function renderErweiterungen')
+if (!erwBereich) {
+  fehler.push('src/workspace.js: renderErweiterungen nicht gefunden — der Erweiterungs-Bereich wurde umbenannt oder entfernt.')
+} else {
+  if (erwBereich.includes('onda-zurueck-zahl') || /onda-badge/.test(erwBereich) || /String\([^)]*length[^)]*\)/.test(erwBereich)) {
+    fehler.push('src/workspace.js: renderErweiterungen zeichnet eine Zahl — aus dem Angebot wird ein Zählerstand.')
+  }
 }
 
 // --- Teil 3: der Kanal klopft nicht an ---------------------------------------
-const workspace = ohneKommentare(await lies('workspace.js'))
-const start = workspace.indexOf('async function fuehreErweiterungslaufAus')
-if (start < 0) {
+const erwLauf = funktionsKoerper(workspaceQuelle, 'async function fuehreErweiterungslaufAus')
+if (!erwLauf) {
   fehler.push('src/workspace.js: fuehreErweiterungslaufAus nicht gefunden — der Kanal wurde umbenannt oder entfernt.')
 } else {
-  const rest = workspace.slice(start)
-  const ende = rest.indexOf('\n}\n')
-  const koerper = ende > 0 ? rest.slice(0, ende) : rest
   for (const anklopfen of ['ergaenzeEchteInitiative', 'meldeAgentInitiative']) {
-    if (koerper.includes(anklopfen)) {
+    if (erwLauf.includes(anklopfen)) {
       fehler.push(`src/workspace.js: der Erweiterungslauf ruft ${anklopfen} — eine Erweiterung klopft damit an, statt liegen zu bleiben.`)
     }
   }
@@ -176,6 +233,7 @@ if (fehler.length) {
 }
 process.stdout.write(
   'ERWEITERUNG-04: drei Erweiterungen neben drei Hinweisen — die Warteschlange zählt 3, '
-  + 'die beiden Zähl-Anzeigen kennen den Kanal nicht, der Lauf klopft nicht an, '
+  + 'die Warte-Zahl im lebenden Modul (workspace.js, vom Einstieg aus erreichbar) kennt den '
+  + 'Kanal nicht, der Erweiterungs-Bereich zeichnet keine Zahl, der Lauf klopft nicht an, '
   + 'und es gibt genau zwei Gesten: merken und weglegen.\n',
 )
