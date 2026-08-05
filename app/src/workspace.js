@@ -113,9 +113,11 @@ let localFeedbackError = null
 let localPositionFrame = null
 let localSummaryFocusRequest = null
 let agentInitiativeTimer = null
-// Echter Hinweislauf (Etappe A, Spec §5): genau ein Lauf gleichzeitig; hinweislaufTimer ist
-// der Zeitgeber-Griff fuer den Pausen-Ausloeser (planeHinweislauf/clearHinweislaufTimer, H-3).
-let hinweislaufAktiv = false
+// Echter Hinweislauf (Etappe A, Spec §5): genau ein Lauf gleichzeitig. Die Lauf-Sperre selbst
+// (frueher hier als hinweislaufAktiv) lebt jetzt im Lauf-Tor (lauf-tor.mjs, Task 7) —
+// kanalGesperrt('hinweis') fragt sie ab, fuehreLaufAus setzt/loest sie synchron. Hier bleibt nur
+// noch hinweislaufTimer, der Zeitgeber-Griff fuer den Pausen-Ausloeser (planeHinweislauf/
+// clearHinweislaufTimer, H-3).
 let hinweislaufTimer = null
 // Zweiter Kanal (Erweiterungen): eigene Sperre, damit ein Erweiterungslauf und ein
 // Hinweislauf einander nicht ausschliessen -- es sind zwei verschiedene Fragen an
@@ -3393,34 +3395,45 @@ async function fuehreHinweislaufAus({ grund = 'pause' } = {}) {
   const project = dokumentProjekt(doc)
   const verstaendnis = project ? ensureProjectUnderstanding(project) : null
 
-  const ergebnis = await versucheHinweislauf({
-    hatDokument: Boolean(doc && workspace),
-    istBeispielprojekt: istBeispielDokument(doc),
-    verstaendnisOffen: verstaendnis ? istInterviewOffen(verstaendnis) : false,
-    laeuftBereits: hinweislaufAktiv,
-    docText,
-    signatur,
-    letzteSignatur: protokoll?.signatur ?? null,
-    sperreSetzen: wert => { hinweislaufAktiv = wert },
-    hatSchluessel,
-    istNochDasselbeDokument: () => ctx.activeDoc()?.id === docId,
-    // Fix-Runde 2, Finding 2b (Important): der Chat-Auslöser umging bisher die Monatsbremse
-    // komplett (beansprucheKostenfreigabe:null -> versucheHinweislauf nimmt dann {erlaubt:true}
-    // an, siehe hinweislauf-model.mjs). Die Oberfläche behauptet aber "Automatische Läufe sind
-    // pausiert" OHNE Ausnahme für den Chat-Hinweislauf -- das war schlicht nicht wahr. Der
-    // reine Chat (die Antwort des Agenten, sendeAgentenChat/fuehreChatLauf) ist davon NICHT
-    // betroffen: das hier ist ausschliesslich der zusätzliche Hintergrund-Hinweislauf, den eine
-    // Chat-Bitte ("schau mal drüber") zusätzlich anstößt (siehe starteHinweislauf-Aufruf in
-    // sendeAgentenChat) -- genau der soll wie jeder andere automatische Lauf der Bremse
-    // unterliegen; die Chat-Antwort selbst läuft unabhängig davon immer weiter.
-    beansprucheKostenfreigabe: () => beansprucheAutomatikKosten('hinweis', { docId, grund }),
-    verstaendnis,
-    blocks,
-    findings: doc?.findings,
-    decisions: doc?.decisions,
-    runTask,
-    setzeAgentStatus,
-  })
+  // Kanal-Sperre und Signatur wandern ins Lauf-Tor (lauf-tor.mjs, Task 7): laeuftBereits/
+  // sperreSetzen an versucheHinweislauf werden darum reine No-ops -- die Kanal-Sperre prueft
+  // und haelt das Tor (fuehreLaufAus); das Modell behaelt seine Parameter fuer die Modell-Tests
+  // (hinweislauf-model.test.mjs). Das Signatur-Doppel bleibt ABSICHTLICH zweistufig: die
+  // Tor-Signatur unten ist docId-praefixiert und vergleicht gegen den letzten BEZAHLTEN Lauf
+  // dieses Kanals im Journal (struktureller Backstop, kanalweit, einmalJeSignatur); die
+  // unpraefixierte `signatur`/`letzteSignatur` unten bleibt versucheHinweislaufs eigene,
+  // unveraenderte Pruefung gegen protokoll.signatur (je Workspace, wie vor Task 7).
+  const ergebnis = await fuehreLaufAus(
+    { kanal: 'hinweis', ausloeser: grund, signatur: `${docId}:${signatur}`, einmalJeSignatur: true },
+    ({ runTask }) => versucheHinweislauf({
+      hatDokument: Boolean(doc && workspace),
+      istBeispielprojekt: istBeispielDokument(doc),
+      verstaendnisOffen: verstaendnis ? istInterviewOffen(verstaendnis) : false,
+      laeuftBereits: false, // die Kanal-Sperre prueft und haelt das Tor (fuehreLaufAus)
+      sperreSetzen: () => {}, // das Modell behaelt seine Parameter fuer die Modell-Tests
+      docText,
+      signatur,
+      letzteSignatur: protokoll?.signatur ?? null,
+      hatSchluessel,
+      istNochDasselbeDokument: () => ctx.activeDoc()?.id === docId,
+      // Fix-Runde 2, Finding 2b (Important): der Chat-Auslöser umging bisher die Monatsbremse
+      // komplett (beansprucheKostenfreigabe:null -> versucheHinweislauf nimmt dann {erlaubt:true}
+      // an, siehe hinweislauf-model.mjs). Die Oberfläche behauptet aber "Automatische Läufe sind
+      // pausiert" OHNE Ausnahme für den Chat-Hinweislauf -- das war schlicht nicht wahr. Der
+      // reine Chat (die Antwort des Agenten, sendeAgentenChat/fuehreChatLauf) ist davon NICHT
+      // betroffen: das hier ist ausschliesslich der zusätzliche Hintergrund-Hinweislauf, den eine
+      // Chat-Bitte ("schau mal drüber") zusätzlich anstößt (siehe starteHinweislauf-Aufruf in
+      // sendeAgentenChat) -- genau der soll wie jeder andere automatische Lauf der Bremse
+      // unterliegen; die Chat-Antwort selbst läuft unabhängig davon immer weiter.
+      beansprucheKostenfreigabe: () => beansprucheAutomatikKosten('hinweis', { docId, grund }),
+      verstaendnis,
+      blocks,
+      findings: doc?.findings,
+      decisions: doc?.decisions,
+      runTask,
+      setzeAgentStatus,
+    }),
+  )
 
   if (!ergebnis.gestartet) {
     if (ergebnis.grund === 'monatsbudget-erreicht') {
@@ -3623,7 +3636,7 @@ function planeHinweislauf() {
   const entscheidung = pruefePausenAusloeser({
     hatDokument: Boolean(doc && workspace),
     istBeispielprojekt: istBeispielDokument(doc),
-    laeuftBereits: hinweislaufAktiv,
+    laeuftBereits: kanalGesperrt('hinweis'), // Sperre wohnt im Tor (Task 7), nicht mehr in einem lokalen Feld
     hatEingabeStatus: Boolean(inputState),
     lastInputAt: inputState?.lastInputAt,
     editorSichtbar: editorViewIsVisibleFor(docId),

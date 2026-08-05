@@ -107,12 +107,15 @@ export function pruefePausenAusloeser({
 // Schluessel-Check hinweg mit gefaketen, verzoegerbaren Collaborators testbar sind, ohne
 // DOM/ctx zu brauchen.
 //
-// Finding 1 (Critical): hinweislaufAktiv wurde bislang erst NACH `await hatSchluessel()`
+// Finding 1 (Critical): die Kanal-Sperre wurde bislang erst NACH `await hatSchluessel()`
 // gesetzt. Zwei kurz aufeinanderfolgende Ausloeser (Schreibpause + Chat-Bitte) lesen dann
 // BEIDE noch `false`, haengen beide im selben await und starten beide einen teuren
 // runTask-Aufruf. Fix: sperreSetzen(true) laeuft synchron, sofort nach der reinen
-// Gate-Pruefung, VOR dem ersten await -- exakt das Muster aus starteVerstaendnisEntwurf
-// (workspace.js), das interviewLaufAktiv ebenso vor jedem await setzt.
+// Gate-Pruefung, VOR dem ersten await. Seit Task 7 haelt das Lauf-Tor (lauf-tor.mjs,
+// fuehreLaufAus/kanalGesperrt('hinweis')) diese Sperre bereits VOR diesem Aufruf synchron --
+// sperreSetzen/laeuftBereits sind hier nur noch No-op-Parameter fuer die Modell-Tests dieser
+// Datei; das historische Muster (VOR dem ersten await sperren) lebt jetzt strukturell im Tor
+// selbst, exakt wie es zuvor starteVerstaendnisEntwurf (workspace.js) lokal umsetzte.
 //
 // Finding 2 (Important): Projekt/Dokument koennen sich waehrend `await hatSchluessel()`
 // aendern. `verstaendnis` muss deshalb VOM AUFRUFER bereits ueber die stabile, vor dem
