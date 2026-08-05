@@ -65,6 +65,19 @@ export function pruefePflichtfelder(daten, schema) {
   return daten !== undefined
 }
 
+// Netzabriss-Prüfung (Issue #17): reißt die Verbindung MITTEN im Stream ab, hat
+// message_start den Verbrauch längst gemeldet — der Lauf war bezahlt. Der Transport
+// legt diesen Teil-Verbrauch in fehler.usage; hier wird er gezählt, denn der
+// Grundsatz gilt auch für gescheiterte Läufe: Verbrauch IMMER zählen.
+function bucheFehlerVerbrauch(fehler, eintrag) {
+  if (!fehler || !fehler.usage) return
+  const settings = hooks.getSettings ? hooks.getSettings() : null
+  if (!settings) return
+  const kostenCents = schaetzeKostenCents(fehler.usage, MODELLE[eintrag.modell])
+  verbucheUsage(settings, fehler.usage, kostenCents)
+  if (hooks.persist) hooks.persist()
+}
+
 export async function runTask(taskName, eingabe, optionen = {}) {
   const eintrag = TASK_TABLE[taskName]
   if (!eintrag) throw new Error('Unbekannter Task: ' + taskName)
@@ -82,9 +95,19 @@ export async function runTask(taskName, eingabe, optionen = {}) {
   try {
     ergebnis = await sendeEinmal(anfrage, onDelta)
   } catch (fehler) {
+    bucheFehlerVerbrauch(fehler, eintrag)
     if (!WIEDERHOLBAR.has(fehler && fehler.typ)) throw fehler
     await warte(hooks.retryWartezeitMs) // EIN stiller Wiederholungsversuch (Spec §7)
-    ergebnis = await sendeEinmal(anfrage, onDelta)
+    // Netzabriss-Prüfung (Issue #17): bei einem Stream-Task hat der Verbraucher die
+    // Deltas des abgerissenen Versuchs womöglich schon angezeigt. Ohne dieses Signal
+    // klebten die Deltas des zweiten Versuchs dahinter — sichtbar doppelter Text.
+    if (eintrag.stream && optionen.onNeustart) optionen.onNeustart()
+    try {
+      ergebnis = await sendeEinmal(anfrage, onDelta)
+    } catch (zweiterFehler) {
+      bucheFehlerVerbrauch(zweiterFehler, eintrag)
+      throw zweiterFehler
+    }
   }
 
   // Verbrauch IMMER zählen — auch bei refusal/max_tokens wurden Tokens verbraucht.

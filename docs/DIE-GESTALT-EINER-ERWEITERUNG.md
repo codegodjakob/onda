@@ -1,7 +1,7 @@
 # Die Gestalt einer Erweiterung
 
 Antwort auf das Ticket *Die Gestalt einer Erweiterung*
-(`.scratch/rueckmeldung/issues/08-die-gestalt-einer-erweiterung.md`).
+(`docs/rueckmeldung/karten/08-die-gestalt-einer-erweiterung.md`).
 
 Die Frage war: Wie sieht eine Erweiterung aus — und wie unterscheidet sie sich sichtbar
 von einer Korrektur? Dazu: Trägt die Formenlehre des Design Systems, oder trägt sie

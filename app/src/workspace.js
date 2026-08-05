@@ -3059,6 +3059,26 @@ async function fuehreChatLauf(thread, kontext) {
   try {
     setzeAgentStatus({ zustand: 'laeuft' })
     const { daten } = await runTask('chat', kontext, {
+      // Netzabriss-Prüfung (Issue #17): wiederholt der Verteiler einen mitten im
+      // Stream abgerissenen Lauf, beginnt die Antwort von vorn — der Puffer muss
+      // leer sein, sonst klebt der Text des abgerissenen Versuchs davor.
+      // Die halbe Nachricht wird dabei ENTFERNT, nicht nur geleert: eine leere
+      // Nachricht im Thread wuerde die naechste Thread-Normalisierung
+      // (normalizeThreadInPlace laeuft bei jedem Rerender) still herausfiltern —
+      // lauf.agentMessage waere dann ein verwaister Verweis, und die fertige
+      // Antwort des zweiten Versuchs kaeme nie im gespeicherten Thread an.
+      // Nach dem Entfernen baut der onDelta-Zweig unten die Nachricht beim
+      // ersten Delta des zweiten Versuchs sauber neu auf.
+      onNeustart: () => {
+        lauf.puffer = ''
+        if (lauf.flushTimer) { clearTimeout(lauf.flushTimer); lauf.flushTimer = null }
+        if (lauf.agentMessage) {
+          const index = thread.indexOf(lauf.agentMessage)
+          if (index >= 0) thread.splice(index, 1)
+          lauf.agentMessage = null
+          refreshWorkspace()
+        }
+      },
       onDelta: text => {
         lauf.puffer += String(text || '')
         if (!lauf.agentMessage) {
