@@ -18,3 +18,7 @@ node evals/run-fertigzustand.mjs   →  evals/results/fertigzustand-latest.json
 Als der frische Lauf am 03.08.2026 erstmals alles neu maß, fiel der Wert von
 5,0 auf 3,78 — das ist der ehrliche Unterschied zwischen Weiterreichung und
 Messung.
+
+Hintergrund: Befund 6 der Systemanalyse vom 04.08.2026 — alte Ergebnisdateien
+lagen als konkurrierende Wahrheit neben dem frischen Lauf. Die Verschiebung
+hierher ist Teil von Issue #18, die Entwertung Teil von Issue #15.

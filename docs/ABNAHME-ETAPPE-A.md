@@ -45,7 +45,7 @@ gelesen). Hier die genauen Befehle und ihre echten Ergebnisse, aus dem Ordner `a
 ```
 npm test
 ```
-Ergebnis: **265 Tests, alle bestanden, keiner fehlgeschlagen.**
+Ergebnis: **265 Tests, alle bestanden, keiner fehlgeschlagen** (gemessen am 30. Juli 2026).
 
 ```
 npm run build
@@ -120,7 +120,7 @@ schnelle für Routine. Das hält die Kosten niedrig."
 
 Die Anzeige wird zur Laufzeit aus `TASK_TABLE` und `MODELLE` (`app/src/agent-tasks.mjs`)
 abgeleitet — sie kann also nicht veralten, wenn sich die Verteilung ändert. Live in der
-laufenden Anwendung nachgeprüft; 446 Tests grün.
+laufenden Anwendung nachgeprüft; 446 Tests grün (gemessen am 31. Juli 2026).
 (Beleg: `app/src/workspace.js` — `renderKiModelle`.)
 
 **Braucht noch deine Prüfung** (Mac-App, mit deinem echten Schlüssel, einmalig):
@@ -414,8 +414,8 @@ dem aktuellen Programmcode bauen und startet danach normal mit deinen vorhandene
 
 **Status: Belegt.**
 
-- `npm test`: **265 von 265 Tests bestanden**, keiner fehlgeschlagen (siehe Abschnitt „Was
-  automatisch geprüft wurde" oben für den genauen Befehl).
+- `npm test`: **265 von 265 Tests bestanden**, keiner fehlgeschlagen (gemessen am 30. Juli 2026;
+  siehe Abschnitt „Was automatisch geprüft wurde" oben für den genauen Befehl).
 - Das Beispielprojekt „Calm Technology" bleibt eindeutig markiert (`exampleSeed`/`exampleSeedKey`
   in `app/src/example-seed.mjs`) und trägt weiterhin seine charakteristische Schlussformel
   „volle Kraft, leise Präsentation" (`app/src/example.js:232`) — die automatische Prüfung
@@ -473,7 +473,7 @@ Gleich mitbehoben: das Zeichen erscheint jetzt **sofort beim Tippen**, statt ers
 wird, nie das Textfeld.
 
 Belegt im laufenden Programm: nicht geschützt → tippen → `geschuetzt: ["task"]`, Zeichen
-sichtbar → Klick → `geschuetzt: []`, Zeichen weg, Text unverändert. 470 Tests grün.
+sichtbar → Klick → `geschuetzt: []`, Zeichen weg, Text unverändert. Alle Tests grün (Messlauf vom 3. August 2026: 470 bestanden).
 
 ---
 
