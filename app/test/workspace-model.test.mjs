@@ -181,13 +181,37 @@ test('array workspace is replaced with state that survives a JSON roundtrip', ()
   const migrated = ensureWorkspaceState(doc)
 
   assert.equal(Array.isArray(migrated), false)
-  assert.equal(migrated.version, 2)
+  assert.equal(migrated.version, 3)
+  assert.equal(migrated.annotationMode, 'text')
+  assert.equal(migrated.quietAnnotations, false)
+  assert.equal(migrated.activeAnnotationId, null)
+  assert.deepEqual(migrated.undoStack, [])
 
   const reloaded = JSON.parse(JSON.stringify(doc))
   const restored = ensureWorkspaceState(reloaded)
-  assert.equal(restored.version, 2)
+  assert.equal(restored.version, 3)
   assert.equal(restored.shelfOpen, false)
   assert.deepEqual(restored.agent.messages, [])
+})
+
+test('annotation workspace migration preserves valid mode, quiet state and recent undo operations', () => {
+  const undoStack = Array.from({ length: 22 }, (_, index) => ({ ok: true, id: `op-${index}` }))
+  const doc = { workspace: {
+    annotationMode: 'notiz',
+    quietAnnotations: true,
+    activeAnnotationId: 'finding-7',
+    undoStack,
+    suppressedAnnotations: ['a', 'a', 'b'],
+  } }
+
+  const workspace = ensureWorkspaceState(doc)
+
+  assert.equal(workspace.annotationMode, 'notiz')
+  assert.equal(workspace.quietAnnotations, true)
+  assert.equal(workspace.activeAnnotationId, 'finding-7')
+  assert.equal(workspace.undoStack.length, 20)
+  assert.equal(workspace.undoStack[0].id, 'op-2')
+  assert.deepEqual(workspace.suppressedAnnotations, ['a', 'b'])
 })
 
 test('array agent is replaced with state that survives a JSON roundtrip', () => {

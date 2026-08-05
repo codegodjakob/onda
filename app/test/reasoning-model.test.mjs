@@ -76,6 +76,20 @@ test('normalizes only explicit nonempty finding claims without deriving one', ()
   assert.equal(Object.hasOwn(doc.findings[2], 'claim'), false)
 })
 
+test('normalisiert exakte Anmerkungsarten und leitet Altbestand konservativ ab', () => {
+  const doc = { findings: [
+    { id: 'exact', anmerkungsart: 'grammatik', category: 'wording' },
+    { id: 'source', category: 'source' },
+    { id: 'unknown', anmerkungsart: 'kaputt', category: 'unknown' },
+  ] }
+
+  ensureReasoningModel(doc)
+
+  assert.equal(doc.findings[0].anmerkungsart, 'grammatik')
+  assert.equal(doc.findings[1].anmerkungsart, 'beleg')
+  assert.equal(doc.findings[2].anmerkungsart, 'anmerkung')
+})
+
 test('surfaces one unblocked root cause and parks its dependants', () => {
   const doc = { findings: [
     { id: 'style', status: 'open', priority: 'normal', category: 'wording', createdAt: 1 },
@@ -109,6 +123,14 @@ test('records rejection of an integrity finding as accepted risk', () => {
   assert.equal(doc.decisions[0].reason, 'Abgabe heute')
   assert.equal(doc.decisions[0].resultingText, 'Die ursprüngliche Behauptung')
   assert.equal(getFindingQueue(doc).acceptedRisks.length, 1)
+})
+
+test('zeichnet den gewählten Verwerfungsumfang nachvollziehbar auf', () => {
+  const doc = { findings: [{ id: 'style', status: 'open', category: 'wording' }] }
+
+  decideFinding(doc, 'style', { kind: 'reject', rejectionScope: 'art-im-dokument' }, 42)
+
+  assert.equal(doc.decisions[0].rejectionScope, 'art-im-dokument')
 })
 
 test('dismisses a wording proposal without creating an integrity risk', () => {

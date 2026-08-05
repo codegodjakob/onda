@@ -1,7 +1,8 @@
 import { isIntegrityCategory } from './reasoning-model.mjs'
 import { istFremdeInterviewNachricht } from './verstaendnis-interview.mjs'
+import { normalizeAnnotationWorkspace } from './annotation-controller.mjs'
 
-const WORKSPACE_VERSION = 2
+const WORKSPACE_VERSION = 3
 const IDLE_BEFORE_INITIATIVE_MS = 3000
 const BOUNDARY_BEFORE_INITIATIVE_MS = 300
 const THREAD_ROLES = new Set(['user', 'agent'])
@@ -104,7 +105,7 @@ function normalizeAgentMessages(value, docProjectId) {
 }
 
 export function ensureWorkspaceState(doc) {
-  const current = isPlainObject(doc.workspace) ? doc.workspace : {}
+  const current = normalizeAnnotationWorkspace(isPlainObject(doc.workspace) ? doc.workspace : {})
   current.version = WORKSPACE_VERSION
   if (typeof current.shelfOpen !== 'boolean') current.shelfOpen = false
   current.activeBlockId = current.activeBlockId || null

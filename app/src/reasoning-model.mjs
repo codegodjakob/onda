@@ -1,4 +1,5 @@
 import { istIntegritaetsfrageFuerCategory } from './textart-regeln.mjs'
+import { normalizeAnnotationFinding } from './annotation-contract.mjs'
 
 const UNDERSTANDING_DEFAULTS = Object.freeze({
   task: '',
@@ -202,6 +203,7 @@ function normalizeFinding(finding, placement, index) {
     }
   }
   normalized.short = normalized.short || normalized.text || 'Hinweis'
+  normalized.anmerkungsart = normalizeAnnotationFinding(normalized).anmerkungsart
   if (typeof normalized.claim === 'string' && normalized.claim.trim()) {
     normalized.claim = normalized.claim.trim()
   } else {
@@ -303,6 +305,9 @@ export function decideFinding(doc, findingId, decision, at = Date.now()) {
     kind: decision.kind,
     outcome,
     reason: decision.reason || '',
+    rejectionScope: decision.kind === 'reject' && typeof decision.rejectionScope === 'string'
+      ? decision.rejectionScope
+      : '',
     appliedText,
     // Betroffene Passage zum Entscheidungszeitpunkt. Dadurch bleibt im Verlauf
     // sichtbar, welcher Wortlaut aus Übernahme, eigener Fassung oder Verwerfen
