@@ -629,9 +629,9 @@ body.zen #title:focus { opacity: 1; }
 #doclist.grid .doc {
   position: relative; flex-direction: column; align-items: stretch; justify-content: flex-end;
   min-height: 116px; padding: var(--space-5) var(--space-6);
-  background: var(--bg-surface); border-radius: var(--radius-card); box-shadow: var(--shadow-xs);
+  background: var(--bg-surface); border-radius: var(--radius-card); box-shadow: none;
 }
-#doclist.grid .doc:hover { background: var(--bg-surface); box-shadow: var(--shadow-sm); }
+#doclist.grid .doc:hover { background: var(--bg-hover); box-shadow: none; }
 #doclist.grid .doc .doc-main {
   display: flex;
   flex-direction: column;
@@ -808,6 +808,7 @@ body.zen #title:focus { opacity: 1; }
   position: relative;
   display: flex;
   width: 100%;
+  min-height: 44px;
   min-width: 0;
   flex-direction: column;
   gap: var(--space-1);
@@ -820,9 +821,10 @@ body.zen #title:focus { opacity: 1; }
 }
 .block-preview-excerpt[hidden] { display: none; }
 .block-preview {
-  border-radius: var(--radius-card);
-  background: var(--bg-surface);
-  box-shadow: var(--shadow-xs);
+  border-bottom: 1px solid var(--border-subtle);
+  border-radius: var(--radius-none);
+  background: transparent;
+  box-shadow: none;
   color: var(--text-primary);
   text-align: left;
   cursor: pointer;
@@ -830,7 +832,8 @@ body.zen #title:focus { opacity: 1; }
 }
 
 .block-preview:hover {
-  box-shadow: var(--shadow-sm);
+  background: var(--bg-hover);
+  box-shadow: none;
 }
 
 /* Der gerade bearbeitete Baustein. Das Design System ist hier deutlich:
@@ -838,7 +841,7 @@ body.zen #title:focus { opacity: 1; }
    (--bg-sunken + Haarlinie)." Vorher fuellte Sky die ganze Karte. */
 .block-preview[aria-current="true"] {
   background: var(--bg-sunken);
-  box-shadow: inset 0 0 0 1px var(--border-default);
+  box-shadow: none;
 }
 
 .block-preview:focus-visible {
@@ -993,11 +996,11 @@ body.zen #title:focus { opacity: 1; }
   border-left: 2px solid var(--accent);
   border-radius: var(--radius-card);
   background: var(--bg-surface);
-  box-shadow: var(--shadow-xs);
+  box-shadow: none;
   overflow: hidden;
-  transition: box-shadow var(--dur-quick) var(--ease-out);
+  transition: background var(--dur-quick) var(--ease-out);
 }
-.onda-erw:hover { box-shadow: var(--shadow-sm); }
+.onda-erw:hover { background: var(--bg-hover); box-shadow: none; }
 /* Gemerktes traegt einen vollen Strich statt eines Haekchens: ein Haken ist die
    Sprache erledigter Aufgaben, und eine Erweiterung war nie eine Aufgabe. */
 .onda-erw.is-gemerkt { border-left-width: 4px; background: var(--bg-sunken); }
@@ -1174,11 +1177,10 @@ body.zen #title:focus { opacity: 1; }
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  /* Die Schreibflaeche IST die weiche Flaeche (Referenz .wt-body): weisses
-     Papier mit --radius-panel. Getrennt wird ueber Flaeche und Abstand,
-     nicht ueber einen Strich an der Seitenleiste. */
+  /* Der Text ist die Grundflaeche, keine schwebende Karte. Die Shell trennt
+     Seitenleiste und Schreibraum mit einer feinen Linie. */
   background: var(--bg-surface);
-  border-radius: var(--radius-panel) 0 0 var(--radius-panel);
+  border-radius: var(--radius-none);
 }
 
 .onda-topbar {
@@ -1431,9 +1433,9 @@ body.zen #title:focus { opacity: 1; }
 .local-finding.is-expanded {
   padding: var(--space-4);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-panel);
+  border-radius: var(--radius-overlay);
   background: var(--surface);
-  box-shadow: var(--shadow-xl), var(--shadow-glow);
+  box-shadow: var(--shadow-md);
   animation: ondaHintIn var(--dur-normal) var(--ease-out);
 }
 
@@ -1511,7 +1513,7 @@ body.zen #title:focus { opacity: 1; }
 .agent-chat-form {
   min-width: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 32px;
+  grid-template-columns: minmax(0, 1fr) 44px;
   gap: 6px;
   align-items: center;
 }
@@ -1519,7 +1521,7 @@ body.zen #title:focus { opacity: 1; }
 .agent-chat-input {
   width: 100%;
   min-width: 0;
-  height: 34px;
+  height: 44px;
   padding: 6px 9px;
   border: 1px solid var(--border-default);
   border-radius: var(--radius-control);
@@ -1537,7 +1539,7 @@ body.zen #title:focus { opacity: 1; }
 
 .agent-chat-send,
 .surface-close {
-  width: 32px; height: 32px;
+  width: 44px; height: 44px;
   display: inline-flex; align-items: center; justify-content: center;
   padding: 0; border: 0;
   border-radius: var(--radius-control);
@@ -1630,7 +1632,7 @@ body.zen #title:focus { opacity: 1; }
 }
 
 .suggestion-action {
-  width: 30px; height: 30px;
+  width: 44px; height: 44px;
   display: inline-flex; align-items: center; justify-content: center;
   padding: 0; border: 0; border-radius: var(--radius-pill);
   background: transparent; color: var(--text-tertiary);
@@ -1808,8 +1810,8 @@ body.zen #title:focus { opacity: 1; }
   overflow: hidden;
   background: var(--surface);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-panel);
-  box-shadow: var(--shadow-xl), var(--shadow-glow);
+  border-radius: var(--radius-overlay);
+  box-shadow: var(--shadow-lg);
   animation: ondaHintIn var(--dur-normal) var(--ease-out);
 }
 
@@ -2429,7 +2431,7 @@ button.onda-aura:focus-visible {
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
-  height: 34px;
+  min-height: 44px;
   padding: 0 var(--space-4);
   border: 0;
   border-radius: var(--radius-control);
@@ -2456,14 +2458,14 @@ button.onda-aura:focus-visible {
 .onda-btn--danger:hover { background: var(--danger); filter: brightness(1.06); }
 .onda-btn--danger:active { background: var(--danger); filter: brightness(0.94); transform: scale(0.98); }
 
-.onda-btn--sm { height: 28px; padding: 0 var(--space-3); font-size: var(--text-xs); }
+.onda-btn--sm { min-height: 44px; padding: 0 var(--space-3); font-size: var(--text-xs); }
 
 .onda-icon-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 44px;
+  height: 44px;
   flex: none;
   padding: 0;
   border: 0;
@@ -2584,14 +2586,15 @@ button.onda-aura:focus-visible {
   gap: var(--space-1);
   width: 100%;
   padding: var(--space-5);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-card);
   background: var(--bg-surface);
-  box-shadow: var(--shadow-xs);
+  box-shadow: none;
   text-align: left;
   cursor: pointer;
-  transition: box-shadow var(--dur-quick) var(--ease-out);
+  transition: background var(--dur-quick) var(--ease-out);
 }
-#pvCard:hover { box-shadow: var(--shadow-sm); }
+#pvCard:hover { background: var(--bg-hover); box-shadow: none; }
 #pvCard:focus-visible { outline: 2px solid transparent; box-shadow: var(--shadow-focus); }
 .onda-pv-card-title {
   color: var(--text-primary);
@@ -2607,7 +2610,7 @@ button.onda-aura:focus-visible {
 #pvCard.is-empty .onda-pv-card-title { color: var(--text-tertiary); }
 
 /* Struktur-Liste + Hinweis-Punkt */
-.structure-nav-list { display: flex; flex-direction: column; gap: var(--space-2); }
+.structure-nav-list { display: flex; flex-direction: column; gap: 0; }
 .structure-nav-empty { margin: 0; color: var(--text-tertiary); font: var(--type-body); }
 .block-preview-hint {
   position: absolute;
@@ -2631,14 +2634,15 @@ button.onda-aura:focus-visible {
   gap: var(--space-2);
   width: 100%;
   padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius-card);
-  background: var(--bg-surface);
-  box-shadow: var(--shadow-xs);
+  border-bottom: 1px solid var(--border-subtle);
+  border-radius: var(--radius-none);
+  background: transparent;
+  box-shadow: none;
   color: var(--text-primary);
   font: var(--type-label);
   text-align: left;
   cursor: pointer;
-  transition: box-shadow var(--dur-quick) var(--ease-out), background var(--dur-quick) var(--ease-out);
+  transition: background var(--dur-quick) var(--ease-out);
 }
 #materialSources:hover { background: var(--bg-sunken); }
 #materialSources:focus-visible { outline: 2px solid transparent; box-shadow: var(--shadow-focus); }
@@ -2675,10 +2679,10 @@ button.onda-aura:focus-visible {
   display: flex;
   flex-direction: column;
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-panel);
+  border-radius: var(--radius-overlay);
   background: var(--bg-surface);
   color: var(--text-primary);
-  box-shadow: var(--shadow-xl), var(--shadow-glow);
+  box-shadow: var(--shadow-lg);
   overflow: hidden;
   animation: ondaHintIn var(--dur-normal) var(--ease-out);
 }
@@ -3886,7 +3890,7 @@ button.onda-aura:focus-visible {
   }
   #auditModal {
     max-height: calc(100dvh - (2 * var(--space-2)));
-    border-radius: var(--radius-card);
+    border-radius: var(--radius-overlay);
   }
   #auditModal .onda-dialog-header {
     padding: var(--space-3) var(--space-3) var(--space-2);

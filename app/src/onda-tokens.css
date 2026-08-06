@@ -52,10 +52,14 @@
   --container-sm:640px; --container-md:880px; --container-lg:1120px; --container-reading:680px;
   --sidebar-width:264px; --topbar-height:56px;
 
+  /* Ecken — Richtung A mit Overlays aus Richtung C, bestätigt am 06.08.2026.
+     Controls und statische Arbeitsflächen bleiben knapp. Nur echte schwebende
+     Ebenen werden merklich weicher. Pillen sind eine eigene, bewusst seltene
+     Rolle für Umschalter, kompakte Zustände, Icon-Kreise und die Aura. */
   --radius-none:0; --radius-xs:2px; --radius-sm:4px; --radius-md:6px; --radius-lg:8px;
   --radius-xl:12px; --radius-full:999px;
-  --radius-control:var(--radius-full); --radius-card:24px; --radius-overlay:24px;
-  --radius-panel:24px; --radius-pill:var(--radius-full);
+  --radius-control:8px; --radius-card:10px; --radius-panel:10px;
+  --radius-overlay:16px; --radius-pill:var(--radius-full);
 
   --shadow-xs:0 1px 2px rgba(28,26,23,0.05);
   --shadow-sm:0 1px 2px rgba(28,26,23,0.06),0 1px 1px rgba(28,26,23,0.04);

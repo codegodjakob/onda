@@ -59,18 +59,28 @@ if (ideen) {
 // --- Die Gestalt-Ergebnisse lesen --------------------------------------------
 let bestanden = new Set()
 try {
-  const ergebnisse = JSON.parse(readFileSync(resolve(hier, '../results/fertigzustand-latest.json'), 'utf8'))
-  const sammle = knoten => {
-    if (Array.isArray(knoten)) { knoten.forEach(sammle); return }
-    if (!knoten || typeof knoten !== 'object') return
-    if (typeof knoten.id === 'string' && knoten.status === 'passed') bestanden.add(knoten.id)
-    Object.values(knoten).forEach(sammle)
-  }
-  sammle(ergebnisse)
+  // Der Fertigzustandsläufer schreibt das Gestalt-Protokoll vor diesem Prozess-Tor.
+  // Es ist damit der aktuelle Lauf. Die aggregierte JSON-Datei wird erst nach allen
+  // Prüfungen geschrieben und wäre hier zwangsläufig der veraltete vorige Lauf.
+  const protokoll = readFileSync(resolve(hier, '../results/laeufe/evals-pruefungen-gestalt-mjs.log'), 'utf8')
+  for (const treffer of protokoll.matchAll(/^ok\s+(DESIGN-\d+)\b/gm)) bestanden.add(treffer[1])
 } catch {
-  // Kein Ergebnisstand vorhanden: dann ist noch nichts umgesetzt, und das Tor hat
-  // nichts zu pruefen. Das ist kein Fehlschlag.
-  bestanden = new Set()
+  // Außerhalb des Fertigzustandsläufers bleibt der letzte Gesamtstand ein
+  // sinnvoller Rückfall, beispielsweise für eine gezielte lokale Prüfung.
+  try {
+    const ergebnisse = JSON.parse(readFileSync(resolve(hier, '../results/fertigzustand-latest.json'), 'utf8'))
+    const sammle = knoten => {
+      if (Array.isArray(knoten)) { knoten.forEach(sammle); return }
+      if (!knoten || typeof knoten !== 'object') return
+      if (typeof knoten.id === 'string' && knoten.status === 'passed') bestanden.add(knoten.id)
+      Object.values(knoten).forEach(sammle)
+    }
+    sammle(ergebnisse)
+  } catch {
+    // Kein Ergebnisstand vorhanden: dann ist noch nichts umgesetzt, und das Tor hat
+    // nichts zu prüfen. Die Gegenprobe unten macht einen stillen Erfolg unmöglich.
+    bestanden = new Set()
+  }
 }
 
 // --- Die eigentliche Pruefung -------------------------------------------------

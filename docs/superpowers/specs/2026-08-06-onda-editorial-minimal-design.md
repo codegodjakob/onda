@@ -44,6 +44,7 @@ Die unverwechselbare Signatur bleibt die **fundstellengenaue Anmerkung**: Eine S
 
 | Rolle | Radius | Tiefe | Beispiele |
 |---|---:|---|---|
+| Grundfläche oder Listenzeile | 0 px | keine | App-Rahmen, Dokument- und Strukturzeile |
 | kleine strukturierende Fläche | 8 px | keine | Navigationseintrag, Zeile, Werkzeuggruppe |
 | größere statische Fläche | 10 px | keine oder feine Kontur | Projektzeile, Verständnisblock, Seitenbereich |
 | echtes Overlay | 16 px | weicher, kurzer Schatten | Dialog, Menü, Popover, schwebende Anmerkung |
@@ -57,7 +58,7 @@ Schatten sind keine allgemeine Flächendekoration. Sie werden nur dort eingesetz
 - Seitenleiste und Hauptbereich bilden einen zusammenhängenden Raum; die Trennung erfolgt über eine feine vertikale Linie.
 - Der Hauptbereich verliert den Eindruck einer großen abgerundeten Karte.
 - Aktive Navigation erhält eine kompakte, 8 px gerundete Fläche statt einer breiten Pille.
-- Projekt- und Dokumentzeilen werden flacher, niedriger und mit 8–10 px Radius dargestellt.
+- Projekt- und Dokumentzeilen werden als flache, eckige Listen mit einer einzelnen Haarlinie dargestellt.
 - Die primäre Aktion „Neu“ bleibt klar erkennbar, wird aber zu einem kompakten Button mit 8 px Radius.
 - Aura-Punkte erscheinen nur an Stellen mit realer KI-Bedeutung und nicht als symmetrische Zierde.
 

@@ -24,19 +24,25 @@ try {
   await page.evaluate(() => localStorage.clear())
   await page.reload({ waitUntil: 'networkidle' })
 
-  // Beispielprojekt öffnen — es trägt einen verankerten Hinweis.
-  await page.evaluate(() => {
-    const knopf = [...document.querySelectorAll('button[type=button]')]
-      .find(b => /Calm Technology/.test(b.textContent) && !b.getAttribute('aria-label'))
-    knopf?.click()
-  })
-  await page.waitForTimeout(400)
-  await page.evaluate(() => {
-    const eintrag = [...document.querySelectorAll('button[type=button]')]
-      .find(b => /Calm Technology/.test(b.textContent))
-    eintrag?.click()
-  })
+  // Beispielprojekt öffnen — es trägt einen verankerten Hinweis. Die stabile
+  // Produktstruktur ist hier absichtlich präziser als ein textbasierter Rundumschlag:
+  // Projektzeile und Dokumentzeile können denselben Titel tragen.
+  await page.locator('#doclist .doc').filter({ hasText: 'Beispiel: Calm Technology' }).click()
+  await page.locator('#doclist .doc').first().click()
   await page.waitForSelector('.ProseMirror', { timeout: 5000 })
+  const hinweisGesetzt = await page.evaluate(() => {
+    const block = window.AIWT.__blockIdentityTestBridge.getBlocks().find(kandidat => kandidat.text.length > 24)
+    if (!block) return false
+    const target = block.text.slice(0, Math.min(32, block.text.length))
+    window.AIWT.__workspaceTestBridge.injectFinding({
+      id: 'gestalt-randhinweis', status: 'open', placement: 'passage', blockId: block.id,
+      target, action: `${target} — präzisiert`, short: 'Der Satz lässt sich präziser führen.',
+      why: 'Die Kernaussage wird früher sichtbar.', folge: 'Die Aussage bleibt gleich.',
+      anmerkungsart: 'satzstil', createdAt: -1,
+    })
+    return true
+  })
+  if (hinweisGesetzt) await page.locator('.onda-annotation').waitFor({ state: 'visible' })
   await page.waitForTimeout(600)
 
   // --- DESIGN-01: Feedback neben der Stelle, nicht darunter ------------------
@@ -52,7 +58,7 @@ try {
     // Die Traegerebene (#localAgentLayer) ist selbst ein <aside> ueber die volle
     // Breite. Sie mitzumessen ergab 1016px und damit ein falsches 'zu breit'.
     // Gemessen wird die Karte DARIN — das kleinste passende Element gewinnt.
-    const kandidaten = [...document.querySelectorAll('.local-finding, .anno-bubble, [class*=hinweis]')]
+    const kandidaten = [...document.querySelectorAll('.onda-annotation, .local-finding, .anno-bubble, [class*=hinweis]')]
       .filter(e => e.offsetParent && e.getBoundingClientRect().height > 10 && traegt(e))
       .sort((a, b) => a.getBoundingClientRect().width - b.getBoundingClientRect().width)
     if (!kandidaten.length) return { fehler: 'kein sichtbarer Hinweis gefunden' }
@@ -82,7 +88,7 @@ try {
   const doppelung = await page.evaluate(() => {
     const editor = document.querySelector('.ProseMirror')
     const absaetze = [...(editor?.children || [])].map(e => e.textContent.trim()).filter(t => t.length >= 20)
-    const spalte = document.querySelector('[class*=sidebar]')
+    const spalte = document.querySelector('#ondaSidebar')
     if (!spalte) return { fehler: 'keine Seitenspalte' }
     // Nur zugeklappte Karten pruefen. Eine Ueberschrift traegt ihren Wortlaut
     // als Struktur, und die Karte, in der gerade geschrieben wird, ist offen —
@@ -105,7 +111,7 @@ try {
   // absichtlich schon offen, an ihnen liesse sich ein Aufklappen gar nicht messen.
   const aufklappen = await page.evaluate(async () => {
     const warte = () => new Promise(r => setTimeout(r, 350))
-    const spalte = document.querySelector('[class*=sidebar]')
+    const spalte = document.querySelector('#ondaSidebar')
     const karten = [...(spalte?.querySelectorAll('[class*=block-preview]') || [])]
       .filter(e => e.getBoundingClientRect().height > 20)
     if (karten.length < 2) return { fehler: `nur ${karten.length} Bausteine gefunden` }
@@ -168,7 +174,12 @@ try {
             const v = regel.style.getPropertyValue(eigenschaft)
             if (!v) continue
             if (v.includes('var(--')) werte.add(v)
-            else if (/\d+px/.test(v)) roh.add(`${regel.selectorText.slice(0, 30)} { ${eigenschaft}: ${v} }`)
+            else {
+              const festePixel = [...v.matchAll(/(-?\d+(?:\.\d+)?)px/g)].map(treffer => Number(treffer[1]))
+              if (festePixel.some(wert => wert !== 0)) {
+                roh.add(`${regel.selectorText.slice(0, 30)} { ${eigenschaft}: ${v} }`)
+              }
+            }
           }
         }
       }

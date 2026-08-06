@@ -5,8 +5,8 @@
   min-width: 0;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: 10px;
-  padding: 10px;
+  gap: 0;
+  padding: 0;
   overflow: hidden;
   background: var(--bg-app);
 }
@@ -23,7 +23,8 @@
   display: none;
   grid-template-rows: auto auto minmax(0, 1fr) auto;
   gap: var(--space-6);
-  padding: var(--space-4) var(--space-3) var(--space-3);
+  padding: var(--space-5) var(--space-4) var(--space-4);
+  border-right: 1px solid var(--border-subtle);
 }
 
 body.view-home .onda-library-sidebar { display: grid; }
@@ -50,7 +51,7 @@ body.view-home .onda-library-sidebar { display: grid; }
 .onda-library-nav__item,
 .onda-library-recent__item {
   width: 100%;
-  min-height: 40px;
+  min-height: 44px;
   display: flex;
   align-items: center;
   padding: var(--space-2) var(--space-4);
@@ -84,7 +85,7 @@ body.view-home .onda-library-sidebar { display: grid; }
 }
 
 .onda-library-recent__item {
-  min-height: 36px;
+  min-height: 44px;
   display: block;
   overflow: hidden;
   white-space: nowrap;
@@ -104,7 +105,7 @@ body.view-home #home {
   height: 100%;
   display: block;
   overflow-y: auto;
-  border-radius: var(--radius-panel);
+  border-radius: var(--radius-none);
   background: var(--bg-surface);
   -webkit-mask-image: none;
   mask-image: none;
@@ -139,7 +140,7 @@ body.view-home #home {
 .home-head__actions {
   display: flex;
   align-items: center;
-  gap: var(--space-4);
+  gap: var(--space-3);
 }
 
 .onda-primary-action {
@@ -202,7 +203,7 @@ body.view-home #home {
 #home #doclist {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-2);
+  gap: 0;
 }
 
 #home #doclist .doc {
@@ -213,13 +214,15 @@ body.view-home #home {
   align-items: center;
   gap: var(--space-3);
   margin: 0;
-  padding: var(--space-3) var(--space-5);
-  border-radius: var(--radius-card);
-  background: var(--surface-2);
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--border-subtle);
+  border-radius: var(--radius-none);
+  background: transparent;
+  box-shadow: none;
 }
 
 #home #doclist .doc:hover,
-#home #doclist .doc:focus-within { background: var(--surface-3); }
+#home #doclist .doc:focus-within { background: var(--bg-hover); }
 
 #home #doclist .doc-main {
   min-height: 42px;
@@ -260,7 +263,7 @@ body.view-editor #editorView {
   height: 100%;
   min-width: 0;
   display: flex;
-  gap: 10px;
+  gap: 0;
   overflow: hidden;
   background: transparent;
 }
@@ -268,7 +271,8 @@ body.view-editor #editorView {
 #editorView .onda-sidebar {
   width: var(--sidebar-width);
   height: 100%;
-  padding: var(--space-4) var(--space-3) var(--space-3);
+  padding: var(--space-5) var(--space-4) var(--space-4);
+  border-right: 1px solid var(--border-subtle);
 }
 
 .onda-project-nav {
@@ -288,9 +292,9 @@ body.view-editor #editorView {
 #editorView .onda-editor-col {
   --onda-topbar-h: var(--topbar-height);
   height: 100%;
-  border-radius: var(--radius-panel);
+  border-radius: var(--radius-none);
   background: var(--bg-surface);
-  box-shadow: var(--shadow-xs);
+  box-shadow: none;
 }
 
 #editorView .onda-topbar {
@@ -346,7 +350,7 @@ body.view-editor #editorView {
 }
 
 @media (max-width: 800px) {
-  .onda-app-shell { padding: var(--space-2); gap: var(--space-2); }
+  .onda-app-shell { padding: 0; gap: 0; }
 
   body.view-home .onda-app-shell { grid-template-columns: minmax(0, 1fr); }
   body.view-home .onda-library-sidebar { display: none; }
@@ -358,7 +362,8 @@ body.view-editor #editorView {
 
   #editorView .onda-sidebar {
     height: 100%;
-    border-radius: var(--radius-panel);
+    border-right: 1px solid var(--border-subtle);
+    border-radius: 0 var(--radius-overlay) var(--radius-overlay) 0;
   }
 
   #editorView #scroll { padding-inline: var(--space-6); }
@@ -366,9 +371,9 @@ body.view-editor #editorView {
 }
 
 @media (max-width: 560px) {
-  .onda-app-shell { padding: var(--space-1); gap: var(--space-1); }
+  .onda-app-shell { padding: 0; gap: 0; }
 
-  #home { border-radius: var(--radius-xl); }
+  #home { border-radius: var(--radius-none); }
   #homeInner { padding: var(--space-7) var(--space-4) var(--space-10); }
 
   .home-head { align-items: flex-start; margin-bottom: var(--space-7); }
@@ -382,7 +387,7 @@ body.view-editor #editorView {
   #home #doclist .doc {
     min-height: 76px;
     padding: var(--space-4);
-    border-radius: var(--radius-xl);
+    border-radius: var(--radius-none);
   }
 
   #home #doclist .doc-main {
@@ -398,8 +403,8 @@ body.view-editor #editorView {
   }
   #home #doclist .doc-status { display: none; }
 
-  #editorView { gap: var(--space-1); }
-  #editorView .onda-editor-col { border-radius: var(--radius-xl); }
+  #editorView { gap: 0; }
+  #editorView .onda-editor-col { border-radius: var(--radius-none); }
   #editorView .onda-topbar { padding-inline: var(--space-3); }
   #editorView #scroll { padding-inline: var(--space-5); }
   #editorView #page { padding-top: var(--space-8); }

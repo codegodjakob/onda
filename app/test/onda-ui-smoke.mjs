@@ -155,16 +155,18 @@ async function runShell(browser) {
   assert.equal(await page.locator('main').count(), 1, 'Die App braucht genau einen Hauptbereich')
   assert.equal(await page.locator('.onda-app-shell').count(), 1, 'Die gemeinsame Onda-Shell fehlt')
   assert.equal(await page.getByRole('navigation', { name: 'Bibliothek' }).isVisible(), true)
-  assert.equal(await page.locator('#home .onda-aura').isVisible(), true)
+  assert.equal(await page.locator('#home .onda-aura').count(), 0, 'Die Bibliothek darf keine dekorative Aura tragen')
+  assert.equal(await page.locator('#ondaAura').count(), 1, 'Es darf genau einen KI-Einstieg mit Aura geben')
 
   await page.locator('#doclist .doc').filter({ hasText: 'Beispiel: Calm Technology' }).click()
   await page.locator('#doclist .doc').first().click()
   assert.equal(await page.getByRole('navigation', { name: 'Projekt' }).isVisible(), true)
+  assert.equal(await page.locator('#ondaAura').isVisible(), true, 'Der KI-Einstieg muss im Editor sichtbar sein')
 
   const editorWidth = await page.locator('#editor .ProseMirror').evaluate(node => node.getBoundingClientRect().width)
   assert.ok(editorWidth >= 640 && editorWidth <= 680, `Die Schreibspalte ist ${editorWidth}px statt 640–680px breit`)
   assert.equal(await page.locator('#title').evaluate(node => getComputedStyle(node).fontSize), '40px')
-  assert.equal(await page.locator('.onda-editor-col').evaluate(node => getComputedStyle(node).borderTopRightRadius), '24px')
+  assert.equal(await page.locator('.onda-editor-col').evaluate(node => getComputedStyle(node).borderTopRightRadius), '0px')
 
   if (screenshots) {
     const directory = resolve(appRoot, 'evals/results/screenshots')
@@ -183,6 +185,24 @@ async function runShell(browser) {
     await page.setViewportSize({ width: 320, height: 760 })
     await page.screenshot({ path: resolve(directory, 'onda-library-320.png'), fullPage: true })
     await page.locator('#doclist .doc').first().click()
+
+    await page.evaluate(() => { document.documentElement.dataset.theme = 'dark' })
+    for (const width of [1440, 320]) {
+      await page.setViewportSize({ width, height: 1000 })
+      if (width === 1440) await ensureProjectSidebarOpen(page)
+      await page.locator('#editorView').evaluate(async node => {
+        await Promise.all(node.getAnimations({ subtree: true }).map(animation => animation.finished.catch(() => {})))
+      })
+      await page.screenshot({ path: resolve(directory, `onda-editor-dark-${width}.png`), fullPage: true })
+    }
+    await page.setViewportSize({ width: 1280, height: 900 })
+    await ensureProjectSidebarOpen(page)
+    await page.getByRole('button', { name: 'Zur Projektübersicht' }).click()
+    await page.screenshot({ path: resolve(directory, 'onda-library-dark-1280.png'), fullPage: true })
+    await page.setViewportSize({ width: 320, height: 760 })
+    await page.screenshot({ path: resolve(directory, 'onda-library-dark-320.png'), fullPage: true })
+    await page.locator('#doclist .doc').first().click()
+    await page.evaluate(() => { document.documentElement.dataset.theme = 'light' })
   }
 
   await page.setViewportSize({ width: 320, height: 760 })
@@ -197,7 +217,7 @@ async function runShell(browser) {
   await page.close()
 }
 
-async function assertOndaSurface(locator, name, { rounded = true } = {}) {
+async function assertOndaSurface(locator, name, { radius = '0px' } = {}) {
   const contract = await locator.evaluate(node => {
     const style = getComputedStyle(node)
     return {
@@ -208,11 +228,19 @@ async function assertOndaSurface(locator, name, { rounded = true } = {}) {
   })
   assert.match(contract.fontFamily, /ABC Diatype/, `${name} verwendet nicht ABC Diatype`)
   assert.ok(['400', '500', '700'].includes(contract.fontWeight), `${name} verwendet Gewicht ${contract.fontWeight}`)
-  if (rounded) assert.equal(contract.radius, '24px', `${name} verwendet Radius ${contract.radius}`)
+  assert.equal(contract.radius, radius, `${name} verwendet Radius ${contract.radius}`)
 }
 
 async function runSurfaces(browser) {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } })
+  const screenshotDirectory = resolve(appRoot, 'evals/results/screenshots')
+  if (screenshots) await mkdir(screenshotDirectory, { recursive: true })
+  const captureSurface = async filename => {
+    await page.locator('body').evaluate(async node => {
+      await Promise.all(node.getAnimations({ subtree: true }).map(animation => animation.finished.catch(() => {})))
+    })
+    await page.screenshot({ path: resolve(screenshotDirectory, filename), fullPage: true })
+  }
   await page.goto(baseUrl, { waitUntil: 'networkidle' })
   await page.evaluate(() => localStorage.clear())
   await page.reload({ waitUntil: 'networkidle' })
@@ -221,24 +249,28 @@ async function runSurfaces(browser) {
   await page.locator('#doclist .doc').filter({ hasText: 'Beispiel: Calm Technology' }).click()
   await page.locator('#doclist .doc').first().click()
   await assertOndaSurface(page.locator('.onda-editor-col'), 'Schreibblatt')
-  await assertOndaSurface(page.locator('.onda-sidebar'), 'Projektnavigation', { rounded: false })
+  await assertOndaSurface(page.locator('.onda-sidebar'), 'Projektnavigation')
 
   await page.getByRole('button', { name: 'KI-Anschluss einrichten' }).click()
-  await assertOndaSurface(page.locator('#kiModal'), 'KI-Anschluss')
+  await assertOndaSurface(page.locator('#kiModal'), 'KI-Anschluss', { radius: '16px' })
+  if (screenshots) await captureSurface('onda-overlay-ki.png')
   await page.locator('#kiModal').getByRole('button', { name: 'Schließen' }).click()
 
   await page.getByRole('button', { name: 'Agentengespräch öffnen' }).click()
-  await assertOndaSurface(page.locator('#agentWidget'), 'Agentengespräch')
+  await assertOndaSurface(page.locator('#agentWidget'), 'Agentengespräch', { radius: '16px' })
+  if (screenshots) await captureSurface('onda-overlay-agent.png')
   await page.locator('#agentWidget').getByRole('button', { name: /schließen/i }).click()
 
   await page.locator('#pvCard').click()
   await page.locator('#argumentOpen').click()
-  await assertOndaSurface(page.locator('#argumentModal'), 'Argumentationsdossier')
+  await assertOndaSurface(page.locator('#argumentModal'), 'Argumentationsdossier', { radius: '16px' })
+  if (screenshots) await captureSurface('onda-overlay-argument.png')
   await page.locator('#argumentModal').getByRole('button', { name: 'Schließen' }).click()
 
   await page.locator('#pvCard').click()
   await page.locator('#auditOpen').click()
-  await assertOndaSurface(page.locator('#auditModal'), 'Schlussaudit')
+  await assertOndaSurface(page.locator('#auditModal'), 'Schlussaudit', { radius: '16px' })
+  if (screenshots) await captureSurface('onda-overlay-audit.png')
   await page.locator('#auditModal').getByRole('button', { name: 'Schließen' }).click()
   await page.close()
 }

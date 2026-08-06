@@ -29,7 +29,7 @@ echo "— Pflicht-Tor 2: Selbsttest …"
 echo "— kopiere Oberfläche …"
 mkdir -p "$APP/Contents/Resources/src" "$APP/Contents/Resources/dist" "$APP/Contents/Resources/fonts"
 cp ../app/index.html "$APP/Contents/Resources/index.html"
-cp ../app/src/style.css "$APP/Contents/Resources/src/style.css"
+cp ../app/src/*.css "$APP/Contents/Resources/src/"
 cp ../app/dist/editor.bundle.js "$APP/Contents/Resources/dist/editor.bundle.js"
 cp ../app/fonts/*.woff2 "$APP/Contents/Resources/fonts/"
 
