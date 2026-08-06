@@ -3,8 +3,8 @@
   "catalogVersion": "2026-08-05.3",
   "stage": "FERTIGZUSTAND",
   "iteration": 3,
-  "generatedAt": "2026-08-06T19:58:57.565Z",
-  "gitCommit": "30173563deb4b29ee83ace0e58898ec880d3ff47",
+  "generatedAt": "2026-08-06T20:10:17.415Z",
+  "gitCommit": "ecfa356b6381092e242b8b323cdc1bd4520a0a48",
   "rubricScores": {
     "truth": 5,
     "authorship": 5,
@@ -4878,7 +4878,7 @@
       "id": "ONDA-UI-18",
       "status": "external-open",
       "evidence": [],
-      "note": "Der bereits hinterlegte Schlüssel wird ausschließlich über den nativen Status- und Transportpfad für einen minimalen schema-validierten Lauf verwendet; sein Wert wird nie gelesen oder protokolliert."
+      "note": "Auf ausdrücklichen Nutzerwunsch ist kein Schlüssel gespeichert; der reale native Providerlauf bleibt deshalb bewusst unausgeführt. Falls später erneut ein Schlüssel hinterlegt wird, darf sein Wert dabei nie gelesen oder protokolliert werden."
     },
     {
       "id": "ONDA-UI-19",
