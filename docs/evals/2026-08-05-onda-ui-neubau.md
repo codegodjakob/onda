@@ -75,6 +75,8 @@ Die bisherigen ausdrücklich freigegebenen Live-Versuche erreichten keine Schema
 
 Der dauerhafte Korrekturpfad verwendet deshalb keine veraltete ACL-API. Nach genau einer erlaubten Leseoperation kopiert die signierte App den Schlüssel unter den neuen Service `Onda.signiert.v1`, liest die Kopie zur Verifikation zurück und entfernt erst danach den alten Eintrag. macOS erzeugt die neue ACL aus der stabilen Designated Requirement der mit `Onda Dev` signierten App. Zusätzlich bricht der Release-Bau hart ab, falls diese Signieridentität fehlt; ein stiller Rückfall auf eine wechselnde ad-hoc-Signatur ist ausgeschlossen. ONDA-UI-18 bleibt bis zur einmaligen Migration und einer anschließenden Schemaantwort offen.
 
+Für die einmalige Übernahme besitzt die native App den separaten Modus `--keychain-migrate`. Er führt keinen Modell- oder Netzwerkaufruf aus und besitzt bewusst keine kurze Probe-Frist: Der macOS-Dialog kann in Ruhe bestätigt werden, bevor ein späterer, getrennt gezählter Live-Eval beginnt.
+
 ## Belege
 
 - Qualitative Rubrik: `app/evals/onda-ui-rubric.json`

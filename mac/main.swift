@@ -287,6 +287,10 @@ enum Keychain {
         query[kSecReturnAttributes as String] = true
         return SecItemCopyMatching(query as CFDictionary, nil) == errSecSuccess
     }
+
+    static func signierterEintragVorhanden() -> Bool {
+        existiert(service: service, account: account)
+    }
 }
 
 // MARK: - Selbsttest (läuft ohne Fenster, prüft die Speicherschicht)
@@ -984,6 +988,11 @@ extension AppDelegate {
 
 let args = CommandLine.arguments
 if args.contains("--selftest") { runSelfTest() }
+if args.contains("--keychain-migrate") {
+    let migriert = Keychain.lesen() != nil && Keychain.signierterEintragVorhanden()
+    print(migriert ? "KEYCHAIN MIGRATION OK" : "KEYCHAIN MIGRATION FAILED")
+    exit(migriert ? 0 : 2)
+}
 
 var probePath: String? = nil
 if let i = args.firstIndex(of: "--probe"), i + 1 < args.count { probePath = args[i + 1] }

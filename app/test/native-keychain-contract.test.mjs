@@ -22,3 +22,13 @@ test('ein bestehender Schlüssel wandert nach der einmaligen Freigabe sicher in 
   assert.match(swift, /roh\(service: service, account: account\) != nil/)
   assert.match(swift, /SecItemDelete\(basisAbfrage\(service: fruehererService/)
 })
+
+test('die einmalige Migration besitzt einen eigenen Modus ohne Netzaufruf oder Kurz-Timeout', () => {
+  assert.match(swift, /--keychain-migrate/)
+  assert.match(swift, /KEYCHAIN MIGRATION OK/)
+  assert.match(swift, /signierterEintragVorhanden/)
+  const migrationStart = swift.indexOf('if args.contains("--keychain-migrate")')
+  const appStart = swift.indexOf('let app = NSApplication.shared')
+  const migrationBlock = swift.slice(migrationStart, appStart)
+  assert.doesNotMatch(migrationBlock, /handleLlm|URLSession|asyncAfter|timeout/)
+})
