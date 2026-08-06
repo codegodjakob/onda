@@ -5,6 +5,7 @@ releases/
 mac/AppIcon.iconset/
 .DS_Store
 .superpowers/
+.worktrees/
 
 # Eval-Laufprotokolle: bei jedem Messlauf neu erzeugt
 app/evals/results/laeufe/
