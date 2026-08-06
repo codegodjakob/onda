@@ -7,7 +7,9 @@ import {
   PHASE_DEFINITIONS,
   PLUGIN_ORIGIN,
   RADIUS_TOKENS,
+  SEMANTIC_COLOR_ROLES,
   SECTION_DEFINITIONS,
+  SPACING_TOKENS,
   TARGET_DOCUMENT_NAME,
   TARGET_FILE_KEY,
   TARGET_PAGE_NAME,
@@ -101,6 +103,218 @@ export function foundationSwatchLabelToken(layer, paintToken) {
     collectionName,
     variableName: darkSemantic === darkPaint ? 'color/text' : 'color/on-inverted',
   }
+}
+
+function foundationTokenSlug(value) {
+  return value.replaceAll(' · ', '-').replaceAll('/', '-').replaceAll(' ', '-').toLowerCase()
+}
+
+export function foundationCodeSyntax(collectionName, variableName) {
+  const prefix = {
+    'Onda · Primitive': 'primitive',
+    'Onda · Dimension': 'dimension',
+    'Onda · Semantic · Light': 'semantic-light',
+    'Onda · Semantic · Dark': 'semantic-dark',
+    'Onda · Typography': 'typography',
+  }[collectionName]
+  if (!prefix) throw new Error(`Unbekannte Foundation-Collection: ${collectionName}`)
+  return `var(--${prefix}-${foundationTokenSlug(variableName)})`
+}
+
+export function foundationVariableDefinitions() {
+  const definitions = []
+  function add(collectionName, modeName, name, resolvedType, scopes, value) {
+    definitions.push({
+      collectionName,
+      modeName,
+      name,
+      resolvedType,
+      scopes: [...scopes],
+      codeSyntax: foundationCodeSyntax(collectionName, name),
+      value,
+    })
+  }
+  for (const [name, value] of Object.entries(PALETTE)) add('Onda · Primitive', 'Value', name, 'COLOR', [], value)
+  for (const role of SEMANTIC_COLOR_ROLES) {
+    add('Onda · Semantic · Light', 'Light', role.name, 'COLOR', role.scopes, { alias: ['Onda · Primitive', role.light] })
+    add('Onda · Semantic · Dark', 'Dark', role.name, 'COLOR', role.scopes, { alias: ['Onda · Primitive', role.dark] })
+  }
+  for (const token of SPACING_TOKENS) add('Onda · Dimension', 'Value', token.name, 'FLOAT', ['GAP'], token.value)
+  for (const token of RADIUS_TOKENS) add('Onda · Dimension', 'Value', token.name, 'FLOAT', ['CORNER_RADIUS'], token.value)
+  for (const scale of TYPE_SCALE) add('Onda · Typography', 'Value', `font-size/${scale.size}`, 'FLOAT', ['FONT_SIZE'], scale.size)
+  for (const weight of TYPE_WEIGHTS) add('Onda · Typography', 'Value', `font-weight/${weight}`, 'FLOAT', ['FONT_WEIGHT'], weight)
+  return definitions
+}
+
+function sameArray(actual, expected) {
+  return Array.isArray(actual)
+    && actual.length === expected.length
+    && actual.every((value, index) => value === expected[index])
+}
+
+function sameObject(actual, expected) {
+  if (!actual || typeof actual !== 'object' || Array.isArray(actual)) return false
+  const actualKeys = Object.keys(actual).sort()
+  const expectedKeys = Object.keys(expected).sort()
+  return sameArray(actualKeys, expectedKeys)
+    && actualKeys.every(key => {
+      const left = actual[key]
+      const right = expected[key]
+      return right && typeof right === 'object' ? sameObject(left, right) : left === right
+    })
+}
+
+function strictSingle(items, predicate, errors, label) {
+  const matching = items.filter(predicate)
+  if (matching.length !== 1) errors.push(`${label}: erwartet 1, gefunden ${matching.length}`)
+  return matching.length === 1 ? matching[0] : null
+}
+
+export function validateFoundationEvidence(evidence = {}) {
+  const errors = []
+  const collections = Array.isArray(evidence.collections) ? evidence.collections : []
+  const variables = Array.isArray(evidence.variables) ? evidence.variables : []
+  const expectedCollections = Object.entries(FOUNDATION_EXPECTATIONS.collections)
+  if (collections.length !== expectedCollections.length) errors.push(`Collections: erwartet ${expectedCollections.length}, gefunden ${collections.length}`)
+  const collectionByName = new Map()
+  for (const [name, expectation] of expectedCollections) {
+    const collection = strictSingle(collections, item => item.name === name, errors, `Collection ${name}`)
+    if (!collection) continue
+    collectionByName.set(name, collection)
+    if (collection.owner !== PLUGIN_ORIGIN) errors.push(`Collection ${name}: owner`)
+    if (!Array.isArray(collection.modes) || collection.modes.length !== 1 || collection.modes[0].name !== expectation.mode) errors.push(`Collection ${name}: mode`)
+  }
+  if (new Set(collections.map(item => item.id)).size !== collections.length) errors.push('Collections: duplicate ids')
+
+  const definitions = foundationVariableDefinitions()
+  if (variables.length !== definitions.length) errors.push(`Variables: erwartet ${definitions.length}, gefunden ${variables.length}`)
+  if (new Set(variables.map(item => item.id)).size !== variables.length) errors.push('Variables: duplicate ids')
+  const variableByKey = new Map()
+  for (const definition of definitions) {
+    const key = `${definition.collectionName}\u0000${definition.name}`
+    const variable = strictSingle(variables, item => `${item.collectionName}\u0000${item.name}` === key, errors, `Variable ${definition.collectionName}/${definition.name}`)
+    if (!variable) continue
+    variableByKey.set(key, variable)
+    const collection = collectionByName.get(definition.collectionName)
+    if (variable.collectionId !== collection?.id) errors.push(`Variable ${key}: collection id`)
+    if (variable.owner !== PLUGIN_ORIGIN) errors.push(`Variable ${key}: owner`)
+    if (variable.resolvedType !== definition.resolvedType) errors.push(`Variable ${key}: type`)
+    if (!sameArray([...(variable.scopes || [])].sort(), [...definition.scopes].sort())) errors.push(`Variable ${key}: scopes`)
+    if (variable.codeSyntax?.WEB !== definition.codeSyntax) errors.push(`Variable ${key}: code syntax`)
+    if (variable.modeId !== collection?.modes?.[0]?.modeId) errors.push(`Variable ${key}: mode id`)
+    if (definition.value?.alias) {
+      const aliasKey = `${definition.value.alias[0]}\u0000${definition.value.alias[1]}`
+      const expectedAlias = variables.find(item => `${item.collectionName}\u0000${item.name}` === aliasKey)
+      if (variable.value?.type !== 'VARIABLE_ALIAS' || variable.value.id !== expectedAlias?.id) errors.push(`Variable ${key}: alias`)
+    } else if (typeof definition.value === 'object') {
+      if (!sameObject(variable.value, definition.value)) errors.push(`Variable ${key}: value`)
+    } else if (variable.value !== definition.value) errors.push(`Variable ${key}: value`)
+  }
+
+  function variableId(collectionName, name) {
+    return variableByKey.get(`${collectionName}\u0000${name}`)?.id
+  }
+  const expectedSwatches = []
+  for (const name of Object.keys(PALETTE)) {
+    const labelToken = foundationSwatchLabelToken('primitive', name)
+    expectedSwatches.push({
+      name: `Swatch / ${name}`,
+      parentName: 'Foundations / Graustufen',
+      variableId: variableId('Onda · Primitive', name),
+      labelName: `Swatch / ${name} / Label`,
+      labelVariableId: variableId(labelToken.collectionName, labelToken.variableName),
+    })
+  }
+  for (const [collectionName, layer, valueKey, parentName] of [
+    ['Onda · Semantic · Light', 'semantic-light', 'light', 'Foundations / Semantic Light'],
+    ['Onda · Semantic · Dark', 'semantic-dark', 'dark', 'Foundations / Semantic Dark'],
+  ]) {
+    for (const role of SEMANTIC_COLOR_ROLES) {
+      const name = `Swatch / ${layer} / ${role.name}`
+      const labelToken = foundationSwatchLabelToken(layer, role[valueKey])
+      expectedSwatches.push({
+        name,
+        parentName,
+        variableId: variableId(collectionName, role.name),
+        labelName: `${name} / Label`,
+        labelVariableId: variableId(labelToken.collectionName, labelToken.variableName),
+      })
+    }
+  }
+  const swatches = Array.isArray(evidence.swatches) ? evidence.swatches : []
+  if (swatches.length !== expectedSwatches.length) errors.push(`Swatches: erwartet ${expectedSwatches.length}, gefunden ${swatches.length}`)
+  if (new Set(swatches.map(item => item.nodeId)).size !== swatches.length) errors.push('Swatches: duplicate node ids')
+  for (const expected of expectedSwatches) {
+    const swatch = strictSingle(swatches, item => item.name === expected.name, errors, `Swatch ${expected.name}`)
+    if (!swatch) continue
+    if (swatch.type !== 'FRAME' || swatch.parentName !== expected.parentName) errors.push(`Swatch ${expected.name}: structure`)
+    if (swatch.fillVariableId !== expected.variableId) errors.push(`Swatch ${expected.name}: fill binding`)
+    if (swatch.labelName !== expected.labelName || swatch.labelFillVariableId !== expected.labelVariableId) errors.push(`Swatch ${expected.name}: label binding`)
+  }
+
+  const spacingBars = Array.isArray(evidence.spacingBars) ? evidence.spacingBars : []
+  if (spacingBars.length !== SPACING_TOKENS.length) errors.push(`Spacing: erwartet ${SPACING_TOKENS.length}, gefunden ${spacingBars.length}`)
+  if (new Set(spacingBars.map(item => item.nodeId)).size !== spacingBars.length) errors.push('Spacing: duplicate node ids')
+  for (const token of SPACING_TOKENS) {
+    const name = `Spacing Bar / ${token.value}`
+    const bar = strictSingle(spacingBars, item => item.name === name, errors, `Spacing ${name}`)
+    if (!bar) continue
+    if (bar.type !== 'RECTANGLE' || bar.parentName !== `Spacing / ${token.value}` || bar.containerName !== 'Foundations / Spacing') errors.push(`Spacing ${name}: structure`)
+    if (bar.width !== token.value) errors.push(`Spacing ${name}: value`)
+    if (bar.widthVariableId !== variableId('Onda · Dimension', token.name)) errors.push(`Spacing ${name}: binding`)
+  }
+
+  const radiusSamples = Array.isArray(evidence.radiusSamples) ? evidence.radiusSamples : []
+  if (radiusSamples.length !== RADIUS_TOKENS.length) errors.push(`Radius: erwartet ${RADIUS_TOKENS.length}, gefunden ${radiusSamples.length}`)
+  if (new Set(radiusSamples.map(item => item.nodeId)).size !== radiusSamples.length) errors.push('Radius: duplicate node ids')
+  for (const token of RADIUS_TOKENS) {
+    const name = `Radius / ${token.value}`
+    const sample = strictSingle(radiusSamples, item => item.name === name, errors, `Radius ${name}`)
+    if (!sample) continue
+    const tokenId = variableId('Onda · Dimension', token.name)
+    if (sample.type !== token.geometry || sample.parentName !== 'Foundations / Radien') errors.push(`Radius ${name}: structure`)
+    if (token.geometry === 'ELLIPSE') {
+      if (sample.width !== 112 || sample.height !== 112 || sample.boundVariableIds?.maxWidth !== tokenId || sample.boundVariableIds?.maxHeight !== tokenId) errors.push(`Radius ${name}: ellipse mapping`)
+    } else {
+      const fields = ['topLeftRadius', 'topRightRadius', 'bottomLeftRadius', 'bottomRightRadius']
+      if (sample.cornerRadius !== token.value || !fields.every(field => sample.boundVariableIds?.[field] === tokenId)) errors.push(`Radius ${name}: rectangle binding`)
+    }
+  }
+
+  const textStyles = Array.isArray(evidence.textStyles) ? evidence.textStyles : []
+  const textSpecimens = Array.isArray(evidence.textSpecimens) ? evidence.textSpecimens : []
+  if (textStyles.length !== FOUNDATION_EXPECTATIONS.textStyles.length) errors.push(`Text styles: erwartet ${FOUNDATION_EXPECTATIONS.textStyles.length}, gefunden ${textStyles.length}`)
+  if (textSpecimens.length !== FOUNDATION_EXPECTATIONS.textStyles.length) errors.push(`Text specimens: erwartet ${FOUNDATION_EXPECTATIONS.textStyles.length}, gefunden ${textSpecimens.length}`)
+  if (new Set(textStyles.map(item => item.id)).size !== textStyles.length) errors.push('Text styles: duplicate ids')
+  if (new Set(textSpecimens.map(item => item.nodeId)).size !== textSpecimens.length) errors.push('Text specimens: duplicate ids')
+  for (const definition of FOUNDATION_EXPECTATIONS.textStyles) {
+    const style = strictSingle(textStyles, item => item.name === definition.name, errors, `Text style ${definition.name}`)
+    const specimen = strictSingle(textSpecimens, item => item.name === `Typografie / ${definition.role}`, errors, `Text specimen ${definition.role}`)
+    if (!style) continue
+    const sizeId = variableId('Onda · Typography', `font-size/${definition.size}`)
+    const weightId = variableId('Onda · Typography', `font-weight/${definition.weight}`)
+    if (style.owner !== PLUGIN_ORIGIN) errors.push(`Text style ${definition.name}: owner`)
+    if (style.fontName?.family !== evidence.fontDecision?.family || style.fontName?.style !== evidence.fontDecision?.styles?.[definition.weight]) errors.push(`Text style ${definition.name}: font`)
+    if (style.fontSize !== definition.size || style.lineHeight?.unit !== 'PIXELS' || style.lineHeight?.value !== definition.lineHeight) errors.push(`Text style ${definition.name}: metrics`)
+    if (style.letterSpacing?.unit !== 'PIXELS' || style.letterSpacing?.value !== 0 || style.textCase !== 'ORIGINAL' || style.textDecoration !== 'NONE') errors.push(`Text style ${definition.name}: properties`)
+    if (style.boundVariableIds?.fontSize !== sizeId || style.boundVariableIds?.fontWeight !== weightId) errors.push(`Text style ${definition.name}: variable mapping`)
+    if (specimen && (specimen.type !== 'TEXT' || specimen.parentName !== 'Foundations / Typografie' || specimen.textStyleId !== style.id || specimen.boundVariableIds?.fontSize !== sizeId || specimen.boundVariableIds?.fontWeight !== weightId)) errors.push(`Text specimen ${definition.role}: link`)
+  }
+
+  const effectStyles = Array.isArray(evidence.effectStyles) ? evidence.effectStyles : []
+  const effectConsumers = Array.isArray(evidence.effectConsumers) ? evidence.effectConsumers : []
+  if (effectStyles.length !== 1) errors.push(`Effect styles: erwartet 1, gefunden ${effectStyles.length}`)
+  const overlay = strictSingle(effectStyles, item => item.name === 'Onda/Shadow/Overlay', errors, 'Overlay effect style')
+  if (overlay) {
+    if (overlay.owner !== PLUGIN_ORIGIN) errors.push('Overlay effect style: owner')
+    const effect = Array.isArray(overlay.effects) && overlay.effects.length === 1 ? overlay.effects[0] : null
+    if (!effect || effect.type !== 'DROP_SHADOW' || !sameObject(effect.color, { r: 0, g: 0, b: 0, a: 0.16 }) || !sameObject(effect.offset, { x: 0, y: 8 }) || effect.radius !== 24 || effect.spread !== 0 || effect.visible !== true || effect.blendMode !== 'NORMAL') errors.push('Overlay effect style: properties')
+    if (!effect || !isGrayColor(effect.color)) errors.push('Overlay effect style: monochrome')
+    if (effectConsumers.length !== 1) errors.push(`Overlay consumers: erwartet 1, gefunden ${effectConsumers.length}`)
+    const consumer = strictSingle(effectConsumers, item => item.name === 'Effect / Onda/Shadow/Overlay', errors, 'Overlay consumer')
+    if (consumer && (consumer.type !== 'FRAME' || consumer.parentName !== 'Foundations / Effects' || consumer.effectStyleId !== overlay.id || !sameArray(consumer.fields, ['effectStyleId']))) errors.push('Overlay consumer: invalid')
+  }
+  return { valid: errors.length === 0, errors }
 }
 
 export function protectedChildIds({ nodeType, children, baselineIds = new Set() }) {
@@ -342,29 +556,8 @@ export function buildVerificationReport(snapshot) {
     && componentSets.every(item => expectedComponentIds.has(item.id))
     && componentSets.every(item => item.variants >= 2 && item.autoLayout && item.bound)
   const foundation = snapshot.foundation || {}
-  const expectedEffectStyles = [...FOUNDATION_EXPECTATIONS.effectStyles]
-  const actualEffectStyles = Array.isArray(foundation.effectStyleNames) ? foundation.effectStyleNames : []
-  const foundationInventoryValid = foundation.collectionCount === Object.keys(FOUNDATION_EXPECTATIONS.collections).length
-    && foundation.variableCount === Object.values(FOUNDATION_EXPECTATIONS.collections).reduce((total, item) => total + item.variableCount, 0)
-    && foundation.missingCodeSyntax === 0
-    && foundation.invalidScopeCount === 0
-    && foundation.brokenAliasCount === 0
-    && foundation.primitiveSwatches === FOUNDATION_EXPECTATIONS.swatches.primitive
-    && foundation.semanticLightSwatches === FOUNDATION_EXPECTATIONS.swatches.semanticLight
-    && foundation.semanticDarkSwatches === FOUNDATION_EXPECTATIONS.swatches.semanticDark
-    && foundation.boundSwatches === FOUNDATION_EXPECTATIONS.swatches.bound
-    && foundation.spacingBars === FOUNDATION_EXPECTATIONS.spacingBars.total
-    && foundation.boundSpacingBars === FOUNDATION_EXPECTATIONS.spacingBars.bound
-    && foundation.radiusSamples === FOUNDATION_EXPECTATIONS.radiusSamples.total
-    && foundation.boundRadiusRectangles === FOUNDATION_EXPECTATIONS.radiusSamples.boundRectangles
-    && foundation.radiusEllipses === FOUNDATION_EXPECTATIONS.radiusSamples.ellipses
-    && foundation.textStyleCount === FOUNDATION_EXPECTATIONS.textStyles.length
-    && foundation.documentedTextStyles === FOUNDATION_EXPECTATIONS.textStyles.length
-    && actualEffectStyles.length === expectedEffectStyles.length
-    && expectedEffectStyles.every((name, index) => actualEffectStyles[index] === name)
-    && foundation.documentedEffectStyles === FOUNDATION_EXPECTATIONS.effectStyles.length
-    && Array.isArray(foundation.unexpectedShadowNodes)
-    && foundation.unexpectedShadowNodes.length === 0
+  const foundationStrict = validateFoundationEvidence(foundation)
+  const foundationInventoryValid = foundationStrict.valid
   const foundationValid = ['paintsValid', 'radiiValid', 'effectsValid', 'fontsValid', 'docsBound'].every(key => foundation[key] === true)
     && foundationInventoryValid
   const annotationViewsValid = snapshot.annotationViews
@@ -396,6 +589,7 @@ export function buildVerificationReport(snapshot) {
     repeatedScreenInstanceCount: Number(snapshot.repeatedScreenInstanceCount || 0),
     foundationValid,
     foundationInventoryValid,
+    foundationErrors: foundationStrict.errors,
     intersections: snapshot.intersections || [],
     clearance: Number(snapshot.clearance ?? 0),
     overflowNodes: snapshot.overflowNodes || [],

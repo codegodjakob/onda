@@ -18,6 +18,7 @@ import {
   DIALOG_FAMILIES,
   SECTION_DEFINITIONS,
 } from '../src/definitions.mjs'
+import { createValidFoundationEvidence } from './foundation-fixture.mjs'
 
 const { foundationSwatchLabelToken, selectOwnedEntity } = planModule
 
@@ -111,16 +112,7 @@ function validSnapshot() {
     componentSets: COMPONENT_DEFINITIONS.map(component => ({ id: component.id, variants: 2, autoLayout: true, bound: true })),
     instanceCount: 20,
     repeatedScreenInstanceCount: 8,
-    foundation: {
-      paintsValid: true, radiiValid: true, effectsValid: true, fontsValid: true, docsBound: true,
-      collectionCount: 5, variableCount: 43, missingCodeSyntax: 0, invalidScopeCount: 0, brokenAliasCount: 0,
-      primitiveSwatches: 10, semanticLightSwatches: 7, semanticDarkSwatches: 7, boundSwatches: 24,
-      spacingBars: 7, boundSpacingBars: 7,
-      radiusSamples: 5, boundRadiusRectangles: 4, radiusEllipses: 1,
-      textStyleCount: 5, documentedTextStyles: 5,
-      effectStyleNames: ['Onda/Shadow/Overlay'], documentedEffectStyles: 1,
-      unexpectedShadowNodes: [],
-    },
+    foundation: createValidFoundationEvidence(),
     intersections: [],
     clearance: 2000,
     overflowNodes: [],
@@ -276,67 +268,19 @@ test('dark swatch label binding is preserved from the broad Light documentation 
   assert.match(runtime, /if \(!node\.getPluginData\('ondaFoundationTextVariableId'\)\)/)
 })
 
-test('verify rejects every incomplete foundation inventory metric', () => {
-  const foundation = {
-    paintsValid: true,
-    radiiValid: true,
-    effectsValid: true,
-    fontsValid: true,
-    docsBound: true,
-    collectionCount: 5,
-    variableCount: 43,
-    missingCodeSyntax: 0,
-    invalidScopeCount: 0,
-    brokenAliasCount: 0,
-    primitiveSwatches: 10,
-    semanticLightSwatches: 7,
-    semanticDarkSwatches: 7,
-    boundSwatches: 24,
-    spacingBars: 7,
-    boundSpacingBars: 7,
-    radiusSamples: 5,
-    boundRadiusRectangles: 4,
-    radiusEllipses: 1,
-    textStyleCount: 5,
-    documentedTextStyles: 5,
-    effectStyleNames: ['Onda/Shadow/Overlay'],
-    documentedEffectStyles: 1,
-    unexpectedShadowNodes: [],
-  }
-  const snapshot = {
-    targetAuthorized: true,
-    pageCount: 1,
-    pageName: 'Page 1',
-    sections: SECTION_DEFINITIONS.map(item => ({ name: item.name, type: 'SECTION', parentType: 'PAGE', parentName: 'Page 1', owner: 'onda-one-page' })),
-    annotationViews: ANNOTATION_SECTIONS.flatMap(annotation => annotation.views.map(view => ({ kind: annotation.kind, view: view.name }))),
-    dialogStates: DIALOG_FAMILIES.flatMap(family => family.states.map(state => ({ family: family.name, state }))),
-    componentSets: COMPONENT_DEFINITIONS.map(component => ({ id: component.id, variants: 2, autoLayout: true, bound: true })),
-    instanceCount: 20,
-    repeatedScreenInstanceCount: 8,
-    foundation,
-    intersections: [], clearance: 2000, overflowNodes: [], undersizedHitTargets: [],
-    reactionCount: 4, requiredReactionCount: 4,
-    baselineHash: 'abc', currentBaselineHash: 'abc', baselineMismatches: [],
-    baselinePages: [{ id: 'page', name: 'Page 1', index: 0 }],
-    currentPages: [{ id: 'page', name: 'Page 1', index: 0 }],
-    phases: Object.fromEntries([
-      'inspect', 'foundations', ...COMPONENT_DEFINITIONS.map(component => `component-${component.id}`),
-      'core-views', ...Array.from({ length: 6 }, (_, index) => `annotations-${index + 1}`), 'dialogs-and-secondary',
-    ].map(id => [id, { status: 'success' }])),
-  }
+test('verify rejects incomplete or mismatched strict foundation evidence', () => {
+  const snapshot = validSnapshot()
   assert.equal(buildVerificationReport(snapshot).hardPass, true)
   const mutations = [
-    value => { value.collectionCount = 4 },
-    value => { value.variableCount = 42 },
-    value => { value.missingCodeSyntax = 1 },
-    value => { value.invalidScopeCount = 1 },
-    value => { value.brokenAliasCount = 1 },
-    value => { value.boundSwatches = 23 },
-    value => { value.boundSpacingBars = 6 },
-    value => { value.boundRadiusRectangles = 3 },
-    value => { value.documentedTextStyles = 4 },
-    value => { value.documentedEffectStyles = 0 },
-    value => { value.unexpectedShadowNodes = ['Foundations / Graustufen'] },
+    value => { value.collections.pop() },
+    value => { value.variables.pop() },
+    value => { value.swatches[0].fillVariableId = 'variable:wrong' },
+    value => { value.spacingBars.pop() },
+    value => { value.radiusSamples[0].boundVariableIds.topLeftRadius = 'variable:wrong' },
+    value => { value.textStyles[0].fontSize += 1 },
+    value => { value.textSpecimens[0].textStyleId = 'text-style:wrong' },
+    value => { value.effectStyles[0].effects[0].radius += 1 },
+    value => { value.effectConsumers.pop() },
   ]
   for (const mutate of mutations) {
     const candidate = structuredClone(snapshot)
