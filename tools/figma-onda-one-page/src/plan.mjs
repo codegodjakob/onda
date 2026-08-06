@@ -267,16 +267,23 @@ export async function executeFoundationMutation({ preflight, requireContext, mut
 
 export function validateComponentMutationInventory(inventory = {}, componentId) {
   const errors = []
-  const definition = COMPONENT_DEFINITIONS.find(component => component.id === componentId)
-  if (!definition) return { valid: false, errors: [`Unbekannte Komponente: ${componentId}`] }
-  const sets = Array.isArray(inventory.sets) ? inventory.sets.filter(set => set.name === definition.name) : []
-  const samples = Array.isArray(inventory.samples) ? inventory.samples.filter(sample => sample.name === `${definition.name} / Dokumentationsinstanz`) : []
-  if (sets.length > 1) errors.push(`Doppeltes ComponentSet: ${definition.name}`)
-  if (samples.length > 1) errors.push(`Doppelte Dokumentationsinstanz: ${definition.name}`)
-  const set = sets.length === 1 ? sets[0] : null
-  const sample = samples.length === 1 ? samples[0] : null
-  if (Boolean(set) !== Boolean(sample)) errors.push(`Unvollständiges Komponentenpaar: ${definition.name}`)
-  if (set) {
+  if (!COMPONENT_DEFINITIONS.some(component => component.id === componentId)) return { valid: false, errors: [`Unbekannte Komponente: ${componentId}`] }
+  const allSets = Array.isArray(inventory.sets) ? inventory.sets : []
+  const allSamples = Array.isArray(inventory.samples) ? inventory.samples : []
+  const expectedSetNames = new Set(COMPONENT_DEFINITIONS.map(definition => definition.name))
+  const expectedSampleNames = new Set(COMPONENT_DEFINITIONS.map(definition => `${definition.name} / Dokumentationsinstanz`))
+  for (const set of allSets) if (!expectedSetNames.has(set.name)) errors.push(`Unerwarteter Onda-Komponentenkandidat: ${set.name}`)
+  for (const sample of allSamples) if (!expectedSampleNames.has(sample.name)) errors.push(`Unerwarteter Onda-Instanzkandidat: ${sample.name}`)
+  for (const definition of COMPONENT_DEFINITIONS) {
+    const sets = allSets.filter(set => set.name === definition.name)
+    const samples = allSamples.filter(sample => sample.name === `${definition.name} / Dokumentationsinstanz`)
+    if (sets.length > 1) errors.push(`Doppeltes ComponentSet: ${definition.name}`)
+    if (samples.length > 1) errors.push(`Doppelte Dokumentationsinstanz: ${definition.name}`)
+    const set = sets.length === 1 ? sets[0] : null
+    const sample = samples.length === 1 ? samples[0] : null
+    if (Boolean(set) !== Boolean(sample)) errors.push(`Unvollständiges Komponentenpaar: ${definition.name}`)
+    if (set) {
+    if (!set.nodeId || set.parentType !== 'SECTION' || set.parentName !== '02 · Komponenten' || !set.parentId) errors.push(`Falscher Set-Parent: ${definition.name}`)
     if (set.type !== 'COMPONENT_SET') errors.push(`Falscher Set-Typ: ${definition.name}`)
     if (set.owner !== PLUGIN_ORIGIN) errors.push(`Ungeschütztes ComponentSet: ${definition.name}`)
     const variants = Array.isArray(set.variants) ? set.variants : []
@@ -287,12 +294,14 @@ export function validateComponentMutationInventory(inventory = {}, componentId) 
       if (matching.length !== 1) { errors.push(`Variante fehlt oder doppelt: ${definition.name}/${variantName}`); continue }
       const variant = matching[0]
       if (variant.type !== 'COMPONENT' || variant.owner !== PLUGIN_ORIGIN) errors.push(`Ungeschützte oder falsche Variante: ${definition.name}/${variantName}`)
+      if (!variant.nodeId || variant.parentId !== set.nodeId || variant.parentType !== 'COMPONENT_SET' || variant.parentName !== set.name) errors.push(`Falscher Varianten-Parent: ${definition.name}/${variantName}`)
       const roles = Array.isArray(variant.roles) ? variant.roles : []
       if (roles.length !== definition.roles.length || new Set(roles.map(role => role.name)).size !== definition.roles.length) errors.push(`Ungültiges Rolleninventar: ${definition.name}/${variantName}`)
       for (const roleDefinition of definition.roles) {
         const roleName = `Role/${roleDefinition.name}`
         const role = roles.find(item => item.name === roleName)
         if (!role || role.type !== roleDefinition.type || role.owner !== PLUGIN_ORIGIN) errors.push(`Rolle fehlt, ist ungeschützt oder falsch: ${definition.name}/${variantName}/${roleName}`)
+        if (role && (!role.nodeId || role.parentId !== variant.nodeId || role.parentType !== 'COMPONENT' || role.parentName !== variant.name)) errors.push(`Falscher Rollen-Parent: ${definition.name}/${variantName}/${roleName}`)
       }
     }
     const properties = Array.isArray(set.componentProperties) ? set.componentProperties : []
@@ -300,16 +309,31 @@ export function validateComponentMutationInventory(inventory = {}, componentId) 
       || properties[0].name !== 'Label'
       || properties[0].type !== 'TEXT'
       || properties[0].defaultValue !== definition.variants[0].copy[definition.labelRole]) errors.push(`Ungültige Label-Property: ${definition.name}`)
-  }
-  if (sample) {
-    if (!set) errors.push(`Verwaiste Dokumentationsinstanz: ${definition.name}`)
-    if (sample.type !== 'INSTANCE' || sample.owner !== PLUGIN_ORIGIN || sample.documentation !== true || sample.repeatedScreen !== false) errors.push(`Ungültige Dokumentationsinstanz: ${definition.name}`)
-    if (set && sample.mainComponentId !== set.variants?.find(variant => variant.name === definition.variants[0].name)?.nodeId) errors.push(`Falsch verknüpfte Dokumentationsinstanz: ${definition.name}`)
+    }
+    if (sample) {
+      if (!set) errors.push(`Verwaiste Dokumentationsinstanz: ${definition.name}`)
+      if (!sample.nodeId || sample.parentId !== set?.parentId || sample.parentType !== 'SECTION' || sample.parentName !== '02 · Komponenten') errors.push(`Falscher Instanz-Parent: ${definition.name}`)
+      if (sample.type !== 'INSTANCE' || sample.owner !== PLUGIN_ORIGIN || sample.documentation !== true || sample.repeatedScreen !== false) errors.push(`Ungültige Dokumentationsinstanz: ${definition.name}`)
+      if (set && sample.mainComponentId !== set.variants?.find(variant => variant.name === definition.variants[0].name)?.nodeId) errors.push(`Falsch verknüpfte Dokumentationsinstanz: ${definition.name}`)
+    }
   }
   return { valid: errors.length === 0, errors }
 }
 
 export async function executeComponentMutation({ preflight, requireContext, mutate }) {
+  await preflight()
+  const context = await requireContext()
+  return mutate(context)
+}
+
+export async function readMainComponentIdentity(instance) {
+  const mainComponent = await instance.getMainComponentAsync()
+  return { id: mainComponent?.id || null, key: mainComponent?.key || null }
+}
+
+export async function executeGuardedComponentCommand({ command, phases, preflight, requireContext, mutate }) {
+  const transition = validatePhaseTransition(command, phases)
+  if (!transition.ok) throw new Error(transition.warning)
   await preflight()
   const context = await requireContext()
   return mutate(context)
@@ -345,6 +369,7 @@ export function validateComponentEvidence(evidence = {}) {
     if (matchingSets.length !== 1) { errors.push(`ComponentSet fehlt oder doppelt: ${definition.name}`); continue }
     const set = matchingSets[0]
     if (set.type !== 'COMPONENT_SET' || set.owner !== PLUGIN_ORIGIN || set.layoutMode === 'NONE' || (set.effects || []).length !== 0) errors.push(`ComponentSet ungültig: ${definition.name}`)
+    if (!set.parentId || set.parentType !== 'SECTION' || set.parentName !== '02 · Komponenten') errors.push(`ComponentSet-Parent ungültig: ${definition.name}`)
     const properties = Array.isArray(set.componentProperties) ? set.componentProperties : []
     const labelProperty = properties.length === 1 && properties[0].name === 'Label' && properties[0].type === 'TEXT' ? properties[0] : null
     if (!labelProperty || labelProperty.defaultValue !== definition.variants[0].copy[definition.labelRole]) errors.push(`Label-Property ungültig: ${definition.name}`)
@@ -357,14 +382,24 @@ export function validateComponentEvidence(evidence = {}) {
       const focus = variantDefinition.name.includes('Focus')
       const disabled = variantDefinition.name.includes('Disabled')
       if (variant.type !== 'COMPONENT' || variant.owner !== PLUGIN_ORIGIN || variant.layoutMode === 'NONE') errors.push(`Variante strukturell ungültig: ${definition.name}/${variantDefinition.name}`)
+      if (!variant.parentId || variant.parentId !== set.nodeId || variant.parentType !== 'COMPONENT_SET' || variant.parentName !== set.name) errors.push(`Varianten-Parent ungültig: ${definition.name}/${variantDefinition.name}`)
       if (variant.height < definition.targetHeight || variant.cornerRadius !== definition.radius || variant.strokeWeight !== (focus ? 2 : 1) || variant.opacity !== (disabled ? 0.45 : 1)) errors.push(`Variante geometrisch ungültig: ${definition.name}/${variantDefinition.name}`)
       if ((variant.effects || []).length !== 0) errors.push(`Variante hat Effekte: ${definition.name}/${variantDefinition.name}`)
       if (!exactComponentPaint(variant.fills, semantic(variantDefinition.surfaceToken)) || !exactComponentPaint(variant.strokes, semantic('color/border'))) errors.push(`Varianten-Paints ungültig: ${definition.name}/${variantDefinition.name}`)
       const fields = variant.fieldVariableIds || {}
       if (!sameArray(fields.itemSpacing, [dimension('spacing/8')])
+        || !sameArray(fields.paddingTop, [dimension('spacing/12')])
         || !sameArray(fields.paddingLeft, [dimension('spacing/16')])
         || !sameArray(fields.paddingRight, [dimension('spacing/16')])
+        || !sameArray(fields.paddingBottom, [dimension('spacing/12')])
         || !['topLeftRadius', 'topRightRadius', 'bottomLeftRadius', 'bottomRightRadius'].every(field => sameArray(fields[field], [dimension(definition.radiusToken)]))) errors.push(`Variantenbindungen ungültig: ${definition.name}/${variantDefinition.name}`)
+      const dimensions = variant.dimensionValues || {}
+      if (dimensions.itemSpacing !== 8
+        || dimensions.paddingTop !== 12
+        || dimensions.paddingRight !== 16
+        || dimensions.paddingBottom !== 12
+        || dimensions.paddingLeft !== 16
+        || dimensions.minHeight !== definition.targetHeight) errors.push(`Variantendimensionen ungültig: ${definition.name}/${variantDefinition.name}`)
       const roles = Array.isArray(variant.roles) ? variant.roles : []
       if (roles.length !== definition.roles.length || new Set(roles.map(role => role.nodeId)).size !== roles.length) errors.push(`Rollenanzahl ungültig: ${definition.name}/${variantDefinition.name}`)
       for (const roleDefinition of definition.roles) {
@@ -373,6 +408,7 @@ export function validateComponentEvidence(evidence = {}) {
         if (matchingRoles.length !== 1) { errors.push(`Rolle fehlt oder doppelt: ${definition.name}/${variantDefinition.name}/${roleName}`); continue }
         const role = matchingRoles[0]
         if (role.type !== roleDefinition.type || role.owner !== PLUGIN_ORIGIN || (role.effects || []).length !== 0) errors.push(`Rolle strukturell ungültig: ${definition.name}/${variantDefinition.name}/${roleName}`)
+        if (!role.parentId || role.parentId !== variant.nodeId || role.parentType !== 'COMPONENT' || role.parentName !== variant.name) errors.push(`Rollen-Parent ungültig: ${definition.name}/${variantDefinition.name}/${roleName}`)
         if (!exactComponentPaint(role.fills, semantic(variantDefinition.textToken))) errors.push(`Rollen-Paint ungültig: ${definition.name}/${variantDefinition.name}/${roleName}`)
         if (roleDefinition.type === 'TEXT') {
           if (role.characters !== variantDefinition.copy[roleDefinition.name]) errors.push(`Rollentext ungültig: ${definition.name}/${variantDefinition.name}/${roleName}`)
@@ -393,6 +429,9 @@ export function validateComponentEvidence(evidence = {}) {
       || sample.mainComponentId !== expectedMain
       || sample.documentation !== true
       || sample.repeatedScreen !== false
+      || sample.parentId !== set.parentId
+      || sample.parentType !== 'SECTION'
+      || sample.parentName !== '02 · Komponenten'
       || (sample.effects || []).length !== 0) errors.push(`Dokumentationsinstanz ungültig: ${definition.name}`)
   }
   return { valid: errors.length === 0, errors }

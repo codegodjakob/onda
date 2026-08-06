@@ -18,6 +18,7 @@ function boundPaint(variableIdValue, value) {
 export function createValidComponentEvidence(foundation) {
   const semantic = name => variableId(foundation, 'Onda · Semantic · Light', name)
   const dimension = name => variableId(foundation, 'Onda · Dimension', name)
+  const section = { nodeId: 'section:components', name: '02 · Komponenten', type: 'SECTION' }
   return COMPONENT_DEFINITIONS.map(definition => {
     const labelKey = 'Label#property'
     const variants = definition.variants.map((variantDefinition, variantIndex) => {
@@ -27,6 +28,9 @@ export function createValidComponentEvidence(foundation) {
         name: variantDefinition.name,
         owner: PLUGIN_ORIGIN,
         type: 'COMPONENT',
+        parentId: `set:${definition.id}`,
+        parentType: 'COMPONENT_SET',
+        parentName: definition.name,
         layoutMode: 'HORIZONTAL',
         width: definition.id === 'icon-button' ? 150 : 180,
         height: definition.targetHeight,
@@ -38,18 +42,24 @@ export function createValidComponentEvidence(foundation) {
         effects: [],
         fieldVariableIds: {
           itemSpacing: [dimension('spacing/8')],
+          paddingTop: [dimension('spacing/12')],
           paddingLeft: [dimension('spacing/16')],
           paddingRight: [dimension('spacing/16')],
+          paddingBottom: [dimension('spacing/12')],
           topLeftRadius: [dimension(definition.radiusToken)],
           topRightRadius: [dimension(definition.radiusToken)],
           bottomLeftRadius: [dimension(definition.radiusToken)],
           bottomRightRadius: [dimension(definition.radiusToken)],
         },
+        dimensionValues: { itemSpacing: 8, paddingTop: 12, paddingRight: 16, paddingBottom: 12, paddingLeft: 16, minHeight: 44 },
         roles: definition.roles.map((roleDefinition, roleIndex) => ({
           nodeId: `role:${definition.id}:${variantIndex}:${roleIndex}`,
           name: `Role/${roleDefinition.name}`,
           owner: PLUGIN_ORIGIN,
           type: roleDefinition.type,
+          parentId: `component:${definition.id}:${variantIndex}`,
+          parentType: 'COMPONENT',
+          parentName: variantDefinition.name,
           characters: roleDefinition.type === 'TEXT' ? variantDefinition.copy[roleDefinition.name] : null,
           width: roleDefinition.type === 'ELLIPSE' ? 16 : 80,
           height: roleDefinition.type === 'ELLIPSE' ? 16 : 22,
@@ -69,6 +79,9 @@ export function createValidComponentEvidence(foundation) {
       name: definition.name,
       owner: PLUGIN_ORIGIN,
       type: 'COMPONENT_SET',
+      parentId: section.nodeId,
+      parentType: section.type,
+      parentName: section.name,
       layoutMode: 'HORIZONTAL',
       effects: [],
       componentProperties: [{
@@ -84,6 +97,9 @@ export function createValidComponentEvidence(foundation) {
         name: `${definition.name} / Dokumentationsinstanz`,
         owner: PLUGIN_ORIGIN,
         type: 'INSTANCE',
+        parentId: section.nodeId,
+        parentType: section.type,
+        parentName: section.name,
         mainComponentId: variants[0].nodeId,
         documentation: true,
         repeatedScreen: false,

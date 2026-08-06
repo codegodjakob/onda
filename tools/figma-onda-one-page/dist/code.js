@@ -318,14 +318,14 @@
       id: "icon-button",
       name: "Onda/Icon Button",
       label: "Icon Button",
-      labelRole: "State Label",
-      roles: [componentRole("Icon", "TEXT"), componentRole("State Label", "TEXT")],
+      labelRole: "Label",
+      roles: [componentRole("Icon", "TEXT"), componentRole("Label", "TEXT"), componentRole("Description", "TEXT")],
       variants: [
-        componentVariant("State=Default", { Icon: "+", "State Label": "Hinzuf\xFCgen" }),
-        componentVariant("State=Hover", { Icon: "\u21BB", "State Label": "Neu laden" }),
-        componentVariant("State=Focus", { Icon: "\u25CE", "State Label": "Fokus" }),
-        componentVariant("State=Disabled", { Icon: "\xD7", "State Label": "Nicht verf\xFCgbar" }),
-        componentVariant("State=Pressed", { Icon: "\u25CF", "State Label": "Gedr\xFCckt" }, true)
+        componentVariant("State=Default", { Icon: "+", Label: "Hinzuf\xFCgen", Description: "Bereit" }),
+        componentVariant("State=Hover", { Icon: "+", Label: "Hinzuf\xFCgen", Description: "Zeiger dar\xFCber" }),
+        componentVariant("State=Focus", { Icon: "+", Label: "Hinzuf\xFCgen", Description: "Tastaturfokus" }),
+        componentVariant("State=Disabled", { Icon: "+", Label: "Hinzuf\xFCgen", Description: "Nicht verf\xFCgbar" }),
+        componentVariant("State=Pressed", { Icon: "+", Label: "Hinzuf\xFCgen", Description: "Wird ausgel\xF6st" }, true)
       ]
     }),
     componentDefinition({
@@ -333,12 +333,12 @@
       name: "Onda/Status Symbol",
       label: "Status Symbol",
       labelRole: "Label",
-      roles: [componentRole("Dot", "ELLIPSE"), componentRole("Label", "TEXT")],
+      roles: [componentRole("Dot", "ELLIPSE"), componentRole("Symbol", "TEXT"), componentRole("Label", "TEXT")],
       variants: [
-        componentVariant("Status=Ready", { Label: "Bereit" }),
-        componentVariant("Status=Working", { Label: "Arbeitet" }),
-        componentVariant("Status=Warning", { Label: "Pr\xFCfen" }),
-        componentVariant("Status=Error", { Label: "Fehler" })
+        componentVariant("Status=Ready", { Symbol: "\u2713", Label: "Bereit" }),
+        componentVariant("Status=Working", { Symbol: "\u2026", Label: "Arbeitet" }),
+        componentVariant("Status=Warning", { Symbol: "!", Label: "Pr\xFCfen" }),
+        componentVariant("Status=Error", { Symbol: "\xD7", Label: "Fehler" })
       ]
     }),
     componentDefinition({
@@ -625,48 +625,65 @@
   function validateComponentMutationInventory(inventory = {}, componentId) {
     var _a, _b;
     const errors = [];
-    const definition2 = COMPONENT_DEFINITIONS.find((component) => component.id === componentId);
-    if (!definition2) return { valid: false, errors: [`Unbekannte Komponente: ${componentId}`] };
-    const sets = Array.isArray(inventory.sets) ? inventory.sets.filter((set2) => set2.name === definition2.name) : [];
-    const samples = Array.isArray(inventory.samples) ? inventory.samples.filter((sample2) => sample2.name === `${definition2.name} / Dokumentationsinstanz`) : [];
-    if (sets.length > 1) errors.push(`Doppeltes ComponentSet: ${definition2.name}`);
-    if (samples.length > 1) errors.push(`Doppelte Dokumentationsinstanz: ${definition2.name}`);
-    const set = sets.length === 1 ? sets[0] : null;
-    const sample = samples.length === 1 ? samples[0] : null;
-    if (Boolean(set) !== Boolean(sample)) errors.push(`Unvollst\xE4ndiges Komponentenpaar: ${definition2.name}`);
-    if (set) {
-      if (set.type !== "COMPONENT_SET") errors.push(`Falscher Set-Typ: ${definition2.name}`);
-      if (set.owner !== PLUGIN_ORIGIN) errors.push(`Ungesch\xFCtztes ComponentSet: ${definition2.name}`);
-      const variants = Array.isArray(set.variants) ? set.variants : [];
-      const expectedNames = definition2.variants.map((variant) => variant.name);
-      if (variants.length !== expectedNames.length || new Set(variants.map((variant) => variant.name)).size !== expectedNames.length) errors.push(`Ung\xFCltiges Varianteninventar: ${definition2.name}`);
-      for (const variantName of expectedNames) {
-        const matching = variants.filter((variant2) => variant2.name === variantName);
-        if (matching.length !== 1) {
-          errors.push(`Variante fehlt oder doppelt: ${definition2.name}/${variantName}`);
-          continue;
+    if (!COMPONENT_DEFINITIONS.some((component) => component.id === componentId)) return { valid: false, errors: [`Unbekannte Komponente: ${componentId}`] };
+    const allSets = Array.isArray(inventory.sets) ? inventory.sets : [];
+    const allSamples = Array.isArray(inventory.samples) ? inventory.samples : [];
+    const expectedSetNames = new Set(COMPONENT_DEFINITIONS.map((definition2) => definition2.name));
+    const expectedSampleNames = new Set(COMPONENT_DEFINITIONS.map((definition2) => `${definition2.name} / Dokumentationsinstanz`));
+    for (const set of allSets) if (!expectedSetNames.has(set.name)) errors.push(`Unerwarteter Onda-Komponentenkandidat: ${set.name}`);
+    for (const sample of allSamples) if (!expectedSampleNames.has(sample.name)) errors.push(`Unerwarteter Onda-Instanzkandidat: ${sample.name}`);
+    for (const definition2 of COMPONENT_DEFINITIONS) {
+      const sets = allSets.filter((set2) => set2.name === definition2.name);
+      const samples = allSamples.filter((sample2) => sample2.name === `${definition2.name} / Dokumentationsinstanz`);
+      if (sets.length > 1) errors.push(`Doppeltes ComponentSet: ${definition2.name}`);
+      if (samples.length > 1) errors.push(`Doppelte Dokumentationsinstanz: ${definition2.name}`);
+      const set = sets.length === 1 ? sets[0] : null;
+      const sample = samples.length === 1 ? samples[0] : null;
+      if (Boolean(set) !== Boolean(sample)) errors.push(`Unvollst\xE4ndiges Komponentenpaar: ${definition2.name}`);
+      if (set) {
+        if (!set.nodeId || set.parentType !== "SECTION" || set.parentName !== "02 \xB7 Komponenten" || !set.parentId) errors.push(`Falscher Set-Parent: ${definition2.name}`);
+        if (set.type !== "COMPONENT_SET") errors.push(`Falscher Set-Typ: ${definition2.name}`);
+        if (set.owner !== PLUGIN_ORIGIN) errors.push(`Ungesch\xFCtztes ComponentSet: ${definition2.name}`);
+        const variants = Array.isArray(set.variants) ? set.variants : [];
+        const expectedNames = definition2.variants.map((variant) => variant.name);
+        if (variants.length !== expectedNames.length || new Set(variants.map((variant) => variant.name)).size !== expectedNames.length) errors.push(`Ung\xFCltiges Varianteninventar: ${definition2.name}`);
+        for (const variantName of expectedNames) {
+          const matching = variants.filter((variant2) => variant2.name === variantName);
+          if (matching.length !== 1) {
+            errors.push(`Variante fehlt oder doppelt: ${definition2.name}/${variantName}`);
+            continue;
+          }
+          const variant = matching[0];
+          if (variant.type !== "COMPONENT" || variant.owner !== PLUGIN_ORIGIN) errors.push(`Ungesch\xFCtzte oder falsche Variante: ${definition2.name}/${variantName}`);
+          if (!variant.nodeId || variant.parentId !== set.nodeId || variant.parentType !== "COMPONENT_SET" || variant.parentName !== set.name) errors.push(`Falscher Varianten-Parent: ${definition2.name}/${variantName}`);
+          const roles = Array.isArray(variant.roles) ? variant.roles : [];
+          if (roles.length !== definition2.roles.length || new Set(roles.map((role) => role.name)).size !== definition2.roles.length) errors.push(`Ung\xFCltiges Rolleninventar: ${definition2.name}/${variantName}`);
+          for (const roleDefinition of definition2.roles) {
+            const roleName = `Role/${roleDefinition.name}`;
+            const role = roles.find((item) => item.name === roleName);
+            if (!role || role.type !== roleDefinition.type || role.owner !== PLUGIN_ORIGIN) errors.push(`Rolle fehlt, ist ungesch\xFCtzt oder falsch: ${definition2.name}/${variantName}/${roleName}`);
+            if (role && (!role.nodeId || role.parentId !== variant.nodeId || role.parentType !== "COMPONENT" || role.parentName !== variant.name)) errors.push(`Falscher Rollen-Parent: ${definition2.name}/${variantName}/${roleName}`);
+          }
         }
-        const variant = matching[0];
-        if (variant.type !== "COMPONENT" || variant.owner !== PLUGIN_ORIGIN) errors.push(`Ungesch\xFCtzte oder falsche Variante: ${definition2.name}/${variantName}`);
-        const roles = Array.isArray(variant.roles) ? variant.roles : [];
-        if (roles.length !== definition2.roles.length || new Set(roles.map((role) => role.name)).size !== definition2.roles.length) errors.push(`Ung\xFCltiges Rolleninventar: ${definition2.name}/${variantName}`);
-        for (const roleDefinition of definition2.roles) {
-          const roleName = `Role/${roleDefinition.name}`;
-          const role = roles.find((item) => item.name === roleName);
-          if (!role || role.type !== roleDefinition.type || role.owner !== PLUGIN_ORIGIN) errors.push(`Rolle fehlt, ist ungesch\xFCtzt oder falsch: ${definition2.name}/${variantName}/${roleName}`);
-        }
+        const properties = Array.isArray(set.componentProperties) ? set.componentProperties : [];
+        if (properties.length !== 1 || properties[0].name !== "Label" || properties[0].type !== "TEXT" || properties[0].defaultValue !== definition2.variants[0].copy[definition2.labelRole]) errors.push(`Ung\xFCltige Label-Property: ${definition2.name}`);
       }
-      const properties = Array.isArray(set.componentProperties) ? set.componentProperties : [];
-      if (properties.length !== 1 || properties[0].name !== "Label" || properties[0].type !== "TEXT" || properties[0].defaultValue !== definition2.variants[0].copy[definition2.labelRole]) errors.push(`Ung\xFCltige Label-Property: ${definition2.name}`);
-    }
-    if (sample) {
-      if (!set) errors.push(`Verwaiste Dokumentationsinstanz: ${definition2.name}`);
-      if (sample.type !== "INSTANCE" || sample.owner !== PLUGIN_ORIGIN || sample.documentation !== true || sample.repeatedScreen !== false) errors.push(`Ung\xFCltige Dokumentationsinstanz: ${definition2.name}`);
-      if (set && sample.mainComponentId !== ((_b = (_a = set.variants) == null ? void 0 : _a.find((variant) => variant.name === definition2.variants[0].name)) == null ? void 0 : _b.nodeId)) errors.push(`Falsch verkn\xFCpfte Dokumentationsinstanz: ${definition2.name}`);
+      if (sample) {
+        if (!set) errors.push(`Verwaiste Dokumentationsinstanz: ${definition2.name}`);
+        if (!sample.nodeId || sample.parentId !== (set == null ? void 0 : set.parentId) || sample.parentType !== "SECTION" || sample.parentName !== "02 \xB7 Komponenten") errors.push(`Falscher Instanz-Parent: ${definition2.name}`);
+        if (sample.type !== "INSTANCE" || sample.owner !== PLUGIN_ORIGIN || sample.documentation !== true || sample.repeatedScreen !== false) errors.push(`Ung\xFCltige Dokumentationsinstanz: ${definition2.name}`);
+        if (set && sample.mainComponentId !== ((_b = (_a = set.variants) == null ? void 0 : _a.find((variant) => variant.name === definition2.variants[0].name)) == null ? void 0 : _b.nodeId)) errors.push(`Falsch verkn\xFCpfte Dokumentationsinstanz: ${definition2.name}`);
+      }
     }
     return { valid: errors.length === 0, errors };
   }
-  async function executeComponentMutation({ preflight, requireContext, mutate }) {
+  async function readMainComponentIdentity(instance) {
+    const mainComponent = await instance.getMainComponentAsync();
+    return { id: (mainComponent == null ? void 0 : mainComponent.id) || null, key: (mainComponent == null ? void 0 : mainComponent.key) || null };
+  }
+  async function executeGuardedComponentCommand({ command, phases, preflight, requireContext, mutate }) {
+    const transition = validatePhaseTransition(command, phases);
+    if (!transition.ok) throw new Error(transition.warning);
     await preflight();
     const context = await requireContext();
     return mutate(context);
@@ -699,6 +716,7 @@
       }
       const set = matchingSets[0];
       if (set.type !== "COMPONENT_SET" || set.owner !== PLUGIN_ORIGIN || set.layoutMode === "NONE" || (set.effects || []).length !== 0) errors.push(`ComponentSet ung\xFCltig: ${definition2.name}`);
+      if (!set.parentId || set.parentType !== "SECTION" || set.parentName !== "02 \xB7 Komponenten") errors.push(`ComponentSet-Parent ung\xFCltig: ${definition2.name}`);
       const properties = Array.isArray(set.componentProperties) ? set.componentProperties : [];
       const labelProperty = properties.length === 1 && properties[0].name === "Label" && properties[0].type === "TEXT" ? properties[0] : null;
       if (!labelProperty || labelProperty.defaultValue !== definition2.variants[0].copy[definition2.labelRole]) errors.push(`Label-Property ung\xFCltig: ${definition2.name}`);
@@ -714,11 +732,14 @@
         const focus = variantDefinition.name.includes("Focus");
         const disabled = variantDefinition.name.includes("Disabled");
         if (variant.type !== "COMPONENT" || variant.owner !== PLUGIN_ORIGIN || variant.layoutMode === "NONE") errors.push(`Variante strukturell ung\xFCltig: ${definition2.name}/${variantDefinition.name}`);
+        if (!variant.parentId || variant.parentId !== set.nodeId || variant.parentType !== "COMPONENT_SET" || variant.parentName !== set.name) errors.push(`Varianten-Parent ung\xFCltig: ${definition2.name}/${variantDefinition.name}`);
         if (variant.height < definition2.targetHeight || variant.cornerRadius !== definition2.radius || variant.strokeWeight !== (focus ? 2 : 1) || variant.opacity !== (disabled ? 0.45 : 1)) errors.push(`Variante geometrisch ung\xFCltig: ${definition2.name}/${variantDefinition.name}`);
         if ((variant.effects || []).length !== 0) errors.push(`Variante hat Effekte: ${definition2.name}/${variantDefinition.name}`);
         if (!exactComponentPaint(variant.fills, semantic(variantDefinition.surfaceToken)) || !exactComponentPaint(variant.strokes, semantic("color/border"))) errors.push(`Varianten-Paints ung\xFCltig: ${definition2.name}/${variantDefinition.name}`);
         const fields = variant.fieldVariableIds || {};
-        if (!sameArray(fields.itemSpacing, [dimension("spacing/8")]) || !sameArray(fields.paddingLeft, [dimension("spacing/16")]) || !sameArray(fields.paddingRight, [dimension("spacing/16")]) || !["topLeftRadius", "topRightRadius", "bottomLeftRadius", "bottomRightRadius"].every((field) => sameArray(fields[field], [dimension(definition2.radiusToken)]))) errors.push(`Variantenbindungen ung\xFCltig: ${definition2.name}/${variantDefinition.name}`);
+        if (!sameArray(fields.itemSpacing, [dimension("spacing/8")]) || !sameArray(fields.paddingTop, [dimension("spacing/12")]) || !sameArray(fields.paddingLeft, [dimension("spacing/16")]) || !sameArray(fields.paddingRight, [dimension("spacing/16")]) || !sameArray(fields.paddingBottom, [dimension("spacing/12")]) || !["topLeftRadius", "topRightRadius", "bottomLeftRadius", "bottomRightRadius"].every((field) => sameArray(fields[field], [dimension(definition2.radiusToken)]))) errors.push(`Variantenbindungen ung\xFCltig: ${definition2.name}/${variantDefinition.name}`);
+        const dimensions = variant.dimensionValues || {};
+        if (dimensions.itemSpacing !== 8 || dimensions.paddingTop !== 12 || dimensions.paddingRight !== 16 || dimensions.paddingBottom !== 12 || dimensions.paddingLeft !== 16 || dimensions.minHeight !== definition2.targetHeight) errors.push(`Variantendimensionen ung\xFCltig: ${definition2.name}/${variantDefinition.name}`);
         const roles = Array.isArray(variant.roles) ? variant.roles : [];
         if (roles.length !== definition2.roles.length || new Set(roles.map((role) => role.nodeId)).size !== roles.length) errors.push(`Rollenanzahl ung\xFCltig: ${definition2.name}/${variantDefinition.name}`);
         for (const roleDefinition of definition2.roles) {
@@ -730,6 +751,7 @@
           }
           const role = matchingRoles[0];
           if (role.type !== roleDefinition.type || role.owner !== PLUGIN_ORIGIN || (role.effects || []).length !== 0) errors.push(`Rolle strukturell ung\xFCltig: ${definition2.name}/${variantDefinition.name}/${roleName}`);
+          if (!role.parentId || role.parentId !== variant.nodeId || role.parentType !== "COMPONENT" || role.parentName !== variant.name) errors.push(`Rollen-Parent ung\xFCltig: ${definition2.name}/${variantDefinition.name}/${roleName}`);
           if (!exactComponentPaint(role.fills, semantic(variantDefinition.textToken))) errors.push(`Rollen-Paint ung\xFCltig: ${definition2.name}/${variantDefinition.name}/${roleName}`);
           if (roleDefinition.type === "TEXT") {
             if (role.characters !== variantDefinition.copy[roleDefinition.name]) errors.push(`Rollentext ung\xFCltig: ${definition2.name}/${variantDefinition.name}/${roleName}`);
@@ -742,7 +764,7 @@
       }
       const sample = set.sample;
       const expectedMain = (_d = variants.find((variant) => variant.name === definition2.variants[0].name)) == null ? void 0 : _d.nodeId;
-      if (set.sampleCount !== void 0 && set.sampleCount !== 1 || !sample || sample.name !== `${definition2.name} / Dokumentationsinstanz` || sample.type !== "INSTANCE" || sample.owner !== PLUGIN_ORIGIN || sample.mainComponentId !== expectedMain || sample.documentation !== true || sample.repeatedScreen !== false || (sample.effects || []).length !== 0) errors.push(`Dokumentationsinstanz ung\xFCltig: ${definition2.name}`);
+      if (set.sampleCount !== void 0 && set.sampleCount !== 1 || !sample || sample.name !== `${definition2.name} / Dokumentationsinstanz` || sample.type !== "INSTANCE" || sample.owner !== PLUGIN_ORIGIN || sample.mainComponentId !== expectedMain || sample.documentation !== true || sample.repeatedScreen !== false || sample.parentId !== set.parentId || sample.parentType !== "SECTION" || sample.parentName !== "02 \xB7 Komponenten" || (sample.effects || []).length !== 0) errors.push(`Dokumentationsinstanz ung\xFCltig: ${definition2.name}`);
     }
     return { valid: errors.length === 0, errors };
   }
@@ -1225,8 +1247,7 @@
     const parent = node.parent;
     return parent && "children" in parent ? parent.children.indexOf(node) : -1;
   }
-  function nodeRecord(node, baselineIds = null) {
-    var _a, _b;
+  async function nodeRecord(node, baselineIds = null) {
     const children = "children" in node ? protectedChildIds({
       nodeType: node.type,
       children: node.children.map((child) => ({ id: child.id, owner: child.getPluginData(CREATED_MARKER_KEY) })),
@@ -1253,8 +1274,9 @@
     let mainComponentKey = null;
     if (node.type === "INSTANCE") {
       try {
-        mainComponentId = ((_a = node.mainComponent) == null ? void 0 : _a.id) || null;
-        mainComponentKey = ((_b = node.mainComponent) == null ? void 0 : _b.key) || null;
+        const identity = await readMainComponentIdentity(node);
+        mainComponentId = identity.id;
+        mainComponentKey = identity.key;
       } catch (_error) {
         mainComponentId = null;
         mainComponentKey = null;
@@ -1291,19 +1313,19 @@
       layoutChild
     };
   }
-  function collectRecordsFromDocument(baselineIds = null) {
+  async function collectRecordsFromDocument(baselineIds = null) {
     const records = [];
-    function visit(node) {
+    async function visit(node) {
       const belongs = !baselineIds || baselineIds.has(node.id);
-      if (belongs) records.push(nodeRecord(node, baselineIds));
+      if (belongs) records.push(await nodeRecord(node, baselineIds));
       if ("children" in node) {
-        for (const child of node.children) visit(child);
+        for (const child of node.children) await visit(child);
       }
     }
-    if (!baselineIds || baselineIds.has(figma.root.id)) records.push(nodeRecord(figma.root, baselineIds));
+    if (!baselineIds || baselineIds.has(figma.root.id)) records.push(await nodeRecord(figma.root, baselineIds));
     for (const page of figma.root.children) {
-      if (!baselineIds || baselineIds.has(page.id)) records.push(nodeRecord(page, baselineIds));
-      for (const child of page.children) visit(child);
+      if (!baselineIds || baselineIds.has(page.id)) records.push(await nodeRecord(page, baselineIds));
+      for (const child of page.children) await visit(child);
     }
     return records;
   }
@@ -1350,7 +1372,7 @@
     const fonts = await figma.listAvailableFontsAsync();
     const fontDecision = inspectFonts(fonts);
     const ledger = readLedger(page);
-    const records = ledger ? null : collectRecordsFromDocument();
+    const records = ledger ? null : await collectRecordsFromDocument();
     const topLevelIds = ledger ? [] : page.children.map((node) => node.id);
     const result = {
       target,
@@ -1391,7 +1413,7 @@
     let ledger = readLedger(page);
     if ((ledger == null ? void 0 : ledger.version) === 1) {
       const legacyIds = ledger.baseline.nodeIds || [];
-      const currentRecords = orderRecordsByBaselineIds(collectRecordsFromDocument(new Set(legacyIds)), legacyIds);
+      const currentRecords = orderRecordsByBaselineIds(await collectRecordsFromDocument(new Set(legacyIds)), legacyIds);
       if (hashBaselineRecords(currentRecords) !== ledger.baseline.hash) throw new Error("Legacy-Baseline weicht ab; sichere Shard-Migration abgebrochen.");
       const shardCount = writeBaselineShards(page, currentRecords);
       ledger.version = 2;
@@ -1987,41 +2009,61 @@ ${result.errors.join("\n")}`);
       nodeId: role.id,
       name: role.name,
       type: role.type,
-      owner: role.getPluginData(CREATED_MARKER_KEY)
+      owner: role.getPluginData(CREATED_MARKER_KEY),
+      parentId: component.id,
+      parentType: component.type,
+      parentName: component.name
     }));
+  }
+  function collectComponentSectionCandidates(page) {
+    const componentSections = page.children.filter((node) => node.name === "02 \xB7 Komponenten");
+    return componentSections.flatMap((section) => !("children" in section) ? [] : section.children.filter((node) => node.name.startsWith("Onda/")).map((node) => ({ node, section })));
   }
   async function collectComponentMutationInventory(componentId) {
     await figma.loadAllPagesAsync();
-    const definition2 = componentDefinition2(componentId);
-    const setNodes = figma.currentPage.findAll((node) => node.name === definition2.name);
-    const sampleNodes = figma.currentPage.findAll((node) => node.name === `${definition2.name} / Dokumentationsinstanz`);
+    componentDefinition2(componentId);
+    const candidates = collectComponentSectionCandidates(figma.currentPage);
+    const sampleNames = new Set(COMPONENT_DEFINITIONS.map((definition2) => `${definition2.name} / Dokumentationsinstanz`));
+    const setNodes = candidates.filter(({ node }) => !sampleNames.has(node.name));
+    const sampleNodes = candidates.filter(({ node }) => sampleNames.has(node.name));
+    const samples = [];
+    for (const { node: sample, section } of sampleNodes) {
+      const identity = sample.type === "INSTANCE" ? await readMainComponentIdentity(sample) : { id: null };
+      samples.push({
+        nodeId: sample.id,
+        name: sample.name,
+        type: sample.type,
+        owner: sample.getPluginData(CREATED_MARKER_KEY),
+        parentId: section.id,
+        parentType: section.type,
+        parentName: section.name,
+        documentation: sample.getPluginData("ondaDocumentationInstance") === "true",
+        repeatedScreen: sample.getPluginData("ondaRepeatedScreenInstance") === "true",
+        mainComponentId: identity.id
+      });
+    }
     return {
-      sets: setNodes.map((set) => ({
+      sets: setNodes.map(({ node: set, section }) => ({
         nodeId: set.id,
         name: set.name,
         type: set.type,
         owner: set.getPluginData(CREATED_MARKER_KEY),
+        parentId: section.id,
+        parentType: section.type,
+        parentName: section.name,
         componentProperties: componentPropertyInventory(set),
-        variants: set.type === "COMPONENT_SET" ? set.children.map((variant) => ({
+        variants: "children" in set ? set.children.map((variant) => ({
           nodeId: variant.id,
           name: variant.name,
           type: variant.type,
           owner: variant.getPluginData(CREATED_MARKER_KEY),
+          parentId: set.id,
+          parentType: set.type,
+          parentName: set.name,
           roles: componentRoleInventory(variant)
         })) : []
       })),
-      samples: sampleNodes.map((sample) => {
-        var _a;
-        return {
-          nodeId: sample.id,
-          name: sample.name,
-          type: sample.type,
-          owner: sample.getPluginData(CREATED_MARKER_KEY),
-          documentation: sample.getPluginData("ondaDocumentationInstance") === "true",
-          repeatedScreen: sample.getPluginData("ondaRepeatedScreenInstance") === "true",
-          mainComponentId: sample.type === "INSTANCE" ? ((_a = sample.mainComponent) == null ? void 0 : _a.id) || null : null
-        };
-      })
+      samples
     };
   }
   async function preflightComponentMutation(componentId) {
@@ -2038,6 +2080,7 @@ ${result.errors.join("\n")}`);
       ["onInverted", "color/on-inverted", "Onda \xB7 Semantic \xB7 Light"],
       ["border", "color/border", "Onda \xB7 Semantic \xB7 Light"],
       ["spacing8", "spacing/8", "Onda \xB7 Dimension"],
+      ["spacing12", "spacing/12", "Onda \xB7 Dimension"],
       ["spacing16", "spacing/16", "Onda \xB7 Dimension"],
       ["radiusControl", "radius/control", "Onda \xB7 Dimension"],
       ["radiusCircle", "radius/circle", "Onda \xB7 Dimension"]
@@ -2065,8 +2108,8 @@ ${result.errors.join("\n")}`);
     role.fills = boundComponentPaint(textVariable.name, textVariable.variable);
     if (role.type === "TEXT") {
       role.fontName = { family: decision.family, style: decision.styles[roleDefinition.name === "Icon" ? 700 : 500] };
-      role.fontSize = roleDefinition.name === "State Label" ? 12 : 15;
-      role.lineHeight = { unit: "PIXELS", value: roleDefinition.name === "State Label" ? 16 : 22 };
+      role.fontSize = roleDefinition.name === "Description" ? 12 : 15;
+      role.lineHeight = { unit: "PIXELS", value: roleDefinition.name === "Description" ? 16 : 22 };
       role.characters = copy[roleDefinition.name];
     } else {
       role.resize(16, 16);
@@ -2083,9 +2126,9 @@ ${result.errors.join("\n")}`);
     component.primaryAxisAlignItems = "CENTER";
     component.counterAxisAlignItems = "CENTER";
     component.itemSpacing = 8;
-    component.paddingTop = 11;
+    component.paddingTop = 12;
     component.paddingRight = 16;
-    component.paddingBottom = 11;
+    component.paddingBottom = 12;
     component.paddingLeft = 16;
     component.cornerRadius = 4;
     component.minHeight = definition2.targetHeight;
@@ -2095,8 +2138,10 @@ ${result.errors.join("\n")}`);
     component.strokeWeight = variantDefinition.name.includes("Focus") ? 2 : 1;
     component.effects = [];
     component.setBoundVariable("itemSpacing", variables.spacing8);
+    component.setBoundVariable("paddingTop", variables.spacing12);
     component.setBoundVariable("paddingLeft", variables.spacing16);
     component.setBoundVariable("paddingRight", variables.spacing16);
+    component.setBoundVariable("paddingBottom", variables.spacing12);
     for (const field of ["topLeftRadius", "topRightRadius", "bottomLeftRadius", "bottomRightRadius"]) component.setBoundVariable(field, variables.radiusControl);
     const textVariable = variantDefinition.textToken === "color/on-inverted" ? { name: "color/on-inverted", variable: variables.onInverted } : { name: "color/text", variable: variables.text };
     for (const roleDefinition of definition2.roles) {
@@ -2437,11 +2482,11 @@ ${result.errors.join("\n")}`);
     }
     return radii;
   }
-  function currentBaselineEvidence(page, ledger) {
+  async function currentBaselineEvidence(page, ledger) {
     const baselineRecords = readBaselineRecords(page, ledger);
     const baselineIdsInOrder = baselineRecords.map((record) => record.id);
     const baselineIds = new Set(baselineIdsInOrder);
-    const records = orderRecordsByBaselineIds(collectRecordsFromDocument(baselineIds), baselineIdsInOrder);
+    const records = orderRecordsByBaselineIds(await collectRecordsFromDocument(baselineIds), baselineIdsInOrder);
     const currentById = new Map(records.map((record) => [record.id, hashBaselineRecords([record])]));
     const mismatches = baselineRecords.filter((record) => currentById.get(record.id) !== hashBaselineRecords([record])).map((record) => record.id);
     const currentHash = hashBaselineRecords(records);
@@ -2640,16 +2685,22 @@ ${result.errors.join("\n")}`);
       });
     });
   }
-  function collectComponentEvidence(page) {
+  async function collectComponentEvidence(page) {
     const definitionsByName = new Map(COMPONENT_DEFINITIONS.map((definition2) => [definition2.name, definition2]));
-    return page.findAll((node) => node.type === "COMPONENT_SET" && node.name.startsWith("Onda/")).map((set) => {
-      var _a;
+    const candidates = collectComponentSectionCandidates(page);
+    const sampleNames = new Set(COMPONENT_DEFINITIONS.map((definition2) => `${definition2.name} / Dokumentationsinstanz`));
+    const setCandidates = candidates.filter(({ node }) => !sampleNames.has(node.name));
+    const evidence = [];
+    for (const { node: set, section } of setCandidates) {
       const definition2 = definitionsByName.get(set.name);
-      const variants = set.children.filter((node) => node.type === "COMPONENT").map((component) => ({
+      const variants = !("children" in set) ? [] : set.children.map((component) => ({
         nodeId: component.id,
         name: component.name,
         owner: component.getPluginData(CREATED_MARKER_KEY),
         type: component.type,
+        parentId: set.id,
+        parentType: set.type,
+        parentName: set.name,
         layoutMode: component.layoutMode,
         width: component.width,
         height: component.height,
@@ -2661,56 +2712,77 @@ ${result.errors.join("\n")}`);
         effects: cloneSerializable(component.effects),
         fieldVariableIds: collectFieldVariableIds(component, [
           "itemSpacing",
+          "paddingTop",
           "paddingLeft",
           "paddingRight",
+          "paddingBottom",
           "topLeftRadius",
           "topRightRadius",
           "bottomLeftRadius",
           "bottomRightRadius"
         ]),
-        roles: component.children.map((role) => {
-          var _a2;
+        dimensionValues: {
+          itemSpacing: component.itemSpacing,
+          paddingTop: component.paddingTop,
+          paddingRight: component.paddingRight,
+          paddingBottom: component.paddingBottom,
+          paddingLeft: component.paddingLeft,
+          minHeight: component.minHeight
+        },
+        roles: !("children" in component) ? [] : component.children.map((role) => {
+          var _a;
           return {
             nodeId: role.id,
             name: role.name,
             owner: role.getPluginData(CREATED_MARKER_KEY),
             type: role.type,
+            parentId: component.id,
+            parentType: component.type,
+            parentName: component.name,
             characters: role.type === "TEXT" ? role.characters : null,
             width: role.width,
             height: role.height,
             fills: componentPaintEvidence(role.fills),
             effects: cloneSerializable(role.effects),
             fieldVariableIds: collectFieldVariableIds(role, ["maxWidth", "maxHeight"]),
-            characterPropertyKey: role.type === "TEXT" ? ((_a2 = role.componentPropertyReferences) == null ? void 0 : _a2.characters) || null : null
+            characterPropertyKey: role.type === "TEXT" ? ((_a = role.componentPropertyReferences) == null ? void 0 : _a.characters) || null : null
           };
         })
       }));
       const sampleName = `${set.name} / Dokumentationsinstanz`;
-      const samples = page.findAll((node) => node.name === sampleName);
-      const sampleNode = samples.length === 1 ? samples[0] : null;
-      return {
+      const samples = candidates.filter(({ node }) => node.name === sampleName);
+      const sampleCandidate = samples.length === 1 ? samples[0] : null;
+      const identity = (sampleCandidate == null ? void 0 : sampleCandidate.node.type) === "INSTANCE" ? await readMainComponentIdentity(sampleCandidate.node) : { id: null };
+      evidence.push({
         id: (definition2 == null ? void 0 : definition2.id) || "",
         nodeId: set.id,
         name: set.name,
         owner: set.getPluginData(CREATED_MARKER_KEY),
         type: set.type,
+        parentId: section.id,
+        parentType: section.type,
+        parentName: section.name,
         layoutMode: set.layoutMode,
         effects: cloneSerializable(set.effects),
         componentProperties: componentPropertyInventory(set),
         variants,
         sampleCount: samples.length,
-        sample: sampleNode ? {
-          nodeId: sampleNode.id,
-          name: sampleNode.name,
-          owner: sampleNode.getPluginData(CREATED_MARKER_KEY),
-          type: sampleNode.type,
-          mainComponentId: sampleNode.type === "INSTANCE" ? ((_a = sampleNode.mainComponent) == null ? void 0 : _a.id) || null : null,
-          documentation: sampleNode.getPluginData("ondaDocumentationInstance") === "true",
-          repeatedScreen: sampleNode.getPluginData("ondaRepeatedScreenInstance") === "true",
-          effects: cloneSerializable(sampleNode.effects)
+        sample: sampleCandidate ? {
+          nodeId: sampleCandidate.node.id,
+          name: sampleCandidate.node.name,
+          owner: sampleCandidate.node.getPluginData(CREATED_MARKER_KEY),
+          type: sampleCandidate.node.type,
+          parentId: sampleCandidate.section.id,
+          parentType: sampleCandidate.section.type,
+          parentName: sampleCandidate.section.name,
+          mainComponentId: identity.id,
+          documentation: sampleCandidate.node.getPluginData("ondaDocumentationInstance") === "true",
+          repeatedScreen: sampleCandidate.node.getPluginData("ondaRepeatedScreenInstance") === "true",
+          effects: cloneSerializable(sampleCandidate.node.effects)
         } : null
-      };
-    });
+      });
+    }
+    return evidence;
   }
   async function runVerify() {
     const inspection = await inspectCurrentTarget();
@@ -2736,8 +2808,8 @@ ${result.errors.join("\n")}`);
         state: (_b = node.getPluginData) == null ? void 0 : _b.call(node, "ondaDialogState")
       };
     }).filter((item) => item.family && item.state);
-    const componentSets = collectComponentEvidence(page);
-    const baseline = currentBaselineEvidence(page, ledger);
+    const componentSets = await collectComponentEvidence(page);
+    const baseline = await currentBaselineEvidence(page, ledger);
     const geometry = geometryEvidence(page, sections, allNodes, ledger, baseline.baselineRecords);
     const paints = paintsFromNodes(allNodes);
     const radii = radiiFromNodes(allNodes);
@@ -2813,7 +2885,7 @@ ${result.errors.join("\n")}`);
     figma.ui.postMessage({ type: "phase-result", command, ok, message, counts, unlockMutations });
   }
   async function handleCommand(command) {
-    var _a, _b, _c, _d;
+    var _a, _b, _c, _d, _e;
     if (command === "inspect") {
       const inspection = await inspectCurrentTarget();
       const authorization = authorizeMutation(inspection.target);
@@ -2860,7 +2932,10 @@ ${result.errors.join("\n")}`);
     }
     if (command.startsWith("component-")) {
       const componentId = command.slice("component-".length);
-      await executeComponentMutation({
+      const phases = ((_e = readLedger(figma.currentPage)) == null ? void 0 : _e.phases) || {};
+      await executeGuardedComponentCommand({
+        command,
+        phases,
         preflight: () => preflightComponentMutation(componentId),
         requireContext: requireMutationContext,
         mutate: runMutation

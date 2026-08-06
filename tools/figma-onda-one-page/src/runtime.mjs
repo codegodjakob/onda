@@ -27,12 +27,14 @@ import {
   collectVisibleFillBindings,
   computeOndaOrigin,
   executeComponentMutation,
+  executeGuardedComponentCommand,
   executeFoundationMutation,
   hashBaselineRecords,
   isGrayColor,
   isValidRadius,
   orderRecordsByBaselineIds,
   protectedChildIds,
+  readMainComponentIdentity,
   restoreBaselineShards,
   selectOwnedEntity,
   selectFontDecision,
@@ -97,7 +99,7 @@ function childIndex(node) {
   return parent && 'children' in parent ? parent.children.indexOf(node) : -1
 }
 
-function nodeRecord(node, baselineIds = null) {
+async function nodeRecord(node, baselineIds = null) {
   const children = 'children' in node
     ? protectedChildIds({
       nodeType: node.type,
@@ -126,8 +128,9 @@ function nodeRecord(node, baselineIds = null) {
   let mainComponentKey = null
   if (node.type === 'INSTANCE') {
     try {
-      mainComponentId = node.mainComponent?.id || null
-      mainComponentKey = node.mainComponent?.key || null
+      const identity = await readMainComponentIdentity(node)
+      mainComponentId = identity.id
+      mainComponentKey = identity.key
     } catch (_error) {
       mainComponentId = null
       mainComponentKey = null
@@ -165,19 +168,19 @@ function nodeRecord(node, baselineIds = null) {
   }
 }
 
-function collectRecordsFromDocument(baselineIds = null) {
+async function collectRecordsFromDocument(baselineIds = null) {
   const records = []
-  function visit(node) {
+  async function visit(node) {
     const belongs = !baselineIds || baselineIds.has(node.id)
-    if (belongs) records.push(nodeRecord(node, baselineIds))
+    if (belongs) records.push(await nodeRecord(node, baselineIds))
     if ('children' in node) {
-      for (const child of node.children) visit(child)
+      for (const child of node.children) await visit(child)
     }
   }
-  if (!baselineIds || baselineIds.has(figma.root.id)) records.push(nodeRecord(figma.root, baselineIds))
+  if (!baselineIds || baselineIds.has(figma.root.id)) records.push(await nodeRecord(figma.root, baselineIds))
   for (const page of figma.root.children) {
-    if (!baselineIds || baselineIds.has(page.id)) records.push(nodeRecord(page, baselineIds))
-    for (const child of page.children) visit(child)
+    if (!baselineIds || baselineIds.has(page.id)) records.push(await nodeRecord(page, baselineIds))
+    for (const child of page.children) await visit(child)
   }
   return records
 }
@@ -225,7 +228,7 @@ async function inspectCurrentTarget() {
   const fonts = await figma.listAvailableFontsAsync()
   const fontDecision = inspectFonts(fonts)
   const ledger = readLedger(page)
-  const records = ledger ? null : collectRecordsFromDocument()
+  const records = ledger ? null : await collectRecordsFromDocument()
   const topLevelIds = ledger ? [] : page.children.map(node => node.id)
   const result = {
     target,
@@ -270,7 +273,7 @@ async function requireMutationContext() {
   let ledger = readLedger(page)
   if (ledger?.version === 1) {
     const legacyIds = ledger.baseline.nodeIds || []
-    const currentRecords = orderRecordsByBaselineIds(collectRecordsFromDocument(new Set(legacyIds)), legacyIds)
+    const currentRecords = orderRecordsByBaselineIds(await collectRecordsFromDocument(new Set(legacyIds)), legacyIds)
     if (hashBaselineRecords(currentRecords) !== ledger.baseline.hash) throw new Error('Legacy-Baseline weicht ab; sichere Shard-Migration abgebrochen.')
     const shardCount = writeBaselineShards(page, currentRecords)
     ledger.version = 2
@@ -853,38 +856,64 @@ function componentRoleInventory(component) {
     name: role.name,
     type: role.type,
     owner: role.getPluginData(CREATED_MARKER_KEY),
+    parentId: component.id,
+    parentType: component.type,
+    parentName: component.name,
   }))
+}
+
+function collectComponentSectionCandidates(page) {
+  const componentSections = page.children.filter(node => node.name === '02 · Komponenten')
+  return componentSections.flatMap(section => !('children' in section) ? [] : section.children
+    .filter(node => node.name.startsWith('Onda/'))
+    .map(node => ({ node, section })))
 }
 
 async function collectComponentMutationInventory(componentId) {
   await figma.loadAllPagesAsync()
-  const definition = componentDefinition(componentId)
-  const setNodes = figma.currentPage.findAll(node => node.name === definition.name)
-  const sampleNodes = figma.currentPage.findAll(node => node.name === `${definition.name} / Dokumentationsinstanz`)
-  return {
-    sets: setNodes.map(set => ({
-      nodeId: set.id,
-      name: set.name,
-      type: set.type,
-      owner: set.getPluginData(CREATED_MARKER_KEY),
-      componentProperties: componentPropertyInventory(set),
-      variants: set.type === 'COMPONENT_SET' ? set.children.map(variant => ({
-        nodeId: variant.id,
-        name: variant.name,
-        type: variant.type,
-        owner: variant.getPluginData(CREATED_MARKER_KEY),
-        roles: componentRoleInventory(variant),
-      })) : [],
-    })),
-    samples: sampleNodes.map(sample => ({
+  componentDefinition(componentId)
+  const candidates = collectComponentSectionCandidates(figma.currentPage)
+  const sampleNames = new Set(COMPONENT_DEFINITIONS.map(definition => `${definition.name} / Dokumentationsinstanz`))
+  const setNodes = candidates.filter(({ node }) => !sampleNames.has(node.name))
+  const sampleNodes = candidates.filter(({ node }) => sampleNames.has(node.name))
+  const samples = []
+  for (const { node: sample, section } of sampleNodes) {
+    const identity = sample.type === 'INSTANCE' ? await readMainComponentIdentity(sample) : { id: null }
+    samples.push({
       nodeId: sample.id,
       name: sample.name,
       type: sample.type,
       owner: sample.getPluginData(CREATED_MARKER_KEY),
+      parentId: section.id,
+      parentType: section.type,
+      parentName: section.name,
       documentation: sample.getPluginData('ondaDocumentationInstance') === 'true',
       repeatedScreen: sample.getPluginData('ondaRepeatedScreenInstance') === 'true',
-      mainComponentId: sample.type === 'INSTANCE' ? sample.mainComponent?.id || null : null,
+      mainComponentId: identity.id,
+    })
+  }
+  return {
+    sets: setNodes.map(({ node: set, section }) => ({
+      nodeId: set.id,
+      name: set.name,
+      type: set.type,
+      owner: set.getPluginData(CREATED_MARKER_KEY),
+      parentId: section.id,
+      parentType: section.type,
+      parentName: section.name,
+      componentProperties: componentPropertyInventory(set),
+      variants: 'children' in set ? set.children.map(variant => ({
+        nodeId: variant.id,
+        name: variant.name,
+        type: variant.type,
+        owner: variant.getPluginData(CREATED_MARKER_KEY),
+        parentId: set.id,
+        parentType: set.type,
+        parentName: set.name,
+        roles: componentRoleInventory(variant),
+      })) : [],
     })),
+    samples,
   }
 }
 
@@ -903,6 +932,7 @@ async function componentVariables() {
     ['onInverted', 'color/on-inverted', 'Onda · Semantic · Light'],
     ['border', 'color/border', 'Onda · Semantic · Light'],
     ['spacing8', 'spacing/8', 'Onda · Dimension'],
+    ['spacing12', 'spacing/12', 'Onda · Dimension'],
     ['spacing16', 'spacing/16', 'Onda · Dimension'],
     ['radiusControl', 'radius/control', 'Onda · Dimension'],
     ['radiusCircle', 'radius/circle', 'Onda · Dimension'],
@@ -932,8 +962,8 @@ function configureComponentRole(role, roleDefinition, copy, decision, textVariab
   role.fills = boundComponentPaint(textVariable.name, textVariable.variable)
   if (role.type === 'TEXT') {
     role.fontName = { family: decision.family, style: decision.styles[roleDefinition.name === 'Icon' ? 700 : 500] }
-    role.fontSize = roleDefinition.name === 'State Label' ? 12 : 15
-    role.lineHeight = { unit: 'PIXELS', value: roleDefinition.name === 'State Label' ? 16 : 22 }
+    role.fontSize = roleDefinition.name === 'Description' ? 12 : 15
+    role.lineHeight = { unit: 'PIXELS', value: roleDefinition.name === 'Description' ? 16 : 22 }
     role.characters = copy[roleDefinition.name]
   } else {
     role.resize(16, 16)
@@ -951,9 +981,9 @@ function configureComponentVariant(component, definition, variantDefinition, dec
   component.primaryAxisAlignItems = 'CENTER'
   component.counterAxisAlignItems = 'CENTER'
   component.itemSpacing = 8
-  component.paddingTop = 11
+  component.paddingTop = 12
   component.paddingRight = 16
-  component.paddingBottom = 11
+  component.paddingBottom = 12
   component.paddingLeft = 16
   component.cornerRadius = 4
   component.minHeight = definition.targetHeight
@@ -963,8 +993,10 @@ function configureComponentVariant(component, definition, variantDefinition, dec
   component.strokeWeight = variantDefinition.name.includes('Focus') ? 2 : 1
   component.effects = []
   component.setBoundVariable('itemSpacing', variables.spacing8)
+  component.setBoundVariable('paddingTop', variables.spacing12)
   component.setBoundVariable('paddingLeft', variables.spacing16)
   component.setBoundVariable('paddingRight', variables.spacing16)
+  component.setBoundVariable('paddingBottom', variables.spacing12)
   for (const field of ['topLeftRadius', 'topRightRadius', 'bottomLeftRadius', 'bottomRightRadius']) component.setBoundVariable(field, variables.radiusControl)
   const textVariable = variantDefinition.textToken === 'color/on-inverted'
     ? { name: 'color/on-inverted', variable: variables.onInverted }
@@ -1324,11 +1356,11 @@ function radiiFromNodes(nodes) {
   return radii
 }
 
-function currentBaselineEvidence(page, ledger) {
+async function currentBaselineEvidence(page, ledger) {
   const baselineRecords = readBaselineRecords(page, ledger)
   const baselineIdsInOrder = baselineRecords.map(record => record.id)
   const baselineIds = new Set(baselineIdsInOrder)
-  const records = orderRecordsByBaselineIds(collectRecordsFromDocument(baselineIds), baselineIdsInOrder)
+  const records = orderRecordsByBaselineIds(await collectRecordsFromDocument(baselineIds), baselineIdsInOrder)
   const currentById = new Map(records.map(record => [record.id, hashBaselineRecords([record])]))
   const mismatches = baselineRecords
     .filter(record => currentById.get(record.id) !== hashBaselineRecords([record]))
@@ -1547,15 +1579,22 @@ function componentPaintEvidence(paints) {
   }))
 }
 
-function collectComponentEvidence(page) {
+async function collectComponentEvidence(page) {
   const definitionsByName = new Map(COMPONENT_DEFINITIONS.map(definition => [definition.name, definition]))
-  return page.findAll(node => node.type === 'COMPONENT_SET' && node.name.startsWith('Onda/')).map(set => {
+  const candidates = collectComponentSectionCandidates(page)
+  const sampleNames = new Set(COMPONENT_DEFINITIONS.map(definition => `${definition.name} / Dokumentationsinstanz`))
+  const setCandidates = candidates.filter(({ node }) => !sampleNames.has(node.name))
+  const evidence = []
+  for (const { node: set, section } of setCandidates) {
     const definition = definitionsByName.get(set.name)
-    const variants = set.children.filter(node => node.type === 'COMPONENT').map(component => ({
+    const variants = !('children' in set) ? [] : set.children.map(component => ({
       nodeId: component.id,
       name: component.name,
       owner: component.getPluginData(CREATED_MARKER_KEY),
       type: component.type,
+      parentId: set.id,
+      parentType: set.type,
+      parentName: set.name,
       layoutMode: component.layoutMode,
       width: component.width,
       height: component.height,
@@ -1566,14 +1605,25 @@ function collectComponentEvidence(page) {
       strokes: componentPaintEvidence(component.strokes),
       effects: cloneSerializable(component.effects),
       fieldVariableIds: collectFieldVariableIds(component, [
-        'itemSpacing', 'paddingLeft', 'paddingRight',
+        'itemSpacing', 'paddingTop', 'paddingLeft', 'paddingRight', 'paddingBottom',
         'topLeftRadius', 'topRightRadius', 'bottomLeftRadius', 'bottomRightRadius',
       ]),
-      roles: component.children.map(role => ({
+      dimensionValues: {
+        itemSpacing: component.itemSpacing,
+        paddingTop: component.paddingTop,
+        paddingRight: component.paddingRight,
+        paddingBottom: component.paddingBottom,
+        paddingLeft: component.paddingLeft,
+        minHeight: component.minHeight,
+      },
+      roles: !('children' in component) ? [] : component.children.map(role => ({
         nodeId: role.id,
         name: role.name,
         owner: role.getPluginData(CREATED_MARKER_KEY),
         type: role.type,
+        parentId: component.id,
+        parentType: component.type,
+        parentName: component.name,
         characters: role.type === 'TEXT' ? role.characters : null,
         width: role.width,
         height: role.height,
@@ -1584,31 +1634,41 @@ function collectComponentEvidence(page) {
       })),
     }))
     const sampleName = `${set.name} / Dokumentationsinstanz`
-    const samples = page.findAll(node => node.name === sampleName)
-    const sampleNode = samples.length === 1 ? samples[0] : null
-    return {
+    const samples = candidates.filter(({ node }) => node.name === sampleName)
+    const sampleCandidate = samples.length === 1 ? samples[0] : null
+    const identity = sampleCandidate?.node.type === 'INSTANCE'
+      ? await readMainComponentIdentity(sampleCandidate.node)
+      : { id: null }
+    evidence.push({
       id: definition?.id || '',
       nodeId: set.id,
       name: set.name,
       owner: set.getPluginData(CREATED_MARKER_KEY),
       type: set.type,
+      parentId: section.id,
+      parentType: section.type,
+      parentName: section.name,
       layoutMode: set.layoutMode,
       effects: cloneSerializable(set.effects),
       componentProperties: componentPropertyInventory(set),
       variants,
       sampleCount: samples.length,
-      sample: sampleNode ? {
-        nodeId: sampleNode.id,
-        name: sampleNode.name,
-        owner: sampleNode.getPluginData(CREATED_MARKER_KEY),
-        type: sampleNode.type,
-        mainComponentId: sampleNode.type === 'INSTANCE' ? sampleNode.mainComponent?.id || null : null,
-        documentation: sampleNode.getPluginData('ondaDocumentationInstance') === 'true',
-        repeatedScreen: sampleNode.getPluginData('ondaRepeatedScreenInstance') === 'true',
-        effects: cloneSerializable(sampleNode.effects),
+      sample: sampleCandidate ? {
+        nodeId: sampleCandidate.node.id,
+        name: sampleCandidate.node.name,
+        owner: sampleCandidate.node.getPluginData(CREATED_MARKER_KEY),
+        type: sampleCandidate.node.type,
+        parentId: sampleCandidate.section.id,
+        parentType: sampleCandidate.section.type,
+        parentName: sampleCandidate.section.name,
+        mainComponentId: identity.id,
+        documentation: sampleCandidate.node.getPluginData('ondaDocumentationInstance') === 'true',
+        repeatedScreen: sampleCandidate.node.getPluginData('ondaRepeatedScreenInstance') === 'true',
+        effects: cloneSerializable(sampleCandidate.node.effects),
       } : null,
-    }
-  })
+    })
+  }
+  return evidence
 }
 
 async function runVerify() {
@@ -1627,8 +1687,8 @@ async function runVerify() {
   const dialogStates = allNodes.map(node => ({
     family: node.getPluginData?.('ondaDialogFamily'), state: node.getPluginData?.('ondaDialogState'),
   })).filter(item => item.family && item.state)
-  const componentSets = collectComponentEvidence(page)
-  const baseline = currentBaselineEvidence(page, ledger)
+  const componentSets = await collectComponentEvidence(page)
+  const baseline = await currentBaselineEvidence(page, ledger)
   const geometry = geometryEvidence(page, sections, allNodes, ledger, baseline.baselineRecords)
   const paints = paintsFromNodes(allNodes)
   const radii = radiiFromNodes(allNodes)
@@ -1749,7 +1809,10 @@ async function handleCommand(command) {
   }
   if (command.startsWith('component-')) {
     const componentId = command.slice('component-'.length)
-    await executeComponentMutation({
+    const phases = readLedger(figma.currentPage)?.phases || {}
+    await executeGuardedComponentCommand({
+      command,
+      phases,
       preflight: () => preflightComponentMutation(componentId),
       requireContext: requireMutationContext,
       mutate: runMutation,
