@@ -187,3 +187,45 @@ export async function startDevServer({
     },
   }
 }
+
+function cliPort(args) {
+  const token = args.find(argument => argument.startsWith('--port='))
+  if (!token) return DEFAULT_PORT
+  const port = Number(token.slice('--port='.length))
+  if (!Number.isInteger(port) || port < 0 || port > 65535) {
+    throw new Error(`Ungültiger Port: ${token}`)
+  }
+  return port
+}
+
+const isMain = process.argv[1]
+  && resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+
+if (isMain) {
+  let running = null
+  try {
+    const port = cliPort(process.argv.slice(2))
+    running = await startDevServer({ port })
+    console.log(`Onda Live: ${running.url}`)
+
+    let stopping = false
+    const stop = async () => {
+      if (stopping) return
+      stopping = true
+      await running.close()
+      process.exit(0)
+    }
+    process.once('SIGINT', stop)
+    process.once('SIGTERM', stop)
+  } catch (error) {
+    let hint = ''
+    try {
+      const port = cliPort(process.argv.slice(2))
+      if (error?.code === 'EADDRINUSE') hint = `Port ${port} ist bereits belegt. `
+    } catch {
+      // The original validation message below is more precise.
+    }
+    console.error(`Onda Live konnte nicht starten. ${hint}${error.message}`)
+    process.exitCode = 1
+  }
+}

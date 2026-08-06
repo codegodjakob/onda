@@ -439,7 +439,7 @@ git commit -m "feat(dev): Onda-Aenderungen automatisch neu laden"
 - Produces: `npm run dev` on port 4173.
 - Produces: test-only CLI override `--port=0` without changing the documented default.
 
-- [ ] **Step 1: Add failing CLI and port-conflict tests**
+- [x] **Step 1: Add failing CLI and port-conflict tests**
 
 Add imports and tests to `app/test/dev-server.test.mjs`:
 
@@ -486,13 +486,13 @@ test('der CLI meldet URL und beendet sich sauber mit SIGTERM', async () => {
 })
 ```
 
-- [ ] **Step 2: Run the focused test and witness RED**
+- [x] **Step 2: Run the focused test and witness RED**
 
 Run: `cd app && node --test test/dev-server.test.mjs`
 
 Expected: failures for the missing `dev` script and missing CLI output/shutdown behavior.
 
-- [ ] **Step 3: Add CLI parsing and graceful shutdown**
+- [x] **Step 3: Add CLI parsing and graceful shutdown**
 
 Append to `app/scripts/dev-server.mjs`:
 
@@ -536,13 +536,13 @@ Modify `app/package.json` scripts:
 }
 ```
 
-- [ ] **Step 4: Run focused tests and verify GREEN**
+- [x] **Step 4: Run focused tests and verify GREEN**
 
 Run: `cd app && node --test test/dev-server.test.mjs`
 
 Expected: 8 tests, 8 passed, 0 failed.
 
-- [ ] **Step 5: Commit CLI and npm integration**
+- [x] **Step 5: Commit CLI and npm integration**
 
 ```bash
 git add app/package.json app/scripts/dev-server.mjs app/test/dev-server.test.mjs

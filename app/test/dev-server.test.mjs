@@ -1,10 +1,13 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { spawn } from 'node:child_process'
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 import { startDevServer } from '../scripts/dev-server.mjs'
+
+const packageJson = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'))
 
 async function fixture() {
   const root = await mkdtemp(join(tmpdir(), 'onda-dev-server-'))
@@ -133,4 +136,39 @@ test('lädt JavaScript nur nach erfolgreichem Build und erholt sich', async t =>
   ))
   assert.match(event, /event: reload/)
   assert.match(await readFile(resolve(root, 'dist/editor.bundle.js'), 'utf8'), /recovered/)
+})
+
+test('package.json bietet den einen dokumentierten dev-Befehl an', () => {
+  assert.equal(packageJson.scripts.dev, 'node scripts/dev-server.mjs')
+})
+
+test('ein belegter Port führt zu EADDRINUSE und hinterlässt keine zweite Vorschau', async t => {
+  const { root, dev: first } = await servedFixture(t)
+  await assert.rejects(
+    startDevServer({ root, port: first.port }),
+    error => error?.code === 'EADDRINUSE',
+  )
+})
+
+test('der CLI meldet URL und beendet sich sauber mit SIGTERM', async () => {
+  const child = spawn(process.execPath, ['scripts/dev-server.mjs', '--port=0'], {
+    cwd: resolve(import.meta.dirname, '..'),
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  let output = ''
+  child.stdout.setEncoding('utf8')
+  child.stdout.on('data', chunk => { output += chunk })
+  const url = await new Promise((resolveUrl, rejectUrl) => {
+    const deadline = setTimeout(() => rejectUrl(new Error(output || 'CLI timeout')), 3000)
+    child.stdout.on('data', () => {
+      const match = output.match(/http:\/\/127\.0\.0\.1:\d+\//)
+      if (!match) return
+      clearTimeout(deadline)
+      resolveUrl(match[0])
+    })
+  })
+  assert.equal((await fetch(url)).status, 200)
+  child.kill('SIGTERM')
+  const code = await new Promise(resolveExit => child.once('exit', resolveExit))
+  assert.equal(code, 0)
 })

@@ -2,6 +2,7 @@
   "name": "schreibwerkzeug-ui",
   "private": true,
   "scripts": {
+    "dev": "node scripts/dev-server.mjs",
     "build": "esbuild src/editor.js --bundle --minify --format=iife --global-name=AIWT --outfile=dist/editor.bundle.js",
     "test": "npm run test:unit && npm run test:smoke",
     "eval:b1-quality": "node evals/run-b1-quality.mjs",
