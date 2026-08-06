@@ -2,11 +2,11 @@
 
 **Datum:** 6. August 2026
 
-**Status:** vom Nutzer freigegeben
+**Status:** vom Nutzer freigegeben; am 6. August 2026 durch Einseiten-Override aktualisiert
 
 ## Ziel
 
-Für die produktive Onda-App entsteht eine neue, vollständige Figma-Design-Datei. Sie bildet nicht nur einzelne Vorzeigebilder ab, sondern die belegten Produktansichten, ihre funktional unterschiedlichen Zustände, die 29 Anmerkungsarten und die wesentlichen Arbeitsabläufe.
+Für die produktive Onda-App entsteht eine vollständige Design-Dokumentation in der bereits bestehenden Figma-Datei `Claude Code`. Sämtliche Onda-Inhalte liegen auf der vorhandenen Figma-Seite `Page 1`; es werden keine zusätzlichen Figma-Seiten angelegt. Die Dokumentation bildet die belegten Produktansichten, ihre funktional unterschiedlichen Zustände, die 29 Anmerkungsarten und die wesentlichen Arbeitsabläufe ab.
 
 Die produktive App ist die Quelle der Wahrheit für Umfang, Inhalt und Verhalten. Der bereitgestellte Ordner `Onda Design System` liefert Marke, Typografie, Komponentenideen und Grundprinzipien. Wo das ältere Download-Paket vom aktuellen produktiven Stand abweicht, gilt die zuletzt bestätigte Richtung der App.
 
@@ -19,11 +19,22 @@ Die produktive App ist die Quelle der Wahrheit für Umfang, Inhalt und Verhalten
 
 Spezifikationen dürfen den Code nicht überstimmen, wenn die tatsächliche Oberfläche anders gebaut ist. Abweichungen werden in der Figma-Abdeckungsmatrix sichtbar notiert.
 
-## Gewählte Dateistruktur
+## Nutzer-Override vom 6. August 2026
 
-Die Datei wird nach Produktabläufen organisiert. Zustandsvarianten liegen innerhalb der zugehörigen Seite nebeneinander. Reine Datenvarianten ohne funktionalen oder visuellen Unterschied werden nicht dupliziert.
+Die frühere Planung einer neuen Datei mit 39 Figma-Seiten ist **superseded** und keine aktive Soll-Anforderung mehr. Verbindlich ist nun:
 
-### Gemeinsame Produktseiten
+- Ziel ist die bestehende Figma-Datei `Claude Code`.
+- Zielseite ist ausschließlich die bestehende `Page 1`.
+- Bestehende Inhalte auf `Page 1` bleiben unverändert erhalten.
+- Der Onda-Bereich wird in einem nachweislich freien Canvas-Bereich platziert.
+- Jede bisherige Hauptseite und jede der 29 Anmerkungsarten wird zu einer eindeutig benannten top-level `SECTION`; falls `SECTION` technisch nicht verfügbar ist, ist ein gleichnamiger top-level Wrapper-Frame zulässig.
+- Untergeordnete Zustände bleiben innerhalb ihres zugehörigen Bereichs.
+
+## Gewählte Einseitenstruktur
+
+`Page 1` wird nach Produktabläufen organisiert. Zustandsvarianten liegen innerhalb der zugehörigen top-level Section nebeneinander. Reine Datenvarianten ohne funktionalen oder visuellen Unterschied werden nicht dupliziert.
+
+### Gemeinsame Produkt-Sections
 
 1. `00 · Übersicht` — Inhaltsverzeichnis, Nutzerflüsse, Legende und Abdeckungsmatrix
 2. `01 · Foundations` — neutrale Farben, Typografie, Abstände, Radien, Schatten, Icons, Light und Dark
@@ -36,9 +47,9 @@ Die Datei wird nach Produktabläufen organisiert. Zustandsvarianten liegen inner
 9. `10 · Responsive & Dark` — Referenzen für 1440, 1024, 720 und 320 Pixel sowie Dark Mode
 10. `11 · Prototyp` — klickbare Hauptabläufe
 
-### Eigene Seiten für Textanmerkungen
+### Eigene Sections für Textanmerkungen
 
-Jede produktive Textanmerkungsart erhält eine eigene Figma-Seite:
+Jede produktive Textanmerkungsart erhält eine eigene top-level Section auf `Page 1`:
 
 1. `05.01 · Rechtschreibung`
 2. `05.02 · Grammatik`
@@ -65,9 +76,9 @@ Jede produktive Textanmerkungsart erhält eine eigene Figma-Seite:
 23. `05.23 · Gegenargument fehlt`
 24. `05.24 · Verständlichkeit`
 
-### Eigene Seiten für Notizanmerkungen
+### Eigene Sections für Notizanmerkungen
 
-Jede produktive Notizanmerkungsart erhält ebenfalls eine eigene Figma-Seite:
+Jede produktive Notizanmerkungsart erhält ebenfalls eine eigene top-level Section auf `Page 1`:
 
 1. `06.01 · Ausformulieren`
 2. `06.02 · Gehört zusammen`
@@ -75,9 +86,9 @@ Jede produktive Notizanmerkungsart erhält ebenfalls eine eigene Figma-Seite:
 4. `06.04 · Reihenfolge`
 5. `06.05 · Offener Faden`
 
-## Aufbau jeder Anmerkungsseite
+## Aufbau jeder Anmerkungs-Section
 
-Jede der 29 Anmerkungsseiten enthält die Zustände, die für die jeweilige Art tatsächlich existieren:
+Jede der 29 Anmerkungs-Sections enthält die Zustände, die für die jeweilige Art tatsächlich existieren:
 
 - Fundstelle im Text oder in Notizen
 - aktive beziehungsweise geöffnete Detailansicht
@@ -89,11 +100,11 @@ Jede der 29 Anmerkungsseiten enthält die Zustände, die für die jeweilige Art 
 - Kleinbreitenreferenz
 - monochrome Dark-Referenz, wenn der Zustand dadurch eine eigene visuelle Prüfung benötigt
 
-Nicht jede Art unterstützt jede Aktion. Die Seite zeigt nur produktiv belegte Zustände und benennt nicht verfügbare Aktionen in einer kleinen Zustandsnotiz, statt sie als fiktive Oberfläche zu erfinden.
+Nicht jede Art unterstützt jede Aktion. Die Section zeigt nur produktiv belegte Zustände und benennt nicht verfügbare Aktionen in einer kleinen Zustandsnotiz, statt sie als fiktive Oberfläche zu erfinden.
 
 ## Dialoge und Zustandsversionen
 
-Die Dialogseite gruppiert die folgenden produktiven Dialoge in horizontalen Reihen. Jede Version ist als eigener, klar benannter Frame ausgeführt.
+Die Dialog-Section gruppiert die folgenden produktiven Dialoge in horizontalen Reihen. Jede Version ist als eigener, klar benannter Frame ausgeführt.
 
 ### Projektverständnis
 
@@ -222,7 +233,7 @@ Alle Produktframes und Komponenten verwenden Auto Layout. Wiederkehrende Oberfl�
 - schmale Arbeitsansicht: 720 Pixel
 - Kleinbreite: 320 Pixel
 
-Die Breiten entsprechen den bestehenden visuellen Prüfungen. Jede Hauptansicht besitzt eine Desktopreferenz. `10 · Responsive & Dark` sammelt die repräsentativen Umbauten für die übrigen Breiten. Anmerkungsseiten zeigen zusätzlich ihre eigene Kleinbreitenreferenz, weil ihre Positionierung und Aktionsdichte artabhängig sind.
+Die Breiten entsprechen den bestehenden visuellen Prüfungen. Jede Hauptansicht besitzt eine Desktopreferenz. Die Section `10 · Responsive & Dark` sammelt die repräsentativen Umbauten für die übrigen Breiten. Anmerkungs-Sections zeigen zusätzlich ihre eigene Kleinbreitenreferenz, weil ihre Positionierung und Aktionsdichte artabhängig sind.
 
 ## Klickbare Abläufe
 
@@ -256,15 +267,39 @@ Fehler- und Grenzzustände führen sichtbar zu Einrichtung, Wiederholung, Korrek
 
 ## Abnahmekriterien
 
-### AC-1 — Vollständige Abdeckung
+### AC-1 — Einseiten-Ziel
+
+**Given** die bestehende Figma-Datei `Claude Code`
+
+**When** Datei, Seitenliste und Parents aller Onda-Sections geprüft werden
+
+**Then** liegen sämtliche Onda-Sections als direkte Kinder auf der bestehenden `Page 1` und es wurde keine zusätzliche Onda-Seite angelegt.
+
+### AC-2 — Bestehende Inhalte bleiben erhalten
+
+**Given** ein vor der Onda-Erstellung gespeicherter Snapshot aller bestehenden top-level Nodes
+
+**When** er nach der Erstellung mit dem frischen Snapshot verglichen wird
+
+**Then** stimmen ID, Name, Typ, Parent, Position und Größe jedes bestehenden Nodes unverändert überein.
+
+### AC-3 — Freie Platzierung
+
+**Given** die vereinten Bestandsgrenzen auf `Page 1`
+
+**When** die Grenzen aller neuen Onda-Sections gemessen werden
+
+**Then** überschneidet keine Onda-Section bestehende Inhalte und der Abstand beträgt auf der gewählten Platzierungsachse mindestens 2.000 Pixel.
+
+### AC-4 — Vollständige Abdeckung
 
 **Given** die Figma-Abdeckungsmatrix
 
 **When** sie gegen produktiven Code, Dialog-IDs und den Anmerkungsvertrag geprüft wird
 
-**Then** enthält sie alle belegten Produktansichten, 24 Textanmerkungsseiten, fünf Notizanmerkungsseiten und alle vereinbarten Dialogversionen ohne unmarkierte Lücke.
+**Then** existieren zehn gemeinsame Produkt-Sections, 24 Textanmerkungs-Sections, fünf Notizanmerkungs-Sections und sieben vollständige Dialogreihen jeweils exakt einmal.
 
-### AC-2 — Monochromes System
+### AC-5 — Monochromes System
 
 **Given** ein beliebiger Produktframe
 
@@ -272,77 +307,53 @@ Fehler- und Grenzzustände führen sichtbar zu Einrichtung, Wiederholung, Korrek
 
 **Then** verwendet er ausschließlich neutrale Grauwerte und vermittelt Bedeutung zusätzlich über Text, Symbol, Form oder Gewicht.
 
-### AC-3 — Kantiges Formsystem
+### AC-6 — Kantiges Formsystem
 
 **Given** Grundflächen, Controls, statische Flächen und Overlays
 
-**When** ihre Radien geprüft werden
+**When** ihre Radien und Geometrie geprüft werden
 
-**Then** verwenden sie ausschließlich 0, 4, höchstens 6 oder 8 Pixel entsprechend ihrer Rolle; nur echte Kreise sind vollständig rund.
+**Then** verwenden nicht-kreisförmige Nodes ausschließlich 0, 4, 6 oder 8 Pixel entsprechend ihrer Rolle; 999 beziehungsweise volle Rundung erscheint nur an geometrisch echten Kreisen.
 
-### AC-4 — Komponenten und Auto Layout
+### AC-7 — Komponenten und Auto Layout
 
-**Given** ein wiederkehrendes Oberflächenelement
+**Given** ein wiederkehrendes Oberflächenelement oder ein Container verwandter Inhalte
 
 **When** seine Figma-Struktur geprüft wird
 
-**Then** ist es eine benannte Komponenteninstanz mit Auto Layout und nicht eine frei gezeichnete Kopie.
+**Then** ist das wiederkehrende Element eine benannte Komponenteninstanz, der Container verwendet Auto Layout und statische Flächen tragen keinen Schatten.
 
-### AC-5 — Anmerkungszustände
+### AC-8 — Anmerkungszustände
 
-**Given** eine der 29 Anmerkungsseiten
+**Given** eine der 29 Anmerkungs-Sections auf `Page 1`
 
 **When** ihre produktiv verfügbaren Zustände geprüft werden
 
-**Then** zeigt sie Fundstelle, aktive Ansicht, Entscheidung, Wiederherstellung und die für die Art relevanten Grenz- und Fehlerzustände.
+**Then** zeigt sie Fundstelle, aktive Ansicht, Entscheidung, Wiederherstellung, Fehler, Kleinbreite und eine repräsentative Dark-Ansicht; nicht unterstützte Aktionen werden benannt statt erfunden.
 
-### AC-6 — Dialogzustände
+### AC-9 — Dialogversionen
 
 **Given** einer der sieben produktiven Dialogbereiche
 
 **When** seine Frame-Reihe geprüft wird
 
-**Then** sind Hauptpfad, relevante Leer-, Arbeits-, Fehler-, Bestätigungs- und Wiederherstellungszustände enthalten.
+**Then** sind alle vereinbarten Haupt-, Leer-, Arbeits-, Fehler-, Bestätigungs- und Wiederherstellungszustände enthalten.
 
-### AC-7 — Responsive Erreichbarkeit
+### AC-10 — Responsive und Dark
 
-**Given** eine Referenz bei 1440, 1024, 720 oder 320 Pixel Breite
+**Given** eine Referenz bei 1440, 1024, 720 oder 320 Pixel Breite beziehungsweise im Dark Mode
 
-**When** Inhalt und Hauptaktionen geprüft werden
+**When** Inhalt, Hauptaktionen, Bounds und Kontrast geprüft werden
 
-**Then** sind sie erreichbar, ohne unbeabsichtigte Überlagerung, abgeschnittenen Text oder horizontales Scrollen.
+**Then** bleiben Inhalte und Aktionen ohne unbeabsichtigte Überlagerung oder horizontalen Überlauf erreichbar und Dark bleibt vollständig monochrom lesbar.
 
-### AC-8 — Monochromer Dark Mode
+### AC-11 — Bedienung und Prototyp
 
-**Given** eine Dark-Referenz
+**Given** Tastatur-, Touch- oder vergrößerte Bedienung sowie die Prototyp-Section
 
-**When** sie mit der zugehörigen Light-Referenz verglichen wird
+**When** Fokus, Klickflächen, Dialogreihenfolge und Haupt-/Support-Flows geprüft werden
 
-**Then** behält sie Hierarchie, Ebenenlogik und Lesbarkeit ohne zusätzliche Farbe bei.
-
-### AC-9 — Fehler und Wiederherstellung
-
-**Given** ein belegter Fehler- oder Abbruchzustand
-
-**When** der entsprechende Frame oder Prototypschritt geöffnet wird
-
-**Then** ist die Ursache ruhig benannt und eine sichtbare nächste Handlung führt zu Wiederholung, Einrichtung, Korrektur oder sicherem Abbruch.
-
-### AC-10 — Bedienbarkeit
-
-**Given** Tastatur-, Touch- oder vergrößerte Bedienung
-
-**When** Fokus, Klickflächen und Dialogreihenfolge geprüft werden
-
-**Then** sind Fokuszustände sichtbar, wichtige Trefferflächen mindestens 44 × 44 Pixel groß und Hauptaktionen erreichbar.
-
-### AC-11 — Klickbarer Hauptablauf
-
-**Given** die Prototypseite
-
-**When** der Hauptablauf bei der Bibliothek begonnen wird
-
-**Then** lässt er sich ohne tote Zwischenstation über Editor, Anmerkung und Audit bis zum Export durchlaufen.
+**Then** sind Fokuszustände sichtbar, wichtige Trefferflächen mindestens 44 × 44 Pixel groß und kein Zwischenzustand endet ohne nächste Handlung.
 
 ### AC-12 — Visuelle Qualität
 
@@ -350,19 +361,19 @@ Fehler- und Grenzzustände führen sichtbar zu Einrichtung, Wiederholung, Korrek
 
 **When** Vollständigkeit, Hierarchie, Konsistenz, Lesbarkeit und Zustandsklarheit bewertet werden
 
-**Then** erreicht jede Dimension mindestens 4,5 von 5 oder die Datei wird gezielt nachgebessert.
+**Then** erreicht jede Dimension innerhalb höchstens drei Iterationen mindestens 4,5 von 5 oder verbleibende Abweichungen werden offen als nicht bestanden protokolliert.
 
 ## Evaluationsschleife und Nachweise
 
 Die visuelle Datei wird höchstens dreimal iteriert. Jede Runde protokolliert die fünf Bewertungen aus AC-12, konkrete Fehler und ihre Korrektur. Die Schleife endet früher, wenn alle harten Tore bestehen und sich der Gesamtscore nicht mehr verbessert.
 
-Harte Tore sind AC-1, AC-2, AC-3, AC-5, AC-6, AC-7, AC-9, AC-10 und AC-11.
+Harte Tore sind AC-1 bis AC-11. AC-12 ist der iterative Qualitätsschwellenwert.
 
 Nachweise:
 
-- Figma-Seitenliste und Abdeckungsmatrix
+- Figma-Seitenliste mit ausschließlich `Page 1`, top-level Section-Inventar und Abdeckungsmatrix
 - Metadatenprüfung von Komponenten, Instanzen, Auto Layout und Variablen
-- Screenshots jeder Produktseite und jeder Anmerkungsseite
+- Screenshots jeder Produkt-Section und jeder Anmerkungs-Section
 - Detail-Screenshots langer Dialoge und Annotationen
 - Fontprüfung gegen ABC Diatype
 - Light-/Dark- und Kleinbreitenvergleich
