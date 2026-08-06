@@ -150,17 +150,80 @@ export const DIALOG_FAMILIES = Object.freeze([
   ]) }),
 ])
 
+function componentRole(name, type) {
+  return Object.freeze({ name, type })
+}
+
+function componentVariant(name, copy, inverted = false) {
+  return Object.freeze({
+    name,
+    copy: Object.freeze({ ...copy }),
+    surfaceToken: inverted ? 'color/inverted' : 'color/surface',
+    textToken: inverted ? 'color/on-inverted' : 'color/text',
+  })
+}
+
+function componentDefinition({ id, name, label, roles, labelRole, variants }) {
+  return Object.freeze({
+    id,
+    name,
+    label,
+    tier: 0,
+    roles: Object.freeze(roles),
+    labelRole,
+    radius: 4,
+    radiusToken: 'radius/control',
+    targetHeight: 44,
+    variants: Object.freeze(variants),
+  })
+}
+
 export const COMPONENT_DEFINITIONS = Object.freeze([
-  Object.freeze({ id: 'button', name: 'Onda/Button', label: 'Button', tier: 0 }),
-  Object.freeze({ id: 'icon-button', name: 'Onda/Icon Button', label: 'Icon Button', tier: 0 }),
-  Object.freeze({ id: 'status-symbol', name: 'Onda/Status Symbol', label: 'Status Symbol', tier: 0 }),
-  Object.freeze({ id: 'tag', name: 'Onda/Tag', label: 'Tag', tier: 0 }),
-  Object.freeze({ id: 'field', name: 'Onda/Field', label: 'Field', tier: 1 }),
-  Object.freeze({ id: 'menu-item', name: 'Onda/Menu Item', label: 'Menu Item', tier: 1 }),
-  Object.freeze({ id: 'annotation-anchor', name: 'Onda/Annotation Anchor', label: 'Annotation Anchor', tier: 1 }),
-  Object.freeze({ id: 'annotation-card', name: 'Onda/Annotation Card', label: 'Annotation Card', tier: 2 }),
-  Object.freeze({ id: 'source-card', name: 'Onda/Source Card', label: 'Source Card', tier: 2 }),
-  Object.freeze({ id: 'dialog', name: 'Onda/Dialog', label: 'Dialog', tier: 2 }),
+  componentDefinition({
+    id: 'button', name: 'Onda/Button', label: 'Button', labelRole: 'Label',
+    roles: [componentRole('Icon', 'TEXT'), componentRole('Label', 'TEXT')],
+    variants: [
+      componentVariant('Kind=Primary, State=Default', { Icon: '→', Label: 'Weiter' }, true),
+      componentVariant('Kind=Primary, State=Focus', { Icon: '◎', Label: 'Weiter' }, true),
+      componentVariant('Kind=Secondary, State=Default', { Icon: '←', Label: 'Zurück' }),
+      componentVariant('Kind=Secondary, State=Focus', { Icon: '◎', Label: 'Zurück' }),
+      componentVariant('Kind=Ghost, State=Default', { Icon: '…', Label: 'Mehr anzeigen' }),
+      componentVariant('Kind=Ghost, State=Focus', { Icon: '◎', Label: 'Mehr anzeigen' }),
+      componentVariant('Kind=Destructive, State=Default', { Icon: '!', Label: 'Löschen' }, true),
+      componentVariant('Kind=Destructive, State=Focus', { Icon: '!', Label: 'Löschen · Fokus' }, true),
+    ],
+  }),
+  componentDefinition({
+    id: 'icon-button', name: 'Onda/Icon Button', label: 'Icon Button', labelRole: 'State Label',
+    roles: [componentRole('Icon', 'TEXT'), componentRole('State Label', 'TEXT')],
+    variants: [
+      componentVariant('State=Default', { Icon: '+', 'State Label': 'Hinzufügen' }),
+      componentVariant('State=Hover', { Icon: '↻', 'State Label': 'Neu laden' }),
+      componentVariant('State=Focus', { Icon: '◎', 'State Label': 'Fokus' }),
+      componentVariant('State=Disabled', { Icon: '×', 'State Label': 'Nicht verfügbar' }),
+      componentVariant('State=Pressed', { Icon: '●', 'State Label': 'Gedrückt' }, true),
+    ],
+  }),
+  componentDefinition({
+    id: 'status-symbol', name: 'Onda/Status Symbol', label: 'Status Symbol', labelRole: 'Label',
+    roles: [componentRole('Dot', 'ELLIPSE'), componentRole('Label', 'TEXT')],
+    variants: [
+      componentVariant('Status=Ready', { Label: 'Bereit' }),
+      componentVariant('Status=Working', { Label: 'Arbeitet' }),
+      componentVariant('Status=Warning', { Label: 'Prüfen' }),
+      componentVariant('Status=Error', { Label: 'Fehler' }),
+    ],
+  }),
+  componentDefinition({
+    id: 'tag', name: 'Onda/Tag', label: 'Tag', labelRole: 'Label',
+    roles: [componentRole('Icon', 'TEXT'), componentRole('Label', 'TEXT')],
+    variants: [
+      componentVariant('Kind=Neutral', { Icon: '—', Label: 'Neutral' }),
+      componentVariant('Kind=Selected', { Icon: '✓', Label: 'Ausgewählt' }, true),
+      componentVariant('Kind=Source', { Icon: '§', Label: 'Quelle' }),
+      componentVariant('Kind=Warning', { Icon: '!', Label: 'Prüfen' }),
+    ],
+  }),
 ])
 
 const fixedSections = [

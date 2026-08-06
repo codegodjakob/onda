@@ -19,6 +19,7 @@ import {
   SECTION_DEFINITIONS,
 } from '../src/definitions.mjs'
 import { createValidFoundationEvidence } from './foundation-fixture.mjs'
+import { createValidComponentEvidence } from './component-fixture.mjs'
 
 const { foundationSwatchLabelToken, selectOwnedEntity } = planModule
 
@@ -102,6 +103,7 @@ test('phase order permits only the next command including component tier order a
 })
 
 function validSnapshot() {
+  const foundation = createValidFoundationEvidence()
   return {
     targetAuthorized: true,
     pageCount: 1,
@@ -109,10 +111,11 @@ function validSnapshot() {
     sections: SECTION_DEFINITIONS.map(item => ({ name: item.name, type: 'SECTION', parentType: 'PAGE', parentName: 'Page 1', owner: 'onda-one-page' })),
     annotationViews: ANNOTATION_SECTIONS.flatMap(annotation => annotation.views.map(view => ({ kind: annotation.kind, view: view.name }))),
     dialogStates: DIALOG_FAMILIES.flatMap(family => family.states.map(state => ({ family: family.name, state }))),
-    componentSets: COMPONENT_DEFINITIONS.map(component => ({ id: component.id, variants: 2, autoLayout: true, bound: true })),
+    componentSets: createValidComponentEvidence(foundation),
     instanceCount: 20,
+    documentationInstanceCount: COMPONENT_DEFINITIONS.length,
     repeatedScreenInstanceCount: 8,
-    foundation: createValidFoundationEvidence(),
+    foundation,
     intersections: [],
     clearance: 2000,
     overflowNodes: [],
@@ -143,8 +146,9 @@ test('verify hard pass closes every structural and safety false-pass independent
     snapshot => { snapshot.sections[0].parentType = 'SECTION' },
     snapshot => { snapshot.annotationViews.pop() },
     snapshot => { snapshot.dialogStates.pop() },
-    snapshot => { snapshot.componentSets[0].autoLayout = false },
-    snapshot => { snapshot.instanceCount = 9 },
+    snapshot => { snapshot.componentSets[0].variants[0].layoutMode = 'NONE' },
+    snapshot => { snapshot.instanceCount = COMPONENT_DEFINITIONS.length - 1 },
+    snapshot => { snapshot.documentationInstanceCount = COMPONENT_DEFINITIONS.length + 1 },
     snapshot => { snapshot.repeatedScreenInstanceCount = 0 },
     snapshot => { snapshot.foundation.docsBound = false },
     snapshot => { snapshot.intersections.push(['a', 'b']) },
@@ -164,7 +168,10 @@ test('verify hard pass closes every structural and safety false-pass independent
 test('foundation and component regeneration are update-or-create, never unconditional sample append', () => {
   const runtime = readFileSync(resolve(ROOT, 'src/runtime.mjs'), 'utf8')
   assert.match(runtime, /ensureRadiusSample/)
-  assert.match(runtime, /rebindExistingComponent/)
+  assert.match(runtime, /preflightComponentMutation/)
+  assert.match(runtime, /page\.findOne\(node => node\.type === 'COMPONENT_SET'/)
+  assert.match(runtime, /if \(!sample\) \{/)
+  assert.doesNotMatch(runtime, /function componentVariant\(/)
   assert.doesNotMatch(runtime, /for \(const token of RADIUS_TOKENS\) \{\s*const sample = token\.geometry/s)
 })
 

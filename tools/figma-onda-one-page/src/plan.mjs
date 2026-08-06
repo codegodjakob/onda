@@ -265,6 +265,139 @@ export async function executeFoundationMutation({ preflight, requireContext, mut
   return mutate(context)
 }
 
+export function validateComponentMutationInventory(inventory = {}, componentId) {
+  const errors = []
+  const definition = COMPONENT_DEFINITIONS.find(component => component.id === componentId)
+  if (!definition) return { valid: false, errors: [`Unbekannte Komponente: ${componentId}`] }
+  const sets = Array.isArray(inventory.sets) ? inventory.sets.filter(set => set.name === definition.name) : []
+  const samples = Array.isArray(inventory.samples) ? inventory.samples.filter(sample => sample.name === `${definition.name} / Dokumentationsinstanz`) : []
+  if (sets.length > 1) errors.push(`Doppeltes ComponentSet: ${definition.name}`)
+  if (samples.length > 1) errors.push(`Doppelte Dokumentationsinstanz: ${definition.name}`)
+  const set = sets.length === 1 ? sets[0] : null
+  const sample = samples.length === 1 ? samples[0] : null
+  if (Boolean(set) !== Boolean(sample)) errors.push(`Unvollständiges Komponentenpaar: ${definition.name}`)
+  if (set) {
+    if (set.type !== 'COMPONENT_SET') errors.push(`Falscher Set-Typ: ${definition.name}`)
+    if (set.owner !== PLUGIN_ORIGIN) errors.push(`Ungeschütztes ComponentSet: ${definition.name}`)
+    const variants = Array.isArray(set.variants) ? set.variants : []
+    const expectedNames = definition.variants.map(variant => variant.name)
+    if (variants.length !== expectedNames.length || new Set(variants.map(variant => variant.name)).size !== expectedNames.length) errors.push(`Ungültiges Varianteninventar: ${definition.name}`)
+    for (const variantName of expectedNames) {
+      const matching = variants.filter(variant => variant.name === variantName)
+      if (matching.length !== 1) { errors.push(`Variante fehlt oder doppelt: ${definition.name}/${variantName}`); continue }
+      const variant = matching[0]
+      if (variant.type !== 'COMPONENT' || variant.owner !== PLUGIN_ORIGIN) errors.push(`Ungeschützte oder falsche Variante: ${definition.name}/${variantName}`)
+      const roles = Array.isArray(variant.roles) ? variant.roles : []
+      if (roles.length !== definition.roles.length || new Set(roles.map(role => role.name)).size !== definition.roles.length) errors.push(`Ungültiges Rolleninventar: ${definition.name}/${variantName}`)
+      for (const roleDefinition of definition.roles) {
+        const roleName = `Role/${roleDefinition.name}`
+        const role = roles.find(item => item.name === roleName)
+        if (!role || role.type !== roleDefinition.type || role.owner !== PLUGIN_ORIGIN) errors.push(`Rolle fehlt, ist ungeschützt oder falsch: ${definition.name}/${variantName}/${roleName}`)
+      }
+    }
+    const properties = Array.isArray(set.componentProperties) ? set.componentProperties : []
+    if (properties.length !== 1
+      || properties[0].name !== 'Label'
+      || properties[0].type !== 'TEXT'
+      || properties[0].defaultValue !== definition.variants[0].copy[definition.labelRole]) errors.push(`Ungültige Label-Property: ${definition.name}`)
+  }
+  if (sample) {
+    if (!set) errors.push(`Verwaiste Dokumentationsinstanz: ${definition.name}`)
+    if (sample.type !== 'INSTANCE' || sample.owner !== PLUGIN_ORIGIN || sample.documentation !== true || sample.repeatedScreen !== false) errors.push(`Ungültige Dokumentationsinstanz: ${definition.name}`)
+    if (set && sample.mainComponentId !== set.variants?.find(variant => variant.name === definition.variants[0].name)?.nodeId) errors.push(`Falsch verknüpfte Dokumentationsinstanz: ${definition.name}`)
+  }
+  return { valid: errors.length === 0, errors }
+}
+
+export async function executeComponentMutation({ preflight, requireContext, mutate }) {
+  await preflight()
+  const context = await requireContext()
+  return mutate(context)
+}
+
+function exactComponentPaint(actual, variableId) {
+  return Array.isArray(actual)
+    && actual.length === 1
+    && actual[0]?.index === 0
+    && actual[0]?.type === 'SOLID'
+    && sameArray(actual[0]?.variableIds, [variableId])
+    && isGrayColor(actual[0]?.color)
+}
+
+export function validateComponentEvidence(evidence = {}) {
+  const errors = []
+  const componentSets = Array.isArray(evidence.componentSets) ? evidence.componentSets : []
+  const foundationVariables = Array.isArray(evidence.foundation?.variables) ? evidence.foundation.variables : []
+  function variableId(collectionName, name) {
+    const matching = foundationVariables.filter(variable => variable.collectionName === collectionName && variable.name === name)
+    if (matching.length !== 1) errors.push(`Komponentenvariable fehlt oder doppelt: ${collectionName}/${name}`)
+    return matching.length === 1 ? matching[0].id : null
+  }
+  const semantic = name => variableId('Onda · Semantic · Light', name)
+  const dimension = name => variableId('Onda · Dimension', name)
+  const expectedIds = new Set(COMPONENT_DEFINITIONS.map(definition => definition.id))
+  if (componentSets.length !== COMPONENT_DEFINITIONS.length) errors.push(`ComponentSets: erwartet ${COMPONENT_DEFINITIONS.length}, gefunden ${componentSets.length}`)
+  if (new Set(componentSets.map(set => set.nodeId)).size !== componentSets.length) errors.push('ComponentSets: doppelte NodeIds')
+  if (new Set(componentSets.map(set => set.id)).size !== componentSets.length || componentSets.some(set => !expectedIds.has(set.id))) errors.push('ComponentSets: falsche IDs')
+
+  for (const definition of COMPONENT_DEFINITIONS) {
+    const matchingSets = componentSets.filter(set => set.name === definition.name && set.id === definition.id)
+    if (matchingSets.length !== 1) { errors.push(`ComponentSet fehlt oder doppelt: ${definition.name}`); continue }
+    const set = matchingSets[0]
+    if (set.type !== 'COMPONENT_SET' || set.owner !== PLUGIN_ORIGIN || set.layoutMode === 'NONE' || (set.effects || []).length !== 0) errors.push(`ComponentSet ungültig: ${definition.name}`)
+    const properties = Array.isArray(set.componentProperties) ? set.componentProperties : []
+    const labelProperty = properties.length === 1 && properties[0].name === 'Label' && properties[0].type === 'TEXT' ? properties[0] : null
+    if (!labelProperty || labelProperty.defaultValue !== definition.variants[0].copy[definition.labelRole]) errors.push(`Label-Property ungültig: ${definition.name}`)
+    const variants = Array.isArray(set.variants) ? set.variants : []
+    if (variants.length !== definition.variants.length || new Set(variants.map(variant => variant.nodeId)).size !== variants.length) errors.push(`Variantenanzahl ungültig: ${definition.name}`)
+    for (const variantDefinition of definition.variants) {
+      const matchingVariants = variants.filter(variant => variant.name === variantDefinition.name)
+      if (matchingVariants.length !== 1) { errors.push(`Variante fehlt oder doppelt: ${definition.name}/${variantDefinition.name}`); continue }
+      const variant = matchingVariants[0]
+      const focus = variantDefinition.name.includes('Focus')
+      const disabled = variantDefinition.name.includes('Disabled')
+      if (variant.type !== 'COMPONENT' || variant.owner !== PLUGIN_ORIGIN || variant.layoutMode === 'NONE') errors.push(`Variante strukturell ungültig: ${definition.name}/${variantDefinition.name}`)
+      if (variant.height < definition.targetHeight || variant.cornerRadius !== definition.radius || variant.strokeWeight !== (focus ? 2 : 1) || variant.opacity !== (disabled ? 0.45 : 1)) errors.push(`Variante geometrisch ungültig: ${definition.name}/${variantDefinition.name}`)
+      if ((variant.effects || []).length !== 0) errors.push(`Variante hat Effekte: ${definition.name}/${variantDefinition.name}`)
+      if (!exactComponentPaint(variant.fills, semantic(variantDefinition.surfaceToken)) || !exactComponentPaint(variant.strokes, semantic('color/border'))) errors.push(`Varianten-Paints ungültig: ${definition.name}/${variantDefinition.name}`)
+      const fields = variant.fieldVariableIds || {}
+      if (!sameArray(fields.itemSpacing, [dimension('spacing/8')])
+        || !sameArray(fields.paddingLeft, [dimension('spacing/16')])
+        || !sameArray(fields.paddingRight, [dimension('spacing/16')])
+        || !['topLeftRadius', 'topRightRadius', 'bottomLeftRadius', 'bottomRightRadius'].every(field => sameArray(fields[field], [dimension(definition.radiusToken)]))) errors.push(`Variantenbindungen ungültig: ${definition.name}/${variantDefinition.name}`)
+      const roles = Array.isArray(variant.roles) ? variant.roles : []
+      if (roles.length !== definition.roles.length || new Set(roles.map(role => role.nodeId)).size !== roles.length) errors.push(`Rollenanzahl ungültig: ${definition.name}/${variantDefinition.name}`)
+      for (const roleDefinition of definition.roles) {
+        const roleName = `Role/${roleDefinition.name}`
+        const matchingRoles = roles.filter(role => role.name === roleName)
+        if (matchingRoles.length !== 1) { errors.push(`Rolle fehlt oder doppelt: ${definition.name}/${variantDefinition.name}/${roleName}`); continue }
+        const role = matchingRoles[0]
+        if (role.type !== roleDefinition.type || role.owner !== PLUGIN_ORIGIN || (role.effects || []).length !== 0) errors.push(`Rolle strukturell ungültig: ${definition.name}/${variantDefinition.name}/${roleName}`)
+        if (!exactComponentPaint(role.fills, semantic(variantDefinition.textToken))) errors.push(`Rollen-Paint ungültig: ${definition.name}/${variantDefinition.name}/${roleName}`)
+        if (roleDefinition.type === 'TEXT') {
+          if (role.characters !== variantDefinition.copy[roleDefinition.name]) errors.push(`Rollentext ungültig: ${definition.name}/${variantDefinition.name}/${roleName}`)
+          const expectedProperty = roleDefinition.name === definition.labelRole ? labelProperty?.key : null
+          if ((role.characterPropertyKey || null) !== (expectedProperty || null)) errors.push(`Rollen-Property ungültig: ${definition.name}/${variantDefinition.name}/${roleName}`)
+        } else if (roleDefinition.type === 'ELLIPSE') {
+          if (role.width !== 16 || role.height !== 16 || !sameArray(role.fieldVariableIds?.maxWidth, [dimension('radius/circle')]) || !sameArray(role.fieldVariableIds?.maxHeight, [dimension('radius/circle')])) errors.push(`Status-Kreis ungültig: ${definition.name}/${variantDefinition.name}`)
+        }
+      }
+    }
+    const sample = set.sample
+    const expectedMain = variants.find(variant => variant.name === definition.variants[0].name)?.nodeId
+    if ((set.sampleCount !== undefined && set.sampleCount !== 1)
+      || !sample
+      || sample.name !== `${definition.name} / Dokumentationsinstanz`
+      || sample.type !== 'INSTANCE'
+      || sample.owner !== PLUGIN_ORIGIN
+      || sample.mainComponentId !== expectedMain
+      || sample.documentation !== true
+      || sample.repeatedScreen !== false
+      || (sample.effects || []).length !== 0) errors.push(`Dokumentationsinstanz ungültig: ${definition.name}`)
+  }
+  return { valid: errors.length === 0, errors }
+}
+
 function sameArray(actual, expected) {
   return Array.isArray(actual)
     && actual.length === expected.length
@@ -702,12 +835,9 @@ export function buildVerificationReport(snapshot) {
       && section.owner === PLUGIN_ORIGIN
     ))
   const componentSets = snapshot.componentSets || []
-  const expectedComponentIds = new Set(COMPONENT_DEFINITIONS.map(component => component.id))
-  const componentStructureValid = componentSets.length === COMPONENT_DEFINITIONS.length
-    && new Set(componentSets.map(item => item.id)).size === COMPONENT_DEFINITIONS.length
-    && componentSets.every(item => expectedComponentIds.has(item.id))
-    && componentSets.every(item => item.variants >= 2 && item.autoLayout && item.bound)
   const foundation = snapshot.foundation || {}
+  const componentStrict = validateComponentEvidence({ componentSets, foundation })
+  const componentStructureValid = componentStrict.valid
   const foundationStrict = validateFoundationEvidence(foundation)
   const foundationInventoryValid = foundationStrict.valid
   const foundationValid = ['paintsValid', 'radiiValid', 'effectsValid', 'fontsValid', 'docsBound'].every(key => foundation[key] === true)
@@ -737,7 +867,9 @@ export function buildVerificationReport(snapshot) {
     sectionStructureValid,
     componentSetCount: componentSets.length,
     componentStructureValid,
+    componentErrors: componentStrict.errors,
     instanceCount: Number(snapshot.instanceCount || 0),
+    documentationInstanceCount: Number(snapshot.documentationInstanceCount || 0),
     repeatedScreenInstanceCount: Number(snapshot.repeatedScreenInstanceCount || 0),
     foundationValid,
     foundationInventoryValid,
@@ -771,6 +903,7 @@ export function buildVerificationReport(snapshot) {
     && dialogStatesValid
     && componentStructureValid
     && report.instanceCount >= COMPONENT_DEFINITIONS.length
+    && report.documentationInstanceCount === COMPONENT_DEFINITIONS.length
     && report.repeatedScreenInstanceCount > 0
     && foundationValid
     && report.intersections.length === 0

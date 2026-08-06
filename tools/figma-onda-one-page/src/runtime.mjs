@@ -26,6 +26,7 @@ import {
   collectTextRangeBindings,
   collectVisibleFillBindings,
   computeOndaOrigin,
+  executeComponentMutation,
   executeFoundationMutation,
   hashBaselineRecords,
   isGrayColor,
@@ -38,6 +39,7 @@ import {
   foundationCodeSyntax,
   foundationSwatchLabelToken,
   validateDesignPlan,
+  validateComponentMutationInventory,
   validateFoundationMutationInventory,
   validatePhaseTransition,
   validateTargetContext,
@@ -826,129 +828,234 @@ async function localVariable(name, collectionName) {
   return variables.find(variable => variable.variableCollectionId === collection.id && variable.name === name) || null
 }
 
-async function bindComponentSurface(component, dark = false) {
-  const fillVariable = await localVariable('color/inverted', dark ? 'Onda · Semantic · Dark' : 'Onda · Semantic · Light')
-  const radiusVariable = await localVariable('radius/control', 'Onda · Dimension')
-  const spacingVariable = await localVariable('spacing/12', 'Onda · Dimension')
-  const horizontalPadding = await localVariable('spacing/16', 'Onda · Dimension')
-  const textVariable = await localVariable('color/on-inverted', dark ? 'Onda · Semantic · Dark' : 'Onda · Semantic · Light')
-  if (fillVariable) {
-    component.fills = [figma.variables.setBoundVariableForPaint(solid('gray/900'), 'color', fillVariable)]
-  }
-  if (radiusVariable) {
-    for (const field of ['topLeftRadius', 'topRightRadius', 'bottomLeftRadius', 'bottomRightRadius']) component.setBoundVariable(field, radiusVariable)
-  }
-  if (spacingVariable) component.setBoundVariable('itemSpacing', spacingVariable)
-  if (horizontalPadding) {
-    component.setBoundVariable('paddingLeft', horizontalPadding)
-    component.setBoundVariable('paddingRight', horizontalPadding)
-  }
-  if (textVariable) {
-    for (const node of component.findAll(node => node.type === 'TEXT')) {
-      node.fills = [figma.variables.setBoundVariableForPaint(solid('gray/000'), 'color', textVariable)]
-    }
-  }
-  component.setPluginData('ondaVariablesBound', 'true')
+function componentDefinition(componentId) {
+  const definition = COMPONENT_DEFINITIONS.find(component => component.id === componentId)
+  if (!definition) throw new Error(`Unbekannte Komponente: ${componentId}`)
+  return definition
 }
 
-async function rebindExistingComponent(set) {
-  for (const component of set.children) {
-    if (component.type !== 'COMPONENT') continue
-    await bindComponentSurface(component)
-    component.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN)
-  }
-  set.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN)
-  set.setPluginData('ondaVariablesBound', 'true')
-  return set
+function componentPropertyInventory(set) {
+  if (!set || set.type !== 'COMPONENT_SET') return []
+  return Object.entries(set.componentPropertyDefinitions || {})
+    .filter(([, property]) => property.type === 'TEXT')
+    .map(([key, property]) => ({
+      key,
+      name: key.split('#')[0],
+      type: property.type,
+      defaultValue: property.defaultValue,
+    }))
 }
 
-function componentVariant(parent, definition, decision, state, index) {
-  const component = figma.createComponent()
-  component.name = `State=${state}`
+function componentRoleInventory(component) {
+  if (!component || !('children' in component)) return []
+  return component.children.map(role => ({
+    nodeId: role.id,
+    name: role.name,
+    type: role.type,
+    owner: role.getPluginData(CREATED_MARKER_KEY),
+  }))
+}
+
+async function collectComponentMutationInventory(componentId) {
+  await figma.loadAllPagesAsync()
+  const definition = componentDefinition(componentId)
+  const setNodes = figma.currentPage.findAll(node => node.name === definition.name)
+  const sampleNodes = figma.currentPage.findAll(node => node.name === `${definition.name} / Dokumentationsinstanz`)
+  return {
+    sets: setNodes.map(set => ({
+      nodeId: set.id,
+      name: set.name,
+      type: set.type,
+      owner: set.getPluginData(CREATED_MARKER_KEY),
+      componentProperties: componentPropertyInventory(set),
+      variants: set.type === 'COMPONENT_SET' ? set.children.map(variant => ({
+        nodeId: variant.id,
+        name: variant.name,
+        type: variant.type,
+        owner: variant.getPluginData(CREATED_MARKER_KEY),
+        roles: componentRoleInventory(variant),
+      })) : [],
+    })),
+    samples: sampleNodes.map(sample => ({
+      nodeId: sample.id,
+      name: sample.name,
+      type: sample.type,
+      owner: sample.getPluginData(CREATED_MARKER_KEY),
+      documentation: sample.getPluginData('ondaDocumentationInstance') === 'true',
+      repeatedScreen: sample.getPluginData('ondaRepeatedScreenInstance') === 'true',
+      mainComponentId: sample.type === 'INSTANCE' ? sample.mainComponent?.id || null : null,
+    })),
+  }
+}
+
+async function preflightComponentMutation(componentId) {
+  const inventory = await collectComponentMutationInventory(componentId)
+  const result = validateComponentMutationInventory(inventory, componentId)
+  if (!result.valid) throw new Error(result.errors.join('\n'))
+  return inventory
+}
+
+async function componentVariables() {
+  const requests = [
+    ['surface', 'color/surface', 'Onda · Semantic · Light'],
+    ['inverted', 'color/inverted', 'Onda · Semantic · Light'],
+    ['text', 'color/text', 'Onda · Semantic · Light'],
+    ['onInverted', 'color/on-inverted', 'Onda · Semantic · Light'],
+    ['border', 'color/border', 'Onda · Semantic · Light'],
+    ['spacing8', 'spacing/8', 'Onda · Dimension'],
+    ['spacing16', 'spacing/16', 'Onda · Dimension'],
+    ['radiusControl', 'radius/control', 'Onda · Dimension'],
+    ['radiusCircle', 'radius/circle', 'Onda · Dimension'],
+  ]
+  const entries = await Promise.all(requests.map(async ([key, name, collection]) => [key, await localVariable(name, collection)]))
+  const variables = Object.fromEntries(entries)
+  const missing = requests.filter(([key]) => !variables[key]).map(([, name, collection]) => `${collection}/${name}`)
+  if (missing.length) throw new Error(`Komponentenvariablen fehlen: ${missing.join(', ')}`)
+  return variables
+}
+
+function boundComponentPaint(token, variable) {
+  const palette = {
+    'color/surface': 'gray/000',
+    'color/inverted': 'gray/900',
+    'color/text': 'gray/900',
+    'color/on-inverted': 'gray/000',
+    'color/border': 'gray/300',
+  }
+  return [figma.variables.setBoundVariableForPaint(solid(palette[token]), 'color', variable)]
+}
+
+function configureComponentRole(role, roleDefinition, copy, decision, textVariable, variables) {
+  role.name = `Role/${roleDefinition.name}`
+  role.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN)
+  role.effects = []
+  role.fills = boundComponentPaint(textVariable.name, textVariable.variable)
+  if (role.type === 'TEXT') {
+    role.fontName = { family: decision.family, style: decision.styles[roleDefinition.name === 'Icon' ? 700 : 500] }
+    role.fontSize = roleDefinition.name === 'State Label' ? 12 : 15
+    role.lineHeight = { unit: 'PIXELS', value: roleDefinition.name === 'State Label' ? 16 : 22 }
+    role.characters = copy[roleDefinition.name]
+  } else {
+    role.resize(16, 16)
+    role.setBoundVariable('maxWidth', variables.radiusCircle)
+    role.setBoundVariable('maxHeight', variables.radiusCircle)
+  }
+}
+
+function configureComponentVariant(component, definition, variantDefinition, decision, variables) {
+  component.name = variantDefinition.name
+  component.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN)
   component.layoutMode = 'HORIZONTAL'
   component.primaryAxisSizingMode = 'AUTO'
   component.counterAxisSizingMode = 'AUTO'
   component.primaryAxisAlignItems = 'CENTER'
   component.counterAxisAlignItems = 'CENTER'
   component.itemSpacing = 8
-  component.paddingTop = 12
+  component.paddingTop = 11
   component.paddingRight = 16
-  component.paddingBottom = 12
+  component.paddingBottom = 11
   component.paddingLeft = 16
-  component.cornerRadius = definition.id === 'dialog' ? 8 : 4
-  component.fills = [solid(index === 0 ? 'gray/900' : 'gray/000')]
-  component.strokes = [solid('gray/500')]
-  component.strokeWeight = state === 'Focus' ? 2 : 1
-  parent.appendChild(component)
-  const marker = figma.createText()
-  marker.name = 'Statussymbol'
-  marker.fontName = { family: decision.family, style: decision.styles[700] }
-  marker.fontSize = 15
-  marker.characters = state === 'Focus' ? '◎' : '●'
-  marker.fills = [solid(index === 0 ? 'gray/000' : 'gray/900')]
-  component.appendChild(marker)
-  const label = figma.createText()
-  label.name = 'label'
-  label.fontName = { family: decision.family, style: decision.styles[500] }
-  label.fontSize = 15
-  label.characters = definition.label
-  label.fills = [solid(index === 0 ? 'gray/000' : 'gray/900')]
-  component.appendChild(label)
-  return { component, label }
+  component.cornerRadius = 4
+  component.minHeight = definition.targetHeight
+  component.opacity = variantDefinition.name.includes('Disabled') ? 0.45 : 1
+  component.fills = boundComponentPaint(variantDefinition.surfaceToken, variantDefinition.surfaceToken === 'color/inverted' ? variables.inverted : variables.surface)
+  component.strokes = boundComponentPaint('color/border', variables.border)
+  component.strokeWeight = variantDefinition.name.includes('Focus') ? 2 : 1
+  component.effects = []
+  component.setBoundVariable('itemSpacing', variables.spacing8)
+  component.setBoundVariable('paddingLeft', variables.spacing16)
+  component.setBoundVariable('paddingRight', variables.spacing16)
+  for (const field of ['topLeftRadius', 'topRightRadius', 'bottomLeftRadius', 'bottomRightRadius']) component.setBoundVariable(field, variables.radiusControl)
+  const textVariable = variantDefinition.textToken === 'color/on-inverted'
+    ? { name: 'color/on-inverted', variable: variables.onInverted }
+    : { name: 'color/text', variable: variables.text }
+  for (const roleDefinition of definition.roles) {
+    const role = component.children.find(node => node.name === `Role/${roleDefinition.name}`)
+    if (!role || role.type !== roleDefinition.type) throw new Error(`Rolle fehlt: ${definition.name}/${variantDefinition.name}/${roleDefinition.name}`)
+    configureComponentRole(role, roleDefinition, variantDefinition.copy, decision, textVariable, variables)
+  }
+}
+
+function createComponentVariantNode(section, definition, variantDefinition) {
+  const component = figma.createComponent()
+  component.name = variantDefinition.name
+  section.appendChild(component)
+  for (const roleDefinition of definition.roles) {
+    const role = roleDefinition.type === 'TEXT' ? figma.createText() : figma.createEllipse()
+    role.name = `Role/${roleDefinition.name}`
+    component.appendChild(role)
+  }
+  return component
+}
+
+function componentLabelProperty(set, definition) {
+  const existing = componentPropertyInventory(set).find(property => property.name === 'Label' && property.type === 'TEXT')
+  if (existing) {
+    if (typeof set.editComponentProperty === 'function') set.editComponentProperty(existing.key, { defaultValue: definition.variants[0].copy[definition.labelRole] })
+    return existing.key
+  }
+  return set.addComponentProperty('Label', 'TEXT', definition.variants[0].copy[definition.labelRole])
 }
 
 async function runComponent(page, ledger, componentId) {
   await loadDecisionFonts(ledger.fontDecision)
-  const definition = COMPONENT_DEFINITIONS.find(component => component.id === componentId)
-  if (!definition) throw new Error(`Unbekannte Komponente: ${componentId}`)
-  const earlierMissing = COMPONENT_DEFINITIONS.filter(component => component.tier < definition.tier).filter(component => {
-    const section = page.children.find(node => node.type === 'SECTION' && node.name === '02 · Komponenten')
-    return !section || !section.findOne(node => node.type === 'COMPONENT_SET' && node.name === component.name)
-  })
-  if (earlierMissing.length) throw new Error(`Zuerst Abhängigkeiten erzeugen: ${earlierMissing.map(component => component.label).join(', ')}`)
+  const definition = componentDefinition(componentId)
+  const variables = await componentVariables()
   const section = ensureSection(page, ledger, '02 · Komponenten', 4000).node
-  const existing = section.findOne(node => node.type === 'COMPONENT_SET' && node.name === definition.name)
-  if (existing) {
-    await rebindExistingComponent(existing)
-    return { component: definition.name, status: 'reused', variantCount: existing.children.length }
+  let set = page.findOne(node => node.type === 'COMPONENT_SET' && node.name === definition.name)
+  const created = !set
+  if (!set) {
+    const components = definition.variants.map(variant => createComponentVariantNode(section, definition, variant))
+    set = figma.combineAsVariants(components, section)
   }
-  const variants = [
-    componentVariant(section, definition, ledger.fontDecision, 'Default', 0),
-    componentVariant(section, definition, ledger.fontDecision, 'Focus', 1),
-  ]
-  for (const variant of variants) await bindComponentSurface(variant.component)
-  const set = figma.combineAsVariants(variants.map(item => item.component), section)
   set.name = definition.name
-  set.description = `${definition.label}: monochrome Onda-Komponente mit Auto Layout, Variablenbindung und sichtbarem Fokuszustand.`
+  set.description = `${definition.label}: monochrome Tier-0-Komponente mit Auto Layout, semantischen Variablen und expliziten Zuständen.`
+  set.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN)
+  set.setPluginData('ondaComponentId', definition.id)
+  set.layoutMode = 'HORIZONTAL'
+  set.layoutWrap = 'WRAP'
+  set.primaryAxisSizingMode = 'AUTO'
+  set.counterAxisSizingMode = 'AUTO'
+  set.itemSpacing = 24
+  set.paddingTop = 32
+  set.paddingRight = 32
+  set.paddingBottom = 32
+  set.paddingLeft = 32
   set.fills = [solid('gray/050')]
   set.strokes = [solid('gray/200')]
   set.strokeWeight = 1
-  set.cornerRadius = 6
-  set.setPluginData('ondaComponentId', definition.id)
-  await rebindExistingComponent(set)
+  set.cornerRadius = 4
+  set.effects = []
+  for (const variantDefinition of definition.variants) {
+    const component = set.children.find(node => node.type === 'COMPONENT' && node.name === variantDefinition.name)
+    if (!component) throw new Error(`Variante fehlt: ${definition.name}/${variantDefinition.name}`)
+    configureComponentVariant(component, definition, variantDefinition, ledger.fontDecision, variables)
+  }
+  const labelKey = componentLabelProperty(set, definition)
+  for (const component of set.children) {
+    if (component.type !== 'COMPONENT') continue
+    for (const role of component.children) {
+      const roleName = role.name.slice('Role/'.length)
+      if (role.type === 'TEXT' && roleName === definition.labelRole) role.componentPropertyReferences = { characters: labelKey }
+    }
+  }
   const index = COMPONENT_DEFINITIONS.findIndex(component => component.id === componentId)
-  set.x = 80 + index % 2 * 920
-  set.y = 120 + Math.floor(index / 2) * 700
-  let maxX = 0
-  for (const [variantIndex, child] of set.children.entries()) {
-    child.x = 40 + variantIndex * 280
-    child.y = 80
-    maxX = Math.max(maxX, child.x + child.width)
+  set.x = 80 + index % 2 * 980
+  set.y = 120 + Math.floor(index / 2) * 900
+  const sampleName = `${definition.name} / Dokumentationsinstanz`
+  let sample = page.findOne(node => node.type === 'INSTANCE' && node.name === sampleName)
+  if (!sample) {
+    sample = set.children.find(node => node.type === 'COMPONENT' && node.name === definition.variants[0].name).createInstance()
+    section.appendChild(sample)
   }
-  resizeNode(set, Math.max(720, maxX + 40), 240)
-  const labelKey = set.addComponentProperty('Label', 'TEXT', definition.label)
-  for (const variant of set.children) {
-    const label = variant.findOne(node => node.type === 'TEXT' && node.name === 'label')
-    if (label) label.componentPropertyReferences = { characters: labelKey }
-  }
-  const instance = set.children[0].createInstance()
-  instance.name = `${definition.name} / Beispielinstanz`
-  instance.x = set.x
-  instance.y = set.y + set.height + 40
-  section.appendChild(instance)
-  instance.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN)
-  instance.setPluginData('ondaRepeatedScreenInstance', 'true')
-  return { component: definition.name, status: 'created', variantCount: set.children.length, instanceCount: 1 }
+  sample.name = sampleName
+  sample.x = set.x
+  sample.y = set.y + set.height + 40
+  sample.effects = []
+  sample.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN)
+  sample.setPluginData('ondaDocumentationInstance', 'true')
+  sample.setPluginData('ondaRepeatedScreenInstance', '')
+  return { component: definition.name, status: created ? 'created' : 'reused', variantCount: set.children.length, documentationInstanceCount: 1 }
 }
 
 function componentSet(page, name) {
@@ -1006,10 +1113,16 @@ async function runCoreViews(page, ledger) {
   const review = createEditorView(editor, ledger.fontDecision, 'Desktop · Review offen', 80)
   review.y = 1300
   const button = componentSet(page, 'Onda/Button')
+  const iconButton = componentSet(page, 'Onda/Icon Button')
+  const statusSymbol = componentSet(page, 'Onda/Status Symbol')
+  const tag = componentSet(page, 'Onda/Tag')
   if (button) {
     placeInstance(clean, button, 'Editor / Bereit / Hauptaktion')
     placeInstance(review, button, 'Editor / Review / Hauptaktion')
   }
+  if (iconButton) placeInstance(clean, iconButton, 'Editor / Bereit / Icon-Aktion')
+  if (statusSymbol) placeInstance(clean, statusSymbol, 'Editor / Bereit / Status')
+  if (tag) placeInstance(review, tag, 'Editor / Review / Kennzeichnung')
   return { sections: 3, libraryViews: 2, editorViews: 2, componentInstances: button ? 2 : 0 }
 }
 
@@ -1427,6 +1540,77 @@ async function collectFoundationEvidence(foundationSection, fontDecision) {
   }
 }
 
+function componentPaintEvidence(paints) {
+  return collectVisibleFillBindings(paints).map(binding => ({
+    ...binding,
+    color: cloneSerializable(paints?.[binding.index]?.color),
+  }))
+}
+
+function collectComponentEvidence(page) {
+  const definitionsByName = new Map(COMPONENT_DEFINITIONS.map(definition => [definition.name, definition]))
+  return page.findAll(node => node.type === 'COMPONENT_SET' && node.name.startsWith('Onda/')).map(set => {
+    const definition = definitionsByName.get(set.name)
+    const variants = set.children.filter(node => node.type === 'COMPONENT').map(component => ({
+      nodeId: component.id,
+      name: component.name,
+      owner: component.getPluginData(CREATED_MARKER_KEY),
+      type: component.type,
+      layoutMode: component.layoutMode,
+      width: component.width,
+      height: component.height,
+      cornerRadius: component.cornerRadius,
+      strokeWeight: component.strokeWeight,
+      opacity: component.opacity,
+      fills: componentPaintEvidence(component.fills),
+      strokes: componentPaintEvidence(component.strokes),
+      effects: cloneSerializable(component.effects),
+      fieldVariableIds: collectFieldVariableIds(component, [
+        'itemSpacing', 'paddingLeft', 'paddingRight',
+        'topLeftRadius', 'topRightRadius', 'bottomLeftRadius', 'bottomRightRadius',
+      ]),
+      roles: component.children.map(role => ({
+        nodeId: role.id,
+        name: role.name,
+        owner: role.getPluginData(CREATED_MARKER_KEY),
+        type: role.type,
+        characters: role.type === 'TEXT' ? role.characters : null,
+        width: role.width,
+        height: role.height,
+        fills: componentPaintEvidence(role.fills),
+        effects: cloneSerializable(role.effects),
+        fieldVariableIds: collectFieldVariableIds(role, ['maxWidth', 'maxHeight']),
+        characterPropertyKey: role.type === 'TEXT' ? role.componentPropertyReferences?.characters || null : null,
+      })),
+    }))
+    const sampleName = `${set.name} / Dokumentationsinstanz`
+    const samples = page.findAll(node => node.name === sampleName)
+    const sampleNode = samples.length === 1 ? samples[0] : null
+    return {
+      id: definition?.id || '',
+      nodeId: set.id,
+      name: set.name,
+      owner: set.getPluginData(CREATED_MARKER_KEY),
+      type: set.type,
+      layoutMode: set.layoutMode,
+      effects: cloneSerializable(set.effects),
+      componentProperties: componentPropertyInventory(set),
+      variants,
+      sampleCount: samples.length,
+      sample: sampleNode ? {
+        nodeId: sampleNode.id,
+        name: sampleNode.name,
+        owner: sampleNode.getPluginData(CREATED_MARKER_KEY),
+        type: sampleNode.type,
+        mainComponentId: sampleNode.type === 'INSTANCE' ? sampleNode.mainComponent?.id || null : null,
+        documentation: sampleNode.getPluginData('ondaDocumentationInstance') === 'true',
+        repeatedScreen: sampleNode.getPluginData('ondaRepeatedScreenInstance') === 'true',
+        effects: cloneSerializable(sampleNode.effects),
+      } : null,
+    }
+  })
+}
+
 async function runVerify() {
   const inspection = await inspectCurrentTarget()
   const page = figma.currentPage
@@ -1443,16 +1627,7 @@ async function runVerify() {
   const dialogStates = allNodes.map(node => ({
     family: node.getPluginData?.('ondaDialogFamily'), state: node.getPluginData?.('ondaDialogState'),
   })).filter(item => item.family && item.state)
-  const componentSets = COMPONENT_DEFINITIONS.map(definition => {
-    const set = allNodes.find(node => node.type === 'COMPONENT_SET' && node.name === definition.name)
-    const variants = set?.children.filter(node => node.type === 'COMPONENT') || []
-    return set ? {
-      id: definition.id,
-      variants: variants.length,
-      autoLayout: variants.length > 0 && variants.every(node => node.layoutMode !== 'NONE'),
-      bound: set.getPluginData('ondaVariablesBound') === 'true' && variants.every(node => node.getPluginData('ondaVariablesBound') === 'true'),
-    } : null
-  }).filter(Boolean)
+  const componentSets = collectComponentEvidence(page)
   const baseline = currentBaselineEvidence(page, ledger)
   const geometry = geometryEvidence(page, sections, allNodes, ledger, baseline.baselineRecords)
   const paints = paintsFromNodes(allNodes)
@@ -1479,7 +1654,8 @@ async function runVerify() {
     annotationViews,
     dialogStates,
     componentSets,
-    instanceCount: allNodes.filter(node => node.type === 'INSTANCE').length,
+    instanceCount: allNodes.filter(node => node.type === 'INSTANCE' && node.getPluginData('ondaDocumentationInstance') !== 'true').length,
+    documentationInstanceCount: allNodes.filter(node => node.type === 'INSTANCE' && node.getPluginData('ondaDocumentationInstance') === 'true').length,
     repeatedScreenInstanceCount: allNodes.filter(node => node.type === 'INSTANCE' && node.getPluginData('ondaRepeatedScreenInstance') === 'true').length,
     foundation: {
       paintsValid: paints.every(isGrayColor),
@@ -1566,6 +1742,15 @@ async function handleCommand(command) {
   if (command === 'foundations') {
     await executeFoundationMutation({
       preflight: preflightFoundationMutation,
+      requireContext: requireMutationContext,
+      mutate: runMutation,
+    })
+    return
+  }
+  if (command.startsWith('component-')) {
+    const componentId = command.slice('component-'.length)
+    await executeComponentMutation({
+      preflight: () => preflightComponentMutation(componentId),
       requireContext: requireMutationContext,
       mutate: runMutation,
     })
