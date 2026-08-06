@@ -15,6 +15,8 @@ import {
   annotationBatch,
 } from './definitions.mjs'
 import {
+  authorizeMutation,
+  buildBaselineShards,
   buildVerificationReport,
   canReuseOwnedNode,
   computeOndaOrigin,
@@ -23,7 +25,10 @@ import {
   isValidRadius,
   orderRecordsByBaselineIds,
   protectedChildIds,
+  restoreBaselineShards,
+  selectFontDecision,
   validateDesignPlan,
+  validatePhaseTransition,
   validateTargetContext,
   buildDesignPlan,
 } from './plan.mjs'
@@ -33,8 +38,10 @@ const SECTION_CELL_WIDTH = 2400
 const SECTION_CELL_HEIGHT = 11000
 const SECTION_COLUMNS = 3
 const CREATED_MARKER_KEY = 'ondaOrigin'
+const BASELINE_SHARD_PREFIX = 'ondaBaselineShard:'
 
 let lastInspection = null
+let operatorPin = null
 
 figma.showUI(__html__, { width: 420, height: 720, themeColors: true })
 
@@ -163,30 +170,22 @@ function writeLedger(page, ledger) {
   page.setPluginData(LEDGER_KEY, JSON.stringify(ledger))
 }
 
-function fontStyleForWeight(fonts, family, weight) {
-  const preferences = weight === 400
-    ? ['Regular', 'Book', 'Normal']
-    : weight === 500
-      ? ['Medium', 'Semi Medium', 'Regular']
-      : ['Bold', 'Semi Bold', 'Semibold', 'Medium']
-  const styles = fonts.filter(font => font.fontName.family === family).map(font => font.fontName.style)
-  return preferences.find(style => styles.includes(style)) || styles[0] || null
+function writeBaselineShards(page, records) {
+  const previous = readLedger(page)?.baseline?.shardCount || 0
+  const shards = buildBaselineShards(records)
+  for (const [index, shard] of shards.entries()) page.setPluginData(`${BASELINE_SHARD_PREFIX}${index}`, shard)
+  for (let index = shards.length; index < previous; index += 1) page.setPluginData(`${BASELINE_SHARD_PREFIX}${index}`, '')
+  return shards.length
+}
+
+function readBaselineRecords(page, ledger) {
+  const count = Number(ledger?.baseline?.shardCount || 0)
+  if (!count) return []
+  return restoreBaselineShards(Array.from({ length: count }, (_, index) => page.getPluginData(`${BASELINE_SHARD_PREFIX}${index}`)))
 }
 
 function inspectFonts(fonts) {
-  const exactFamily = fonts.some(font => font.fontName.family === 'ABC Diatype')
-  const family = exactFamily
-    ? 'ABC Diatype'
-    : fonts.some(font => font.fontName.family === 'Inter')
-      ? 'Inter'
-      : fonts[0]?.fontName.family
-  if (!family) throw new Error('Keine verwendbare Schrift in Figma gefunden.')
-  const styles = Object.fromEntries(TYPE_WEIGHTS.map(weight => [weight, fontStyleForWeight(fonts, family, weight)]))
-  if (Object.values(styles).some(style => !style)) throw new Error(`Keine vollständigen Schriftschnitte für ${family} gefunden.`)
-  const warning = exactFamily
-    ? ''
-    : `ABC Diatype ist nicht verfügbar. Sichtbarer System-Fallback: ${family}.`
-  return { requestedFamily: 'ABC Diatype', family, styles, exact: exactFamily, warning }
+  return selectFontDecision(fonts)
 }
 
 async function inspectCurrentTarget() {
@@ -201,9 +200,11 @@ async function inspectCurrentTarget() {
   const fontDecision = inspectFonts(fonts)
   const ledger = readLedger(page)
   const records = ledger ? null : collectRecordsFromDocument()
-  const topLevelIds = ledger ? ledger.baseline.topLevelIds : page.children.map(node => node.id)
+  const topLevelIds = ledger ? [] : page.children.map(node => node.id)
   const result = {
     target,
+    documentId: figma.root.id,
+    pageId: page.id,
     fileKey: figma.fileKey || null,
     expectedFileKey: TARGET_FILE_KEY,
     documentName: figma.root.name,
@@ -216,8 +217,6 @@ async function inspectCurrentTarget() {
     pendingBaseline: ledger ? null : {
       records,
       hash: hashBaselineRecords(records),
-      nodeHashes: records.map(record => ({ id: record.id, hash: hashBaselineRecords([record]) })),
-      nodeIds: records.map(record => record.id),
       topLevelIds,
       topLevelCount: topLevelIds.length,
       pages: pageInvariantSnapshot(),
@@ -228,7 +227,7 @@ async function inspectCurrentTarget() {
 }
 
 function inspectionMessage(inspection) {
-  const targetText = inspection.target.ok
+  const targetText = inspection.target.ok || inspection.target.readOnlyOk
     ? `Ziel geprüft: ${inspection.documentName} · ${inspection.pageName}.`
     : inspection.target.warning
   const fontText = inspection.fontDecision.warning || 'ABC Diatype mit exakten Schnitten verfügbar.'
@@ -236,34 +235,57 @@ function inspectionMessage(inspection) {
 }
 
 async function requireMutationContext() {
-  const inspection = lastInspection || await inspectCurrentTarget()
-  if (!inspection.target.ok) throw new Error(inspection.target.warning)
+  let inspection = lastInspection || await inspectCurrentTarget()
   const page = figma.currentPage
+  if (inspection.documentId !== figma.root.id || inspection.pageId !== page.id) inspection = await inspectCurrentTarget()
+  const authorization = authorizeMutation(inspection.target, operatorPin, { documentId: figma.root.id, pageId: page.id })
+  if (!authorization.ok) throw new Error(authorization.warning || inspection.target.warning)
   let ledger = readLedger(page)
+  if (ledger?.version === 1) {
+    const legacyIds = ledger.baseline.nodeIds || []
+    const currentRecords = orderRecordsByBaselineIds(collectRecordsFromDocument(new Set(legacyIds)), legacyIds)
+    if (hashBaselineRecords(currentRecords) !== ledger.baseline.hash) throw new Error('Legacy-Baseline weicht ab; sichere Shard-Migration abgebrochen.')
+    const shardCount = writeBaselineShards(page, currentRecords)
+    ledger.version = 2
+    ledger.baseline = {
+      hash: ledger.baseline.hash,
+      shardCount,
+      recordCount: currentRecords.length,
+      topLevelCount: ledger.baseline.topLevelCount,
+      pages: ledger.baseline.pages,
+    }
+    writeLedger(page, ledger)
+  }
   if (!ledger) {
     const baseline = inspection.pendingBaseline
     if (!baseline) throw new Error('Inspect muss vor der ersten Mutation erneut ausgeführt werden.')
-    const origin = computeOndaOrigin(page.children)
+    function boundsTree(node) {
+      return {
+        x: node.x, width: node.width, absoluteRenderBounds: node.absoluteRenderBounds,
+        children: 'children' in node ? node.children.map(boundsTree) : [],
+      }
+    }
+    const origin = computeOndaOrigin(page.children.map(boundsTree))
+    const shardCount = writeBaselineShards(page, baseline.records)
     ledger = {
-      version: 1,
+      version: 2,
       origin: { x: origin, y: 0 },
       target: {
         fileKey: figma.fileKey || null,
         documentName: figma.root.name,
         pageId: page.id,
         pageName: page.name,
-        fallback: inspection.target.fallback,
+        manualPin: authorization.manual,
       },
       fontDecision: inspection.fontDecision,
       baseline: {
         hash: baseline.hash,
-        nodeHashes: baseline.nodeHashes,
-        nodeIds: baseline.nodeIds,
-        topLevelIds: baseline.topLevelIds,
+        shardCount,
+        recordCount: baseline.records.length,
         topLevelCount: baseline.topLevelCount,
         pages: baseline.pages,
       },
-      phases: {},
+      phases: { inspect: { status: 'success', at: new Date().toISOString() } },
       createdAt: new Date().toISOString(),
     }
     writeLedger(page, ledger)
@@ -271,6 +293,8 @@ async function requireMutationContext() {
   if (ledger.target.pageId !== page.id || ledger.target.pageName !== TARGET_PAGE_NAME) {
     throw new Error('Das gespeicherte Onda-Ledger gehört nicht zur aktuellen Page 1.')
   }
+  const records = readBaselineRecords(page, ledger)
+  Object.defineProperty(ledger, 'baselineRecords', { value: records, enumerable: false, configurable: true })
   return { page, ledger }
 }
 
@@ -298,7 +322,7 @@ function ensureSection(page, ledger, name, height = 1800) {
     const reusable = existing.type === 'SECTION' && canReuseOwnedNode({
       id: existing.id,
       owner: existing.getPluginData(CREATED_MARKER_KEY),
-    }, new Set(ledger.baseline.nodeIds))
+    }, new Set((ledger.baselineRecords || []).map(record => record.id)))
     if (!reusable) throw new Error(`Namenskollision mit geschütztem Bestand: ${name}`)
     return { node: existing, created: false }
   }
@@ -323,8 +347,7 @@ function directChild(parent, name, types = null) {
 
 function autoFrame(parent, name, options = {}) {
   const existing = directChild(parent, name, ['FRAME'])
-  if (existing) return { node: existing, created: false }
-  const frame = figma.createFrame()
+  const frame = existing || figma.createFrame()
   frame.name = name
   frame.layoutMode = options.direction || 'VERTICAL'
   frame.primaryAxisSizingMode = options.primarySizing || 'AUTO'
@@ -342,11 +365,11 @@ function autoFrame(parent, name, options = {}) {
   frame.cornerRadius = options.radius ?? 6
   frame.clipsContent = true
   resizeNode(frame, options.width || 620, options.height || 120)
-  parent.appendChild(frame)
+  if (!existing) parent.appendChild(frame)
   if (Number.isFinite(options.x)) frame.x = options.x
   if (Number.isFinite(options.y)) frame.y = options.y
   frame.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN)
-  return { node: frame, created: true }
+  return { node: frame, created: !existing }
 }
 
 async function loadDecisionFonts(decision) {
@@ -357,8 +380,7 @@ async function loadDecisionFonts(decision) {
 
 function textNode(parent, name, characters, decision, options = {}) {
   const existing = directChild(parent, name, ['TEXT'])
-  if (existing) return { node: existing, created: false }
-  const text = figma.createText()
+  const text = existing || figma.createText()
   text.name = name
   const weight = options.weight || 400
   text.fontName = { family: decision.family, style: decision.styles[weight] }
@@ -367,12 +389,13 @@ function textNode(parent, name, characters, decision, options = {}) {
   text.lineHeight = { unit: 'PIXELS', value: scale?.lineHeight || Math.round(text.fontSize * 1.45) }
   text.characters = characters
   text.fills = [solid(options.dark ? 'gray/000' : options.muted ? 'gray/500' : 'gray/900')]
-  parent.appendChild(text)
+  if (!existing) parent.appendChild(text)
   if (options.width) {
     text.textAutoResize = 'HEIGHT'
     text.resize(options.width, Math.max(text.height, 16))
   }
-  return { node: text, created: true }
+  text.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN)
+  return { node: text, created: !existing }
 }
 
 function heading(parent, title, decision, subtitle = '') {
@@ -392,12 +415,11 @@ async function ensureCollection(name, modeName) {
 async function ensureVariable(collection, modeId, definition) {
   const variables = await figma.variables.getLocalVariablesAsync()
   const existing = variables.find(variable => variable.variableCollectionId === collection.id && variable.name === definition.name)
-  if (existing) return { variable: existing, created: false }
-  const variable = figma.variables.createVariable(definition.name, collection, definition.type)
+  const variable = existing || figma.variables.createVariable(definition.name, collection, definition.type)
   variable.setValueForMode(modeId, definition.value)
   if (definition.type !== 'BOOLEAN') variable.scopes = definition.scopes || []
   variable.setVariableCodeSyntax('WEB', `var(${definition.css})`)
-  return { variable, created: true }
+  return { variable, created: !existing }
 }
 
 async function createFoundationVariables() {
@@ -472,14 +494,14 @@ async function createFoundationStyles(decision) {
   for (const scale of TYPE_SCALE) {
     for (const weight of TYPE_WEIGHTS) {
       const name = `Onda/Type/${scale.size} · ${weight}`
-      if (existingText.some(style => style.name === name)) continue
-      const style = figma.createTextStyle()
+      const existing = existingText.find(style => style.name === name)
+      const style = existing || figma.createTextStyle()
       style.name = name
       style.fontName = { family: decision.family, style: decision.styles[weight] }
       style.fontSize = scale.size
       style.lineHeight = { unit: 'PIXELS', value: scale.lineHeight }
       style.letterSpacing = { unit: 'PIXELS', value: 0 }
-      createdText.push(style.id)
+      if (!existing) createdText.push(style.id)
     }
   }
   const existingEffects = await figma.getLocalEffectStylesAsync()
@@ -489,17 +511,63 @@ async function createFoundationStyles(decision) {
     { name: 'Onda/Shadow/Overlay', radius: 24, opacity: 0.16, y: 8 },
   ]
   for (const effect of effects) {
-    if (existingEffects.some(style => style.name === effect.name)) continue
-    const style = figma.createEffectStyle()
+    const existing = existingEffects.find(style => style.name === effect.name)
+    const style = existing || figma.createEffectStyle()
     style.name = effect.name
     style.effects = [{
       type: 'DROP_SHADOW', color: { r: 0, g: 0, b: 0, a: effect.opacity },
       offset: { x: 0, y: effect.y }, radius: effect.radius, spread: 0,
       visible: true, blendMode: 'NORMAL',
     }]
-    createdEffects.push(style.id)
+    if (!existing) createdEffects.push(style.id)
   }
   return { createdTextStyleIds: createdText, createdEffectStyleIds: createdEffects }
+}
+
+function ensureRadiusSample(parent, token) {
+  const name = `Radius / ${token.value}`
+  const expectedType = token.geometry === 'ELLIPSE' ? 'ELLIPSE' : 'RECTANGLE'
+  const existing = directChild(parent, name)
+  if (existing && existing.type !== expectedType) throw new Error(`Ungültiger bestehender Foundation-Sample: ${name}`)
+  const sample = existing || (expectedType === 'ELLIPSE' ? figma.createEllipse() : figma.createRectangle())
+  sample.name = name
+  sample.resize(112, 112)
+  sample.fills = [solid('gray/100')]
+  sample.strokes = [solid('gray/700')]
+  sample.strokeWeight = 1
+  if (expectedType === 'RECTANGLE') sample.cornerRadius = token.value
+  if (!existing) parent.appendChild(sample)
+  sample.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN)
+  return { node: sample, created: !existing }
+}
+
+async function bindFoundationArtifacts(section) {
+  const surface = await localVariable('color/surface', 'Onda · Semantic · Light')
+  const background = await localVariable('color/background', 'Onda · Semantic · Light')
+  const text = await localVariable('color/text', 'Onda · Semantic · Light')
+  const muted = await localVariable('color/text-muted', 'Onda · Semantic · Light')
+  const border = await localVariable('color/border', 'Onda · Semantic · Light')
+  const spacing = await localVariable('spacing/24', 'Onda · Dimension')
+  if (background) section.fills = [figma.variables.setBoundVariableForPaint(solid('gray/025'), 'color', background)]
+  const nodes = collectOndaNodes([section])
+  for (const node of nodes) {
+    if (node.type === 'FRAME' && surface) node.fills = [figma.variables.setBoundVariableForPaint(solid('gray/000'), 'color', surface)]
+    if ('strokes' in node && border && node.strokes?.length) node.strokes = [figma.variables.setBoundVariableForPaint(solid('gray/200'), 'color', border)]
+    if (node.type === 'TEXT') {
+      const variable = /Untertitel|Fontstatus|Label/.test(node.name) ? muted : text
+      if (variable) node.fills = [figma.variables.setBoundVariableForPaint(solid(variable === muted ? 'gray/500' : 'gray/900'), 'color', variable)]
+    }
+    if (node.type === 'FRAME' && spacing) node.setBoundVariable('itemSpacing', spacing)
+    if (node.name.startsWith('Swatch / ') && node.type === 'FRAME') {
+      const primitive = await localVariable(node.name.slice('Swatch / '.length), 'Onda · Primitive')
+      if (primitive) node.fills = [figma.variables.setBoundVariableForPaint(node.fills[0], 'color', primitive)]
+    }
+    if (node.name.startsWith('Radius / ') && node.type === 'RECTANGLE') {
+      const radius = await localVariable(`radius/${node.cornerRadius === 0 ? 'none' : node.cornerRadius === 4 ? 'control' : node.cornerRadius === 6 ? 'static' : 'overlay'}`, 'Onda · Dimension')
+      if (radius) for (const field of ['topLeftRadius', 'topRightRadius', 'bottomLeftRadius', 'bottomRightRadius']) node.setBoundVariable(field, radius)
+    }
+    node.setPluginData('ondaFoundationBound', 'true')
+  }
 }
 
 async function runFoundations(page, ledger) {
@@ -529,15 +597,9 @@ async function runFoundations(page, ledger) {
   }
   const radius = autoFrame(section, 'Foundations / Radien', { x: 80, y: 2250, width: 1940, direction: 'HORIZONTAL', padding: 32, gap: 20, radius: 6 }).node
   for (const token of RADIUS_TOKENS) {
-    const sample = token.geometry === 'ELLIPSE' ? figma.createEllipse() : figma.createRectangle()
-    sample.name = `Radius / ${token.value}`
-    sample.resize(112, 112)
-    sample.fills = [solid('gray/100')]
-    sample.strokes = [solid('gray/700')]
-    sample.strokeWeight = 1
-    if (token.geometry !== 'ELLIPSE') sample.cornerRadius = token.value
-    radius.appendChild(sample)
+    ensureRadiusSample(radius, token)
   }
+  await bindFoundationArtifacts(section)
   return {
     sectionCreated: sectionResult.created,
     collectionCount: variables.collections.length,
@@ -559,6 +621,8 @@ async function bindComponentSurface(component, dark = false) {
   const fillVariable = await localVariable('color/inverted', dark ? 'Onda · Semantic · Dark' : 'Onda · Semantic · Light')
   const radiusVariable = await localVariable('radius/control', 'Onda · Dimension')
   const spacingVariable = await localVariable('spacing/12', 'Onda · Dimension')
+  const horizontalPadding = await localVariable('spacing/16', 'Onda · Dimension')
+  const textVariable = await localVariable('color/on-inverted', dark ? 'Onda · Semantic · Dark' : 'Onda · Semantic · Light')
   if (fillVariable) {
     component.fills = [figma.variables.setBoundVariableForPaint(solid('gray/900'), 'color', fillVariable)]
   }
@@ -566,6 +630,27 @@ async function bindComponentSurface(component, dark = false) {
     for (const field of ['topLeftRadius', 'topRightRadius', 'bottomLeftRadius', 'bottomRightRadius']) component.setBoundVariable(field, radiusVariable)
   }
   if (spacingVariable) component.setBoundVariable('itemSpacing', spacingVariable)
+  if (horizontalPadding) {
+    component.setBoundVariable('paddingLeft', horizontalPadding)
+    component.setBoundVariable('paddingRight', horizontalPadding)
+  }
+  if (textVariable) {
+    for (const node of component.findAll(node => node.type === 'TEXT')) {
+      node.fills = [figma.variables.setBoundVariableForPaint(solid('gray/000'), 'color', textVariable)]
+    }
+  }
+  component.setPluginData('ondaVariablesBound', 'true')
+}
+
+async function rebindExistingComponent(set) {
+  for (const component of set.children) {
+    if (component.type !== 'COMPONENT') continue
+    await bindComponentSurface(component)
+    component.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN)
+  }
+  set.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN)
+  set.setPluginData('ondaVariablesBound', 'true')
+  return set
 }
 
 function componentVariant(parent, definition, decision, state, index) {
@@ -615,6 +700,7 @@ async function runComponent(page, ledger, componentId) {
   const section = ensureSection(page, ledger, '02 · Komponenten', 4000).node
   const existing = section.findOne(node => node.type === 'COMPONENT_SET' && node.name === definition.name)
   if (existing) {
+    await rebindExistingComponent(existing)
     return { component: definition.name, status: 'reused', variantCount: existing.children.length }
   }
   const variants = [
@@ -629,6 +715,8 @@ async function runComponent(page, ledger, componentId) {
   set.strokes = [solid('gray/200')]
   set.strokeWeight = 1
   set.cornerRadius = 6
+  set.setPluginData('ondaComponentId', definition.id)
+  await rebindExistingComponent(set)
   const index = COMPONENT_DEFINITIONS.findIndex(component => component.id === componentId)
   set.x = 80 + index % 2 * 920
   set.y = 120 + Math.floor(index / 2) * 700
@@ -649,6 +737,8 @@ async function runComponent(page, ledger, componentId) {
   instance.x = set.x
   instance.y = set.y + set.height + 40
   section.appendChild(instance)
+  instance.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN)
+  instance.setPluginData('ondaRepeatedScreenInstance', 'true')
   return { component: definition.name, status: 'created', variantCount: set.children.length, instanceCount: 1 }
 }
 
@@ -664,6 +754,8 @@ function placeInstance(parent, set, name) {
   const instance = set.children[0].createInstance()
   instance.name = name
   parent.appendChild(instance)
+  instance.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN)
+  instance.setPluginData('ondaRepeatedScreenInstance', 'true')
   return instance
 }
 
@@ -678,6 +770,7 @@ function createLibraryView(section, decision, state, x) {
 
 function createEditorView(section, decision, state, x, dark = false, width = 1440) {
   const frame = autoFrame(section, `Editor / ${state}`, { x, y: 180, width, padding: 0, gap: 0, radius: 0, dark, direction: 'HORIZONTAL' }).node
+  frame.setPluginData('ondaResponsiveFrame', String(width))
   const nav = autoFrame(frame, `Editor / ${state} / Navigation`, { width: Math.min(264, Math.round(width * .25)), padding: 24, gap: 16, radius: 0, dark, fill: dark ? 'gray/900' : 'gray/050' }).node
   textNode(nav, `Editor / ${state} / Navigation / Marke`, 'ONDA', decision, { size: 21, weight: 700, dark, width: 210 })
   for (const label of ['Struktur', 'Projektverständnis', 'Quellen', 'Einstellungen']) textNode(nav, `Editor / ${state} / Navigation / ${label}`, `□ ${label}`, decision, { size: 15, weight: 500, dark, width: 210 })
@@ -841,11 +934,21 @@ function createPrototype(section, decision) {
     ['Quellen & Recherche', 'Quellen → Import → Recherche planen → Lauf → Prüfung → Fundstelle übernehmen'],
     ['Agent & Beleg', 'Aura → Agentengespräch → Antwort → Fundstelle → Editor'],
   ]
+  const frames = []
   for (const [index, [name, path]] of flows.entries()) {
     const frame = autoFrame(section, `Prototyp / ${name}`, { x: 80, y: 120 + index * 500, width: 1940, padding: 32, gap: 20, radius: 6 }).node
+    frames.push(frame)
     textNode(frame, `Prototyp / ${name} / Titel`, name, decision, { size: 21, weight: 700, width: 1800 })
     textNode(frame, `Prototyp / ${name} / Pfad`, path, decision, { size: 15, weight: 500, width: 1800 })
     textNode(frame, `Prototyp / ${name} / Recovery`, 'Fehler → Wiederholen / Einrichten / Korrigieren / Abbrechen · keine tote Zwischenstation', decision, { size: 12, weight: 700, width: 1800 })
+  }
+  for (const [index, frame] of frames.entries()) {
+    const destination = frames[(index + 1) % frames.length]
+    frame.reactions = [{
+      trigger: { type: 'ON_CLICK' },
+      actions: [{ type: 'NODE', destinationId: destination.id, navigation: 'NAVIGATE', transition: null, preserveScrollPosition: false }],
+    }]
+    frame.setPluginData('ondaPrototypeReaction', 'true')
   }
 }
 
@@ -900,13 +1003,19 @@ function radiiFromNodes(nodes) {
 }
 
 function currentBaselineEvidence(page, ledger) {
-  const baselineIds = new Set(ledger.baseline.nodeIds)
-  const records = orderRecordsByBaselineIds(collectRecordsFromDocument(baselineIds), ledger.baseline.nodeIds)
+  const baselineRecords = readBaselineRecords(page, ledger)
+  const baselineIdsInOrder = baselineRecords.map(record => record.id)
+  const baselineIds = new Set(baselineIdsInOrder)
+  const records = orderRecordsByBaselineIds(collectRecordsFromDocument(baselineIds), baselineIdsInOrder)
   const currentById = new Map(records.map(record => [record.id, hashBaselineRecords([record])]))
-  const mismatches = ledger.baseline.nodeHashes.filter(item => currentById.get(item.id) !== item.hash).map(item => item.id)
+  const mismatches = baselineRecords
+    .filter(record => currentById.get(record.id) !== hashBaselineRecords([record]))
+    .map(record => record.id)
   const currentHash = hashBaselineRecords(records)
-  const presentTopLevel = page.children.filter(node => ledger.baseline.topLevelIds.includes(node.id)).length
+  const topLevelIds = baselineRecords.filter(record => record.parentId === page.id).map(record => record.id)
+  const presentTopLevel = page.children.filter(node => topLevelIds.includes(node.id)).length
   return {
+    baselineRecords,
     records,
     currentHash,
     mismatches,
@@ -915,25 +1024,114 @@ function currentBaselineEvidence(page, ledger) {
   }
 }
 
+function renderRect(value) {
+  const rect = value?.absoluteRenderBounds || value?.absoluteBoundingBox || value?.bounds
+  if (!rect || ![rect.x, rect.y, rect.width, rect.height].every(Number.isFinite)) return null
+  return { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
+}
+
+function rectanglesIntersect(a, b) {
+  return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y
+}
+
+function geometryEvidence(page, sections, allNodes, ledger, baselineRecords) {
+  const ondaRects = sections.map(node => ({ id: node.id, name: node.name, rect: renderRect(node) })).filter(item => item.rect)
+  const baselineRects = baselineRecords
+    .filter(record => record.type !== 'DOCUMENT' && record.type !== 'PAGE')
+    .map(record => ({ id: record.id, name: record.name, rect: renderRect(record) }))
+    .filter(item => item.rect)
+  const intersections = []
+  for (let left = 0; left < ondaRects.length; left += 1) {
+    for (let right = left + 1; right < ondaRects.length; right += 1) {
+      if (rectanglesIntersect(ondaRects[left].rect, ondaRects[right].rect)) intersections.push([ondaRects[left].name, ondaRects[right].name])
+    }
+  }
+  for (const onda of ondaRects) {
+    for (const foreign of baselineRects) if (rectanglesIntersect(onda.rect, foreign.rect)) intersections.push([onda.name, foreign.name])
+  }
+  const minOndaLeft = Math.min(...ondaRects.map(item => item.rect.x))
+  const maxBaselineRight = Math.max(0, ...baselineRecords.map(renderRect).filter(Boolean).map(rect => rect.x + rect.width))
+  const clearance = Number.isFinite(minOndaLeft) ? minOndaLeft - maxBaselineRight : 0
+  const overflowNodes = []
+  for (const frame of allNodes.filter(node => node.type === 'FRAME' && node.getPluginData('ondaResponsiveFrame'))) {
+    const outer = renderRect(frame)
+    if (!outer) continue
+    for (const descendant of frame.findAll(() => true)) {
+      const inner = renderRect(descendant)
+      if (inner && (inner.x < outer.x - .5 || inner.x + inner.width > outer.x + outer.width + .5)) overflowNodes.push(descendant.id)
+    }
+  }
+  const undersizedHitTargets = allNodes
+    .filter(node => node.type === 'INSTANCE')
+    .filter(node => node.width < 44 || node.height < 44)
+    .map(node => node.id)
+  return { intersections, clearance, overflowNodes: [...new Set(overflowNodes)], undersizedHitTargets }
+}
+
 async function runVerify() {
   const inspection = await inspectCurrentTarget()
-  if (!inspection.target.ok) throw new Error(inspection.target.warning)
   const page = figma.currentPage
+  const authorization = authorizeMutation(inspection.target, operatorPin, { documentId: figma.root.id, pageId: page.id })
+  if (!authorization.ok) throw new Error(authorization.warning || inspection.target.warning)
   const ledger = readLedger(page)
   if (!ledger) throw new Error('Noch kein Onda-Ledger vorhanden. Inspect und mindestens eine Mutationsphase ausführen.')
   const requiredNames = new Set(SECTION_DEFINITIONS.map(section => section.name))
-  const sections = page.children.filter(node => node.type === 'SECTION' && requiredNames.has(node.name))
+  const sections = page.children.filter(node => requiredNames.has(node.name))
   const allNodes = collectOndaNodes(sections)
-  const annotationKinds = sections.map(section => section.getPluginData('ondaAnnotationKind')).filter(Boolean)
-  const dialogFamilies = allNodes.map(node => node.getPluginData?.('ondaDialogFamily')).filter(Boolean)
+  const annotationViews = allNodes.map(node => ({
+    kind: node.getPluginData?.('ondaAnnotationKind'), view: node.getPluginData?.('ondaAnnotationView'),
+  })).filter(item => item.kind && item.view)
+  const dialogStates = allNodes.map(node => ({
+    family: node.getPluginData?.('ondaDialogFamily'), state: node.getPluginData?.('ondaDialogState'),
+  })).filter(item => item.family && item.state)
+  const componentSets = COMPONENT_DEFINITIONS.map(definition => {
+    const set = allNodes.find(node => node.type === 'COMPONENT_SET' && node.name === definition.name)
+    const variants = set?.children.filter(node => node.type === 'COMPONENT') || []
+    return set ? {
+      id: definition.id,
+      variants: variants.length,
+      autoLayout: variants.length > 0 && variants.every(node => node.layoutMode !== 'NONE'),
+      bound: set.getPluginData('ondaVariablesBound') === 'true' && variants.every(node => node.getPluginData('ondaVariablesBound') === 'true'),
+    } : null
+  }).filter(Boolean)
   const baseline = currentBaselineEvidence(page, ledger)
+  const geometry = geometryEvidence(page, sections, allNodes, ledger, baseline.baselineRecords)
+  const paints = paintsFromNodes(allNodes)
+  const radii = radiiFromNodes(allNodes)
+  const foundationSection = sections.find(node => node.name === '01 · Foundations')
+  const foundationNodes = foundationSection ? collectOndaNodes([foundationSection]) : []
+  const effectsValid = allNodes.every(node => !('effects' in node) || !Array.isArray(node.effects) || node.effects.every(effect => !effect.color || isGrayColor(effect.color)))
+  const fontStylesValid = TYPE_WEIGHTS.every(weight => ledger.fontDecision?.styles?.[weight])
+  const reactionCount = allNodes.reduce((count, node) => count + (Array.isArray(node.reactions) ? node.reactions.length : 0), 0)
   const report = buildVerificationReport({
+    targetAuthorized: authorization.ok,
     pageCount: figma.root.children.length,
-    sectionNames: sections.map(section => section.name),
-    annotationKinds,
-    dialogFamilies,
-    paints: paintsFromNodes(allNodes),
-    radii: radiiFromNodes(allNodes),
+    pageName: page.name,
+    sections: sections.map(section => ({
+      name: section.name,
+      type: section.type,
+      parentType: section.parent?.type,
+      parentName: section.parent?.name,
+      owner: section.getPluginData(CREATED_MARKER_KEY),
+    })),
+    annotationViews,
+    dialogStates,
+    componentSets,
+    instanceCount: allNodes.filter(node => node.type === 'INSTANCE').length,
+    repeatedScreenInstanceCount: allNodes.filter(node => node.type === 'INSTANCE' && node.getPluginData('ondaRepeatedScreenInstance') === 'true').length,
+    foundation: {
+      paintsValid: paints.every(isGrayColor),
+      radiiValid: radii.every(radius => isValidRadius(radius.value, radius.geometry)),
+      effectsValid,
+      fontsValid: fontStylesValid,
+      docsBound: foundationNodes.length > 0 && foundationNodes.every(node => node.getPluginData('ondaFoundationBound') === 'true'),
+    },
+    ...geometry,
+    reactionCount,
+    requiredReactionCount: 4,
+    phases: ledger.phases,
+    paints,
+    radii,
     topLevelNames: sections.map(section => section.name),
     baselineTopLevelCount: ledger.baseline.topLevelCount,
     preservedTopLevelCount: baseline.presentTopLevel,
@@ -952,48 +1150,47 @@ async function runVerify() {
     const matching = page.children.find(node => node.name === definition.name)
     return matching && matching.type !== 'SECTION'
   }).map(definition => definition.name)
-  report.nonGrayPaintNodeCount = paintsFromNodes(allNodes).filter(paint => !isGrayColor(paint)).length
-  report.invalidRadiusNodes = radiiFromNodes(allNodes).filter(radius => !isValidRadius(radius.value, radius.geometry)).map(radius => ({ id: radius.id, name: radius.name, value: radius.value }))
+  report.nonGrayPaintNodeCount = paints.filter(paint => !isGrayColor(paint)).length
+  report.invalidRadiusNodes = radii.filter(radius => !isValidRadius(radius.value, radius.geometry)).map(radius => ({ id: radius.id, name: radius.name, value: radius.value }))
   report.preservedBaselineHash = report.preservedBaselineHash && baseline.mismatches.length === 0
+  report.hardPass = report.hardPass && report.planErrors.length === 0
   report.baselineHash = ledger.baseline.hash
   report.currentBaselineHash = baseline.currentHash
   return report
 }
 
-function postResult(command, ok, message, counts = null, unlockMutations = Boolean(lastInspection?.target.ok)) {
+function postResult(command, ok, message, counts = null, unlockMutations = false) {
   figma.ui.postMessage({ type: 'phase-result', command, ok, message, counts, unlockMutations })
 }
 
 async function handleCommand(command) {
   if (command === 'inspect') {
     const inspection = await inspectCurrentTarget()
-    postResult(command, inspection.target.ok, inspectionMessage(inspection), {
+    const authorization = authorizeMutation(inspection.target, operatorPin, { documentId: figma.root.id, pageId: figma.currentPage.id })
+    postResult(command, Boolean(inspection.target.ok || inspection.target.readOnlyOk), inspectionMessage(inspection), {
       pageCount: inspection.pageCount,
-      baselineTopLevelCount: inspection.ledger?.baseline.topLevelCount ?? inspection.pendingBaseline.topLevelCount,
-      baselineNodeCount: inspection.ledger?.baseline.nodeIds.length ?? inspection.pendingBaseline.nodeIds.length,
+      baselineTopLevelCount: inspection.ledger ? inspection.ledger.baseline.topLevelCount : inspection.pendingBaseline.topLevelCount,
+      baselineNodeCount: inspection.ledger ? (inspection.ledger.baseline.recordCount ?? inspection.ledger.baseline.nodeIds?.length ?? 0) : inspection.pendingBaseline.records.length,
       fontFamily: inspection.fontDecision.family,
       exactFont: inspection.fontDecision.exact,
       targetFallback: inspection.target.fallback,
-    }, inspection.target.ok)
+      requiresOperatorPin: Boolean(inspection.target.requiresOperatorPin),
+      completedPhases: Object.entries(inspection.ledger?.phases || {}).filter(([, value]) => value.status === 'success').map(([id]) => id),
+    }, authorization.ok)
     return
   }
   if (command === 'verify') {
+    const ledger = readLedger(figma.currentPage)
+    const transition = validatePhaseTransition(command, ledger?.phases || {})
+    if (!transition.ok) throw new Error(transition.warning)
     const report = await runVerify()
-    const hardPass = report.pageInvariant
-      && report.preservedBaselineHash
-      && report.pageCount === 1
-      && report.sectionCount === 39
-      && report.missingSections.length === 0
-      && report.annotationCount === 29
-      && report.dialogFamilyCount === 7
-      && report.nonGrayPaints === 0
-      && report.invalidRadii === 0
-      && report.duplicateNames.length === 0
-      && report.planErrors.length === 0
+    const hardPass = report.hardPass
     postResult(command, hardPass, hardPass ? 'Alle strukturellen Hard Gates bestanden.' : 'Verify hat offene Hard Gates gefunden.', report, true)
     return
   }
   const { page, ledger } = await requireMutationContext()
+  const transition = validatePhaseTransition(command, ledger.phases)
+  if (!transition.ok) throw new Error(transition.warning)
   let counts
   if (command === 'foundations') counts = await runFoundations(page, ledger)
   else if (command === 'core-views') counts = await runCoreViews(page, ledger)
@@ -1006,10 +1203,26 @@ async function handleCommand(command) {
 }
 
 figma.ui.onmessage = async message => {
-  if (!message || message.type !== 'run-command') return
+  if (!message) return
   try {
+    if (message.type === 'pin-target') {
+      let inspection = lastInspection || await inspectCurrentTarget()
+      if (inspection.documentId !== figma.root.id || inspection.pageId !== figma.currentPage.id) inspection = await inspectCurrentTarget()
+      if (inspection.fileKey) throw new Error('Ein verfügbarer Dateischlüssel kann nicht manuell überschrieben werden.')
+      operatorPin = {
+        fileKey: String(message.fileKey || '').trim(),
+        confirmed: message.confirmed === true,
+        documentId: figma.root.id,
+        pageId: figma.currentPage.id,
+      }
+      const authorization = authorizeMutation(inspection.target, operatorPin, { documentId: figma.root.id, pageId: figma.currentPage.id })
+      if (!authorization.ok) throw new Error(authorization.warning)
+      postResult('pin-target', true, authorization.warning, { sessionOnly: true, pageId: figma.currentPage.id }, true)
+      return
+    }
+    if (message.type !== 'run-command') return
     await handleCommand(message.command)
   } catch (error) {
-    postResult(message.command, false, error instanceof Error ? error.message : String(error), null, Boolean(lastInspection?.target.ok))
+    postResult(message.command || 'pin-target', false, error instanceof Error ? error.message : String(error), null, false)
   }
 }

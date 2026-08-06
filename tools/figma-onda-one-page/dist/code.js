@@ -19,7 +19,7 @@
   };
   var __spreadProps = (a, b) => __defProps(a, __getOwnPropDescs(b));
 
-  // app/src/annotation-contract.mjs
+  // ../../app/src/annotation-contract.mjs
   var TEXT_ANNOTATION_KINDS = Object.freeze([
     "rechtschreibung",
     "grammatik",
@@ -116,7 +116,7 @@
     form: "wortwahl"
   });
 
-  // tools/figma-onda-one-page/src/definitions.mjs
+  // src/definitions.mjs
   var PLUGIN_ORIGIN = "onda-one-page";
   var LEDGER_KEY = "ondaOnePageLedger";
   var TARGET_FILE_KEY = "0DbO0vK6shrVU2qkmWSxIp";
@@ -298,7 +298,7 @@
     return ANNOTATION_SECTIONS.slice(start, start + 5);
   }
 
-  // tools/figma-onda-one-page/src/plan.mjs
+  // src/plan.mjs
   function buildDesignPlan() {
     return {
       sections: SECTION_DEFINITIONS,
@@ -325,10 +325,11 @@
   }
   function computeOndaOrigin(children, persistedOrigin) {
     if (Number.isFinite(persistedOrigin)) return persistedOrigin;
-    const maxExistingRight = children.reduce((max, child) => {
-      const right = Number(child.x || 0) + Number(child.width || 0);
-      return Math.max(max, right);
-    }, 0);
+    function furthestRight(node) {
+      const own = (node == null ? void 0 : node.absoluteRenderBounds) ? Number(node.absoluteRenderBounds.x || 0) + Number(node.absoluteRenderBounds.width || 0) : Number((node == null ? void 0 : node.x) || 0) + Number((node == null ? void 0 : node.width) || 0);
+      return Math.max(own, ...((node == null ? void 0 : node.children) || []).map(furthestRight));
+    }
+    const maxExistingRight = Math.max(0, ...children.map(furthestRight));
     return Math.ceil((maxExistingRight + 2e3) / 100) * 100;
   }
   function validateTargetContext({ fileKey, documentName, pageName }) {
@@ -342,10 +343,18 @@
       return { ok: false, fallback: true, warning: `Dateischl\xFCssel nicht verf\xFCgbar und Dokumentname ist nicht \u201E${TARGET_DOCUMENT_NAME}\u201C.` };
     }
     return {
-      ok: true,
+      ok: false,
+      readOnlyOk: true,
       fallback: true,
-      warning: "Dateischl\xFCssel nicht verf\xFCgbar; Ziel \xFCber \u201EClaude Code\u201C und \u201EPage 1\u201C gepr\xFCft."
+      requiresOperatorPin: true,
+      warning: "Dateischl\xFCssel nicht verf\xFCgbar. \u201EClaude Code\u201C und \u201EPage 1\u201C sind nur ein Lesehinweis; Mutationen erfordern den exakten Schl\xFCssel und eine sitzungsgebundene Best\xE4tigung."
     };
+  }
+  function authorizeMutation(target, operatorPin2, current) {
+    if ((target == null ? void 0 : target.ok) && !target.fallback) return { ok: true, manual: false, warning: "" };
+    if (!(target == null ? void 0 : target.requiresOperatorPin) || !(target == null ? void 0 : target.readOnlyOk)) return { ok: false, manual: false, warning: (target == null ? void 0 : target.warning) || "Ziel nicht freigegeben." };
+    const pinned = (operatorPin2 == null ? void 0 : operatorPin2.confirmed) === true && operatorPin2.fileKey === TARGET_FILE_KEY && operatorPin2.documentId === (current == null ? void 0 : current.documentId) && operatorPin2.pageId === (current == null ? void 0 : current.pageId);
+    return pinned ? { ok: true, manual: true, warning: "Mutation durch sitzungsgebundenen Operator-Pin freigegeben." } : { ok: false, manual: false, warning: "Exakter Dateischl\xFCssel, Best\xE4tigung und aktuelle Dokument-/Seiten-ID sind erforderlich." };
   }
   function canReuseOwnedNode(node, baselineIds = /* @__PURE__ */ new Set()) {
     return (node == null ? void 0 : node.owner) === PLUGIN_ORIGIN && (!baselineIds.has(node.id) || node.owner === PLUGIN_ORIGIN);
@@ -356,7 +365,90 @@
   }
   function isGrayColor(color2) {
     if (!color2 || ![color2.r, color2.g, color2.b].every(Number.isFinite)) return false;
-    return color2.r === color2.g && color2.g === color2.b;
+    return Math.max(color2.r, color2.g, color2.b) - Math.min(color2.r, color2.g, color2.b) <= 2e-3 + 1e-9;
+  }
+  var FONT_STYLES = Object.freeze({
+    400: Object.freeze(["Regular", "Book", "Normal"]),
+    500: Object.freeze(["Medium"]),
+    700: Object.freeze(["Bold"])
+  });
+  function stylesForFamily(fonts, family) {
+    return new Set(fonts.filter((font) => font.fontName.family === family).map((font) => font.fontName.style));
+  }
+  function exactWeightStyles(fonts, family) {
+    const available = stylesForFamily(fonts, family);
+    const entries = TYPE_WEIGHTS.map((weight) => [weight, FONT_STYLES[weight].find((style) => available.has(style)) || null]);
+    return Object.fromEntries(entries);
+  }
+  function selectFontDecision(fonts) {
+    const abcStyles = exactWeightStyles(fonts, "ABC Diatype");
+    const missingAbc = TYPE_WEIGHTS.filter((weight) => !abcStyles[weight]);
+    if (!missingAbc.length) {
+      return { requestedFamily: "ABC Diatype", family: "ABC Diatype", styles: abcStyles, exact: true, warning: "" };
+    }
+    const families = [...new Set(fonts.map((font) => font.fontName.family))];
+    const fallbackFamily = ["Inter", ...families.filter((family) => family !== "ABC Diatype" && family !== "Inter")].find((family) => TYPE_WEIGHTS.every((weight) => exactWeightStyles(fonts, family)[weight]));
+    if (!fallbackFamily) throw new Error(`Keine Schriftfamilie mit geeigneten Schnitten f\xFCr 400, 500 und 700 gefunden; ABC Diatype fehlt: ${missingAbc.join(", ")}.`);
+    return {
+      requestedFamily: "ABC Diatype",
+      family: fallbackFamily,
+      styles: exactWeightStyles(fonts, fallbackFamily),
+      exact: false,
+      warning: `ABC Diatype hat keine geeigneten Schnitte f\xFCr ${missingAbc.join(", ")}. Sichtbarer System-Fallback: ${fallbackFamily}.`
+    };
+  }
+  function utf8ByteLength(value) {
+    return unescape(encodeURIComponent(value)).length;
+  }
+  function buildBaselineShards(records, maxBytes = 79e3) {
+    const shards = [];
+    let current = [];
+    for (const record of records) {
+      const candidate = JSON.stringify([...current, record]);
+      if (utf8ByteLength(candidate) >= maxBytes) {
+        if (!current.length) throw new Error(`Ein Baseline-Datensatz \xFCberschreitet das Shard-Limit von ${maxBytes} Bytes.`);
+        shards.push(JSON.stringify(current));
+        current = [record];
+        if (utf8ByteLength(JSON.stringify(current)) >= maxBytes) throw new Error(`Ein Baseline-Datensatz \xFCberschreitet das Shard-Limit von ${maxBytes} Bytes.`);
+      } else current.push(record);
+    }
+    if (current.length || !shards.length) shards.push(JSON.stringify(current));
+    return shards;
+  }
+  function restoreBaselineShards(shards) {
+    return shards.flatMap((shard, index) => {
+      const value = JSON.parse(shard);
+      if (!Array.isArray(value)) throw new Error(`Baseline-Shard ${index} ist ung\xFCltig.`);
+      return value;
+    });
+  }
+  var REQUIRED_PHASES = Object.freeze([
+    "inspect",
+    "foundations",
+    ...COMPONENT_DEFINITIONS.map((component) => `component-${component.id}`),
+    "core-views",
+    ...Array.from({ length: 6 }, (_, index) => `annotations-${index + 1}`),
+    "dialogs-and-secondary"
+  ]);
+  function validatePhaseTransition(command, phases = {}) {
+    var _a;
+    if (command === "inspect") return { ok: true, expected: "inspect" };
+    if (((_a = phases[command]) == null ? void 0 : _a.status) === "success" && REQUIRED_PHASES.includes(command)) {
+      const index = REQUIRED_PHASES.indexOf(command);
+      const prerequisitesComplete = REQUIRED_PHASES.slice(0, index).every((id) => {
+        var _a2;
+        return ((_a2 = phases[id]) == null ? void 0 : _a2.status) === "success";
+      });
+      if (prerequisitesComplete) return { ok: true, expected: command, replay: true };
+    }
+    const next = REQUIRED_PHASES.find((id) => {
+      var _a2;
+      return ((_a2 = phases[id]) == null ? void 0 : _a2.status) !== "success";
+    });
+    if (command === "verify") {
+      return next ? { ok: false, expected: next, warning: `Vor Verify fehlt: ${next}.` } : { ok: true, expected: "verify" };
+    }
+    return command === next ? { ok: true, expected: next } : { ok: false, expected: next || "verify", warning: `Reihenfolge verletzt. Als N\xE4chstes: ${next || "verify"}.` };
   }
   function isValidRadius(value, geometry = "RECTANGLE") {
     if (![0, 4, 6, 8, 999].includes(value)) return false;
@@ -456,17 +548,53 @@
     return [...repeated].sort();
   }
   function buildVerificationReport(snapshot) {
+    var _a;
     const requiredNames = new Set(SECTION_DEFINITIONS.map((section) => section.name));
-    const presentNames = new Set(snapshot.sectionNames || []);
-    return {
+    const sections = snapshot.sections || (snapshot.sectionNames || []).map((name) => ({ name }));
+    const sectionNames = sections.map((section) => section.name);
+    const presentNames = new Set(sectionNames);
+    const expectedAnnotationViews = new Set(ANNOTATION_SECTIONS.flatMap((annotation) => annotation.views.map((view) => `${annotation.kind}\0${view.name}`)));
+    const presentAnnotationViews = new Set((snapshot.annotationViews || []).map((item) => `${item.kind}\0${item.view}`));
+    const expectedDialogStates = new Set(DIALOG_FAMILIES.flatMap((family) => family.states.map((state) => `${family.name}\0${state}`)));
+    const presentDialogStates = new Set((snapshot.dialogStates || []).map((item) => `${item.family}\0${item.state}`));
+    const sectionStructureValid = sections.length === SECTION_DEFINITIONS.length && sections.every((section) => section.type === void 0 || section.type === "SECTION" && section.parentType === "PAGE" && section.parentName === TARGET_PAGE_NAME && section.owner === PLUGIN_ORIGIN);
+    const componentSets = snapshot.componentSets || [];
+    const expectedComponentIds = new Set(COMPONENT_DEFINITIONS.map((component) => component.id));
+    const componentStructureValid = componentSets.length === COMPONENT_DEFINITIONS.length && new Set(componentSets.map((item) => item.id)).size === COMPONENT_DEFINITIONS.length && componentSets.every((item) => expectedComponentIds.has(item.id)) && componentSets.every((item) => item.variants >= 2 && item.autoLayout && item.bound);
+    const foundation = snapshot.foundation || {};
+    const foundationValid = ["paintsValid", "radiiValid", "effectsValid", "fontsValid", "docsBound"].every((key) => foundation[key] === true);
+    const annotationViewsValid = snapshot.annotationViews ? snapshot.annotationViews.length === expectedAnnotationViews.size && presentAnnotationViews.size === expectedAnnotationViews.size && [...expectedAnnotationViews].every((key) => presentAnnotationViews.has(key)) : new Set(snapshot.annotationKinds || []).size === ANNOTATION_SECTIONS.length;
+    const dialogStatesValid = snapshot.dialogStates ? snapshot.dialogStates.length === expectedDialogStates.size && presentDialogStates.size === expectedDialogStates.size && [...expectedDialogStates].every((key) => presentDialogStates.has(key)) : new Set(snapshot.dialogFamilies || []).size === DIALOG_FAMILIES.length;
+    const phasesComplete = snapshot.phases ? REQUIRED_PHASES.every((id) => {
+      var _a2;
+      return ((_a2 = snapshot.phases[id]) == null ? void 0 : _a2.status) === "success";
+    }) : true;
+    const report = {
       pageCount: Number(snapshot.pageCount || 0),
-      sectionCount: (snapshot.sectionNames || []).length,
+      sectionCount: sectionNames.length,
       missingSections: [...requiredNames].filter((name) => !presentNames.has(name)),
-      annotationCount: new Set(snapshot.annotationKinds || []).size,
-      dialogFamilyCount: new Set(snapshot.dialogFamilies || []).size,
+      annotationCount: snapshot.annotationViews ? new Set(snapshot.annotationViews.map((item) => item.kind)).size : new Set(snapshot.annotationKinds || []).size,
+      annotationViewCount: presentAnnotationViews.size,
+      annotationViewsValid,
+      dialogFamilyCount: snapshot.dialogStates ? new Set(snapshot.dialogStates.map((item) => item.family)).size : new Set(snapshot.dialogFamilies || []).size,
+      dialogStateCount: presentDialogStates.size,
+      dialogStatesValid,
       nonGrayPaints: (snapshot.paints || []).filter((color2) => !isGrayColor(color2)).length,
       invalidRadii: (snapshot.radii || []).filter((radius) => !isValidRadius(radius.value, radius.geometry)).length,
-      duplicateNames: duplicates(snapshot.topLevelNames || []),
+      duplicateNames: duplicates(snapshot.topLevelNames || sectionNames),
+      sectionStructureValid,
+      componentSetCount: componentSets.length,
+      componentStructureValid,
+      instanceCount: Number(snapshot.instanceCount || 0),
+      repeatedScreenInstanceCount: Number(snapshot.repeatedScreenInstanceCount || 0),
+      foundationValid,
+      intersections: snapshot.intersections || [],
+      clearance: Number((_a = snapshot.clearance) != null ? _a : 0),
+      overflowNodes: snapshot.overflowNodes || [],
+      undersizedHitTargets: snapshot.undersizedHitTargets || [],
+      reactionCount: Number(snapshot.reactionCount || 0),
+      requiredReactionCount: Number(snapshot.requiredReactionCount || 0),
+      phasesComplete,
       preservedBaselineTopLevelCount: Math.min(
         Number(snapshot.baselineTopLevelCount || 0),
         Number(snapshot.preservedTopLevelCount || 0)
@@ -475,15 +603,21 @@
       baselineMismatches: snapshot.baselineMismatches || [],
       pageInvariant: hashBaselineRecords(snapshot.baselinePages || []) === hashBaselineRecords(snapshot.currentPages || [])
     };
+    const modern = Boolean(snapshot.sections);
+    report.hardPass = Boolean(snapshot.targetAuthorized) && report.pageCount === 1 && snapshot.pageName === TARGET_PAGE_NAME && report.sectionCount === SECTION_DEFINITIONS.length && report.missingSections.length === 0 && report.duplicateNames.length === 0 && sectionStructureValid && annotationViewsValid && dialogStatesValid && componentStructureValid && report.instanceCount >= COMPONENT_DEFINITIONS.length && report.repeatedScreenInstanceCount > 0 && foundationValid && report.intersections.length === 0 && report.clearance >= 2e3 && report.overflowNodes.length === 0 && report.undersizedHitTargets.length === 0 && report.requiredReactionCount > 0 && report.reactionCount >= report.requiredReactionCount && report.preservedBaselineHash && report.pageInvariant && phasesComplete;
+    if (!modern) delete report.hardPass;
+    return report;
   }
 
-  // tools/figma-onda-one-page/src/runtime.mjs
+  // src/runtime.mjs
   var SECTION_WIDTH = 2100;
   var SECTION_CELL_WIDTH = 2400;
   var SECTION_CELL_HEIGHT = 11e3;
   var SECTION_COLUMNS = 3;
   var CREATED_MARKER_KEY = "ondaOrigin";
+  var BASELINE_SHARD_PREFIX = "ondaBaselineShard:";
   var lastInspection = null;
+  var operatorPin = null;
   figma.showUI(__html__, { width: 420, height: 720, themeColors: true });
   function color(key) {
     const value = PALETTE[key];
@@ -604,20 +738,22 @@
   function writeLedger(page, ledger) {
     page.setPluginData(LEDGER_KEY, JSON.stringify(ledger));
   }
-  function fontStyleForWeight(fonts, family, weight) {
-    const preferences = weight === 400 ? ["Regular", "Book", "Normal"] : weight === 500 ? ["Medium", "Semi Medium", "Regular"] : ["Bold", "Semi Bold", "Semibold", "Medium"];
-    const styles = fonts.filter((font) => font.fontName.family === family).map((font) => font.fontName.style);
-    return preferences.find((style) => styles.includes(style)) || styles[0] || null;
+  function writeBaselineShards(page, records) {
+    var _a, _b;
+    const previous = ((_b = (_a = readLedger(page)) == null ? void 0 : _a.baseline) == null ? void 0 : _b.shardCount) || 0;
+    const shards = buildBaselineShards(records);
+    for (const [index, shard] of shards.entries()) page.setPluginData(`${BASELINE_SHARD_PREFIX}${index}`, shard);
+    for (let index = shards.length; index < previous; index += 1) page.setPluginData(`${BASELINE_SHARD_PREFIX}${index}`, "");
+    return shards.length;
+  }
+  function readBaselineRecords(page, ledger) {
+    var _a;
+    const count = Number(((_a = ledger == null ? void 0 : ledger.baseline) == null ? void 0 : _a.shardCount) || 0);
+    if (!count) return [];
+    return restoreBaselineShards(Array.from({ length: count }, (_, index) => page.getPluginData(`${BASELINE_SHARD_PREFIX}${index}`)));
   }
   function inspectFonts(fonts) {
-    var _a;
-    const exactFamily = fonts.some((font) => font.fontName.family === "ABC Diatype");
-    const family = exactFamily ? "ABC Diatype" : fonts.some((font) => font.fontName.family === "Inter") ? "Inter" : (_a = fonts[0]) == null ? void 0 : _a.fontName.family;
-    if (!family) throw new Error("Keine verwendbare Schrift in Figma gefunden.");
-    const styles = Object.fromEntries(TYPE_WEIGHTS.map((weight) => [weight, fontStyleForWeight(fonts, family, weight)]));
-    if (Object.values(styles).some((style) => !style)) throw new Error(`Keine vollst\xE4ndigen Schriftschnitte f\xFCr ${family} gefunden.`);
-    const warning = exactFamily ? "" : `ABC Diatype ist nicht verf\xFCgbar. Sichtbarer System-Fallback: ${family}.`;
-    return { requestedFamily: "ABC Diatype", family, styles, exact: exactFamily, warning };
+    return selectFontDecision(fonts);
   }
   async function inspectCurrentTarget() {
     await figma.loadAllPagesAsync();
@@ -631,9 +767,11 @@
     const fontDecision = inspectFonts(fonts);
     const ledger = readLedger(page);
     const records = ledger ? null : collectRecordsFromDocument();
-    const topLevelIds = ledger ? ledger.baseline.topLevelIds : page.children.map((node) => node.id);
+    const topLevelIds = ledger ? [] : page.children.map((node) => node.id);
     const result = {
       target,
+      documentId: figma.root.id,
+      pageId: page.id,
       fileKey: figma.fileKey || null,
       expectedFileKey: TARGET_FILE_KEY,
       documentName: figma.root.name,
@@ -646,8 +784,6 @@
       pendingBaseline: ledger ? null : {
         records,
         hash: hashBaselineRecords(records),
-        nodeHashes: records.map((record) => ({ id: record.id, hash: hashBaselineRecords([record]) })),
-        nodeIds: records.map((record) => record.id),
         topLevelIds,
         topLevelCount: topLevelIds.length,
         pages: pageInvariantSnapshot()
@@ -657,39 +793,64 @@
     return result;
   }
   function inspectionMessage(inspection) {
-    const targetText = inspection.target.ok ? `Ziel gepr\xFCft: ${inspection.documentName} \xB7 ${inspection.pageName}.` : inspection.target.warning;
+    const targetText = inspection.target.ok || inspection.target.readOnlyOk ? `Ziel gepr\xFCft: ${inspection.documentName} \xB7 ${inspection.pageName}.` : inspection.target.warning;
     const fontText = inspection.fontDecision.warning || "ABC Diatype mit exakten Schnitten verf\xFCgbar.";
     return `${targetText} ${inspection.target.warning && inspection.target.ok ? inspection.target.warning : ""} ${fontText}`.trim();
   }
   async function requireMutationContext() {
-    const inspection = lastInspection || await inspectCurrentTarget();
-    if (!inspection.target.ok) throw new Error(inspection.target.warning);
+    let inspection = lastInspection || await inspectCurrentTarget();
     const page = figma.currentPage;
+    if (inspection.documentId !== figma.root.id || inspection.pageId !== page.id) inspection = await inspectCurrentTarget();
+    const authorization = authorizeMutation(inspection.target, operatorPin, { documentId: figma.root.id, pageId: page.id });
+    if (!authorization.ok) throw new Error(authorization.warning || inspection.target.warning);
     let ledger = readLedger(page);
+    if ((ledger == null ? void 0 : ledger.version) === 1) {
+      const legacyIds = ledger.baseline.nodeIds || [];
+      const currentRecords = orderRecordsByBaselineIds(collectRecordsFromDocument(new Set(legacyIds)), legacyIds);
+      if (hashBaselineRecords(currentRecords) !== ledger.baseline.hash) throw new Error("Legacy-Baseline weicht ab; sichere Shard-Migration abgebrochen.");
+      const shardCount = writeBaselineShards(page, currentRecords);
+      ledger.version = 2;
+      ledger.baseline = {
+        hash: ledger.baseline.hash,
+        shardCount,
+        recordCount: currentRecords.length,
+        topLevelCount: ledger.baseline.topLevelCount,
+        pages: ledger.baseline.pages
+      };
+      writeLedger(page, ledger);
+    }
     if (!ledger) {
+      let boundsTree = function(node) {
+        return {
+          x: node.x,
+          width: node.width,
+          absoluteRenderBounds: node.absoluteRenderBounds,
+          children: "children" in node ? node.children.map(boundsTree) : []
+        };
+      };
       const baseline = inspection.pendingBaseline;
       if (!baseline) throw new Error("Inspect muss vor der ersten Mutation erneut ausgef\xFChrt werden.");
-      const origin = computeOndaOrigin(page.children);
+      const origin = computeOndaOrigin(page.children.map(boundsTree));
+      const shardCount = writeBaselineShards(page, baseline.records);
       ledger = {
-        version: 1,
+        version: 2,
         origin: { x: origin, y: 0 },
         target: {
           fileKey: figma.fileKey || null,
           documentName: figma.root.name,
           pageId: page.id,
           pageName: page.name,
-          fallback: inspection.target.fallback
+          manualPin: authorization.manual
         },
         fontDecision: inspection.fontDecision,
         baseline: {
           hash: baseline.hash,
-          nodeHashes: baseline.nodeHashes,
-          nodeIds: baseline.nodeIds,
-          topLevelIds: baseline.topLevelIds,
+          shardCount,
+          recordCount: baseline.records.length,
           topLevelCount: baseline.topLevelCount,
           pages: baseline.pages
         },
-        phases: {},
+        phases: { inspect: { status: "success", at: (/* @__PURE__ */ new Date()).toISOString() } },
         createdAt: (/* @__PURE__ */ new Date()).toISOString()
       };
       writeLedger(page, ledger);
@@ -697,6 +858,8 @@
     if (ledger.target.pageId !== page.id || ledger.target.pageName !== TARGET_PAGE_NAME) {
       throw new Error("Das gespeicherte Onda-Ledger geh\xF6rt nicht zur aktuellen Page 1.");
     }
+    const records = readBaselineRecords(page, ledger);
+    Object.defineProperty(ledger, "baselineRecords", { value: records, enumerable: false, configurable: true });
     return { page, ledger };
   }
   function markPhase(page, ledger, command, counts) {
@@ -720,7 +883,7 @@
       const reusable = existing.type === "SECTION" && canReuseOwnedNode({
         id: existing.id,
         owner: existing.getPluginData(CREATED_MARKER_KEY)
-      }, new Set(ledger.baseline.nodeIds));
+      }, new Set((ledger.baselineRecords || []).map((record) => record.id)));
       if (!reusable) throw new Error(`Namenskollision mit gesch\xFCtztem Bestand: ${name}`);
       return { node: existing, created: false };
     }
@@ -744,8 +907,7 @@
   function autoFrame(parent, name, options = {}) {
     var _a, _b, _c, _d, _e, _f;
     const existing = directChild(parent, name, ["FRAME"]);
-    if (existing) return { node: existing, created: false };
-    const frame = figma.createFrame();
+    const frame = existing || figma.createFrame();
     frame.name = name;
     frame.layoutMode = options.direction || "VERTICAL";
     frame.primaryAxisSizingMode = options.primarySizing || "AUTO";
@@ -763,11 +925,11 @@
     frame.cornerRadius = (_f = options.radius) != null ? _f : 6;
     frame.clipsContent = true;
     resizeNode(frame, options.width || 620, options.height || 120);
-    parent.appendChild(frame);
+    if (!existing) parent.appendChild(frame);
     if (Number.isFinite(options.x)) frame.x = options.x;
     if (Number.isFinite(options.y)) frame.y = options.y;
     frame.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN);
-    return { node: frame, created: true };
+    return { node: frame, created: !existing };
   }
   async function loadDecisionFonts(decision) {
     const fontNames = TYPE_WEIGHTS.map((weight) => ({ family: decision.family, style: decision.styles[weight] }));
@@ -776,8 +938,7 @@
   }
   function textNode(parent, name, characters, decision, options = {}) {
     const existing = directChild(parent, name, ["TEXT"]);
-    if (existing) return { node: existing, created: false };
-    const text = figma.createText();
+    const text = existing || figma.createText();
     text.name = name;
     const weight = options.weight || 400;
     text.fontName = { family: decision.family, style: decision.styles[weight] };
@@ -786,12 +947,13 @@
     text.lineHeight = { unit: "PIXELS", value: (scale == null ? void 0 : scale.lineHeight) || Math.round(text.fontSize * 1.45) };
     text.characters = characters;
     text.fills = [solid(options.dark ? "gray/000" : options.muted ? "gray/500" : "gray/900")];
-    parent.appendChild(text);
+    if (!existing) parent.appendChild(text);
     if (options.width) {
       text.textAutoResize = "HEIGHT";
       text.resize(options.width, Math.max(text.height, 16));
     }
-    return { node: text, created: true };
+    text.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN);
+    return { node: text, created: !existing };
   }
   function heading(parent, title, decision, subtitle = "") {
     textNode(parent, `${title} / Titel`, title, decision, { size: 40, weight: 700, width: 1500 });
@@ -808,12 +970,11 @@
   async function ensureVariable(collection, modeId, definition2) {
     const variables = await figma.variables.getLocalVariablesAsync();
     const existing = variables.find((variable2) => variable2.variableCollectionId === collection.id && variable2.name === definition2.name);
-    if (existing) return { variable: existing, created: false };
-    const variable = figma.variables.createVariable(definition2.name, collection, definition2.type);
+    const variable = existing || figma.variables.createVariable(definition2.name, collection, definition2.type);
     variable.setValueForMode(modeId, definition2.value);
     if (definition2.type !== "BOOLEAN") variable.scopes = definition2.scopes || [];
     variable.setVariableCodeSyntax("WEB", `var(${definition2.css})`);
-    return { variable, created: true };
+    return { variable, created: !existing };
   }
   async function createFoundationVariables() {
     const primitiveInfo = await ensureCollection("Onda \xB7 Primitive", "Value");
@@ -903,14 +1064,14 @@
     for (const scale of TYPE_SCALE) {
       for (const weight of TYPE_WEIGHTS) {
         const name = `Onda/Type/${scale.size} \xB7 ${weight}`;
-        if (existingText.some((style2) => style2.name === name)) continue;
-        const style = figma.createTextStyle();
+        const existing = existingText.find((style2) => style2.name === name);
+        const style = existing || figma.createTextStyle();
         style.name = name;
         style.fontName = { family: decision.family, style: decision.styles[weight] };
         style.fontSize = scale.size;
         style.lineHeight = { unit: "PIXELS", value: scale.lineHeight };
         style.letterSpacing = { unit: "PIXELS", value: 0 };
-        createdText.push(style.id);
+        if (!existing) createdText.push(style.id);
       }
     }
     const existingEffects = await figma.getLocalEffectStylesAsync();
@@ -920,8 +1081,8 @@
       { name: "Onda/Shadow/Overlay", radius: 24, opacity: 0.16, y: 8 }
     ];
     for (const effect of effects) {
-      if (existingEffects.some((style2) => style2.name === effect.name)) continue;
-      const style = figma.createEffectStyle();
+      const existing = existingEffects.find((style2) => style2.name === effect.name);
+      const style = existing || figma.createEffectStyle();
       style.name = effect.name;
       style.effects = [{
         type: "DROP_SHADOW",
@@ -932,9 +1093,54 @@
         visible: true,
         blendMode: "NORMAL"
       }];
-      createdEffects.push(style.id);
+      if (!existing) createdEffects.push(style.id);
     }
     return { createdTextStyleIds: createdText, createdEffectStyleIds: createdEffects };
+  }
+  function ensureRadiusSample(parent, token) {
+    const name = `Radius / ${token.value}`;
+    const expectedType = token.geometry === "ELLIPSE" ? "ELLIPSE" : "RECTANGLE";
+    const existing = directChild(parent, name);
+    if (existing && existing.type !== expectedType) throw new Error(`Ung\xFCltiger bestehender Foundation-Sample: ${name}`);
+    const sample = existing || (expectedType === "ELLIPSE" ? figma.createEllipse() : figma.createRectangle());
+    sample.name = name;
+    sample.resize(112, 112);
+    sample.fills = [solid("gray/100")];
+    sample.strokes = [solid("gray/700")];
+    sample.strokeWeight = 1;
+    if (expectedType === "RECTANGLE") sample.cornerRadius = token.value;
+    if (!existing) parent.appendChild(sample);
+    sample.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN);
+    return { node: sample, created: !existing };
+  }
+  async function bindFoundationArtifacts(section) {
+    var _a;
+    const surface = await localVariable("color/surface", "Onda \xB7 Semantic \xB7 Light");
+    const background = await localVariable("color/background", "Onda \xB7 Semantic \xB7 Light");
+    const text = await localVariable("color/text", "Onda \xB7 Semantic \xB7 Light");
+    const muted = await localVariable("color/text-muted", "Onda \xB7 Semantic \xB7 Light");
+    const border = await localVariable("color/border", "Onda \xB7 Semantic \xB7 Light");
+    const spacing = await localVariable("spacing/24", "Onda \xB7 Dimension");
+    if (background) section.fills = [figma.variables.setBoundVariableForPaint(solid("gray/025"), "color", background)];
+    const nodes = collectOndaNodes([section]);
+    for (const node of nodes) {
+      if (node.type === "FRAME" && surface) node.fills = [figma.variables.setBoundVariableForPaint(solid("gray/000"), "color", surface)];
+      if ("strokes" in node && border && ((_a = node.strokes) == null ? void 0 : _a.length)) node.strokes = [figma.variables.setBoundVariableForPaint(solid("gray/200"), "color", border)];
+      if (node.type === "TEXT") {
+        const variable = /Untertitel|Fontstatus|Label/.test(node.name) ? muted : text;
+        if (variable) node.fills = [figma.variables.setBoundVariableForPaint(solid(variable === muted ? "gray/500" : "gray/900"), "color", variable)];
+      }
+      if (node.type === "FRAME" && spacing) node.setBoundVariable("itemSpacing", spacing);
+      if (node.name.startsWith("Swatch / ") && node.type === "FRAME") {
+        const primitive = await localVariable(node.name.slice("Swatch / ".length), "Onda \xB7 Primitive");
+        if (primitive) node.fills = [figma.variables.setBoundVariableForPaint(node.fills[0], "color", primitive)];
+      }
+      if (node.name.startsWith("Radius / ") && node.type === "RECTANGLE") {
+        const radius = await localVariable(`radius/${node.cornerRadius === 0 ? "none" : node.cornerRadius === 4 ? "control" : node.cornerRadius === 6 ? "static" : "overlay"}`, "Onda \xB7 Dimension");
+        if (radius) for (const field of ["topLeftRadius", "topRightRadius", "bottomLeftRadius", "bottomRightRadius"]) node.setBoundVariable(field, radius);
+      }
+      node.setPluginData("ondaFoundationBound", "true");
+    }
   }
   async function runFoundations(page, ledger) {
     await loadDecisionFonts(ledger.fontDecision);
@@ -967,15 +1173,9 @@
     }
     const radius = autoFrame(section, "Foundations / Radien", { x: 80, y: 2250, width: 1940, direction: "HORIZONTAL", padding: 32, gap: 20, radius: 6 }).node;
     for (const token of RADIUS_TOKENS) {
-      const sample = token.geometry === "ELLIPSE" ? figma.createEllipse() : figma.createRectangle();
-      sample.name = `Radius / ${token.value}`;
-      sample.resize(112, 112);
-      sample.fills = [solid("gray/100")];
-      sample.strokes = [solid("gray/700")];
-      sample.strokeWeight = 1;
-      if (token.geometry !== "ELLIPSE") sample.cornerRadius = token.value;
-      radius.appendChild(sample);
+      ensureRadiusSample(radius, token);
     }
+    await bindFoundationArtifacts(section);
     return {
       sectionCreated: sectionResult.created,
       collectionCount: variables.collections.length,
@@ -995,6 +1195,8 @@
     const fillVariable = await localVariable("color/inverted", dark ? "Onda \xB7 Semantic \xB7 Dark" : "Onda \xB7 Semantic \xB7 Light");
     const radiusVariable = await localVariable("radius/control", "Onda \xB7 Dimension");
     const spacingVariable = await localVariable("spacing/12", "Onda \xB7 Dimension");
+    const horizontalPadding = await localVariable("spacing/16", "Onda \xB7 Dimension");
+    const textVariable = await localVariable("color/on-inverted", dark ? "Onda \xB7 Semantic \xB7 Dark" : "Onda \xB7 Semantic \xB7 Light");
     if (fillVariable) {
       component.fills = [figma.variables.setBoundVariableForPaint(solid("gray/900"), "color", fillVariable)];
     }
@@ -1002,6 +1204,26 @@
       for (const field of ["topLeftRadius", "topRightRadius", "bottomLeftRadius", "bottomRightRadius"]) component.setBoundVariable(field, radiusVariable);
     }
     if (spacingVariable) component.setBoundVariable("itemSpacing", spacingVariable);
+    if (horizontalPadding) {
+      component.setBoundVariable("paddingLeft", horizontalPadding);
+      component.setBoundVariable("paddingRight", horizontalPadding);
+    }
+    if (textVariable) {
+      for (const node of component.findAll((node2) => node2.type === "TEXT")) {
+        node.fills = [figma.variables.setBoundVariableForPaint(solid("gray/000"), "color", textVariable)];
+      }
+    }
+    component.setPluginData("ondaVariablesBound", "true");
+  }
+  async function rebindExistingComponent(set) {
+    for (const component of set.children) {
+      if (component.type !== "COMPONENT") continue;
+      await bindComponentSurface(component);
+      component.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN);
+    }
+    set.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN);
+    set.setPluginData("ondaVariablesBound", "true");
+    return set;
   }
   function componentVariant(parent, definition2, decision, state, index) {
     const component = figma.createComponent();
@@ -1049,6 +1271,7 @@
     const section = ensureSection(page, ledger, "02 \xB7 Komponenten", 4e3).node;
     const existing = section.findOne((node) => node.type === "COMPONENT_SET" && node.name === definition2.name);
     if (existing) {
+      await rebindExistingComponent(existing);
       return { component: definition2.name, status: "reused", variantCount: existing.children.length };
     }
     const variants = [
@@ -1063,6 +1286,8 @@
     set.strokes = [solid("gray/200")];
     set.strokeWeight = 1;
     set.cornerRadius = 6;
+    set.setPluginData("ondaComponentId", definition2.id);
+    await rebindExistingComponent(set);
     const index = COMPONENT_DEFINITIONS.findIndex((component) => component.id === componentId);
     set.x = 80 + index % 2 * 920;
     set.y = 120 + Math.floor(index / 2) * 700;
@@ -1083,6 +1308,8 @@
     instance.x = set.x;
     instance.y = set.y + set.height + 40;
     section.appendChild(instance);
+    instance.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN);
+    instance.setPluginData("ondaRepeatedScreenInstance", "true");
     return { component: definition2.name, status: "created", variantCount: set.children.length, instanceCount: 1 };
   }
   function componentSet(page, name) {
@@ -1096,6 +1323,8 @@
     const instance = set.children[0].createInstance();
     instance.name = name;
     parent.appendChild(instance);
+    instance.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN);
+    instance.setPluginData("ondaRepeatedScreenInstance", "true");
     return instance;
   }
   function createLibraryView(section, decision, state, x) {
@@ -1108,6 +1337,7 @@
   }
   function createEditorView(section, decision, state, x, dark = false, width = 1440) {
     const frame = autoFrame(section, `Editor / ${state}`, { x, y: 180, width, padding: 0, gap: 0, radius: 0, dark, direction: "HORIZONTAL" }).node;
+    frame.setPluginData("ondaResponsiveFrame", String(width));
     const nav = autoFrame(frame, `Editor / ${state} / Navigation`, { width: Math.min(264, Math.round(width * 0.25)), padding: 24, gap: 16, radius: 0, dark, fill: dark ? "gray/900" : "gray/050" }).node;
     textNode(nav, `Editor / ${state} / Navigation / Marke`, "ONDA", decision, { size: 21, weight: 700, dark, width: 210 });
     for (const label of ["Struktur", "Projektverst\xE4ndnis", "Quellen", "Einstellungen"]) textNode(nav, `Editor / ${state} / Navigation / ${label}`, `\u25A1 ${label}`, decision, { size: 15, weight: 500, dark, width: 210 });
@@ -1266,11 +1496,21 @@
       ["Quellen & Recherche", "Quellen \u2192 Import \u2192 Recherche planen \u2192 Lauf \u2192 Pr\xFCfung \u2192 Fundstelle \xFCbernehmen"],
       ["Agent & Beleg", "Aura \u2192 Agentengespr\xE4ch \u2192 Antwort \u2192 Fundstelle \u2192 Editor"]
     ];
+    const frames = [];
     for (const [index, [name, path]] of flows.entries()) {
       const frame = autoFrame(section, `Prototyp / ${name}`, { x: 80, y: 120 + index * 500, width: 1940, padding: 32, gap: 20, radius: 6 }).node;
+      frames.push(frame);
       textNode(frame, `Prototyp / ${name} / Titel`, name, decision, { size: 21, weight: 700, width: 1800 });
       textNode(frame, `Prototyp / ${name} / Pfad`, path, decision, { size: 15, weight: 500, width: 1800 });
       textNode(frame, `Prototyp / ${name} / Recovery`, "Fehler \u2192 Wiederholen / Einrichten / Korrigieren / Abbrechen \xB7 keine tote Zwischenstation", decision, { size: 12, weight: 700, width: 1800 });
+    }
+    for (const [index, frame] of frames.entries()) {
+      const destination = frames[(index + 1) % frames.length];
+      frame.reactions = [{
+        trigger: { type: "ON_CLICK" },
+        actions: [{ type: "NODE", destinationId: destination.id, navigation: "NAVIGATE", transition: null, preserveScrollPosition: false }]
+      }];
+      frame.setPluginData("ondaPrototypeReaction", "true");
     }
   }
   async function runDialogsAndSecondary(page, ledger) {
@@ -1320,13 +1560,17 @@
     return radii;
   }
   function currentBaselineEvidence(page, ledger) {
-    const baselineIds = new Set(ledger.baseline.nodeIds);
-    const records = orderRecordsByBaselineIds(collectRecordsFromDocument(baselineIds), ledger.baseline.nodeIds);
+    const baselineRecords = readBaselineRecords(page, ledger);
+    const baselineIdsInOrder = baselineRecords.map((record) => record.id);
+    const baselineIds = new Set(baselineIdsInOrder);
+    const records = orderRecordsByBaselineIds(collectRecordsFromDocument(baselineIds), baselineIdsInOrder);
     const currentById = new Map(records.map((record) => [record.id, hashBaselineRecords([record])]));
-    const mismatches = ledger.baseline.nodeHashes.filter((item) => currentById.get(item.id) !== item.hash).map((item) => item.id);
+    const mismatches = baselineRecords.filter((record) => currentById.get(record.id) !== hashBaselineRecords([record])).map((record) => record.id);
     const currentHash = hashBaselineRecords(records);
-    const presentTopLevel = page.children.filter((node) => ledger.baseline.topLevelIds.includes(node.id)).length;
+    const topLevelIds = baselineRecords.filter((record) => record.parentId === page.id).map((record) => record.id);
+    const presentTopLevel = page.children.filter((node) => topLevelIds.includes(node.id)).length;
     return {
+      baselineRecords,
       records,
       currentHash,
       mismatches,
@@ -1334,28 +1578,119 @@
       pages: pageInvariantSnapshot()
     };
   }
+  function renderRect(value) {
+    const rect = (value == null ? void 0 : value.absoluteRenderBounds) || (value == null ? void 0 : value.absoluteBoundingBox) || (value == null ? void 0 : value.bounds);
+    if (!rect || ![rect.x, rect.y, rect.width, rect.height].every(Number.isFinite)) return null;
+    return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+  }
+  function rectanglesIntersect(a, b) {
+    return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
+  }
+  function geometryEvidence(page, sections, allNodes, ledger, baselineRecords) {
+    const ondaRects = sections.map((node) => ({ id: node.id, name: node.name, rect: renderRect(node) })).filter((item) => item.rect);
+    const baselineRects = baselineRecords.filter((record) => record.type !== "DOCUMENT" && record.type !== "PAGE").map((record) => ({ id: record.id, name: record.name, rect: renderRect(record) })).filter((item) => item.rect);
+    const intersections = [];
+    for (let left = 0; left < ondaRects.length; left += 1) {
+      for (let right = left + 1; right < ondaRects.length; right += 1) {
+        if (rectanglesIntersect(ondaRects[left].rect, ondaRects[right].rect)) intersections.push([ondaRects[left].name, ondaRects[right].name]);
+      }
+    }
+    for (const onda of ondaRects) {
+      for (const foreign of baselineRects) if (rectanglesIntersect(onda.rect, foreign.rect)) intersections.push([onda.name, foreign.name]);
+    }
+    const minOndaLeft = Math.min(...ondaRects.map((item) => item.rect.x));
+    const maxBaselineRight = Math.max(0, ...baselineRecords.map(renderRect).filter(Boolean).map((rect) => rect.x + rect.width));
+    const clearance = Number.isFinite(minOndaLeft) ? minOndaLeft - maxBaselineRight : 0;
+    const overflowNodes = [];
+    for (const frame of allNodes.filter((node) => node.type === "FRAME" && node.getPluginData("ondaResponsiveFrame"))) {
+      const outer = renderRect(frame);
+      if (!outer) continue;
+      for (const descendant of frame.findAll(() => true)) {
+        const inner = renderRect(descendant);
+        if (inner && (inner.x < outer.x - 0.5 || inner.x + inner.width > outer.x + outer.width + 0.5)) overflowNodes.push(descendant.id);
+      }
+    }
+    const undersizedHitTargets = allNodes.filter((node) => node.type === "INSTANCE").filter((node) => node.width < 44 || node.height < 44).map((node) => node.id);
+    return { intersections, clearance, overflowNodes: [...new Set(overflowNodes)], undersizedHitTargets };
+  }
   async function runVerify() {
     const inspection = await inspectCurrentTarget();
-    if (!inspection.target.ok) throw new Error(inspection.target.warning);
     const page = figma.currentPage;
+    const authorization = authorizeMutation(inspection.target, operatorPin, { documentId: figma.root.id, pageId: page.id });
+    if (!authorization.ok) throw new Error(authorization.warning || inspection.target.warning);
     const ledger = readLedger(page);
     if (!ledger) throw new Error("Noch kein Onda-Ledger vorhanden. Inspect und mindestens eine Mutationsphase ausf\xFChren.");
     const requiredNames = new Set(SECTION_DEFINITIONS.map((section) => section.name));
-    const sections = page.children.filter((node) => node.type === "SECTION" && requiredNames.has(node.name));
+    const sections = page.children.filter((node) => requiredNames.has(node.name));
     const allNodes = collectOndaNodes(sections);
-    const annotationKinds = sections.map((section) => section.getPluginData("ondaAnnotationKind")).filter(Boolean);
-    const dialogFamilies = allNodes.map((node) => {
-      var _a;
-      return (_a = node.getPluginData) == null ? void 0 : _a.call(node, "ondaDialogFamily");
+    const annotationViews2 = allNodes.map((node) => {
+      var _a, _b;
+      return {
+        kind: (_a = node.getPluginData) == null ? void 0 : _a.call(node, "ondaAnnotationKind"),
+        view: (_b = node.getPluginData) == null ? void 0 : _b.call(node, "ondaAnnotationView")
+      };
+    }).filter((item) => item.kind && item.view);
+    const dialogStates = allNodes.map((node) => {
+      var _a, _b;
+      return {
+        family: (_a = node.getPluginData) == null ? void 0 : _a.call(node, "ondaDialogFamily"),
+        state: (_b = node.getPluginData) == null ? void 0 : _b.call(node, "ondaDialogState")
+      };
+    }).filter((item) => item.family && item.state);
+    const componentSets = COMPONENT_DEFINITIONS.map((definition2) => {
+      const set = allNodes.find((node) => node.type === "COMPONENT_SET" && node.name === definition2.name);
+      const variants = (set == null ? void 0 : set.children.filter((node) => node.type === "COMPONENT")) || [];
+      return set ? {
+        id: definition2.id,
+        variants: variants.length,
+        autoLayout: variants.length > 0 && variants.every((node) => node.layoutMode !== "NONE"),
+        bound: set.getPluginData("ondaVariablesBound") === "true" && variants.every((node) => node.getPluginData("ondaVariablesBound") === "true")
+      } : null;
     }).filter(Boolean);
     const baseline = currentBaselineEvidence(page, ledger);
-    const report = buildVerificationReport({
+    const geometry = geometryEvidence(page, sections, allNodes, ledger, baseline.baselineRecords);
+    const paints = paintsFromNodes(allNodes);
+    const radii = radiiFromNodes(allNodes);
+    const foundationSection = sections.find((node) => node.name === "01 \xB7 Foundations");
+    const foundationNodes = foundationSection ? collectOndaNodes([foundationSection]) : [];
+    const effectsValid = allNodes.every((node) => !("effects" in node) || !Array.isArray(node.effects) || node.effects.every((effect) => !effect.color || isGrayColor(effect.color)));
+    const fontStylesValid = TYPE_WEIGHTS.every((weight) => {
+      var _a, _b;
+      return (_b = (_a = ledger.fontDecision) == null ? void 0 : _a.styles) == null ? void 0 : _b[weight];
+    });
+    const reactionCount = allNodes.reduce((count, node) => count + (Array.isArray(node.reactions) ? node.reactions.length : 0), 0);
+    const report = buildVerificationReport(__spreadProps(__spreadValues({
+      targetAuthorized: authorization.ok,
       pageCount: figma.root.children.length,
-      sectionNames: sections.map((section) => section.name),
-      annotationKinds,
-      dialogFamilies,
-      paints: paintsFromNodes(allNodes),
-      radii: radiiFromNodes(allNodes),
+      pageName: page.name,
+      sections: sections.map((section) => {
+        var _a, _b;
+        return {
+          name: section.name,
+          type: section.type,
+          parentType: (_a = section.parent) == null ? void 0 : _a.type,
+          parentName: (_b = section.parent) == null ? void 0 : _b.name,
+          owner: section.getPluginData(CREATED_MARKER_KEY)
+        };
+      }),
+      annotationViews: annotationViews2,
+      dialogStates,
+      componentSets,
+      instanceCount: allNodes.filter((node) => node.type === "INSTANCE").length,
+      repeatedScreenInstanceCount: allNodes.filter((node) => node.type === "INSTANCE" && node.getPluginData("ondaRepeatedScreenInstance") === "true").length,
+      foundation: {
+        paintsValid: paints.every(isGrayColor),
+        radiiValid: radii.every((radius) => isValidRadius(radius.value, radius.geometry)),
+        effectsValid,
+        fontsValid: fontStylesValid,
+        docsBound: foundationNodes.length > 0 && foundationNodes.every((node) => node.getPluginData("ondaFoundationBound") === "true")
+      }
+    }, geometry), {
+      reactionCount,
+      requiredReactionCount: 4,
+      phases: ledger.phases,
+      paints,
+      radii,
       topLevelNames: sections.map((section) => section.name),
       baselineTopLevelCount: ledger.baseline.topLevelCount,
       preservedTopLevelCount: baseline.presentTopLevel,
@@ -1364,7 +1699,7 @@
       baselineMismatches: baseline.mismatches,
       baselinePages: ledger.baseline.pages,
       currentPages: baseline.pages
-    });
+    }));
     report.targetFileKey = figma.fileKey || null;
     report.targetPageName = page.name;
     report.expectedFileKey = TARGET_FILE_KEY;
@@ -1374,37 +1709,46 @@
       const matching = page.children.find((node) => node.name === definition2.name);
       return matching && matching.type !== "SECTION";
     }).map((definition2) => definition2.name);
-    report.nonGrayPaintNodeCount = paintsFromNodes(allNodes).filter((paint) => !isGrayColor(paint)).length;
-    report.invalidRadiusNodes = radiiFromNodes(allNodes).filter((radius) => !isValidRadius(radius.value, radius.geometry)).map((radius) => ({ id: radius.id, name: radius.name, value: radius.value }));
+    report.nonGrayPaintNodeCount = paints.filter((paint) => !isGrayColor(paint)).length;
+    report.invalidRadiusNodes = radii.filter((radius) => !isValidRadius(radius.value, radius.geometry)).map((radius) => ({ id: radius.id, name: radius.name, value: radius.value }));
     report.preservedBaselineHash = report.preservedBaselineHash && baseline.mismatches.length === 0;
+    report.hardPass = report.hardPass && report.planErrors.length === 0;
     report.baselineHash = ledger.baseline.hash;
     report.currentBaselineHash = baseline.currentHash;
     return report;
   }
-  function postResult(command, ok, message, counts = null, unlockMutations = Boolean(lastInspection == null ? void 0 : lastInspection.target.ok)) {
+  function postResult(command, ok, message, counts = null, unlockMutations = false) {
     figma.ui.postMessage({ type: "phase-result", command, ok, message, counts, unlockMutations });
   }
   async function handleCommand(command) {
     var _a, _b, _c, _d;
     if (command === "inspect") {
       const inspection = await inspectCurrentTarget();
-      postResult(command, inspection.target.ok, inspectionMessage(inspection), {
+      const authorization = authorizeMutation(inspection.target, operatorPin, { documentId: figma.root.id, pageId: figma.currentPage.id });
+      postResult(command, Boolean(inspection.target.ok || inspection.target.readOnlyOk), inspectionMessage(inspection), {
         pageCount: inspection.pageCount,
-        baselineTopLevelCount: (_b = (_a = inspection.ledger) == null ? void 0 : _a.baseline.topLevelCount) != null ? _b : inspection.pendingBaseline.topLevelCount,
-        baselineNodeCount: (_d = (_c = inspection.ledger) == null ? void 0 : _c.baseline.nodeIds.length) != null ? _d : inspection.pendingBaseline.nodeIds.length,
+        baselineTopLevelCount: inspection.ledger ? inspection.ledger.baseline.topLevelCount : inspection.pendingBaseline.topLevelCount,
+        baselineNodeCount: inspection.ledger ? (_c = (_b = inspection.ledger.baseline.recordCount) != null ? _b : (_a = inspection.ledger.baseline.nodeIds) == null ? void 0 : _a.length) != null ? _c : 0 : inspection.pendingBaseline.records.length,
         fontFamily: inspection.fontDecision.family,
         exactFont: inspection.fontDecision.exact,
-        targetFallback: inspection.target.fallback
-      }, inspection.target.ok);
+        targetFallback: inspection.target.fallback,
+        requiresOperatorPin: Boolean(inspection.target.requiresOperatorPin),
+        completedPhases: Object.entries(((_d = inspection.ledger) == null ? void 0 : _d.phases) || {}).filter(([, value]) => value.status === "success").map(([id]) => id)
+      }, authorization.ok);
       return;
     }
     if (command === "verify") {
+      const ledger2 = readLedger(figma.currentPage);
+      const transition2 = validatePhaseTransition(command, (ledger2 == null ? void 0 : ledger2.phases) || {});
+      if (!transition2.ok) throw new Error(transition2.warning);
       const report = await runVerify();
-      const hardPass = report.pageInvariant && report.preservedBaselineHash && report.pageCount === 1 && report.sectionCount === 39 && report.missingSections.length === 0 && report.annotationCount === 29 && report.dialogFamilyCount === 7 && report.nonGrayPaints === 0 && report.invalidRadii === 0 && report.duplicateNames.length === 0 && report.planErrors.length === 0;
+      const hardPass = report.hardPass;
       postResult(command, hardPass, hardPass ? "Alle strukturellen Hard Gates bestanden." : "Verify hat offene Hard Gates gefunden.", report, true);
       return;
     }
     const { page, ledger } = await requireMutationContext();
+    const transition = validatePhaseTransition(command, ledger.phases);
+    if (!transition.ok) throw new Error(transition.warning);
     let counts;
     if (command === "foundations") counts = await runFoundations(page, ledger);
     else if (command === "core-views") counts = await runCoreViews(page, ledger);
@@ -1416,11 +1760,27 @@
     postResult(command, true, "Phase erfolgreich abgeschlossen und strukturell gez\xE4hlt.", counts, true);
   }
   figma.ui.onmessage = async (message) => {
-    if (!message || message.type !== "run-command") return;
+    if (!message) return;
     try {
+      if (message.type === "pin-target") {
+        let inspection = lastInspection || await inspectCurrentTarget();
+        if (inspection.documentId !== figma.root.id || inspection.pageId !== figma.currentPage.id) inspection = await inspectCurrentTarget();
+        if (inspection.fileKey) throw new Error("Ein verf\xFCgbarer Dateischl\xFCssel kann nicht manuell \xFCberschrieben werden.");
+        operatorPin = {
+          fileKey: String(message.fileKey || "").trim(),
+          confirmed: message.confirmed === true,
+          documentId: figma.root.id,
+          pageId: figma.currentPage.id
+        };
+        const authorization = authorizeMutation(inspection.target, operatorPin, { documentId: figma.root.id, pageId: figma.currentPage.id });
+        if (!authorization.ok) throw new Error(authorization.warning);
+        postResult("pin-target", true, authorization.warning, { sessionOnly: true, pageId: figma.currentPage.id }, true);
+        return;
+      }
+      if (message.type !== "run-command") return;
       await handleCommand(message.command);
     } catch (error) {
-      postResult(message.command, false, error instanceof Error ? error.message : String(error), null, Boolean(lastInspection == null ? void 0 : lastInspection.target.ok));
+      postResult(message.command || "pin-target", false, error instanceof Error ? error.message : String(error), null, false);
     }
   };
 })();

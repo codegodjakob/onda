@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "test": "node --test test/*.test.mjs",
-    "build": "../../../app/node_modules/.bin/esbuild src/runtime.mjs --bundle --format=iife --platform=browser --target=es2017 --outfile=dist/code.js",
+    "build": "../../app/node_modules/.bin/esbuild src/runtime.mjs --bundle --format=iife --platform=browser --target=es2017 --outfile=dist/code.js",
     "verify": "npm run build && npm test"
   }
 }

@@ -42,10 +42,13 @@ export function validateDesignPlan(plan) {
 
 export function computeOndaOrigin(children, persistedOrigin) {
   if (Number.isFinite(persistedOrigin)) return persistedOrigin
-  const maxExistingRight = children.reduce((max, child) => {
-    const right = Number(child.x || 0) + Number(child.width || 0)
-    return Math.max(max, right)
-  }, 0)
+  function furthestRight(node) {
+    const own = node?.absoluteRenderBounds
+      ? Number(node.absoluteRenderBounds.x || 0) + Number(node.absoluteRenderBounds.width || 0)
+      : Number(node?.x || 0) + Number(node?.width || 0)
+    return Math.max(own, ...(node?.children || []).map(furthestRight))
+  }
+  const maxExistingRight = Math.max(0, ...children.map(furthestRight))
   return Math.ceil((maxExistingRight + 2000) / 100) * 100
 }
 
@@ -62,10 +65,24 @@ export function validateTargetContext({ fileKey, documentName, pageName }) {
     return { ok: false, fallback: true, warning: `Dateischlüssel nicht verfügbar und Dokumentname ist nicht „${TARGET_DOCUMENT_NAME}“.` }
   }
   return {
-    ok: true,
+    ok: false,
+    readOnlyOk: true,
     fallback: true,
-    warning: 'Dateischlüssel nicht verfügbar; Ziel über „Claude Code“ und „Page 1“ geprüft.',
+    requiresOperatorPin: true,
+    warning: 'Dateischlüssel nicht verfügbar. „Claude Code“ und „Page 1“ sind nur ein Lesehinweis; Mutationen erfordern den exakten Schlüssel und eine sitzungsgebundene Bestätigung.',
   }
+}
+
+export function authorizeMutation(target, operatorPin, current) {
+  if (target?.ok && !target.fallback) return { ok: true, manual: false, warning: '' }
+  if (!target?.requiresOperatorPin || !target?.readOnlyOk) return { ok: false, manual: false, warning: target?.warning || 'Ziel nicht freigegeben.' }
+  const pinned = operatorPin?.confirmed === true
+    && operatorPin.fileKey === TARGET_FILE_KEY
+    && operatorPin.documentId === current?.documentId
+    && operatorPin.pageId === current?.pageId
+  return pinned
+    ? { ok: true, manual: true, warning: 'Mutation durch sitzungsgebundenen Operator-Pin freigegeben.' }
+    : { ok: false, manual: false, warning: 'Exakter Dateischlüssel, Bestätigung und aktuelle Dokument-/Seiten-ID sind erforderlich.' }
 }
 
 export function canReuseOwnedNode(node, baselineIds = new Set()) {
@@ -81,7 +98,95 @@ export function protectedChildIds({ nodeType, children, baselineIds = new Set() 
 
 export function isGrayColor(color) {
   if (!color || ![color.r, color.g, color.b].every(Number.isFinite)) return false
-  return color.r === color.g && color.g === color.b
+  return Math.max(color.r, color.g, color.b) - Math.min(color.r, color.g, color.b) <= 0.002 + 1e-9
+}
+
+const FONT_STYLES = Object.freeze({
+  400: Object.freeze(['Regular', 'Book', 'Normal']),
+  500: Object.freeze(['Medium']),
+  700: Object.freeze(['Bold']),
+})
+
+function stylesForFamily(fonts, family) {
+  return new Set(fonts.filter(font => font.fontName.family === family).map(font => font.fontName.style))
+}
+
+function exactWeightStyles(fonts, family) {
+  const available = stylesForFamily(fonts, family)
+  const entries = TYPE_WEIGHTS.map(weight => [weight, FONT_STYLES[weight].find(style => available.has(style)) || null])
+  return Object.fromEntries(entries)
+}
+
+export function selectFontDecision(fonts) {
+  const abcStyles = exactWeightStyles(fonts, 'ABC Diatype')
+  const missingAbc = TYPE_WEIGHTS.filter(weight => !abcStyles[weight])
+  if (!missingAbc.length) {
+    return { requestedFamily: 'ABC Diatype', family: 'ABC Diatype', styles: abcStyles, exact: true, warning: '' }
+  }
+  const families = [...new Set(fonts.map(font => font.fontName.family))]
+  const fallbackFamily = ['Inter', ...families.filter(family => family !== 'ABC Diatype' && family !== 'Inter')]
+    .find(family => TYPE_WEIGHTS.every(weight => exactWeightStyles(fonts, family)[weight]))
+  if (!fallbackFamily) throw new Error(`Keine Schriftfamilie mit geeigneten Schnitten für 400, 500 und 700 gefunden; ABC Diatype fehlt: ${missingAbc.join(', ')}.`)
+  return {
+    requestedFamily: 'ABC Diatype',
+    family: fallbackFamily,
+    styles: exactWeightStyles(fonts, fallbackFamily),
+    exact: false,
+    warning: `ABC Diatype hat keine geeigneten Schnitte für ${missingAbc.join(', ')}. Sichtbarer System-Fallback: ${fallbackFamily}.`,
+  }
+}
+
+function utf8ByteLength(value) {
+  return unescape(encodeURIComponent(value)).length
+}
+
+export function buildBaselineShards(records, maxBytes = 79_000) {
+  const shards = []
+  let current = []
+  for (const record of records) {
+    const candidate = JSON.stringify([...current, record])
+    if (utf8ByteLength(candidate) >= maxBytes) {
+      if (!current.length) throw new Error(`Ein Baseline-Datensatz überschreitet das Shard-Limit von ${maxBytes} Bytes.`)
+      shards.push(JSON.stringify(current))
+      current = [record]
+      if (utf8ByteLength(JSON.stringify(current)) >= maxBytes) throw new Error(`Ein Baseline-Datensatz überschreitet das Shard-Limit von ${maxBytes} Bytes.`)
+    } else current.push(record)
+  }
+  if (current.length || !shards.length) shards.push(JSON.stringify(current))
+  return shards
+}
+
+export function restoreBaselineShards(shards) {
+  return shards.flatMap((shard, index) => {
+    const value = JSON.parse(shard)
+    if (!Array.isArray(value)) throw new Error(`Baseline-Shard ${index} ist ungültig.`)
+    return value
+  })
+}
+
+const REQUIRED_PHASES = Object.freeze([
+  'inspect',
+  'foundations',
+  ...COMPONENT_DEFINITIONS.map(component => `component-${component.id}`),
+  'core-views',
+  ...Array.from({ length: 6 }, (_, index) => `annotations-${index + 1}`),
+  'dialogs-and-secondary',
+])
+
+export function validatePhaseTransition(command, phases = {}) {
+  if (command === 'inspect') return { ok: true, expected: 'inspect' }
+  if (phases[command]?.status === 'success' && REQUIRED_PHASES.includes(command)) {
+    const index = REQUIRED_PHASES.indexOf(command)
+    const prerequisitesComplete = REQUIRED_PHASES.slice(0, index).every(id => phases[id]?.status === 'success')
+    if (prerequisitesComplete) return { ok: true, expected: command, replay: true }
+  }
+  const next = REQUIRED_PHASES.find(id => phases[id]?.status !== 'success')
+  if (command === 'verify') {
+    return next ? { ok: false, expected: next, warning: `Vor Verify fehlt: ${next}.` } : { ok: true, expected: 'verify' }
+  }
+  return command === next
+    ? { ok: true, expected: next }
+    : { ok: false, expected: next || 'verify', warning: `Reihenfolge verletzt. Als Nächstes: ${next || 'verify'}.` }
 }
 
 export function isValidRadius(value, geometry = 'RECTANGLE') {
@@ -202,16 +307,63 @@ function duplicates(values) {
 
 export function buildVerificationReport(snapshot) {
   const requiredNames = new Set(SECTION_DEFINITIONS.map(section => section.name))
-  const presentNames = new Set(snapshot.sectionNames || [])
-  return {
+  const sections = snapshot.sections || (snapshot.sectionNames || []).map(name => ({ name }))
+  const sectionNames = sections.map(section => section.name)
+  const presentNames = new Set(sectionNames)
+  const expectedAnnotationViews = new Set(ANNOTATION_SECTIONS.flatMap(annotation => annotation.views.map(view => `${annotation.kind}\u0000${view.name}`)))
+  const presentAnnotationViews = new Set((snapshot.annotationViews || []).map(item => `${item.kind}\u0000${item.view}`))
+  const expectedDialogStates = new Set(DIALOG_FAMILIES.flatMap(family => family.states.map(state => `${family.name}\u0000${state}`)))
+  const presentDialogStates = new Set((snapshot.dialogStates || []).map(item => `${item.family}\u0000${item.state}`))
+  const sectionStructureValid = sections.length === SECTION_DEFINITIONS.length
+    && sections.every(section => section.type === undefined || (
+      section.type === 'SECTION'
+      && section.parentType === 'PAGE'
+      && section.parentName === TARGET_PAGE_NAME
+      && section.owner === PLUGIN_ORIGIN
+    ))
+  const componentSets = snapshot.componentSets || []
+  const expectedComponentIds = new Set(COMPONENT_DEFINITIONS.map(component => component.id))
+  const componentStructureValid = componentSets.length === COMPONENT_DEFINITIONS.length
+    && new Set(componentSets.map(item => item.id)).size === COMPONENT_DEFINITIONS.length
+    && componentSets.every(item => expectedComponentIds.has(item.id))
+    && componentSets.every(item => item.variants >= 2 && item.autoLayout && item.bound)
+  const foundation = snapshot.foundation || {}
+  const foundationValid = ['paintsValid', 'radiiValid', 'effectsValid', 'fontsValid', 'docsBound'].every(key => foundation[key] === true)
+  const annotationViewsValid = snapshot.annotationViews
+    ? snapshot.annotationViews.length === expectedAnnotationViews.size && presentAnnotationViews.size === expectedAnnotationViews.size && [...expectedAnnotationViews].every(key => presentAnnotationViews.has(key))
+    : new Set(snapshot.annotationKinds || []).size === ANNOTATION_SECTIONS.length
+  const dialogStatesValid = snapshot.dialogStates
+    ? snapshot.dialogStates.length === expectedDialogStates.size && presentDialogStates.size === expectedDialogStates.size && [...expectedDialogStates].every(key => presentDialogStates.has(key))
+    : new Set(snapshot.dialogFamilies || []).size === DIALOG_FAMILIES.length
+  const phasesComplete = snapshot.phases
+    ? REQUIRED_PHASES.every(id => snapshot.phases[id]?.status === 'success')
+    : true
+  const report = {
     pageCount: Number(snapshot.pageCount || 0),
-    sectionCount: (snapshot.sectionNames || []).length,
+    sectionCount: sectionNames.length,
     missingSections: [...requiredNames].filter(name => !presentNames.has(name)),
-    annotationCount: new Set(snapshot.annotationKinds || []).size,
-    dialogFamilyCount: new Set(snapshot.dialogFamilies || []).size,
+    annotationCount: snapshot.annotationViews ? new Set(snapshot.annotationViews.map(item => item.kind)).size : new Set(snapshot.annotationKinds || []).size,
+    annotationViewCount: presentAnnotationViews.size,
+    annotationViewsValid,
+    dialogFamilyCount: snapshot.dialogStates ? new Set(snapshot.dialogStates.map(item => item.family)).size : new Set(snapshot.dialogFamilies || []).size,
+    dialogStateCount: presentDialogStates.size,
+    dialogStatesValid,
     nonGrayPaints: (snapshot.paints || []).filter(color => !isGrayColor(color)).length,
     invalidRadii: (snapshot.radii || []).filter(radius => !isValidRadius(radius.value, radius.geometry)).length,
-    duplicateNames: duplicates(snapshot.topLevelNames || []),
+    duplicateNames: duplicates(snapshot.topLevelNames || sectionNames),
+    sectionStructureValid,
+    componentSetCount: componentSets.length,
+    componentStructureValid,
+    instanceCount: Number(snapshot.instanceCount || 0),
+    repeatedScreenInstanceCount: Number(snapshot.repeatedScreenInstanceCount || 0),
+    foundationValid,
+    intersections: snapshot.intersections || [],
+    clearance: Number(snapshot.clearance ?? 0),
+    overflowNodes: snapshot.overflowNodes || [],
+    undersizedHitTargets: snapshot.undersizedHitTargets || [],
+    reactionCount: Number(snapshot.reactionCount || 0),
+    requiredReactionCount: Number(snapshot.requiredReactionCount || 0),
+    phasesComplete,
     preservedBaselineTopLevelCount: Math.min(
       Number(snapshot.baselineTopLevelCount || 0),
       Number(snapshot.preservedTopLevelCount || 0),
@@ -222,4 +374,29 @@ export function buildVerificationReport(snapshot) {
     baselineMismatches: snapshot.baselineMismatches || [],
     pageInvariant: hashBaselineRecords(snapshot.baselinePages || []) === hashBaselineRecords(snapshot.currentPages || []),
   }
+  const modern = Boolean(snapshot.sections)
+  report.hardPass = Boolean(snapshot.targetAuthorized)
+    && report.pageCount === 1
+    && snapshot.pageName === TARGET_PAGE_NAME
+    && report.sectionCount === SECTION_DEFINITIONS.length
+    && report.missingSections.length === 0
+    && report.duplicateNames.length === 0
+    && sectionStructureValid
+    && annotationViewsValid
+    && dialogStatesValid
+    && componentStructureValid
+    && report.instanceCount >= COMPONENT_DEFINITIONS.length
+    && report.repeatedScreenInstanceCount > 0
+    && foundationValid
+    && report.intersections.length === 0
+    && report.clearance >= 2000
+    && report.overflowNodes.length === 0
+    && report.undersizedHitTargets.length === 0
+    && report.requiredReactionCount > 0
+    && report.reactionCount >= report.requiredReactionCount
+    && report.preservedBaselineHash
+    && report.pageInvariant
+    && phasesComplete
+  if (!modern) delete report.hardPass
+  return report
 }

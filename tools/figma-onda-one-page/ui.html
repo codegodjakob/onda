@@ -20,6 +20,9 @@
     button[aria-busy="true"]::after { content: " …"; }
     #target-status { margin-top: 8px; padding: 8px; border: 1px solid GrayText; border-radius: 4px; }
     #target-status[data-ok="true"] { border-width: 2px; }
+    #operator-pin { display: none; margin-top: 8px; padding: 10px; border: 1px solid GrayText; }
+    #operator-pin[data-visible="true"] { display: grid; gap: 8px; }
+    #operator-pin input[type="text"] { width: 100%; min-height: 32px; padding: 6px; }
     #phase-results { display: grid; gap: 6px; margin-top: 12px; }
     .result { border: 1px solid GrayText; border-left-width: 4px; border-radius: 4px; padding: 8px; white-space: pre-wrap; overflow-wrap: anywhere; }
     .result[data-ok="false"] { font-weight: 600; }
@@ -31,6 +34,13 @@
     <h1>Onda · One Page Generator</h1>
     <p>Ziel: Claude Code · Page 1 · phasenweise und idempotent</p>
     <div id="target-status" role="status" data-ok="false">Ziel noch nicht geprüft. Bitte zuerst Inspect ausführen.</div>
+    <form id="operator-pin" data-visible="false">
+      <strong>Session-Pin erforderlich</strong>
+      <span>Nur wenn Figma keinen <code>fileKey</code> liefert: exakten Schlüssel eingeben und für dieses Dokument + diese Seite bestätigen.</span>
+      <input id="operator-file-key" type="text" autocomplete="off" spellcheck="false" placeholder="0DbO0vK6shrVU2qkmWSxIp" aria-label="Exakter Figma-Dateischlüssel">
+      <label><input id="operator-confirm" type="checkbox"> Ich bestätige Claude Code · Page 1 für diese Sitzung.</label>
+      <button type="submit">Session-Pin prüfen</button>
+    </form>
   </header>
 
   <main>
@@ -84,7 +94,7 @@
 
     <section aria-labelledby="verify-title">
       <h2 id="verify-title">Verify · read-only</h2>
-      <div class="commands"><button type="button" data-command="verify">Verify</button></div>
+      <div class="commands"><button type="button" data-command="verify" disabled>Verify</button></div>
     </section>
 
     <div id="phase-results" aria-live="polite" aria-label="Phasenergebnisse"></div>
@@ -93,7 +103,30 @@
   <script>
     const results = document.getElementById('phase-results')
     const targetStatus = document.getElementById('target-status')
+    const operatorPin = document.getElementById('operator-pin')
+    const operatorFileKey = document.getElementById('operator-file-key')
+    const operatorConfirm = document.getElementById('operator-confirm')
     const buttons = [...document.querySelectorAll('[data-command]')]
+    const orderedCommands = [
+      'foundations',
+      'component-button', 'component-icon-button', 'component-status-symbol', 'component-tag',
+      'component-field', 'component-menu-item', 'component-annotation-anchor', 'component-annotation-card',
+      'component-source-card', 'component-dialog', 'core-views',
+      'annotations-1', 'annotations-2', 'annotations-3', 'annotations-4', 'annotations-5', 'annotations-6',
+      'dialogs-and-secondary',
+    ]
+    const completed = new Set()
+    let targetAuthorized = false
+
+    function updateAvailability() {
+      const next = orderedCommands.find(command => !completed.has(command))
+      for (const button of buttons) {
+        const command = button.dataset.command
+        if (command === 'inspect') { button.disabled = false; continue }
+        if (command === 'verify') { button.disabled = !targetAuthorized || Boolean(next); continue }
+        button.disabled = !targetAuthorized || (command !== next && !completed.has(command))
+      }
+    }
 
     function appendResult(message) {
       const item = document.createElement('div')
@@ -116,23 +149,35 @@
       })
     }
 
+    operatorPin.addEventListener('submit', event => {
+      event.preventDefault()
+      parent.postMessage({ pluginMessage: {
+        type: 'pin-target', fileKey: operatorFileKey.value, confirmed: operatorConfirm.checked,
+      } }, '*')
+    })
+
     onmessage = event => {
       const message = event.data.pluginMessage
       if (!message || message.type !== 'phase-result') return
       const button = buttons.find(candidate => candidate.dataset.command === message.command)
       if (button) {
         button.removeAttribute('aria-busy')
-        button.disabled = button.hasAttribute('data-mutation') && !message.unlockMutations
       }
-      if (message.unlockMutations) {
-        for (const mutation of document.querySelectorAll('[data-mutation]')) mutation.disabled = false
-      }
+      if (message.unlockMutations) targetAuthorized = true
+      if (message.ok && orderedCommands.includes(message.command)) completed.add(message.command)
       if (message.command === 'inspect') {
+        targetAuthorized = Boolean(message.unlockMutations)
+        completed.clear()
         targetStatus.dataset.ok = String(Boolean(message.ok))
         targetStatus.textContent = message.message
+        operatorPin.dataset.visible = String(Boolean(message.counts?.requiresOperatorPin && !message.unlockMutations))
+        for (const command of message.counts?.completedPhases || []) if (orderedCommands.includes(command)) completed.add(command)
       }
+      if (message.command === 'pin-target' && message.ok) operatorPin.dataset.visible = 'false'
+      updateAvailability()
       appendResult(message)
     }
+    updateAvailability()
   </script>
 </body>
 </html>

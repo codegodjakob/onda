@@ -213,7 +213,7 @@ test('ownership guard reuses only Onda-owned nodes and filters only direct Onda 
 })
 
 test('target guard pins mutations to Claude Code Page 1 and prefers the exact file key', async () => {
-  const [{ TARGET_DOCUMENT_NAME, TARGET_FILE_KEY, TARGET_PAGE_NAME }, { validateTargetContext }] = await loadModules()
+  const [{ TARGET_DOCUMENT_NAME, TARGET_FILE_KEY, TARGET_PAGE_NAME }, { authorizeMutation, validateTargetContext }] = await loadModules()
   assert.equal(TARGET_FILE_KEY, '0DbO0vK6shrVU2qkmWSxIp')
   assert.equal(TARGET_DOCUMENT_NAME, 'Claude Code')
   assert.equal(TARGET_PAGE_NAME, 'Page 1')
@@ -227,15 +227,33 @@ test('target guard pins mutations to Claude Code Page 1 and prefers the exact fi
     documentName: TARGET_DOCUMENT_NAME,
     pageName: TARGET_PAGE_NAME,
   }).ok, false)
-  assert.deepEqual(validateTargetContext({
+  const unavailable = validateTargetContext({
     fileKey: undefined,
     documentName: TARGET_DOCUMENT_NAME,
     pageName: TARGET_PAGE_NAME,
-  }), {
-    ok: true,
-    fallback: true,
-    warning: 'Dateischlüssel nicht verfügbar; Ziel über „Claude Code“ und „Page 1“ geprüft.',
+    documentId: 'doc-1',
+    pageId: 'page-1',
   })
+  assert.deepEqual(unavailable, {
+    ok: false,
+    readOnlyOk: true,
+    fallback: true,
+    requiresOperatorPin: true,
+    warning: 'Dateischlüssel nicht verfügbar. „Claude Code“ und „Page 1“ sind nur ein Lesehinweis; Mutationen erfordern den exakten Schlüssel und eine sitzungsgebundene Bestätigung.',
+  })
+  assert.equal(authorizeMutation(unavailable, null, { documentId: 'doc-1', pageId: 'page-1' }).ok, false)
+  assert.equal(authorizeMutation(unavailable, {
+    fileKey: TARGET_FILE_KEY, confirmed: true, documentId: 'doc-1', pageId: 'page-1',
+  }, { documentId: 'doc-1', pageId: 'page-1' }).ok, true)
+  assert.equal(authorizeMutation(unavailable, {
+    fileKey: TARGET_FILE_KEY, confirmed: true, documentId: 'other', pageId: 'page-1',
+  }, { documentId: 'doc-1', pageId: 'page-1' }).ok, false)
+  const wrongAvailable = validateTargetContext({
+    fileKey: 'wrong', documentName: TARGET_DOCUMENT_NAME, pageName: TARGET_PAGE_NAME,
+  })
+  assert.equal(authorizeMutation(wrongAvailable, {
+    fileKey: TARGET_FILE_KEY, confirmed: true, documentId: 'doc-1', pageId: 'page-1',
+  }, { documentId: 'doc-1', pageId: 'page-1' }).ok, false)
   assert.equal(validateTargetContext({
     fileKey: undefined,
     documentName: 'Other',
@@ -278,7 +296,21 @@ test('verification reports every required structural metric', async () => {
     baselinePages: [{ id: '0:0', name: 'Page 1', index: 0 }],
     currentPages: [{ id: '0:0', name: 'Page 1', index: 0 }],
   }
-  assert.deepEqual(buildVerificationReport(snapshot), {
+  const report = buildVerificationReport(snapshot)
+  assert.deepEqual(Object.fromEntries(Object.keys({
+    pageCount: 1,
+    sectionCount: 39,
+    missingSections: [],
+    annotationCount: 29,
+    dialogFamilyCount: 7,
+    nonGrayPaints: 0,
+    invalidRadii: 0,
+    duplicateNames: [],
+    preservedBaselineTopLevelCount: 17,
+    preservedBaselineHash: true,
+    baselineMismatches: [],
+    pageInvariant: true,
+  }).map(key => [key, report[key]])), {
     pageCount: 1,
     sectionCount: 39,
     missingSections: [],
