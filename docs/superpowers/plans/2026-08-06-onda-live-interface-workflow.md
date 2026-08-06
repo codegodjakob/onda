@@ -40,7 +40,7 @@
 - `options`: `{ root?: string, host?: string, port?: number, debounceMs?: number, logger?: Pick<Console, 'log'|'error'> }`
 - Produces: HTTP endpoint `GET /__onda_reload` with `text/event-stream`.
 
-- [ ] **Step 1: Write the failing static-server tests**
+- [x] **Step 1: Write the failing static-server tests**
 
 Create `app/test/dev-server.test.mjs` with the fixture and the first three tests:
 
@@ -98,7 +98,7 @@ test('gibt keine Datei außerhalb des App-Verzeichnisses aus', async t => {
 })
 ```
 
-- [ ] **Step 2: Run the test and witness RED**
+- [x] **Step 2: Run the test and witness RED**
 
 Run:
 
@@ -108,7 +108,7 @@ cd app && node --test test/dev-server.test.mjs
 
 Expected: FAIL with `ERR_MODULE_NOT_FOUND` for `scripts/dev-server.mjs`.
 
-- [ ] **Step 3: Implement the static server and SSE endpoint**
+- [x] **Step 3: Implement the static server and SSE endpoint**
 
 Create `app/scripts/dev-server.mjs` with these public constants, safety checks and lifecycle semantics:
 
@@ -236,13 +236,13 @@ export async function startDevServer({
 }
 ```
 
-- [ ] **Step 4: Run the tests and verify GREEN**
+- [x] **Step 4: Run the tests and verify GREEN**
 
 Run: `cd app && node --test test/dev-server.test.mjs`
 
 Expected: 3 tests, 3 passed, 0 failed.
 
-- [ ] **Step 5: Commit the static server slice**
+- [x] **Step 5: Commit the static server slice**
 
 ```bash
 git add app/scripts/dev-server.mjs app/test/dev-server.test.mjs
