@@ -2,109 +2,109 @@ TAP version 13
 # Subtest: Zusammenfassung zählt Fehler, Empfehlungen und Geschmack getrennt
 ok 1 - Zusammenfassung zählt Fehler, Empfehlungen und Geschmack getrennt
   ---
-  duration_ms: 1.168625
+  duration_ms: 1.3735
   type: 'test'
   ...
 # Subtest: Reihenfolge folgt Fehler, Empfehlung, Geschmack und bleibt stabil
 ok 2 - Reihenfolge folgt Fehler, Empfehlung, Geschmack und bleibt stabil
   ---
-  duration_ms: 0.181208
+  duration_ms: 0.195917
   type: 'test'
   ...
 # Subtest: stiller Modus behält die Zähler, liefert aber keine aktive Oberfläche
 ok 3 - stiller Modus behält die Zähler, liefert aber keine aktive Oberfläche
   ---
-  duration_ms: 0.23825
+  duration_ms: 0.20925
   type: 'test'
   ...
 # Subtest: aktive Auswahl, Weiter und Zurück verwenden eine einzige ID
 ok 4 - aktive Auswahl, Weiter und Zurück verwenden eine einzige ID
   ---
-  duration_ms: 0.092833
+  duration_ms: 0.105875
   type: 'test'
   ...
 # Subtest: Modus und Ruhe werden normalisiert und persistiert
 ok 5 - Modus und Ruhe werden normalisiert und persistiert
   ---
-  duration_ms: 0.1745
+  duration_ms: 0.232875
   type: 'test'
   ...
 # Subtest: Undo-Stack ist auf 20 Einträge begrenzt und wird zuletzt zuerst abgearbeitet
 ok 6 - Undo-Stack ist auf 20 Einträge begrenzt und wird zuletzt zuerst abgearbeitet
   ---
-  duration_ms: 0.107834
+  duration_ms: 0.157041
   type: 'test'
   ...
 # Subtest: Sammelannahme erfasst nur sichere Korrekturen, keine Quellen- oder Geschmacksfälle
 ok 7 - Sammelannahme erfasst nur sichere Korrekturen, keine Quellen- oder Geschmacksfälle
   ---
-  duration_ms: 0.131083
+  duration_ms: 0.186167
   type: 'test'
   ...
 # Subtest: kaputte Adapter oder leere Warteschlange bleiben ruhig und deterministisch
 ok 8 - kaputte Adapter oder leere Warteschlange bleiben ruhig und deterministisch
   ---
-  duration_ms: 0.103
+  duration_ms: 0.143208
   type: 'test'
   ...
 # Subtest: Notizmodus lässt nur Notizarten, Textmodus nur Textarten zu
 ok 9 - Notizmodus lässt nur Notizarten, Textmodus nur Textarten zu
   ---
-  duration_ms: 0.215292
+  duration_ms: 0.33425
   type: 'test'
   ...
 # Subtest: Verwerfungsumfänge bleiben getrennt und widerrufbar
 ok 10 - Verwerfungsumfänge bleiben getrennt und widerrufbar
   ---
-  duration_ms: 0.317125
+  duration_ms: 0.454084
   type: 'test'
   ...
 # Subtest: einmalige Verwerfung unterdrückt keinen künftigen ähnlichen Fund
 ok 11 - einmalige Verwerfung unterdrückt keinen künftigen ähnlichen Fund
   ---
-  duration_ms: 0.152541
+  duration_ms: 0.201833
   type: 'test'
   ...
 # Subtest: replace-range plant nur einen eindeutigen exakten Treffer
 ok 12 - replace-range plant nur einen eindeutigen exakten Treffer
   ---
-  duration_ms: 0.985791
+  duration_ms: 1.315292
   type: 'test'
   ...
 # Subtest: replace-range scheitert bei demselben Ziel in mehreren Blöcken geschlossen
 ok 13 - replace-range scheitert bei demselben Ziel in mehreren Blöcken geschlossen
   ---
-  duration_ms: 0.371041
+  duration_ms: 0.386208
   type: 'test'
   ...
 # Subtest: insert-at ersetzt die verifizierte Ankerfassung durch die vollständige neue Fassung
 ok 14 - insert-at ersetzt die verifizierte Ankerfassung durch die vollständige neue Fassung
   ---
-  duration_ms: 0.176
+  duration_ms: 0.189334
   type: 'test'
   ...
 # Subtest: replace-title, move-block und insert-heading liefern umkehrbare Pläne
 ok 15 - replace-title, move-block und insert-heading liefern umkehrbare Pläne
   ---
-  duration_ms: 0.415875
+  duration_ms: 0.375083
   type: 'test'
   ...
 # Subtest: replace-many ist atomar und attach-source erhält Herkunftsdaten
 ok 16 - replace-many ist atomar und attach-source erhält Herkunftsdaten
   ---
-  duration_ms: 0.263291
+  duration_ms: 0.247709
   type: 'test'
   ...
 # Subtest: Planvalidierung erkennt Drift und verändert weder Plan noch Snapshot
 ok 17 - Planvalidierung erkennt Drift und verändert weder Plan noch Snapshot
   ---
-  duration_ms: 0.11625
+  duration_ms: 0.108083
   type: 'test'
   ...
 # Subtest: fehlende Operation, Aktion, Quelle oder Zielstelle scheitern ohne Raten
 ok 18 - fehlende Operation, Aktion, Quelle oder Zielstelle scheitern ohne Raten
   ---
-  duration_ms: 0.142458
+  duration_ms: 0.136958
   type: 'test'
   ...
 1..18
@@ -115,5 +115,5 @@ ok 18 - fehlende Operation, Aktion, Quelle oder Zielstelle scheitern ohne Raten
 # cancelled 0
 # skipped 0
 # todo 0
-# duration_ms 42.068291
+# duration_ms 46.224125
 

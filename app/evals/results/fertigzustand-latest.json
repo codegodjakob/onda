@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": "2026-08-05.2",
+  "catalogVersion": "2026-08-05.3",
   "stage": "FERTIGZUSTAND",
   "iteration": 1,
-  "generatedAt": "2026-08-05T17:57:00.523Z",
-  "gitCommit": "6de1f5b98b1acc2212c4a8ca832375009562bf1a",
+  "generatedAt": "2026-08-06T19:44:40.620Z",
+  "gitCommit": "72ad10852d7faae0f59ad7738e0a152041aafa7a",
   "rubricScores": {
     "truth": 5,
     "authorship": 5,
@@ -24,28 +24,50 @@
     "access_privacy": "Automatisierte Drei-Engine-, Zoom-, Zielgrößen-, Export- und Geheimnisprüfungen bestehen; echte assistive Nutzung bleibt extern, daher Deckel 4,5."
   },
   "coverage": {
-    "passed": 126,
-    "applicable": 126,
+    "passed": 147,
+    "applicable": 147,
     "ratio": 1
   },
   "loops": [
     {
       "iteration": 1,
-      "passed": 126,
+      "passed": 147,
       "failed": 0,
-      "externalOpen": 4,
+      "externalOpen": 5,
       "weightedScore": 4.88
     }
   ],
   "massstabVergleich": {
-    "status": "kein-vergleichsstand",
-    "aenderungen": []
+    "status": "geaendert",
+    "aenderungen": [
+      {
+        "bereich": "eval",
+        "art": "geaendert",
+        "id": "DESIGN-06",
+        "feld": "automation",
+        "vorher": "file-inspection",
+        "jetzt": "integration"
+      },
+      {
+        "bereich": "eval",
+        "art": "geaendert",
+        "id": "DESIGN-06",
+        "feld": "evidence",
+        "vorher": [
+          "Datei-Prüfung: Statustabelle in docs/REDESIGN-IDEEN.md enthält keinen Eintrag 'open' für einen Punkt, dessen Eval bereits bestanden wird"
+        ],
+        "jetzt": [
+          "Datei-Prüfung: Statustabelle in docs/REDESIGN-IDEEN.md enthält keinen Eintrag 'open' für einen Punkt, dessen Eval bereits bestanden wird",
+          "Frische Messung im selben Lauf: ob ein Punkt umgesetzt ist, wird durch Starten der Gestalt-Prüfung jetzt ermittelt — nicht aus dem Ergebnisstand eines früheren Laufs gelesen"
+        ]
+      }
+    ]
   },
   "massstab": {
-    "catalogVersion": "2026-08-05.2",
+    "catalogVersion": "2026-08-05.3",
     "thresholds": {
       "allApplicableHardGatesMustPass": true,
-      "minimumWeightedScore": 4.5,
+      "minimumWeightedScore": 4.6,
       "minimumDimensionScore": 4,
       "maximumIterationsPerStage": 5,
       "stopAfterConsecutiveNonImprovingIterations": 2
@@ -90,6 +112,7 @@
     "externalLiveGateIds": [
       "EFFECT-06",
       "INV-06",
+      "ONDA-UI-18",
       "SYSTEM-03",
       "SYSTEM-09"
     ],
@@ -1336,12 +1359,13 @@
       "DESIGN-06": {
         "title": "Die Umgestaltungsentscheidungen sind getroffen",
         "gate": "hard",
-        "automation": "file-inspection",
+        "automation": "integration",
         "given": "docs/REDESIGN-IDEEN.md sammelt Punkte mit Status offen, vereinbart oder verworfen.",
         "when": "Die Umsetzung eines Punktes beginnt.",
         "then": "Dieser Punkt trägt den Status vereinbart oder verworfen mit einer Begründung. Kein Punkt wird umgesetzt, solange er auf offen steht — die Entscheidung liegt beim Nutzer, nicht bei der Umsetzung.",
         "evidence": [
-          "Datei-Prüfung: Statustabelle in docs/REDESIGN-IDEEN.md enthält keinen Eintrag 'open' für einen Punkt, dessen Eval bereits bestanden wird"
+          "Datei-Prüfung: Statustabelle in docs/REDESIGN-IDEEN.md enthält keinen Eintrag 'open' für einen Punkt, dessen Eval bereits bestanden wird",
+          "Frische Messung im selben Lauf: ob ein Punkt umgesetzt ist, wird durch Starten der Gestalt-Prüfung jetzt ermittelt — nicht aus dem Ergebnisstand eines früheren Laufs gelesen"
         ],
         "source": [
           "Anweisung 2026-07-31: erst sammeln, dann umsetzen"
@@ -2117,6 +2141,343 @@
           "app/src/hinweis-kontext.mjs",
           "app/src/workspace.js"
         ]
+      },
+      "ONDA-UI-01": {
+        "title": "Systemweite Gestalt",
+        "gate": "hard",
+        "automation": "browser",
+        "given": "Eine beliebige Haupt- oder Nebenansicht ist in Hell- oder Dunkelmodus geöffnet.",
+        "when": "Tokens, Typografie, Radien, Farben, Fokus und Symbole geprüft werden.",
+        "then": "Die Ansicht verwendet ausschließlich den freigegebenen Onda-Vertrag mit Sky als einzigem Akzent.",
+        "evidence": [
+          "Token-Vertragstest, Laufzeit-Audit und Screenshotmatrix"
+        ],
+        "source": [
+          "AC-01",
+          "app/test/onda-design-contract.test.mjs",
+          "app/test/onda-ui-smoke.mjs"
+        ]
+      },
+      "ONDA-UI-02": {
+        "title": "Alle 24 Textarten",
+        "gate": "hard",
+        "automation": "browser",
+        "given": "Die Anmerkungsgalerie enthält die Textmodus-Fixtures.",
+        "when": "Alle Anmerkungen gerendert und gegen den Vertrag geprüft werden.",
+        "then": "Alle 24 Textarten sind korrekt bezeichnet, kategorisiert, priorisiert und ihrer Form zugeordnet.",
+        "evidence": [
+          "Taxonomie-Unit-Test und vollständige Galerie-Screenshots"
+        ],
+        "source": [
+          "AC-02",
+          "app/src/annotation-contract.mjs",
+          "app/annotation-lab.html"
+        ]
+      },
+      "ONDA-UI-03": {
+        "title": "Reiner Notizmodus",
+        "gate": "hard",
+        "automation": "integration",
+        "given": "Ein Dokument befindet sich im Notizmodus.",
+        "when": "Ein Hinweislauf verarbeitet und dargestellt wird.",
+        "then": "Es entstehen nur die fünf Notizarten und keine Textkorrekturen oder Stilglättungen.",
+        "evidence": [
+          "Schema-, Prompt-, Controller- und Browserprüfung"
+        ],
+        "source": [
+          "AC-03",
+          "app/src/agent-tasks.mjs",
+          "app/src/annotation-controller.mjs"
+        ]
+      },
+      "ONDA-UI-04": {
+        "title": "Exakte Wortkorrektur mit Undo",
+        "gate": "hard",
+        "automation": "browser",
+        "given": "Ein eindeutiger Wortfehler ist verankert.",
+        "when": "Die kompakte Korrektur übernommen und zurückgenommen wird.",
+        "then": "Nur der Zieltext ändert sich und der vollständige vorherige Zustand wird wiederhergestellt.",
+        "evidence": [
+          "Operations-Unit-Test und Browser-E2E"
+        ],
+        "source": [
+          "AC-04",
+          "app/src/annotation-operations.mjs"
+        ]
+      },
+      "ONDA-UI-05": {
+        "title": "Rewrite mit unverändertem Originalpfad",
+        "gate": "hard",
+        "automation": "browser",
+        "given": "Ein Satz-, Absatz- oder Textvorschlag ist aktiv.",
+        "when": "Diagnose, Neufassung und Original-behalten-Pfad benutzt werden.",
+        "then": "Die passende Seitenspur erscheint und Original behalten verändert keinen Text.",
+        "evidence": [
+          "Resolver-Test und Browser-E2E"
+        ],
+        "source": [
+          "AC-05",
+          "app/src/annotation-components.mjs"
+        ]
+      },
+      "ONDA-UI-06": {
+        "title": "Sichere Einfügung im Textfluss",
+        "gate": "hard",
+        "automation": "integration",
+        "given": "Ein Übergangs-, Stilmittel- oder Verständlichkeitshinweis hat einen Anker.",
+        "when": "Die Einfügung geplant und angewendet wird.",
+        "then": "Sie überdeckt keinen Text und wird nur bei eindeutigem Anker ausgeführt.",
+        "evidence": [
+          "Layout-E2E und Negativtest für mehrdeutige Anker"
+        ],
+        "source": [
+          "AC-06",
+          "app/src/annotation-operations.mjs"
+        ]
+      },
+      "ONDA-UI-07": {
+        "title": "Strukturänderung zeigt Ursprung und Ziel",
+        "gate": "hard",
+        "automation": "integration",
+        "given": "Ein Bewegungs- oder Gliederungshinweis ist aktiv.",
+        "when": "Die Strukturänderung übernommen oder rückgängig gemacht wird.",
+        "then": "Ursprung und Ziel sind sichtbar und genau die vereinbarte Struktur wird reversibel verändert.",
+        "evidence": [
+          "Strukturoperations-Test und Browser-E2E"
+        ],
+        "source": [
+          "AC-07",
+          "app/src/annotation-operations.mjs"
+        ]
+      },
+      "ONDA-UI-08": {
+        "title": "Atomare Mehrfachbereiche",
+        "gate": "hard",
+        "automation": "integration",
+        "given": "Ein Ton-, Wiederholungs- oder Terminologiehinweis betrifft mehrere Fundstellen.",
+        "when": "Der gemeinsame Bereich gesammelt geändert wird.",
+        "then": "Bereich und Anzahl sind sichtbar; die Änderung ist atomar und gemeinsam rückgängig.",
+        "evidence": [
+          "Replace-many-Unit-Test und Browser-E2E"
+        ],
+        "source": [
+          "AC-08",
+          "app/src/annotation-operations.mjs"
+        ]
+      },
+      "ONDA-UI-09": {
+        "title": "Ehrliche Quellen- und Faktenkarte",
+        "gate": "hard",
+        "automation": "browser",
+        "given": "Ein Beleg- oder Faktencheckhinweis ist geöffnet.",
+        "when": "Quelle, Auszug, Fundstelle, Status und Grenzen angezeigt werden.",
+        "then": "Ungeprüfte Quellen werden nie als verifiziert bezeichnet.",
+        "evidence": [
+          "Quellen-Fixtures, Galerie und Browser-E2E"
+        ],
+        "source": [
+          "AC-09",
+          "app/src/annotation-components.mjs",
+          "app/src/source-library-ui.mjs"
+        ]
+      },
+      "ONDA-UI-10": {
+        "title": "Belegter Vergleich oder echter Dialog",
+        "gate": "hard",
+        "automation": "browser",
+        "given": "Ein Widerspruch, eine Terminologiefrage, Notiz oder Gegenargumentlücke ist geöffnet.",
+        "when": "Die jeweilige Onda-Form erscheint.",
+        "then": "Sie zeigt eine belegte Gegenüberstellung oder einen echten lokalen Dialog, ohne beim Öffnen Text zu mutieren.",
+        "evidence": [
+          "DOM-, Transport- und Persistenzprüfung"
+        ],
+        "source": [
+          "AC-10",
+          "app/src/annotation-components.mjs"
+        ]
+      },
+      "ONDA-UI-11": {
+        "title": "Priorisierte Navigation",
+        "gate": "hard",
+        "automation": "browser",
+        "given": "Offene Findings verschiedener Priorität liegen vor.",
+        "when": "Die Schreibansicht geöffnet oder weiter navigiert wird.",
+        "then": "Anzahlen stimmen und die Reihenfolge folgt Fehler, Empfehlung, Geschmack unter Wahrung des Moments.",
+        "evidence": [
+          "Queue-Unit-Test und Browser-E2E"
+        ],
+        "source": [
+          "AC-11",
+          "app/src/annotation-controller.mjs"
+        ]
+      },
+      "ONDA-UI-12": {
+        "title": "Sichere Sammelannahme",
+        "gate": "hard",
+        "automation": "browser",
+        "given": "Mindestens zwei sichere Korrekturen sind offen.",
+        "when": "Die Sammelannahme ausgelöst wird.",
+        "then": "Nur sichere Korrekturen werden atomar angewendet und gemeinsam rückgängig gemacht.",
+        "evidence": [
+          "Controller- und Operations-Test sowie Browser-E2E"
+        ],
+        "source": [
+          "AC-12",
+          "app/src/annotation-controller.mjs"
+        ]
+      },
+      "ONDA-UI-13": {
+        "title": "Erklärtes und widerrufbares Verwerfen",
+        "gate": "hard",
+        "automation": "persistence",
+        "given": "Eine Person verwirft einen Hinweis.",
+        "when": "Sie einmalig, dokumentbezogen oder persönlich-global wählt.",
+        "then": "Die ausführlich erklärte Folge gilt exakt im gewählten Umfang und bleibt widerrufbar.",
+        "evidence": [
+          "Unterdrückungsmodell-, Persistenz- und Browserprüfung"
+        ],
+        "source": [
+          "AC-13",
+          "app/src/annotation-controller.mjs"
+        ]
+      },
+      "ONDA-UI-14": {
+        "title": "Ruhiger Anmerkungsmodus",
+        "gate": "hard",
+        "automation": "browser",
+        "given": "Beim Schreiben still ist aktiviert.",
+        "when": "Neue Hinweise eingehen.",
+        "then": "Sie unterbrechen den Text nicht, bleiben erhalten und sind neutral zusammengefasst abrufbar.",
+        "evidence": [
+          "Controller- und Browserprüfung mit künstlichem Finding"
+        ],
+        "source": [
+          "AC-14",
+          "app/src/annotation-controller.mjs"
+        ]
+      },
+      "ONDA-UI-15": {
+        "title": "Verlustfreie Migration bestehender Daten",
+        "gate": "hard",
+        "automation": "persistence",
+        "given": "Gespeicherte Projekte und alte Findings ohne Anmerkungsart existieren.",
+        "when": "Die neue App sie lädt.",
+        "then": "Text, Struktur, Quellen, Entscheidungen und Status bleiben erhalten; alte Findings erhalten eine sichere Form.",
+        "evidence": [
+          "Migrationsfixtures und Reload-E2E"
+        ],
+        "source": [
+          "AC-15",
+          "app/src/workspace-model.mjs",
+          "app/src/annotation-contract.mjs"
+        ]
+      },
+      "ONDA-UI-16": {
+        "title": "Responsive Schreibansicht ohne Überlauf",
+        "gate": "hard",
+        "automation": "browser",
+        "given": "Die Schreibansicht läuft mit 1280, 1024, 720 oder 320 Pixel Breite.",
+        "when": "Text, Spur und Aktionen benutzt werden.",
+        "then": "Die Spur steht rechts oder unter dem Text, alle Aktionen bleiben erreichbar und horizontaler Überlauf fehlt.",
+        "evidence": [
+          "Screenshotmatrix und Größenassertionen"
+        ],
+        "source": [
+          "AC-16",
+          "app/src/onda-shell.css",
+          "app/test/onda-ui-smoke.mjs"
+        ]
+      },
+      "ONDA-UI-17": {
+        "title": "WCAG 2.1 AA und Tastatur",
+        "gate": "hard",
+        "automation": "browser",
+        "given": "Bibliothek, Schreibansicht, Anmerkungen und Dialoge sind geöffnet.",
+        "when": "Kontrast, Tastatur, Fokus, Namen, Zustände, Ziele und reduzierte Bewegung geprüft werden.",
+        "then": "Es bestehen alle geprüften WCAG-2.1-A/AA-Regeln ohne kritische oder ernste Axe-Verstöße.",
+        "evidence": [
+          "Vollständiger Axe-Lauf und Tastatur-E2E"
+        ],
+        "source": [
+          "AC-17",
+          "app/test/d2-accessibility.test.mjs"
+        ]
+      },
+      "ONDA-UI-18": {
+        "title": "Geheimnisfreier nativer Minimallauf",
+        "gate": "hard",
+        "automation": "security-inspection",
+        "given": "Ein echter Schlüssel ist bereits sicher im Schlüsselbund gespeichert.",
+        "when": "Genau ein minimaler nativer Hinweislauf ausgeführt wird.",
+        "then": "Eine schema-valide Antwort kommt an und kein Schlüsselwert oder Authorization-Header erscheint in Artefakten oder Prozessargumenten.",
+        "evidence": [
+          "Native-Probe, Leak-Prüfung und redigiertes Laufprotokoll"
+        ],
+        "source": [
+          "AC-18",
+          "app/evals/pruefungen/schluessel-leck.mjs"
+        ]
+      },
+      "ONDA-UI-19": {
+        "title": "Keine Funktionsregression",
+        "gate": "hard",
+        "automation": "integration",
+        "given": "Der UI-Neubau ist implementiert.",
+        "when": "Unit-, Smoke-, Build-, Native- und Fertigzustandprüfungen frisch laufen.",
+        "then": "Alle bestehenden Produktfunktionen bleiben grün.",
+        "evidence": [
+          "Frische vollständige Test- und Eval-Ausgabe"
+        ],
+        "source": [
+          "AC-19",
+          "app/package.json"
+        ]
+      },
+      "ONDA-UI-20": {
+        "title": "Wahrnehmbare Designqualität",
+        "gate": "hard",
+        "automation": "manual-live",
+        "given": "Referenz- und App-Screenshots liegen in der festen Matrix vor.",
+        "when": "Sie mit der stabilen Sieben-Dimensionen-Rubrik bewertet werden.",
+        "then": "Jede Hauptansicht erreicht mindestens 4,6 von 5 und kein hartes Design-Gate fällt durch.",
+        "evidence": [
+          "Bis zu fünf dokumentierte Eval-Runden mit Rubrik und Screenshots"
+        ],
+        "source": [
+          "AC-20",
+          "app/evals/run-onda-ui-quality.mjs"
+        ]
+      },
+      "ONDA-UI-21": {
+        "title": "Ruhige KI-Fehler und genau ein Retry",
+        "gate": "hard",
+        "automation": "integration",
+        "given": "Ein Hinweislauf scheitert an Netzwerk, Anbieter oder Schema.",
+        "when": "Der Fehler angezeigt und bewusst wiederholt wird.",
+        "then": "Aura und Erklärung bleiben geheimnisfrei, der Text unverändert und genau eine neue Anfrage entsteht.",
+        "evidence": [
+          "Gateway-Fixtures, Browser-E2E und Request-Zählung"
+        ],
+        "source": [
+          "AC-21",
+          "app/src/agent-gateway.mjs"
+        ]
+      },
+      "ONDA-UI-22": {
+        "title": "Speichern und Wiederherstellen",
+        "gate": "hard",
+        "automation": "persistence",
+        "given": "Eine Fassung wurde bearbeitet oder eine Anmerkung angenommen.",
+        "when": "Gespeichert, neu geladen oder ein Speicherfehler simuliert wird.",
+        "then": "Text, Struktur, Finding-Status und Entscheidung stimmen; ungesicherte Arbeit bleibt bei Fehler erhalten und wird verständlich angekündigt.",
+        "evidence": [
+          "Persistenz-, Fehler- und Reload-E2E"
+        ],
+        "source": [
+          "AC-22",
+          "app/src/editor.js",
+          "app/test/v2-smoke.mjs"
+        ]
       }
     },
     "bindungen": {
@@ -2556,6 +2917,69 @@
         "test/rueckkopplung-model.test.mjs",
         "test/hinweis-kontext.test.mjs",
         "test/v2-smoke.mjs"
+      ],
+      "ONDA-UI-01": [
+        "evals/run-onda-ui-quality.mjs"
+      ],
+      "ONDA-UI-02": [
+        "evals/run-onda-ui-quality.mjs"
+      ],
+      "ONDA-UI-03": [
+        "evals/run-onda-ui-quality.mjs"
+      ],
+      "ONDA-UI-04": [
+        "evals/run-onda-ui-quality.mjs"
+      ],
+      "ONDA-UI-05": [
+        "evals/run-onda-ui-quality.mjs"
+      ],
+      "ONDA-UI-06": [
+        "evals/run-onda-ui-quality.mjs"
+      ],
+      "ONDA-UI-07": [
+        "evals/run-onda-ui-quality.mjs"
+      ],
+      "ONDA-UI-08": [
+        "evals/run-onda-ui-quality.mjs"
+      ],
+      "ONDA-UI-09": [
+        "evals/run-onda-ui-quality.mjs"
+      ],
+      "ONDA-UI-10": [
+        "evals/run-onda-ui-quality.mjs"
+      ],
+      "ONDA-UI-11": [
+        "evals/run-onda-ui-quality.mjs"
+      ],
+      "ONDA-UI-12": [
+        "evals/run-onda-ui-quality.mjs"
+      ],
+      "ONDA-UI-13": [
+        "evals/run-onda-ui-quality.mjs"
+      ],
+      "ONDA-UI-14": [
+        "evals/run-onda-ui-quality.mjs"
+      ],
+      "ONDA-UI-15": [
+        "evals/run-onda-ui-quality.mjs"
+      ],
+      "ONDA-UI-16": [
+        "evals/run-onda-ui-quality.mjs"
+      ],
+      "ONDA-UI-17": [
+        "evals/run-onda-ui-quality.mjs"
+      ],
+      "ONDA-UI-19": [
+        "evals/run-onda-ui-quality.mjs"
+      ],
+      "ONDA-UI-20": [
+        "evals/run-onda-ui-quality.mjs"
+      ],
+      "ONDA-UI-21": [
+        "evals/run-onda-ui-quality.mjs"
+      ],
+      "ONDA-UI-22": [
+        "evals/run-onda-ui-quality.mjs"
       ]
     }
   },
@@ -4276,6 +4700,243 @@
           "kind": "browser",
           "path": "evals/results/laeufe/test-v2-smoke-mjs.log",
           "command": "node test/v2-smoke.mjs"
+        }
+      ]
+    },
+    {
+      "id": "ONDA-UI-01",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/evals-run-onda-ui-quality-mjs.log",
+          "command": "node evals/run-onda-ui-quality.mjs"
+        }
+      ]
+    },
+    {
+      "id": "ONDA-UI-02",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/evals-run-onda-ui-quality-mjs.log",
+          "command": "node evals/run-onda-ui-quality.mjs"
+        }
+      ]
+    },
+    {
+      "id": "ONDA-UI-03",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/evals-run-onda-ui-quality-mjs.log",
+          "command": "node evals/run-onda-ui-quality.mjs"
+        }
+      ]
+    },
+    {
+      "id": "ONDA-UI-04",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/evals-run-onda-ui-quality-mjs.log",
+          "command": "node evals/run-onda-ui-quality.mjs"
+        }
+      ]
+    },
+    {
+      "id": "ONDA-UI-05",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/evals-run-onda-ui-quality-mjs.log",
+          "command": "node evals/run-onda-ui-quality.mjs"
+        }
+      ]
+    },
+    {
+      "id": "ONDA-UI-06",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/evals-run-onda-ui-quality-mjs.log",
+          "command": "node evals/run-onda-ui-quality.mjs"
+        }
+      ]
+    },
+    {
+      "id": "ONDA-UI-07",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/evals-run-onda-ui-quality-mjs.log",
+          "command": "node evals/run-onda-ui-quality.mjs"
+        }
+      ]
+    },
+    {
+      "id": "ONDA-UI-08",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/evals-run-onda-ui-quality-mjs.log",
+          "command": "node evals/run-onda-ui-quality.mjs"
+        }
+      ]
+    },
+    {
+      "id": "ONDA-UI-09",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/evals-run-onda-ui-quality-mjs.log",
+          "command": "node evals/run-onda-ui-quality.mjs"
+        }
+      ]
+    },
+    {
+      "id": "ONDA-UI-10",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/evals-run-onda-ui-quality-mjs.log",
+          "command": "node evals/run-onda-ui-quality.mjs"
+        }
+      ]
+    },
+    {
+      "id": "ONDA-UI-11",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/evals-run-onda-ui-quality-mjs.log",
+          "command": "node evals/run-onda-ui-quality.mjs"
+        }
+      ]
+    },
+    {
+      "id": "ONDA-UI-12",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/evals-run-onda-ui-quality-mjs.log",
+          "command": "node evals/run-onda-ui-quality.mjs"
+        }
+      ]
+    },
+    {
+      "id": "ONDA-UI-13",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/evals-run-onda-ui-quality-mjs.log",
+          "command": "node evals/run-onda-ui-quality.mjs"
+        }
+      ]
+    },
+    {
+      "id": "ONDA-UI-14",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/evals-run-onda-ui-quality-mjs.log",
+          "command": "node evals/run-onda-ui-quality.mjs"
+        }
+      ]
+    },
+    {
+      "id": "ONDA-UI-15",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/evals-run-onda-ui-quality-mjs.log",
+          "command": "node evals/run-onda-ui-quality.mjs"
+        }
+      ]
+    },
+    {
+      "id": "ONDA-UI-16",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/evals-run-onda-ui-quality-mjs.log",
+          "command": "node evals/run-onda-ui-quality.mjs"
+        }
+      ]
+    },
+    {
+      "id": "ONDA-UI-17",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/evals-run-onda-ui-quality-mjs.log",
+          "command": "node evals/run-onda-ui-quality.mjs"
+        }
+      ]
+    },
+    {
+      "id": "ONDA-UI-18",
+      "status": "external-open",
+      "evidence": [],
+      "note": "Der bereits hinterlegte Schlüssel wird ausschließlich über den nativen Status- und Transportpfad für einen minimalen schema-validierten Lauf verwendet; sein Wert wird nie gelesen oder protokolliert."
+    },
+    {
+      "id": "ONDA-UI-19",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/evals-run-onda-ui-quality-mjs.log",
+          "command": "node evals/run-onda-ui-quality.mjs"
+        }
+      ]
+    },
+    {
+      "id": "ONDA-UI-20",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/evals-run-onda-ui-quality-mjs.log",
+          "command": "node evals/run-onda-ui-quality.mjs"
+        }
+      ]
+    },
+    {
+      "id": "ONDA-UI-21",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/evals-run-onda-ui-quality-mjs.log",
+          "command": "node evals/run-onda-ui-quality.mjs"
+        }
+      ]
+    },
+    {
+      "id": "ONDA-UI-22",
+      "status": "passed",
+      "evidence": [
+        {
+          "kind": "integration",
+          "path": "evals/results/laeufe/evals-run-onda-ui-quality-mjs.log",
+          "command": "node evals/run-onda-ui-quality.mjs"
         }
       ]
     }
