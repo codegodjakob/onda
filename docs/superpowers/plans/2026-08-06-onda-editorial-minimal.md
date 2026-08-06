@@ -263,16 +263,16 @@ git add app/src app/test app/evals mac/build.sh docs/superpowers/plans/2026-08-0
 git commit -m "feat(ui): Onda editorial und minimal vollenden"
 ```
 
-- [ ] **Step 3: Finalen signierten Build aus sauberem Commit bauen**
+- [x] **Step 3: Finalen signierten Build aus sauberem Commit bauen**
 
 Run: `./mac/build.sh`
 
 Expected: 842 oder mehr Tests PASS, alle Browser-Smokes PASS, `SELFTEST OK`, Signatur `Onda Dev`, `BUILD OK` ohne `+` in der Versionskennung.
 
-- [ ] **Step 4: Exakt eine finale Instanz starten**
+- [x] **Step 4: Exakt eine finale Instanz starten**
 
 Beende nur Prozesse mit dem exakten Pfad dieses Bundles, starte `open -n "$PWD/Onda.app"` und prüfe Prozesspfad, Bundle-Version, Codesignatur sowie fehlende Schlüsselbunddienste.
 
-- [ ] **Step 5: Sichtbare Endabnahme**
+- [x] **Step 5: Sichtbare Endabnahme**
 
 Prüfe mit Computer Use Bibliothek, Editor und eine schwebende Anmerkung. Erwartet: flache A-Grundfläche, 16-Pixel-C-Overlay, vollständig geladenes CSS, ruhiger Schlüssel-fehlt-Zustand und keine zweite App-Instanz.
