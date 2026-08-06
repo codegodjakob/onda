@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Onda · One Page Generator</title>
+  <style>
+    :root { color-scheme: light dark; font: 12px/1.45 Inter, system-ui, sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 16px; background: Canvas; color: CanvasText; }
+    header { border-bottom: 1px solid GrayText; padding-bottom: 12px; margin-bottom: 12px; }
+    h1 { font-size: 16px; margin: 0 0 4px; }
+    p { margin: 0; color: GrayText; }
+    section { border-bottom: 1px solid color-mix(in srgb, CanvasText 18%, transparent); padding: 12px 0; }
+    h2 { font-size: 12px; margin: 0 0 8px; }
+    .commands { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    button { min-height: 32px; border: 1px solid CanvasText; border-radius: 4px; background: Canvas; color: CanvasText; padding: 6px 8px; text-align: left; cursor: pointer; }
+    button:hover:not(:disabled) { background: color-mix(in srgb, CanvasText 8%, Canvas); }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    button[aria-busy="true"]::after { content: " …"; }
+    #target-status { margin-top: 8px; padding: 8px; border: 1px solid GrayText; border-radius: 4px; }
+    #target-status[data-ok="true"] { border-width: 2px; }
+    #phase-results { display: grid; gap: 6px; margin-top: 12px; }
+    .result { border: 1px solid GrayText; border-left-width: 4px; border-radius: 4px; padding: 8px; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .result[data-ok="false"] { font-weight: 600; }
+    .result code { display: block; margin-top: 4px; font: 11px/1.4 ui-monospace, monospace; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Onda · One Page Generator</h1>
+    <p>Ziel: Claude Code · Page 1 · phasenweise und idempotent</p>
+    <div id="target-status" role="status" data-ok="false">Ziel noch nicht geprüft. Bitte zuerst Inspect ausführen.</div>
+  </header>
+
+  <main>
+    <section aria-labelledby="inspect-title">
+      <h2 id="inspect-title">Inspect · read-only</h2>
+      <div class="commands"><button type="button" data-command="inspect">Inspect</button></div>
+    </section>
+
+    <section aria-labelledby="foundations-title">
+      <h2 id="foundations-title">Foundations</h2>
+      <div class="commands"><button type="button" data-command="foundations" data-mutation disabled>Foundations erzeugen</button></div>
+    </section>
+
+    <section aria-labelledby="components-title">
+      <h2 id="components-title">Komponenten · einzeln in Dependency-Reihenfolge</h2>
+      <div class="commands">
+        <button type="button" data-command="component-button" data-mutation disabled>Button</button>
+        <button type="button" data-command="component-icon-button" data-mutation disabled>Icon Button</button>
+        <button type="button" data-command="component-status-symbol" data-mutation disabled>Status Symbol</button>
+        <button type="button" data-command="component-tag" data-mutation disabled>Tag</button>
+        <button type="button" data-command="component-field" data-mutation disabled>Field</button>
+        <button type="button" data-command="component-menu-item" data-mutation disabled>Menu Item</button>
+        <button type="button" data-command="component-annotation-anchor" data-mutation disabled>Annotation Anchor</button>
+        <button type="button" data-command="component-annotation-card" data-mutation disabled>Annotation Card</button>
+        <button type="button" data-command="component-source-card" data-mutation disabled>Source Card</button>
+        <button type="button" data-command="component-dialog" data-mutation disabled>Dialog</button>
+      </div>
+    </section>
+
+    <section aria-labelledby="core-title">
+      <h2 id="core-title">Kernansichten</h2>
+      <div class="commands"><button type="button" data-command="core-views" data-mutation disabled>Übersicht, Bibliothek und Editor</button></div>
+    </section>
+
+    <section aria-labelledby="annotations-title">
+      <h2 id="annotations-title">Annotation-Batches · 29 Arten</h2>
+      <div class="commands">
+        <button type="button" data-command="annotations-1" data-mutation disabled>Batch 1 · 05.01–05.05</button>
+        <button type="button" data-command="annotations-2" data-mutation disabled>Batch 2 · 05.06–05.10</button>
+        <button type="button" data-command="annotations-3" data-mutation disabled>Batch 3 · 05.11–05.15</button>
+        <button type="button" data-command="annotations-4" data-mutation disabled>Batch 4 · 05.16–05.20</button>
+        <button type="button" data-command="annotations-5" data-mutation disabled>Batch 5 · 05.21–06.01</button>
+        <button type="button" data-command="annotations-6" data-mutation disabled>Batch 6 · 06.02–06.05</button>
+      </div>
+    </section>
+
+    <section aria-labelledby="secondary-title">
+      <h2 id="secondary-title">Dialoge &amp; Nebenansichten</h2>
+      <div class="commands"><button type="button" data-command="dialogs-and-secondary" data-mutation disabled>Agent, Dialoge, Menüs, Responsive, Dark, Prototyp</button></div>
+    </section>
+
+    <section aria-labelledby="verify-title">
+      <h2 id="verify-title">Verify · read-only</h2>
+      <div class="commands"><button type="button" data-command="verify">Verify</button></div>
+    </section>
+
+    <div id="phase-results" aria-live="polite" aria-label="Phasenergebnisse"></div>
+  </main>
+
+  <script>
+    const results = document.getElementById('phase-results')
+    const targetStatus = document.getElementById('target-status')
+    const buttons = [...document.querySelectorAll('[data-command]')]
+
+    function appendResult(message) {
+      const item = document.createElement('div')
+      item.className = 'result'
+      item.dataset.ok = String(Boolean(message.ok))
+      item.textContent = `${message.ok ? '✓' : '!'} ${message.command}: ${message.message}`
+      if (message.counts) {
+        const code = document.createElement('code')
+        code.textContent = JSON.stringify(message.counts, null, 2)
+        item.append(code)
+      }
+      results.prepend(item)
+    }
+
+    for (const button of buttons) {
+      button.addEventListener('click', () => {
+        button.setAttribute('aria-busy', 'true')
+        button.disabled = true
+        parent.postMessage({ pluginMessage: { type: 'run-command', command: button.dataset.command } }, '*')
+      })
+    }
+
+    onmessage = event => {
+      const message = event.data.pluginMessage
+      if (!message || message.type !== 'phase-result') return
+      const button = buttons.find(candidate => candidate.dataset.command === message.command)
+      if (button) {
+        button.removeAttribute('aria-busy')
+        button.disabled = button.hasAttribute('data-mutation') && !message.unlockMutations
+      }
+      if (message.unlockMutations) {
+        for (const mutation of document.querySelectorAll('[data-mutation]')) mutation.disabled = false
+      }
+      if (message.command === 'inspect') {
+        targetStatus.dataset.ok = String(Boolean(message.ok))
+        targetStatus.textContent = message.message
+      }
+      appendResult(message)
+    }
+  </script>
+</body>
+</html>

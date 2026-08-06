@@ -1,0 +1,9 @@
+{
+  "name": "Onda · One Page Generator",
+  "id": "onda-one-page-generator-local",
+  "api": "1.0.0",
+  "main": "dist/code.js",
+  "ui": "ui.html",
+  "editorType": ["figma"],
+  "documentAccess": "dynamic-page"
+}
