@@ -1,3 +1,5 @@
+import { context as createBuildContext } from 'esbuild'
+import { watch } from 'node:fs'
 import { createServer } from 'node:http'
 import { readFile } from 'node:fs/promises'
 import { extname, isAbsolute, relative, resolve, sep } from 'node:path'
@@ -45,6 +47,7 @@ export async function startDevServer({
   host = DEFAULT_HOST,
   port = DEFAULT_PORT,
   debounceMs = 80,
+  logger = console,
 } = {}) {
   const clients = new Set()
   let closed = false
@@ -94,14 +97,72 @@ export async function startDevServer({
     }
   })
 
-  await new Promise((resolveListening, rejectListening) => {
-    const onError = error => rejectListening(error)
-    server.once('error', onError)
-    server.listen(port, host, () => {
-      server.off('error', onError)
-      resolveListening()
-    })
+  const buildContext = await createBuildContext({
+    entryPoints: [resolve(root, 'src/editor.js')],
+    bundle: true,
+    minify: true,
+    format: 'iife',
+    globalName: 'AIWT',
+    outfile: resolve(root, 'dist/editor.bundle.js'),
+    logLevel: 'silent',
   })
+  try {
+    await buildContext.rebuild()
+  } catch (error) {
+    for (const detail of error.errors ?? [error]) logger.error?.(detail.text ?? detail.message)
+    await buildContext.dispose()
+    throw error
+  }
+
+  let buildTimer = null
+  let buildQueue = Promise.resolve()
+  const scheduleJavaScriptBuild = () => {
+    clearTimeout(buildTimer)
+    buildTimer = setTimeout(() => {
+      buildTimer = null
+      buildQueue = buildQueue.then(async () => {
+        try {
+          const result = await buildContext.rebuild()
+          if (result.errors.length) {
+            for (const detail of result.errors) logger.error?.(detail.text)
+            return
+          }
+          scheduleReload()
+        } catch (error) {
+          for (const detail of error.errors ?? [error]) logger.error?.(detail.text ?? detail.message)
+        }
+      })
+    }, Math.max(debounceMs, 80))
+  }
+
+  const fileWatchers = [
+    watch(resolve(root, 'index.html'), scheduleReload),
+    watch(resolve(root, 'src'), { recursive: true }, (_event, filename) => {
+      if (filename?.endsWith('.css')) scheduleReload()
+      else if (filename && /\.(?:[cm]?js)$/.test(filename)) scheduleJavaScriptBuild()
+    }),
+  ]
+
+  // macOS can deliver file events that were queued while the watcher was attached.
+  // Drain that short startup window before any browser can subscribe.
+  await new Promise(resolveSettled => setTimeout(resolveSettled, debounceMs + 20))
+  clearTimeout(reloadTimer)
+  reloadTimer = null
+
+  try {
+    await new Promise((resolveListening, rejectListening) => {
+      const onError = error => rejectListening(error)
+      server.once('error', onError)
+      server.listen(port, host, () => {
+        server.off('error', onError)
+        resolveListening()
+      })
+    })
+  } catch (error) {
+    for (const watcher of fileWatchers) watcher.close()
+    await buildContext.dispose()
+    throw error
+  }
 
   const address = server.address()
   const actualPort = typeof address === 'object' && address ? address.port : port
@@ -114,9 +175,15 @@ export async function startDevServer({
       if (closed) return
       closed = true
       clearTimeout(reloadTimer)
+      clearTimeout(buildTimer)
+      for (const watcher of fileWatchers) watcher.close()
       for (const client of clients) client.end()
       clients.clear()
-      await new Promise(resolveClosed => server.close(resolveClosed))
+      const serverClosed = new Promise(resolveClosed => server.close(resolveClosed))
+      server.closeAllConnections()
+      await serverClosed
+      await buildQueue
+      await buildContext.dispose()
     },
   }
 }

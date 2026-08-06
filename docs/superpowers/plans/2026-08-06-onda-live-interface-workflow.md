@@ -260,7 +260,7 @@ git commit -m "feat(dev): sichere lokale Onda-Vorschau bereitstellen"
 - Produces: SSE event `reload` after HTML/CSS changes or successful JavaScript builds.
 - Produces: no event after a failed JavaScript build; recovery after the next valid change.
 
-- [ ] **Step 1: Add failing reload and recovery tests**
+- [x] **Step 1: Add failing reload and recovery tests**
 
 Append helpers and tests to `app/test/dev-server.test.mjs`:
 
@@ -349,13 +349,13 @@ test('lädt JavaScript nur nach erfolgreichem Build und erholt sich', async t =>
 })
 ```
 
-- [ ] **Step 2: Run the focused test and witness RED**
+- [x] **Step 2: Run the focused test and witness RED**
 
 Run: `cd app && node --test test/dev-server.test.mjs`
 
 Expected: the original 3 tests pass; the new reload tests fail because no file or build watcher exists.
 
-- [ ] **Step 3: Add esbuild and file-watch lifecycles**
+- [x] **Step 3: Add esbuild and file-watch lifecycles**
 
 Extend imports in `app/scripts/dev-server.mjs`:
 
@@ -364,10 +364,9 @@ import { context as createBuildContext } from 'esbuild'
 import { watch } from 'node:fs'
 ```
 
-Inside `startDevServer`, before `server.listen`, create the build context and HTML/CSS watchers. The build plugin reports errors through the injected logger and schedules reload only for a successful non-initial build:
+Inside `startDevServer`, before `server.listen`, create the build context and HTML/CSS/JavaScript watchers. Tests showed that `context.watch()` can report a second startup build; therefore the filesystem watcher deliberately triggers one controlled `context.rebuild()`. Only its successful result schedules reload:
 
 ```js
-  let initialBuild = true
   const buildContext = await createBuildContext({
     entryPoints: [resolve(root, 'src/editor.js')],
     bundle: true,
@@ -376,27 +375,30 @@ Inside `startDevServer`, before `server.listen`, create the build context and HT
     globalName: 'AIWT',
     outfile: resolve(root, 'dist/editor.bundle.js'),
     logLevel: 'silent',
-    plugins: [{
-      name: 'onda-live-reload',
-      setup(build) {
-        build.onEnd(result => {
-          if (result.errors.length) {
-            for (const error of result.errors) logger.error?.(error.text)
-            return
-          }
-          if (initialBuild) initialBuild = false
-          else scheduleReload()
-        })
-      },
-    }],
   })
   await buildContext.rebuild()
-  await buildContext.watch()
+
+  let buildTimer = null
+  let buildQueue = Promise.resolve()
+  const scheduleJavaScriptBuild = () => {
+    clearTimeout(buildTimer)
+    buildTimer = setTimeout(() => {
+      buildQueue = buildQueue.then(async () => {
+        try {
+          const result = await buildContext.rebuild()
+          if (!result.errors.length) scheduleReload()
+        } catch (error) {
+          for (const detail of error.errors ?? [error]) logger.error?.(detail.text ?? detail.message)
+        }
+      })
+    }, Math.max(debounceMs, 80))
+  }
 
   const fileWatchers = [
     watch(resolve(root, 'index.html'), scheduleReload),
     watch(resolve(root, 'src'), { recursive: true }, (_event, filename) => {
-      if (filename && filename.endsWith('.css')) scheduleReload()
+      if (filename?.endsWith('.css')) scheduleReload()
+      else if (filename && /\.(?:[cm]?js)$/.test(filename)) scheduleJavaScriptBuild()
     }),
   ]
 ```
@@ -408,16 +410,17 @@ Make startup transactional: if `server.listen` fails, close both file watchers a
       for (const client of clients) client.end()
       clients.clear()
       await new Promise(resolveClosed => server.close(resolveClosed))
+      await buildQueue
       await buildContext.dispose()
 ```
 
-- [ ] **Step 4: Run focused tests and verify GREEN**
+- [x] **Step 4: Run focused tests and verify GREEN**
 
 Run: `cd app && node --test test/dev-server.test.mjs`
 
 Expected: 5 tests, 5 passed, 0 failed; no handles remain open after the process exits.
 
-- [ ] **Step 5: Commit the reload slice**
+- [x] **Step 5: Commit the reload slice**
 
 ```bash
 git add app/scripts/dev-server.mjs app/test/dev-server.test.mjs
