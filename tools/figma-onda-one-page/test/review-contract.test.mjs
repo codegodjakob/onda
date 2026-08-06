@@ -171,3 +171,20 @@ test('mutation context re-inspects when the current document or page changed aft
   assert.match(runtime, /inspection\.documentId\s*!==\s*figma\.root\.id/)
   assert.match(runtime, /inspection\.pageId\s*!==\s*page\.id/)
 })
+
+test('missing private fileKey is permanently read-only and UI exposes no mutation pin', () => {
+  const runtime = readFileSync(resolve(ROOT, 'src/runtime.mjs'), 'utf8')
+  const ui = readFileSync(resolve(ROOT, 'ui.html'), 'utf8')
+  assert.doesNotMatch(runtime, /operatorPin|pin-target/)
+  assert.doesNotMatch(ui, /operator-pin|operator-file-key|pin-target|Session-Pin/)
+  assert.match(runtime, /figma\.fileKey/)
+  assert.match(runtime, /inspection\.target\.readOnlyOk\s*\?\s*inspection\.target\.warning/)
+})
+
+test('prototype reactions use the dynamic-page async API exclusively', () => {
+  const runtime = readFileSync(resolve(ROOT, 'src/runtime.mjs'), 'utf8')
+  assert.doesNotMatch(runtime, /\.reactions\s*=/)
+  assert.match(runtime, /async function createPrototype/)
+  assert.match(runtime, /await frame\.setReactionsAsync\(/)
+  assert.match(runtime, /await createPrototype\(/)
+})

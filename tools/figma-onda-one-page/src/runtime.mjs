@@ -41,7 +41,6 @@ const CREATED_MARKER_KEY = 'ondaOrigin'
 const BASELINE_SHARD_PREFIX = 'ondaBaselineShard:'
 
 let lastInspection = null
-let operatorPin = null
 
 figma.showUI(__html__, { width: 420, height: 720, themeColors: true })
 
@@ -230,15 +229,16 @@ function inspectionMessage(inspection) {
   const targetText = inspection.target.ok || inspection.target.readOnlyOk
     ? `Ziel geprüft: ${inspection.documentName} · ${inspection.pageName}.`
     : inspection.target.warning
+  const readOnlyWarning = inspection.target.readOnlyOk ? inspection.target.warning : ''
   const fontText = inspection.fontDecision.warning || 'ABC Diatype mit exakten Schnitten verfügbar.'
-  return `${targetText} ${inspection.target.warning && inspection.target.ok ? inspection.target.warning : ''} ${fontText}`.trim()
+  return `${targetText} ${readOnlyWarning} ${fontText}`.trim()
 }
 
 async function requireMutationContext() {
   let inspection = lastInspection || await inspectCurrentTarget()
   const page = figma.currentPage
   if (inspection.documentId !== figma.root.id || inspection.pageId !== page.id) inspection = await inspectCurrentTarget()
-  const authorization = authorizeMutation(inspection.target, operatorPin, { documentId: figma.root.id, pageId: page.id })
+  const authorization = authorizeMutation(inspection.target)
   if (!authorization.ok) throw new Error(authorization.warning || inspection.target.warning)
   let ledger = readLedger(page)
   if (ledger?.version === 1) {
@@ -275,7 +275,6 @@ async function requireMutationContext() {
         documentName: figma.root.name,
         pageId: page.id,
         pageName: page.name,
-        manualPin: authorization.manual,
       },
       fontDecision: inspection.fontDecision,
       baseline: {
@@ -927,7 +926,7 @@ function createResponsiveDark(section, decision) {
   dark.y = 4520
 }
 
-function createPrototype(section, decision) {
+async function createPrototype(section, decision) {
   const flows = [
     ['Hauptablauf', 'Bibliothek → Projekt → Dokument → Anmerkung → Übernehmen → Rückgängig → Schlussaudit → Export'],
     ['Projektwissen', 'Projektverständnis → Projektgedächtnis / Argumentationsdossier / Sprache & Wirkung → Editor'],
@@ -944,10 +943,10 @@ function createPrototype(section, decision) {
   }
   for (const [index, frame] of frames.entries()) {
     const destination = frames[(index + 1) % frames.length]
-    frame.reactions = [{
+    await frame.setReactionsAsync([{
       trigger: { type: 'ON_CLICK' },
       actions: [{ type: 'NODE', destinationId: destination.id, navigation: 'NAVIGATE', transition: null, preserveScrollPosition: false }],
-    }]
+    }])
     frame.setPluginData('ondaPrototypeReaction', 'true')
   }
 }
@@ -963,7 +962,7 @@ async function runDialogsAndSecondary(page, ledger) {
   const responsive = ensureSection(page, ledger, '10 · Responsive & Dark', 6200).node
   createResponsiveDark(responsive, ledger.fontDecision)
   const prototype = ensureSection(page, ledger, '11 · Prototyp', 2400).node
-  createPrototype(prototype, ledger.fontDecision)
+  await createPrototype(prototype, ledger.fontDecision)
   return { sections: 5, dialogFamilies: DIALOG_FAMILIES.length, dialogStates: dialogStateCount, responsiveWidths: 4, darkReferences: 1, prototypeFlows: 4 }
 }
 
@@ -1071,7 +1070,7 @@ function geometryEvidence(page, sections, allNodes, ledger, baselineRecords) {
 async function runVerify() {
   const inspection = await inspectCurrentTarget()
   const page = figma.currentPage
-  const authorization = authorizeMutation(inspection.target, operatorPin, { documentId: figma.root.id, pageId: page.id })
+  const authorization = authorizeMutation(inspection.target)
   if (!authorization.ok) throw new Error(authorization.warning || inspection.target.warning)
   const ledger = readLedger(page)
   if (!ledger) throw new Error('Noch kein Onda-Ledger vorhanden. Inspect und mindestens eine Mutationsphase ausführen.')
@@ -1102,7 +1101,9 @@ async function runVerify() {
   const foundationNodes = foundationSection ? collectOndaNodes([foundationSection]) : []
   const effectsValid = allNodes.every(node => !('effects' in node) || !Array.isArray(node.effects) || node.effects.every(effect => !effect.color || isGrayColor(effect.color)))
   const fontStylesValid = TYPE_WEIGHTS.every(weight => ledger.fontDecision?.styles?.[weight])
-  const reactionCount = allNodes.reduce((count, node) => count + (Array.isArray(node.reactions) ? node.reactions.length : 0), 0)
+  const reactionCount = (await Promise.all(allNodes.map(async node => (
+    typeof node.getReactionsAsync === 'function' ? (await node.getReactionsAsync()).length : 0
+  )))).reduce((total, count) => total + count, 0)
   const report = buildVerificationReport({
     targetAuthorized: authorization.ok,
     pageCount: figma.root.children.length,
@@ -1166,7 +1167,7 @@ function postResult(command, ok, message, counts = null, unlockMutations = false
 async function handleCommand(command) {
   if (command === 'inspect') {
     const inspection = await inspectCurrentTarget()
-    const authorization = authorizeMutation(inspection.target, operatorPin, { documentId: figma.root.id, pageId: figma.currentPage.id })
+    const authorization = authorizeMutation(inspection.target)
     postResult(command, Boolean(inspection.target.ok || inspection.target.readOnlyOk), inspectionMessage(inspection), {
       pageCount: inspection.pageCount,
       baselineTopLevelCount: inspection.ledger ? inspection.ledger.baseline.topLevelCount : inspection.pendingBaseline.topLevelCount,
@@ -1174,7 +1175,6 @@ async function handleCommand(command) {
       fontFamily: inspection.fontDecision.family,
       exactFont: inspection.fontDecision.exact,
       targetFallback: inspection.target.fallback,
-      requiresOperatorPin: Boolean(inspection.target.requiresOperatorPin),
       completedPhases: Object.entries(inspection.ledger?.phases || {}).filter(([, value]) => value.status === 'success').map(([id]) => id),
     }, authorization.ok)
     return
@@ -1205,24 +1205,9 @@ async function handleCommand(command) {
 figma.ui.onmessage = async message => {
   if (!message) return
   try {
-    if (message.type === 'pin-target') {
-      let inspection = lastInspection || await inspectCurrentTarget()
-      if (inspection.documentId !== figma.root.id || inspection.pageId !== figma.currentPage.id) inspection = await inspectCurrentTarget()
-      if (inspection.fileKey) throw new Error('Ein verfügbarer Dateischlüssel kann nicht manuell überschrieben werden.')
-      operatorPin = {
-        fileKey: String(message.fileKey || '').trim(),
-        confirmed: message.confirmed === true,
-        documentId: figma.root.id,
-        pageId: figma.currentPage.id,
-      }
-      const authorization = authorizeMutation(inspection.target, operatorPin, { documentId: figma.root.id, pageId: figma.currentPage.id })
-      if (!authorization.ok) throw new Error(authorization.warning)
-      postResult('pin-target', true, authorization.warning, { sessionOnly: true, pageId: figma.currentPage.id }, true)
-      return
-    }
     if (message.type !== 'run-command') return
     await handleCommand(message.command)
   } catch (error) {
-    postResult(message.command || 'pin-target', false, error instanceof Error ? error.message : String(error), null, false)
+    postResult(message.command || 'unknown', false, error instanceof Error ? error.message : String(error), null, false)
   }
 }

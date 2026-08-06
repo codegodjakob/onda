@@ -346,15 +346,11 @@
       ok: false,
       readOnlyOk: true,
       fallback: true,
-      requiresOperatorPin: true,
-      warning: "Dateischl\xFCssel nicht verf\xFCgbar. \u201EClaude Code\u201C und \u201EPage 1\u201C sind nur ein Lesehinweis; Mutationen erfordern den exakten Schl\xFCssel und eine sitzungsgebundene Best\xE4tigung."
+      warning: "Dateischl\xFCssel nicht verf\xFCgbar. \u201EClaude Code\u201C und \u201EPage 1\u201C sind nur ein Lesehinweis; Inspect bleibt read-only und Mutationen sind deaktiviert."
     };
   }
-  function authorizeMutation(target, operatorPin2, current) {
-    if ((target == null ? void 0 : target.ok) && !target.fallback) return { ok: true, manual: false, warning: "" };
-    if (!(target == null ? void 0 : target.requiresOperatorPin) || !(target == null ? void 0 : target.readOnlyOk)) return { ok: false, manual: false, warning: (target == null ? void 0 : target.warning) || "Ziel nicht freigegeben." };
-    const pinned = (operatorPin2 == null ? void 0 : operatorPin2.confirmed) === true && operatorPin2.fileKey === TARGET_FILE_KEY && operatorPin2.documentId === (current == null ? void 0 : current.documentId) && operatorPin2.pageId === (current == null ? void 0 : current.pageId);
-    return pinned ? { ok: true, manual: true, warning: "Mutation durch sitzungsgebundenen Operator-Pin freigegeben." } : { ok: false, manual: false, warning: "Exakter Dateischl\xFCssel, Best\xE4tigung und aktuelle Dokument-/Seiten-ID sind erforderlich." };
+  function authorizeMutation(target) {
+    return (target == null ? void 0 : target.ok) && !target.fallback ? { ok: true, manual: false, warning: "" } : { ok: false, manual: false, warning: (target == null ? void 0 : target.warning) || "Mutation erfordert den exakten privaten Dateischl\xFCssel." };
   }
   function canReuseOwnedNode(node, baselineIds = /* @__PURE__ */ new Set()) {
     return (node == null ? void 0 : node.owner) === PLUGIN_ORIGIN && (!baselineIds.has(node.id) || node.owner === PLUGIN_ORIGIN);
@@ -617,7 +613,6 @@
   var CREATED_MARKER_KEY = "ondaOrigin";
   var BASELINE_SHARD_PREFIX = "ondaBaselineShard:";
   var lastInspection = null;
-  var operatorPin = null;
   figma.showUI(__html__, { width: 420, height: 720, themeColors: true });
   function color(key) {
     const value = PALETTE[key];
@@ -794,14 +789,15 @@
   }
   function inspectionMessage(inspection) {
     const targetText = inspection.target.ok || inspection.target.readOnlyOk ? `Ziel gepr\xFCft: ${inspection.documentName} \xB7 ${inspection.pageName}.` : inspection.target.warning;
+    const readOnlyWarning = inspection.target.readOnlyOk ? inspection.target.warning : "";
     const fontText = inspection.fontDecision.warning || "ABC Diatype mit exakten Schnitten verf\xFCgbar.";
-    return `${targetText} ${inspection.target.warning && inspection.target.ok ? inspection.target.warning : ""} ${fontText}`.trim();
+    return `${targetText} ${readOnlyWarning} ${fontText}`.trim();
   }
   async function requireMutationContext() {
     let inspection = lastInspection || await inspectCurrentTarget();
     const page = figma.currentPage;
     if (inspection.documentId !== figma.root.id || inspection.pageId !== page.id) inspection = await inspectCurrentTarget();
-    const authorization = authorizeMutation(inspection.target, operatorPin, { documentId: figma.root.id, pageId: page.id });
+    const authorization = authorizeMutation(inspection.target);
     if (!authorization.ok) throw new Error(authorization.warning || inspection.target.warning);
     let ledger = readLedger(page);
     if ((ledger == null ? void 0 : ledger.version) === 1) {
@@ -839,8 +835,7 @@
           fileKey: figma.fileKey || null,
           documentName: figma.root.name,
           pageId: page.id,
-          pageName: page.name,
-          manualPin: authorization.manual
+          pageName: page.name
         },
         fontDecision: inspection.fontDecision,
         baseline: {
@@ -1489,7 +1484,7 @@
     const dark = createEditorView(section, decision, "1440px \xB7 Dark", 80, true, 1440);
     dark.y = 4520;
   }
-  function createPrototype(section, decision) {
+  async function createPrototype(section, decision) {
     const flows = [
       ["Hauptablauf", "Bibliothek \u2192 Projekt \u2192 Dokument \u2192 Anmerkung \u2192 \xDCbernehmen \u2192 R\xFCckg\xE4ngig \u2192 Schlussaudit \u2192 Export"],
       ["Projektwissen", "Projektverst\xE4ndnis \u2192 Projektged\xE4chtnis / Argumentationsdossier / Sprache & Wirkung \u2192 Editor"],
@@ -1506,10 +1501,10 @@
     }
     for (const [index, frame] of frames.entries()) {
       const destination = frames[(index + 1) % frames.length];
-      frame.reactions = [{
+      await frame.setReactionsAsync([{
         trigger: { type: "ON_CLICK" },
         actions: [{ type: "NODE", destinationId: destination.id, navigation: "NAVIGATE", transition: null, preserveScrollPosition: false }]
-      }];
+      }]);
       frame.setPluginData("ondaPrototypeReaction", "true");
     }
   }
@@ -1524,7 +1519,7 @@
     const responsive = ensureSection(page, ledger, "10 \xB7 Responsive & Dark", 6200).node;
     createResponsiveDark(responsive, ledger.fontDecision);
     const prototype = ensureSection(page, ledger, "11 \xB7 Prototyp", 2400).node;
-    createPrototype(prototype, ledger.fontDecision);
+    await createPrototype(prototype, ledger.fontDecision);
     return { sections: 5, dialogFamilies: DIALOG_FAMILIES.length, dialogStates: dialogStateCount, responsiveWidths: 4, darkReferences: 1, prototypeFlows: 4 };
   }
   function collectOndaNodes(sections) {
@@ -1616,7 +1611,7 @@
   async function runVerify() {
     const inspection = await inspectCurrentTarget();
     const page = figma.currentPage;
-    const authorization = authorizeMutation(inspection.target, operatorPin, { documentId: figma.root.id, pageId: page.id });
+    const authorization = authorizeMutation(inspection.target);
     if (!authorization.ok) throw new Error(authorization.warning || inspection.target.warning);
     const ledger = readLedger(page);
     if (!ledger) throw new Error("Noch kein Onda-Ledger vorhanden. Inspect und mindestens eine Mutationsphase ausf\xFChren.");
@@ -1658,7 +1653,7 @@
       var _a, _b;
       return (_b = (_a = ledger.fontDecision) == null ? void 0 : _a.styles) == null ? void 0 : _b[weight];
     });
-    const reactionCount = allNodes.reduce((count, node) => count + (Array.isArray(node.reactions) ? node.reactions.length : 0), 0);
+    const reactionCount = (await Promise.all(allNodes.map(async (node) => typeof node.getReactionsAsync === "function" ? (await node.getReactionsAsync()).length : 0))).reduce((total, count) => total + count, 0);
     const report = buildVerificationReport(__spreadProps(__spreadValues({
       targetAuthorized: authorization.ok,
       pageCount: figma.root.children.length,
@@ -1724,7 +1719,7 @@
     var _a, _b, _c, _d;
     if (command === "inspect") {
       const inspection = await inspectCurrentTarget();
-      const authorization = authorizeMutation(inspection.target, operatorPin, { documentId: figma.root.id, pageId: figma.currentPage.id });
+      const authorization = authorizeMutation(inspection.target);
       postResult(command, Boolean(inspection.target.ok || inspection.target.readOnlyOk), inspectionMessage(inspection), {
         pageCount: inspection.pageCount,
         baselineTopLevelCount: inspection.ledger ? inspection.ledger.baseline.topLevelCount : inspection.pendingBaseline.topLevelCount,
@@ -1732,7 +1727,6 @@
         fontFamily: inspection.fontDecision.family,
         exactFont: inspection.fontDecision.exact,
         targetFallback: inspection.target.fallback,
-        requiresOperatorPin: Boolean(inspection.target.requiresOperatorPin),
         completedPhases: Object.entries(((_d = inspection.ledger) == null ? void 0 : _d.phases) || {}).filter(([, value]) => value.status === "success").map(([id]) => id)
       }, authorization.ok);
       return;
@@ -1762,25 +1756,10 @@
   figma.ui.onmessage = async (message) => {
     if (!message) return;
     try {
-      if (message.type === "pin-target") {
-        let inspection = lastInspection || await inspectCurrentTarget();
-        if (inspection.documentId !== figma.root.id || inspection.pageId !== figma.currentPage.id) inspection = await inspectCurrentTarget();
-        if (inspection.fileKey) throw new Error("Ein verf\xFCgbarer Dateischl\xFCssel kann nicht manuell \xFCberschrieben werden.");
-        operatorPin = {
-          fileKey: String(message.fileKey || "").trim(),
-          confirmed: message.confirmed === true,
-          documentId: figma.root.id,
-          pageId: figma.currentPage.id
-        };
-        const authorization = authorizeMutation(inspection.target, operatorPin, { documentId: figma.root.id, pageId: figma.currentPage.id });
-        if (!authorization.ok) throw new Error(authorization.warning);
-        postResult("pin-target", true, authorization.warning, { sessionOnly: true, pageId: figma.currentPage.id }, true);
-        return;
-      }
       if (message.type !== "run-command") return;
       await handleCommand(message.command);
     } catch (error) {
-      postResult(message.command || "pin-target", false, error instanceof Error ? error.message : String(error), null, false);
+      postResult(message.command || "unknown", false, error instanceof Error ? error.message : String(error), null, false);
     }
   };
 })();

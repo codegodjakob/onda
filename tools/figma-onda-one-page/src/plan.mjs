@@ -68,21 +68,14 @@ export function validateTargetContext({ fileKey, documentName, pageName }) {
     ok: false,
     readOnlyOk: true,
     fallback: true,
-    requiresOperatorPin: true,
-    warning: 'Dateischlüssel nicht verfügbar. „Claude Code“ und „Page 1“ sind nur ein Lesehinweis; Mutationen erfordern den exakten Schlüssel und eine sitzungsgebundene Bestätigung.',
+    warning: 'Dateischlüssel nicht verfügbar. „Claude Code“ und „Page 1“ sind nur ein Lesehinweis; Inspect bleibt read-only und Mutationen sind deaktiviert.',
   }
 }
 
-export function authorizeMutation(target, operatorPin, current) {
-  if (target?.ok && !target.fallback) return { ok: true, manual: false, warning: '' }
-  if (!target?.requiresOperatorPin || !target?.readOnlyOk) return { ok: false, manual: false, warning: target?.warning || 'Ziel nicht freigegeben.' }
-  const pinned = operatorPin?.confirmed === true
-    && operatorPin.fileKey === TARGET_FILE_KEY
-    && operatorPin.documentId === current?.documentId
-    && operatorPin.pageId === current?.pageId
-  return pinned
-    ? { ok: true, manual: true, warning: 'Mutation durch sitzungsgebundenen Operator-Pin freigegeben.' }
-    : { ok: false, manual: false, warning: 'Exakter Dateischlüssel, Bestätigung und aktuelle Dokument-/Seiten-ID sind erforderlich.' }
+export function authorizeMutation(target) {
+  return target?.ok && !target.fallback
+    ? { ok: true, manual: false, warning: '' }
+    : { ok: false, manual: false, warning: target?.warning || 'Mutation erfordert den exakten privaten Dateischlüssel.' }
 }
 
 export function canReuseOwnedNode(node, baselineIds = new Set()) {

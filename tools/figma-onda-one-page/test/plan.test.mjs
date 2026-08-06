@@ -212,7 +212,7 @@ test('ownership guard reuses only Onda-owned nodes and filters only direct Onda 
   }), ['foreign-child', 'unexpected-new-child'])
 })
 
-test('target guard pins mutations to Claude Code Page 1 and prefers the exact file key', async () => {
+test('target guard requires the exact private file key for every mutation', async () => {
   const [{ TARGET_DOCUMENT_NAME, TARGET_FILE_KEY, TARGET_PAGE_NAME }, { authorizeMutation, validateTargetContext }] = await loadModules()
   assert.equal(TARGET_FILE_KEY, '0DbO0vK6shrVU2qkmWSxIp')
   assert.equal(TARGET_DOCUMENT_NAME, 'Claude Code')
@@ -238,13 +238,12 @@ test('target guard pins mutations to Claude Code Page 1 and prefers the exact fi
     ok: false,
     readOnlyOk: true,
     fallback: true,
-    requiresOperatorPin: true,
-    warning: 'Dateischlüssel nicht verfügbar. „Claude Code“ und „Page 1“ sind nur ein Lesehinweis; Mutationen erfordern den exakten Schlüssel und eine sitzungsgebundene Bestätigung.',
+    warning: 'Dateischlüssel nicht verfügbar. „Claude Code“ und „Page 1“ sind nur ein Lesehinweis; Inspect bleibt read-only und Mutationen sind deaktiviert.',
   })
   assert.equal(authorizeMutation(unavailable, null, { documentId: 'doc-1', pageId: 'page-1' }).ok, false)
   assert.equal(authorizeMutation(unavailable, {
     fileKey: TARGET_FILE_KEY, confirmed: true, documentId: 'doc-1', pageId: 'page-1',
-  }, { documentId: 'doc-1', pageId: 'page-1' }).ok, true)
+  }, { documentId: 'doc-1', pageId: 'page-1' }).ok, false)
   assert.equal(authorizeMutation(unavailable, {
     fileKey: TARGET_FILE_KEY, confirmed: true, documentId: 'other', pageId: 'page-1',
   }, { documentId: 'doc-1', pageId: 'page-1' }).ok, false)

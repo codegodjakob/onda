@@ -20,9 +20,6 @@
     button[aria-busy="true"]::after { content: " …"; }
     #target-status { margin-top: 8px; padding: 8px; border: 1px solid GrayText; border-radius: 4px; }
     #target-status[data-ok="true"] { border-width: 2px; }
-    #operator-pin { display: none; margin-top: 8px; padding: 10px; border: 1px solid GrayText; }
-    #operator-pin[data-visible="true"] { display: grid; gap: 8px; }
-    #operator-pin input[type="text"] { width: 100%; min-height: 32px; padding: 6px; }
     #phase-results { display: grid; gap: 6px; margin-top: 12px; }
     .result { border: 1px solid GrayText; border-left-width: 4px; border-radius: 4px; padding: 8px; white-space: pre-wrap; overflow-wrap: anywhere; }
     .result[data-ok="false"] { font-weight: 600; }
@@ -34,13 +31,6 @@
     <h1>Onda · One Page Generator</h1>
     <p>Ziel: Claude Code · Page 1 · phasenweise und idempotent</p>
     <div id="target-status" role="status" data-ok="false">Ziel noch nicht geprüft. Bitte zuerst Inspect ausführen.</div>
-    <form id="operator-pin" data-visible="false">
-      <strong>Session-Pin erforderlich</strong>
-      <span>Nur wenn Figma keinen <code>fileKey</code> liefert: exakten Schlüssel eingeben und für dieses Dokument + diese Seite bestätigen.</span>
-      <input id="operator-file-key" type="text" autocomplete="off" spellcheck="false" placeholder="0DbO0vK6shrVU2qkmWSxIp" aria-label="Exakter Figma-Dateischlüssel">
-      <label><input id="operator-confirm" type="checkbox"> Ich bestätige Claude Code · Page 1 für diese Sitzung.</label>
-      <button type="submit">Session-Pin prüfen</button>
-    </form>
   </header>
 
   <main>
@@ -103,9 +93,6 @@
   <script>
     const results = document.getElementById('phase-results')
     const targetStatus = document.getElementById('target-status')
-    const operatorPin = document.getElementById('operator-pin')
-    const operatorFileKey = document.getElementById('operator-file-key')
-    const operatorConfirm = document.getElementById('operator-confirm')
     const buttons = [...document.querySelectorAll('[data-command]')]
     const orderedCommands = [
       'foundations',
@@ -149,13 +136,6 @@
       })
     }
 
-    operatorPin.addEventListener('submit', event => {
-      event.preventDefault()
-      parent.postMessage({ pluginMessage: {
-        type: 'pin-target', fileKey: operatorFileKey.value, confirmed: operatorConfirm.checked,
-      } }, '*')
-    })
-
     onmessage = event => {
       const message = event.data.pluginMessage
       if (!message || message.type !== 'phase-result') return
@@ -170,10 +150,8 @@
         completed.clear()
         targetStatus.dataset.ok = String(Boolean(message.ok))
         targetStatus.textContent = message.message
-        operatorPin.dataset.visible = String(Boolean(message.counts?.requiresOperatorPin && !message.unlockMutations))
         for (const command of message.counts?.completedPhases || []) if (orderedCommands.includes(command)) completed.add(command)
       }
-      if (message.command === 'pin-target' && message.ok) operatorPin.dataset.visible = 'false'
       updateAvailability()
       appendResult(message)
     }
