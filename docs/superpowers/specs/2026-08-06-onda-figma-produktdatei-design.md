@@ -6,7 +6,7 @@
 
 ## Ziel
 
-Für die produktive Onda-App entsteht eine vollständige Design-Dokumentation in der bereits bestehenden Figma-Datei `Claude Code`. Sämtliche Onda-Inhalte liegen auf der vorhandenen Figma-Seite `Page 1`; es werden keine zusätzlichen Figma-Seiten angelegt. Die Dokumentation bildet die belegten Produktansichten, ihre funktional unterschiedlichen Zustände, die 29 Anmerkungsarten und die wesentlichen Arbeitsabläufe ab.
+Für die produktive Onda-App entsteht eine vollständige Design-Dokumentation in der bereits bestehenden Figma-Datei `Claude Code` mit dem File-Key `0DbO0vK6shrVU2qkmWSxIp` ([Zieldatei](https://www.figma.com/design/0DbO0vK6shrVU2qkmWSxIp/Claude-Code?node-id=0-1)). Sämtliche Onda-Inhalte liegen auf der vorhandenen Figma-Seite `Page 1`; es werden keinerlei neue Figma-Seiten angelegt. Die Dokumentation bildet die belegten Produktansichten, ihre funktional unterschiedlichen Zustände, die 29 Anmerkungsarten und die wesentlichen Arbeitsabläufe ab.
 
 Die produktive App ist die Quelle der Wahrheit für Umfang, Inhalt und Verhalten. Der bereitgestellte Ordner `Onda Design System` liefert Marke, Typografie, Komponentenideen und Grundprinzipien. Wo das ältere Download-Paket vom aktuellen produktiven Stand abweicht, gilt die zuletzt bestätigte Richtung der App.
 
@@ -23,11 +23,12 @@ Spezifikationen dürfen den Code nicht überstimmen, wenn die tatsächliche Ober
 
 Die frühere Planung einer neuen Datei mit 39 Figma-Seiten ist **superseded** und keine aktive Soll-Anforderung mehr. Verbindlich ist nun:
 
-- Ziel ist die bestehende Figma-Datei `Claude Code`.
+- Ziel ist ausschließlich die bestehende Figma-Datei `Claude Code` mit File-Key `0DbO0vK6shrVU2qkmWSxIp` und URL `https://www.figma.com/design/0DbO0vK6shrVU2qkmWSxIp/Claude-Code?node-id=0-1`.
 - Zielseite ist ausschließlich die bestehende `Page 1`.
-- Bestehende Inhalte auf `Page 1` bleiben unverändert erhalten.
+- Seitenzahl, Seiten-IDs, Seitennamen und Seitenreihenfolge bleiben gegenüber der Vorher-Baseline vollständig unverändert; es wird keine neue Seite irgendeines Namens angelegt.
+- Alle vorher vorhandenen Nodes in der gesamten Datei bleiben unverändert. Der Nachweis erfolgt über einen rekursiven kanonischen Snapshot der gesamten Datei einschließlich bestehender `DOCUMENT`-/`PAGE`-Nodes und einen SHA-256-Hash für jeden Baseline-Node. Er umfasst pro Node die Reihenfolge seiner bereits vorhandenen Kinder, ID, Name, Typ, Parent, Bounds, `visible`, `opacity`, Textinhalt, Füllungen, Linien, Effekte, Component-/Instance-Referenzen und relevante Auto-Layout-Eigenschaften. Für den Nachher-Vergleich wird eine Baseline-Projektion gebildet, die ausschließlich neu hinzugefügte direkte Onda-Geschwister auf `Page 1` herausfiltert; Reihenfolge und Eigenschaften aller Baseline-Nodes müssen identisch bleiben.
 - Der Onda-Bereich wird in einem nachweislich freien Canvas-Bereich platziert.
-- Jede bisherige Hauptseite und jede der 29 Anmerkungsarten wird zu einer eindeutig benannten top-level `SECTION`; falls `SECTION` technisch nicht verfügbar ist, ist ein gleichnamiger top-level Wrapper-Frame zulässig.
+- Jede bisherige Hauptseite und jede der 29 Anmerkungsarten wird zu einer kanonisch benannten top-level `SECTION` als direktes Kind von `Page 1`; falls `SECTION` technisch nicht verfügbar ist, ist ausschließlich ein gleichnamiger `FRAME` mit direktem Parent `Page 1` zulässig. Die kanonischen Namen lauten exakt `00 · …` bis `11 · …` wie unten aufgeführt und tragen kein zusätzliches Präfix.
 - Untergeordnete Zustände bleiben innerhalb ihres zugehörigen Bereichs.
 
 ## Gewählte Einseitenstruktur
@@ -204,9 +205,9 @@ Falls ABC Diatype in der verbundenen Figma-Umgebung nicht verfügbar ist, gilt d
 |---|---:|---|
 | Grundfläche, Liste, Schreibfläche | 0 px | keine |
 | Button, Feld, kompakte Fläche | 4 px | keine |
-| größere statische Fläche | höchstens 6 px | keine |
+| größere statische Fläche | 6 px | keine |
 | Dialog, Popover, schwebende Anmerkung | 8 px | zurückhaltender Schatten |
-| echter Kreis | vollständig rund | nur bei funktionalem Bedarf |
+| echter Kreis | 999 px / vollständig rund | nur bei funktionalem Bedarf |
 
 Vollständig rund bleiben nur echte Kreise wie einzelne Icon-Aktionen, Avatar und Aura. Schatten erscheinen ausschließlich an schwebenden Ebenen. Die Aura wird monochrom und bleibt der KI-Präsenz vorbehalten.
 
@@ -269,19 +270,19 @@ Fehler- und Grenzzustände führen sichtbar zu Einrichtung, Wiederholung, Korrek
 
 ### AC-1 — Einseiten-Ziel
 
-**Given** die bestehende Figma-Datei `Claude Code`
+**Given** die Baseline der bestehenden Figma-Datei `Claude Code` mit File-Key `0DbO0vK6shrVU2qkmWSxIp`
 
-**When** Datei, Seitenliste und Parents aller Onda-Sections geprüft werden
+**When** Seitenzahl, Seiten-IDs, Seitennamen, Seitenreihenfolge und Parents aller Onda-Sections geprüft werden
 
-**Then** liegen sämtliche Onda-Sections als direkte Kinder auf der bestehenden `Page 1` und es wurde keine zusätzliche Onda-Seite angelegt.
+**Then** sind Seitenzahl, IDs, Namen und Reihenfolge exakt gleich der Baseline, es wurde keine neue Seite irgendeines Namens angelegt und sämtliche Onda-Sections liegen mit ihrem kanonischen Namen ohne Präfix als direkte Kinder auf der bestehenden `Page 1`; jeder Bereich hat den Typ `SECTION` oder den explizit dokumentierten Fallback-Typ `FRAME`.
 
 ### AC-2 — Bestehende Inhalte bleiben erhalten
 
-**Given** ein vor der Onda-Erstellung gespeicherter Snapshot aller bestehenden top-level Nodes
+**Given** ein rekursiver kanonischer Snapshot der gesamten Datei einschließlich aller bestehenden `DOCUMENT`-/`PAGE`- und Scene-Nodes sowie ein SHA-256-Hash für jeden Baseline-Node
 
-**When** er nach der Erstellung mit dem frischen Snapshot verglichen wird
+**When** er nach der Erstellung gegen eine frische Baseline-Projektion verglichen wird, wobei ausschließlich neue direkte Onda-Geschwister auf `Page 1` aus dem Vergleich gefiltert werden
 
-**Then** stimmen ID, Name, Typ, Parent, Position und Größe jedes bestehenden Nodes unverändert überein.
+**Then** stimmen für jeden vorherigen Node Reihenfolge der vorherigen Kinder, ID, Name, Typ, Parent, Bounds, `visible`, `opacity`, Text, Füllungen, Linien, Effekte, Component-/Instance-Referenzen sowie relevante Auto-Layout-Eigenschaften unverändert überein und jeder Teilbaum-Hash ist identisch.
 
 ### AC-3 — Freie Platzierung
 

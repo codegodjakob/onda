@@ -3,11 +3,13 @@
 ## Verbindlicher Nutzer-Override (2026-08-06)
 
 - Zieldatei: bestehende Figma-Datei `Claude Code`
+- File-Key: `0DbO0vK6shrVU2qkmWSxIp`
+- URL: https://www.figma.com/design/0DbO0vK6shrVU2qkmWSxIp/Claude-Code?node-id=0-1
 - Zielseite: ausschließlich die bestehende `Page 1`
-- Neue Figma-Seiten: nicht zulässig
-- Bestandsschutz: alle vor dem Onda-Lauf vorhandenen Nodes bleiben in Name, Typ, Parent, Position und Größe unverändert
+- Seiten-Baseline: Seitenzahl, IDs, Namen und Reihenfolge bleiben vollständig unverändert; keine neue Seite irgendeines Namens ist zulässig
+- Bestandsschutz: rekursiver kanonischer Snapshot der gesamten Datei einschließlich `DOCUMENT`-/`PAGE`-Nodes und SHA-256-Hash jedes Baseline-Nodes; pro Node werden Reihenfolge der Baseline-Kinder, ID, Name, Typ, Parent, lokale und absolute Bounds, `visible`, `opacity`, Text, Füllungen, Linien, Effekte, Component-/Instance-Referenzen sowie relevante Auto-Layout-Properties geprüft
 - Platzierung: Onda in einem nachweislich freien Canvas-Bereich mit mindestens 2.000 px Abstand auf der gewählten Platzierungsachse
-- Organisation: jede Hauptansicht und jede der 29 Anmerkungsarten als eindeutig benannte top-level `SECTION`; technisch notwendiger Fallback ist ein gleichnamiger top-level Wrapper-Frame
+- Organisation: jede Hauptansicht und jede der 29 Anmerkungsarten trägt exakt den kanonischen Namen ohne Präfix, ist vom Typ `SECTION` oder dem explizit protokollierten Fallback `FRAME` und hat als direkten Parent `Page 1`
 - Darstellung: monochrom; Radien 0/4/6/8; 999 beziehungsweise volle Rundung nur für echte Kreise
 - Dialoge: mehrere Zustandsversionen je produktivem Dialogbereich bleiben verpflichtend
 
@@ -24,65 +26,66 @@ An diesem verworfenen Artefakt werden keine weiteren Mutationen vorgenommen.
 
 ## Zielnachweis vor Mutation
 
-- [ ] Aktiver Dateiname ist exakt `Claude Code`.
+- [ ] Aktiver Dateiname ist exakt `Claude Code`, File-Key exakt `0DbO0vK6shrVU2qkmWSxIp` und URL exakt `https://www.figma.com/design/0DbO0vK6shrVU2qkmWSxIp/Claude-Code?node-id=0-1`.
 - [ ] Ausgewählte Seite ist exakt `Page 1`.
-- [ ] Seiteninventar vor Mutation erfasst.
-- [ ] Top-level Snapshot vor Mutation erfasst: `id`, `name`, `type`, `parentId`, `x`, `y`, `width`, `height`.
+- [ ] Vollständiges geordnetes Seiteninventar vor Mutation erfasst: Seitenzahl sowie Index, ID und Name jeder Seite.
+- [ ] Rekursiver kanonischer Snapshot der gesamten Datei einschließlich bestehender `DOCUMENT`-/`PAGE`- und Scene-Nodes sowie SHA-256-Hash jedes Baseline-Nodes erfasst. Je Node enthalten: geordnete Baseline-Kind-IDs, ID/Name/Typ/Parent, lokale und absolute Bounds, `visible`, `opacity`, Text, Füllungen/Linien/Effekte, Component-/Instance-Referenzen sowie `layoutMode`, Achsen-Sizing/-Alignment, `itemSpacing`, alle Paddings, `layoutPositioning`, `layoutAlign`, `layoutGrow` und Constraints, soweit vorhanden.
 - [ ] Vereinte Bestandsgrenzen berechnet.
 - [ ] Freier Onda-Ursprung mit mindestens 2.000 px Abstand dokumentiert.
-- Figma-Datei-Key/URL: noch zu erfassen
-- Bestands-Snapshot: noch zu erfassen
+- Ziel-Key/URL: wie oben fest gepinnt; Live-Bestätigung noch ausstehend
+- Seiten-Baseline: noch zu erfassen
+- Bestands-Snapshots/-Hashes: noch zu erfassen
 - Platzierungsursprung: noch zu erfassen
 
 ## Erforderliche Sections auf `Page 1`
 
 ### Gemeinsame Produktbereiche (10)
 
-- [ ] Onda / 00 · Übersicht
-- [ ] Onda / 01 · Foundations
-- [ ] Onda / 02 · Komponenten
-- [ ] Onda / 03 · Bibliothek
-- [ ] Onda / 04 · Editor
-- [ ] Onda / 07 · Agent & Quellen
-- [ ] Onda / 08 · Dialoge
-- [ ] Onda / 09 · Menüs & Nebenansichten
-- [ ] Onda / 10 · Responsive & Dark
-- [ ] Onda / 11 · Prototyp
+- [ ] 00 · Übersicht
+- [ ] 01 · Foundations
+- [ ] 02 · Komponenten
+- [ ] 03 · Bibliothek
+- [ ] 04 · Editor
+- [ ] 07 · Agent & Quellen
+- [ ] 08 · Dialoge
+- [ ] 09 · Menüs & Nebenansichten
+- [ ] 10 · Responsive & Dark
+- [ ] 11 · Prototyp
 
 ### Textanmerkungen (24)
 
-- [ ] Onda / 05.01 · Rechtschreibung
-- [ ] Onda / 05.02 · Grammatik
-- [ ] Onda / 05.03 · Zeichensetzung
-- [ ] Onda / 05.04 · Wortwahl
-- [ ] Onda / 05.05 · Satzstil
-- [ ] Onda / 05.06 · Absatzstil
-- [ ] Onda / 05.07 · Straffen
-- [ ] Onda / 05.08 · Wiederholung
-- [ ] Onda / 05.09 · Ton & Register
-- [ ] Onda / 05.10 · Stilmittel
-- [ ] Onda / 05.11 · Anglizismus
-- [ ] Onda / 05.12 · Terminologie
-- [ ] Onda / 05.13 · Verschieben
-- [ ] Onda / 05.14 · Übergang
-- [ ] Onda / 05.15 · Gliederung
-- [ ] Onda / 05.16 · Textfluss
-- [ ] Onda / 05.17 · Roter Faden
-- [ ] Onda / 05.18 · Überschrift
-- [ ] Onda / 05.19 · Anmerkung
-- [ ] Onda / 05.20 · Beleg fehlt
-- [ ] Onda / 05.21 · Faktencheck
-- [ ] Onda / 05.22 · Widerspruch
-- [ ] Onda / 05.23 · Gegenargument fehlt
-- [ ] Onda / 05.24 · Verständlichkeit
+- [ ] 05.01 · Rechtschreibung
+- [ ] 05.02 · Grammatik
+- [ ] 05.03 · Zeichensetzung
+- [ ] 05.04 · Wortwahl
+- [ ] 05.05 · Satzstil
+- [ ] 05.06 · Absatzstil
+- [ ] 05.07 · Straffen
+- [ ] 05.08 · Wiederholung
+- [ ] 05.09 · Ton & Register
+- [ ] 05.10 · Stilmittel
+- [ ] 05.11 · Anglizismus
+- [ ] 05.12 · Terminologie
+- [ ] 05.13 · Verschieben
+- [ ] 05.14 · Übergang
+- [ ] 05.15 · Gliederung
+- [ ] 05.16 · Textfluss
+- [ ] 05.17 · Roter Faden
+- [ ] 05.18 · Überschrift
+- [ ] 05.19 · Anmerkung
+- [ ] 05.20 · Beleg fehlt
+- [ ] 05.21 · Faktencheck
+- [ ] 05.22 · Widerspruch
+- [ ] 05.23 · Gegenargument fehlt
+- [ ] 05.24 · Verständlichkeit
 
 ### Notizanmerkungen (5)
 
-- [ ] Onda / 06.01 · Ausformulieren
-- [ ] Onda / 06.02 · Gehört zusammen
-- [ ] Onda / 06.03 · Nachfrage
-- [ ] Onda / 06.04 · Reihenfolge
-- [ ] Onda / 06.05 · Offener Faden
+- [ ] 06.01 · Ausformulieren
+- [ ] 06.02 · Gehört zusammen
+- [ ] 06.03 · Nachfrage
+- [ ] 06.04 · Reihenfolge
+- [ ] 06.05 · Offener Faden
 
 ## Dialogabdeckung
 
@@ -96,8 +99,8 @@ An diesem verworfenen Artefakt werden keine weiteren Mutationen vorgenommen.
 
 ## Acceptance Criteria
 
-- [ ] **AC-1 · One-page target:** `Claude Code` bleibt die Datei; alle Onda-Inhalte liegen auf `Page 1`; keine Onda-Seite wird zusätzlich angelegt.
-- [ ] **AC-2 · Bestandsschutz:** Jeder vorherige top-level Node stimmt im Vorher-/Nachher-Snapshot in ID, Name, Typ, Parent, Position und Größe überein.
+- [ ] **AC-1 · One-page target:** File-Key bleibt `0DbO0vK6shrVU2qkmWSxIp`; Seitenzahl, IDs, Namen und Reihenfolge stimmen exakt mit der Baseline überein; keine neue Seite irgendeines Namens wurde angelegt; alle kanonisch und ohne Präfix benannten Onda-Bereiche sind `SECTION` oder explizit protokollierter `FRAME`-Fallback mit direktem Parent `Page 1`.
+- [ ] **AC-2 · Bestandsschutz:** Rekursive kanonische Vorher-/Nachher-Snapshots der gesamten Datei und per-Node SHA-256-Hashes belegen für jeden vorherigen `DOCUMENT`-, `PAGE`- und Scene-Node unveränderte Baseline-Kindreihenfolge, ID, Name, Typ, Parent, Bounds, `visible`, `opacity`, Text, Füllungen, Linien, Effekte, Component-/Instance-Referenzen und relevante Auto-Layout-Properties. Nur neue direkte Onda-Geschwister werden in der Nachher-Baseline-Projektion aus dem `Page 1`-Kindvergleich gefiltert.
 - [ ] **AC-3 · Freie Platzierung:** Onda überschneidet keinen Bestands-Node und hält mindestens 2.000 px Abstand auf der gewählten Platzierungsachse.
 - [ ] **AC-4 · Vollständigkeit:** zehn gemeinsame Sections, 24 Text- und fünf Notizanmerkungs-Sections sowie sieben vollständige Dialogreihen sind exakt einmal vorhanden.
 - [ ] **AC-5 · Monochrom:** keine sichtbare Vollfarbe weicht innerhalb Toleranz von gleichen RGB-Kanälen ab; Status bleibt zusätzlich textlich, symbolisch oder formal verständlich.
@@ -133,7 +136,8 @@ An diesem verworfenen Artefakt werden keine weiteren Mutationen vorgenommen.
 ## Verifikation und Abweichungen
 
 - Struktureller Prüfbericht: noch ausstehend
-- Vorher-/Nachher-Bestandsdiff: noch ausstehend
+- Vollständiger Seiteninventar-Diff: noch ausstehend
+- Rekursive Vorher-/Nachher-Snapshots, SHA-256-Hashes und Property-Diff: noch ausstehend
 - Bounds-/Overlap-Prüfung: noch ausstehend
 - Visuelle Evaluation: noch ausstehend
 - Bekannte Abweichungen: Figma-MCP-Limit; Font- und Library-Verfügbarkeit noch nicht verifiziert
