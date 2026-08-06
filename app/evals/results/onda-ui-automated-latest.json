@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
   "catalogVersion": "2026-08-05.3",
-  "generatedAt": "2026-08-05T21:57:05.315Z",
-  "gitCommit": "d78dec0d82c71c44d8106ce62eb1eb9313e1dca1",
+  "generatedAt": "2026-08-06T19:58:57.280Z",
+  "gitCommit": "30173563deb4b29ee83ace0e58898ec880d3ff47",
   "mode": "without-live",
-  "iteration": 2,
+  "iteration": 3,
   "threshold": 4.6,
   "criteria": [
     {
@@ -18,13 +18,13 @@
           "kind": "contract",
           "path": "evals/results/onda-ui-runs/contract.log",
           "command": "/Users/jakobschlenker/.hermes/node/bin/node --test test/annotation-contract.test.mjs test/annotation-schema.test.mjs test/onda-design-contract.test.mjs",
-          "durationMs": 68
+          "durationMs": 84
         },
         {
           "kind": "browser",
           "path": "evals/results/onda-ui-runs/browser.log",
           "command": "/Users/jakobschlenker/.hermes/node/bin/node test/onda-ui-smoke.mjs",
-          "durationMs": 14109
+          "durationMs": 15625
         }
       ]
     },
@@ -39,13 +39,13 @@
           "kind": "contract",
           "path": "evals/results/onda-ui-runs/contract.log",
           "command": "/Users/jakobschlenker/.hermes/node/bin/node --test test/annotation-contract.test.mjs test/annotation-schema.test.mjs test/onda-design-contract.test.mjs",
-          "durationMs": 68
+          "durationMs": 84
         },
         {
           "kind": "browser",
           "path": "evals/results/onda-ui-runs/browser.log",
           "command": "/Users/jakobschlenker/.hermes/node/bin/node test/onda-ui-smoke.mjs",
-          "durationMs": 14109
+          "durationMs": 15625
         }
       ]
     },
@@ -60,7 +60,7 @@
           "kind": "contract",
           "path": "evals/results/onda-ui-runs/contract.log",
           "command": "/Users/jakobschlenker/.hermes/node/bin/node --test test/annotation-contract.test.mjs test/annotation-schema.test.mjs test/onda-design-contract.test.mjs",
-          "durationMs": 68
+          "durationMs": 84
         },
         {
           "kind": "gateway",
@@ -72,7 +72,7 @@
           "kind": "browser",
           "path": "evals/results/onda-ui-runs/browser.log",
           "command": "/Users/jakobschlenker/.hermes/node/bin/node test/onda-ui-smoke.mjs",
-          "durationMs": 14109
+          "durationMs": 15625
         }
       ]
     },
@@ -87,13 +87,13 @@
           "kind": "operations",
           "path": "evals/results/onda-ui-runs/operations.log",
           "command": "/Users/jakobschlenker/.hermes/node/bin/node --test test/annotation-operations.test.mjs test/annotation-controller.test.mjs",
-          "durationMs": 67
+          "durationMs": 74
         },
         {
           "kind": "browser",
           "path": "evals/results/onda-ui-runs/browser.log",
           "command": "/Users/jakobschlenker/.hermes/node/bin/node test/onda-ui-smoke.mjs",
-          "durationMs": 14109
+          "durationMs": 15625
         }
       ]
     },
@@ -108,13 +108,13 @@
           "kind": "operations",
           "path": "evals/results/onda-ui-runs/operations.log",
           "command": "/Users/jakobschlenker/.hermes/node/bin/node --test test/annotation-operations.test.mjs test/annotation-controller.test.mjs",
-          "durationMs": 67
+          "durationMs": 74
         },
         {
           "kind": "browser",
           "path": "evals/results/onda-ui-runs/browser.log",
           "command": "/Users/jakobschlenker/.hermes/node/bin/node test/onda-ui-smoke.mjs",
-          "durationMs": 14109
+          "durationMs": 15625
         }
       ]
     },
@@ -129,13 +129,13 @@
           "kind": "operations",
           "path": "evals/results/onda-ui-runs/operations.log",
           "command": "/Users/jakobschlenker/.hermes/node/bin/node --test test/annotation-operations.test.mjs test/annotation-controller.test.mjs",
-          "durationMs": 67
+          "durationMs": 74
         },
         {
           "kind": "browser",
           "path": "evals/results/onda-ui-runs/browser.log",
           "command": "/Users/jakobschlenker/.hermes/node/bin/node test/onda-ui-smoke.mjs",
-          "durationMs": 14109
+          "durationMs": 15625
         }
       ]
     },
@@ -150,13 +150,13 @@
           "kind": "operations",
           "path": "evals/results/onda-ui-runs/operations.log",
           "command": "/Users/jakobschlenker/.hermes/node/bin/node --test test/annotation-operations.test.mjs test/annotation-controller.test.mjs",
-          "durationMs": 67
+          "durationMs": 74
         },
         {
           "kind": "browser",
           "path": "evals/results/onda-ui-runs/browser.log",
           "command": "/Users/jakobschlenker/.hermes/node/bin/node test/onda-ui-smoke.mjs",
-          "durationMs": 14109
+          "durationMs": 15625
         }
       ]
     },
@@ -171,13 +171,13 @@
           "kind": "operations",
           "path": "evals/results/onda-ui-runs/operations.log",
           "command": "/Users/jakobschlenker/.hermes/node/bin/node --test test/annotation-operations.test.mjs test/annotation-controller.test.mjs",
-          "durationMs": 67
+          "durationMs": 74
         },
         {
           "kind": "browser",
           "path": "evals/results/onda-ui-runs/browser.log",
           "command": "/Users/jakobschlenker/.hermes/node/bin/node test/onda-ui-smoke.mjs",
-          "durationMs": 14109
+          "durationMs": 15625
         }
       ]
     },
@@ -192,13 +192,13 @@
           "kind": "contract",
           "path": "evals/results/onda-ui-runs/contract.log",
           "command": "/Users/jakobschlenker/.hermes/node/bin/node --test test/annotation-contract.test.mjs test/annotation-schema.test.mjs test/onda-design-contract.test.mjs",
-          "durationMs": 68
+          "durationMs": 84
         },
         {
           "kind": "browser",
           "path": "evals/results/onda-ui-runs/browser.log",
           "command": "/Users/jakobschlenker/.hermes/node/bin/node test/onda-ui-smoke.mjs",
-          "durationMs": 14109
+          "durationMs": 15625
         }
       ]
     },
@@ -213,13 +213,13 @@
           "kind": "contract",
           "path": "evals/results/onda-ui-runs/contract.log",
           "command": "/Users/jakobschlenker/.hermes/node/bin/node --test test/annotation-contract.test.mjs test/annotation-schema.test.mjs test/onda-design-contract.test.mjs",
-          "durationMs": 68
+          "durationMs": 84
         },
         {
           "kind": "browser",
           "path": "evals/results/onda-ui-runs/browser.log",
           "command": "/Users/jakobschlenker/.hermes/node/bin/node test/onda-ui-smoke.mjs",
-          "durationMs": 14109
+          "durationMs": 15625
         }
       ]
     },
@@ -234,13 +234,13 @@
           "kind": "operations",
           "path": "evals/results/onda-ui-runs/operations.log",
           "command": "/Users/jakobschlenker/.hermes/node/bin/node --test test/annotation-operations.test.mjs test/annotation-controller.test.mjs",
-          "durationMs": 67
+          "durationMs": 74
         },
         {
           "kind": "browser",
           "path": "evals/results/onda-ui-runs/browser.log",
           "command": "/Users/jakobschlenker/.hermes/node/bin/node test/onda-ui-smoke.mjs",
-          "durationMs": 14109
+          "durationMs": 15625
         }
       ]
     },
@@ -255,13 +255,13 @@
           "kind": "operations",
           "path": "evals/results/onda-ui-runs/operations.log",
           "command": "/Users/jakobschlenker/.hermes/node/bin/node --test test/annotation-operations.test.mjs test/annotation-controller.test.mjs",
-          "durationMs": 67
+          "durationMs": 74
         },
         {
           "kind": "browser",
           "path": "evals/results/onda-ui-runs/browser.log",
           "command": "/Users/jakobschlenker/.hermes/node/bin/node test/onda-ui-smoke.mjs",
-          "durationMs": 14109
+          "durationMs": 15625
         }
       ]
     },
@@ -276,19 +276,19 @@
           "kind": "operations",
           "path": "evals/results/onda-ui-runs/operations.log",
           "command": "/Users/jakobschlenker/.hermes/node/bin/node --test test/annotation-operations.test.mjs test/annotation-controller.test.mjs",
-          "durationMs": 67
+          "durationMs": 74
         },
         {
           "kind": "workspace",
           "path": "evals/results/onda-ui-runs/workspace.log",
           "command": "/Users/jakobschlenker/.hermes/node/bin/node --test test/workspace-model.test.mjs",
-          "durationMs": 81
+          "durationMs": 79
         },
         {
           "kind": "browser",
           "path": "evals/results/onda-ui-runs/browser.log",
           "command": "/Users/jakobschlenker/.hermes/node/bin/node test/onda-ui-smoke.mjs",
-          "durationMs": 14109
+          "durationMs": 15625
         }
       ]
     },
@@ -303,13 +303,13 @@
           "kind": "operations",
           "path": "evals/results/onda-ui-runs/operations.log",
           "command": "/Users/jakobschlenker/.hermes/node/bin/node --test test/annotation-operations.test.mjs test/annotation-controller.test.mjs",
-          "durationMs": 67
+          "durationMs": 74
         },
         {
           "kind": "browser",
           "path": "evals/results/onda-ui-runs/browser.log",
           "command": "/Users/jakobschlenker/.hermes/node/bin/node test/onda-ui-smoke.mjs",
-          "durationMs": 14109
+          "durationMs": 15625
         }
       ]
     },
@@ -324,19 +324,19 @@
           "kind": "contract",
           "path": "evals/results/onda-ui-runs/contract.log",
           "command": "/Users/jakobschlenker/.hermes/node/bin/node --test test/annotation-contract.test.mjs test/annotation-schema.test.mjs test/onda-design-contract.test.mjs",
-          "durationMs": 68
+          "durationMs": 84
         },
         {
           "kind": "workspace",
           "path": "evals/results/onda-ui-runs/workspace.log",
           "command": "/Users/jakobschlenker/.hermes/node/bin/node --test test/workspace-model.test.mjs",
-          "durationMs": 81
+          "durationMs": 79
         },
         {
           "kind": "browser",
           "path": "evals/results/onda-ui-runs/browser.log",
           "command": "/Users/jakobschlenker/.hermes/node/bin/node test/onda-ui-smoke.mjs",
-          "durationMs": 14109
+          "durationMs": 15625
         }
       ]
     },
@@ -351,7 +351,7 @@
           "kind": "browser",
           "path": "evals/results/onda-ui-runs/browser.log",
           "command": "/Users/jakobschlenker/.hermes/node/bin/node test/onda-ui-smoke.mjs",
-          "durationMs": 14109
+          "durationMs": 15625
         }
       ]
     },
@@ -366,13 +366,13 @@
           "kind": "accessibility",
           "path": "evals/results/onda-ui-runs/accessibility.log",
           "command": "/Users/jakobschlenker/.hermes/node/bin/node test/d2-accessibility.test.mjs",
-          "durationMs": 4766
+          "durationMs": 5750
         },
         {
           "kind": "browser",
           "path": "evals/results/onda-ui-runs/browser.log",
           "command": "/Users/jakobschlenker/.hermes/node/bin/node test/onda-ui-smoke.mjs",
-          "durationMs": 14109
+          "durationMs": 15625
         }
       ]
     },
@@ -396,13 +396,13 @@
           "kind": "contract",
           "path": "evals/results/onda-ui-runs/contract.log",
           "command": "/Users/jakobschlenker/.hermes/node/bin/node --test test/annotation-contract.test.mjs test/annotation-schema.test.mjs test/onda-design-contract.test.mjs",
-          "durationMs": 68
+          "durationMs": 84
         },
         {
           "kind": "operations",
           "path": "evals/results/onda-ui-runs/operations.log",
           "command": "/Users/jakobschlenker/.hermes/node/bin/node --test test/annotation-operations.test.mjs test/annotation-controller.test.mjs",
-          "durationMs": 67
+          "durationMs": 74
         },
         {
           "kind": "gateway",
@@ -414,25 +414,25 @@
           "kind": "workspace",
           "path": "evals/results/onda-ui-runs/workspace.log",
           "command": "/Users/jakobschlenker/.hermes/node/bin/node --test test/workspace-model.test.mjs",
-          "durationMs": 81
+          "durationMs": 79
         },
         {
           "kind": "browser",
           "path": "evals/results/onda-ui-runs/browser.log",
           "command": "/Users/jakobschlenker/.hermes/node/bin/node test/onda-ui-smoke.mjs",
-          "durationMs": 14109
+          "durationMs": 15625
         },
         {
           "kind": "accessibility",
           "path": "evals/results/onda-ui-runs/accessibility.log",
           "command": "/Users/jakobschlenker/.hermes/node/bin/node test/d2-accessibility.test.mjs",
-          "durationMs": 4766
+          "durationMs": 5750
         },
         {
           "kind": "build",
           "path": "evals/results/onda-ui-runs/build.log",
           "command": "npm run build",
-          "durationMs": 150
+          "durationMs": 808
         }
       ]
     },
@@ -447,13 +447,13 @@
           "kind": "contract",
           "path": "evals/results/onda-ui-runs/contract.log",
           "command": "/Users/jakobschlenker/.hermes/node/bin/node --test test/annotation-contract.test.mjs test/annotation-schema.test.mjs test/onda-design-contract.test.mjs",
-          "durationMs": 68
+          "durationMs": 84
         },
         {
           "kind": "browser",
           "path": "evals/results/onda-ui-runs/browser.log",
           "command": "/Users/jakobschlenker/.hermes/node/bin/node test/onda-ui-smoke.mjs",
-          "durationMs": 14109
+          "durationMs": 15625
         }
       ]
     },
@@ -474,7 +474,7 @@
           "kind": "browser",
           "path": "evals/results/onda-ui-runs/browser.log",
           "command": "/Users/jakobschlenker/.hermes/node/bin/node test/onda-ui-smoke.mjs",
-          "durationMs": 14109
+          "durationMs": 15625
         }
       ]
     },
@@ -489,25 +489,25 @@
           "kind": "workspace",
           "path": "evals/results/onda-ui-runs/workspace.log",
           "command": "/Users/jakobschlenker/.hermes/node/bin/node --test test/workspace-model.test.mjs",
-          "durationMs": 81
+          "durationMs": 79
         },
         {
           "kind": "browser",
           "path": "evals/results/onda-ui-runs/browser.log",
           "command": "/Users/jakobschlenker/.hermes/node/bin/node test/onda-ui-smoke.mjs",
-          "durationMs": 14109
+          "durationMs": 15625
         }
       ]
     }
   ],
   "rubric": {
     "source": "evals/onda-ui-rubric.json",
-    "iteration": 2,
+    "iteration": 3,
     "dimensions": {
       "designSystem": {
         "label": "Designsystemtreue",
         "score": 4.9,
-        "rationale": "ABC Diatype, vier Größen, drei Gewichte, Sky als einziger Akzent, Aura nur für KI-Präsenz, Pillen und 24-Pixel-Flächen sind in Shell und Anmerkungen konsistent.",
+        "rationale": "ABC Diatype, vier Größen, drei Gewichte, Sky als einziger Akzent und Aura nur für KI-Präsenz bleiben kanonisch; die bestätigte A/C-Variante setzt Controls auf 8, statische Flächen auf 10 und echte Overlays auf 16 Pixel.",
         "evidence": [
           "ONDA-UI-01",
           "ONDA-UI-16"
@@ -516,7 +516,7 @@
       "caseFit": {
         "label": "Passende Gestalt je Anwendungsfall",
         "score": 4.9,
-        "rationale": "Korrektur, Umschreibung, Einfügung, Zielplatz, Bereich, Quelle, Vergleich, Dialog und Titel besitzen eigene, handlungsnahe Formen; Text- und Notizmodus bleiben getrennt.",
+        "rationale": "Korrektur, Umschreibung, Einfügung, Zielplatz, Bereich, Quelle, Vergleich, Dialog und Titel besitzen eigene, handlungsnahe Formen; schwebende Details unterscheiden sich klar von statischen Steuerflächen.",
         "evidence": [
           "ONDA-UI-02",
           "ONDA-UI-03",
@@ -532,7 +532,7 @@
       "hierarchyCalm": {
         "label": "Visuelle Hierarchie und Ruhe",
         "score": 4.8,
-        "rationale": "Schreibblatt und Text bleiben dominant; Navigation, Review-Leiste und Karten sind ruhig abgestuft. Die informationsreiche Anmerkungsgalerie bleibt bewusst eine Prüffläche, nicht die Produktansicht.",
+        "rationale": "Schreibtext und Seitentitel dominieren; Navigation und Struktur nutzen Linien statt Kartenstapel, während Projektverständnis und aktive Anmerkung gezielt hervorgehoben bleiben.",
         "evidence": [
           "ONDA-UI-11",
           "ONDA-UI-14",
@@ -542,7 +542,7 @@
       "interactionSafety": {
         "label": "Entscheidungsklarheit und Reversibilität",
         "score": 5,
-        "rationale": "Übernehmen, Original behalten, eigene Fassung, sichere Sammelkorrektur, Rückgängig und dreistufiger Verwerfungsumfang sind sichtbar und eindeutig.",
+        "rationale": "Übernehmen, Original behalten, eigene Fassung, sichere Sammelkorrektur, Rückgängig und der Verwerfungsumfang sind sichtbar und eindeutig.",
         "evidence": [
           "ONDA-UI-04",
           "ONDA-UI-12",
@@ -552,7 +552,7 @@
       "responsive": {
         "label": "Responsive Robustheit",
         "score": 4.9,
-        "rationale": "1440, 1024, 720 und 320 Pixel bleiben ohne horizontalen Überlauf; die Randkarte wandert unter den Text und mobile Navigation bleibt zusammen.",
+        "rationale": "1440, 1024, 720 und 320 Pixel bleiben ohne horizontalen Überlauf; die Randanmerkung wandert auf schmalen Ansichten unter den Text und die Bedienpaare bleiben zusammen.",
         "evidence": [
           "ONDA-UI-16"
         ]
@@ -560,7 +560,7 @@
       "accessibility": {
         "label": "Barrierefreiheit",
         "score": 5,
-        "rationale": "Axe WCAG 2.1 A/AA ohne serious/critical Befunde, 44-Pixel-Ziele, Tastaturpfade, Fokusführung und reduzierte Bewegung sind belegt.",
+        "rationale": "Axe WCAG 2.1 A/AA, 44-Pixel-Ziele, Tastaturpfade, Fokusführung und reduzierte Bewegung sind als harte Browser-Gates belegt.",
         "evidence": [
           "ONDA-UI-17"
         ]
@@ -568,7 +568,7 @@
       "reliability": {
         "label": "Funktionale Zuverlässigkeit",
         "score": 4.7,
-        "rationale": "Unit-, Browser-, Build-, Performance- und Native-Selbsttests sind grün. Der einmalige echte Lauf ist separat als externes Hard Gate wegen des macOS-Schlüsselbunddialogs offen.",
+        "rationale": "Designverträge, Komponenten-, Browser- und Build-Prüfungen sind grün; der native Endzustand wird ohne gespeicherten Schlüssel gebaut, signiert und selbstgetestet.",
         "evidence": [
           "ONDA-UI-15",
           "ONDA-UI-18",
