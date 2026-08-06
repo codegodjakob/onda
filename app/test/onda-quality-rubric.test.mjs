@@ -23,3 +23,10 @@ test('die qualitative Onda-Rubrik ist begrenzt, nachvollziehbar und über der Zi
   assert.ok(rubric.iterations.every(item => item.average >= 0 && Array.isArray(item.findings) && Array.isArray(item.changes)))
   for (const evidence of rubric.current.evidence) await access(resolve(root, evidence))
 })
+
+test('der native Live-Gate beschreibt ehrlich den freigegebenen Zustand ohne Schlüssel', async () => {
+  const bindings = JSON.parse(await readFile(resolve(root, 'evals/bindungen.json'), 'utf8'))
+  const note = bindings._live_gates['ONDA-UI-18']
+  assert.match(note, /kein Schlüssel gespeichert/i)
+  assert.doesNotMatch(note, /bereits hinterlegt/i)
+})

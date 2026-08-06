@@ -467,6 +467,6 @@
     "EFFECT-06": "Nutzerstudie mit echten Leserinnen und Lesern — von niemandem automatisierbar.",
     "SYSTEM-03": "Die statische Sicherheitsinspektion ist automatisiert; die abschliessende Keychain- und Prozessinspektion braucht die gebaute, signierte Mac-App mit einem echten Schluessel.",
     "SYSTEM-09": "Die deterministische Kernlogik ist automatisiert; der letzte Paritaetsbeleg braucht denselben echten Providerlauf im Browser- und Mac-Brueckenpfad.",
-    "ONDA-UI-18": "Der bereits hinterlegte Schlüssel wird ausschließlich über den nativen Status- und Transportpfad für einen minimalen schema-validierten Lauf verwendet; sein Wert wird nie gelesen oder protokolliert."
+    "ONDA-UI-18": "Auf ausdrücklichen Nutzerwunsch ist kein Schlüssel gespeichert; der reale native Providerlauf bleibt deshalb bewusst unausgeführt. Falls später erneut ein Schlüssel hinterlegt wird, darf sein Wert dabei nie gelesen oder protokolliert werden."
   }
 }
