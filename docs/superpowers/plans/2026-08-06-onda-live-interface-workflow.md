@@ -558,7 +558,7 @@ git commit -m "feat(dev): Onda-Live-Arbeitsmodus anbieten"
 - Consumes: `npm run dev` from Task 3.
 - Produces: laufende Vorschau in the in-app browser at `http://127.0.0.1:4173/`.
 
-- [ ] **Step 1: Run the complete unit and contract suite**
+- [x] **Step 1: Run the complete unit and contract suite**
 
 Run:
 
@@ -568,7 +568,7 @@ cd app && npm run test:unit
 
 Expected: all unit/contract tests pass, including all 8 dev-server tests.
 
-- [ ] **Step 2: Run browser smokes against the live server**
+- [x] **Step 2: Run browser smokes against the live server**
 
 Start `npm run dev` in a persistent terminal. In a second command run:
 
@@ -578,7 +578,7 @@ cd app && AIWT_URL=http://127.0.0.1:4173/ node test/onda-ui-smoke.mjs
 
 Expected: `ONDA UI all: PASS`.
 
-- [ ] **Step 3: Verify production separation**
+- [x] **Step 3: Verify production separation**
 
 Run:
 
@@ -589,13 +589,13 @@ rg -n "__onda_reload|EventSource" index.html dist/editor.bundle.js
 
 Expected: build succeeds; `rg` exits 1 with no matches.
 
-- [ ] **Step 4: Open and visibly inspect the live preview**
+- [x] **Step 4: Open and visibly inspect the live preview**
 
 Navigate the in-app browser to `http://127.0.0.1:4173/`. Verify library and editor render, then make a reversible CSS fixture change during the automated test or use the SSE test evidence; do not alter saved user content merely to prove reload.
 
 Expected: the browser is on the HTTP URL, the interface is styled, and one `npm run dev` process owns port 4173.
 
-- [ ] **Step 5: Mark this plan complete and commit the final evidence state**
+- [x] **Step 5: Mark this plan complete and commit the final evidence state**
 
 Check every box in this plan, then run:
 
