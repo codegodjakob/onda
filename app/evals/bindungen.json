@@ -460,7 +460,6 @@
     "ONDA-UI-20": ["evals/run-onda-ui-quality.mjs"],
     "ONDA-UI-21": ["evals/run-onda-ui-quality.mjs"],
     "ONDA-UI-22": ["evals/run-onda-ui-quality.mjs"]
-    ]
   },
   "_ungebunden_begruendung": {},
   "_live_gates": {
