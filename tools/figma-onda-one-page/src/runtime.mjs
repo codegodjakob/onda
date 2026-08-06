@@ -2,11 +2,14 @@ import {
   ANNOTATION_SECTIONS,
   COMPONENT_DEFINITIONS,
   DIALOG_FAMILIES,
+  FOUNDATION_EXPECTATIONS,
   LEDGER_KEY,
   PALETTE,
   PLUGIN_ORIGIN,
   RADIUS_TOKENS,
+  SEMANTIC_COLOR_ROLES,
   SECTION_DEFINITIONS,
+  SPACING_TOKENS,
   TARGET_DOCUMENT_NAME,
   TARGET_FILE_KEY,
   TARGET_PAGE_NAME,
@@ -405,7 +408,10 @@ function heading(parent, title, decision, subtitle = '') {
 async function ensureCollection(name, modeName) {
   const collections = await figma.variables.getLocalVariableCollectionsAsync()
   const existing = collections.find(collection => collection.name === name)
-  if (existing) return { collection: existing, modeId: existing.modes[0].modeId, created: false }
+  if (existing) {
+    if (existing.modes[0]?.name !== modeName) existing.renameMode(existing.modes[0].modeId, modeName)
+    return { collection: existing, modeId: existing.modes[0].modeId, created: false }
+  }
   const collection = figma.variables.createVariableCollection(name)
   collection.renameMode(collection.modes[0].modeId, modeName)
   return { collection, modeId: collection.modes[0].modeId, created: true }
@@ -429,23 +435,16 @@ async function createFoundationVariables() {
   const typographyInfo = await ensureCollection('Onda · Typography', 'Value')
   const created = []
   const primitiveByName = {}
+  const variablesByKey = new Map()
   for (const [name, value] of Object.entries(PALETTE)) {
     const result = await ensureVariable(primitiveInfo.collection, primitiveInfo.modeId, {
       name, type: 'COLOR', value, scopes: [], css: `--onda-${name.replace('/', '-')}`,
     })
     primitiveByName[name] = result.variable
+    variablesByKey.set(`Onda · Primitive\u0000${name}`, result.variable)
     if (result.created) created.push(result.variable.id)
   }
-  const semanticRoles = [
-    { name: 'color/background', light: 'gray/025', dark: 'gray/1000', scopes: ['FRAME_FILL', 'SHAPE_FILL'] },
-    { name: 'color/surface', light: 'gray/000', dark: 'gray/900', scopes: ['FRAME_FILL', 'SHAPE_FILL'] },
-    { name: 'color/text', light: 'gray/900', dark: 'gray/000', scopes: ['TEXT_FILL'] },
-    { name: 'color/text-muted', light: 'gray/500', dark: 'gray/300', scopes: ['TEXT_FILL'] },
-    { name: 'color/border', light: 'gray/200', dark: 'gray/700', scopes: ['STROKE_COLOR'] },
-    { name: 'color/inverted', light: 'gray/900', dark: 'gray/000', scopes: ['FRAME_FILL', 'SHAPE_FILL'] },
-    { name: 'color/on-inverted', light: 'gray/000', dark: 'gray/900', scopes: ['TEXT_FILL'] },
-  ]
-  for (const role of semanticRoles) {
+  for (const role of SEMANTIC_COLOR_ROLES) {
     for (const [info, primitiveName, suffix] of [
       [lightInfo, role.light, 'light'], [darkInfo, role.dark, 'dark'],
     ]) {
@@ -456,40 +455,46 @@ async function createFoundationVariables() {
         scopes: role.scopes,
         css: `--onda-${role.name.replaceAll('/', '-')}-${suffix}`,
       })
+      variablesByKey.set(`${info.collection.name}\u0000${role.name}`, result.variable)
       if (result.created) created.push(result.variable.id)
     }
   }
   const dimensions = [
-    ...[4, 8, 12, 16, 24, 32, 40].map(value => ({ name: `spacing/${value}`, value, scope: 'GAP' })),
+    ...SPACING_TOKENS.map(token => ({ ...token, scope: 'GAP' })),
     ...RADIUS_TOKENS.map(token => ({ name: token.name, value: token.value, scope: 'CORNER_RADIUS' })),
   ]
   for (const item of dimensions) {
     const result = await ensureVariable(dimensionInfo.collection, dimensionInfo.modeId, {
       name: item.name, type: 'FLOAT', value: item.value, scopes: [item.scope], css: `--onda-${item.name.replaceAll('/', '-')}`,
     })
+    variablesByKey.set(`Onda · Dimension\u0000${item.name}`, result.variable)
     if (result.created) created.push(result.variable.id)
   }
   for (const item of TYPE_SCALE) {
     const result = await ensureVariable(typographyInfo.collection, typographyInfo.modeId, {
       name: `font-size/${item.size}`, type: 'FLOAT', value: item.size, scopes: ['FONT_SIZE'], css: `--onda-font-size-${item.size}`,
     })
+    variablesByKey.set(`Onda · Typography\u0000font-size/${item.size}`, result.variable)
     if (result.created) created.push(result.variable.id)
   }
   for (const weight of TYPE_WEIGHTS) {
     const result = await ensureVariable(typographyInfo.collection, typographyInfo.modeId, {
       name: `font-weight/${weight}`, type: 'FLOAT', value: weight, scopes: ['FONT_WEIGHT'], css: `--onda-font-weight-${weight}`,
     })
+    variablesByKey.set(`Onda · Typography\u0000font-weight/${weight}`, result.variable)
     if (result.created) created.push(result.variable.id)
   }
   return {
     collections: [primitiveInfo, dimensionInfo, lightInfo, darkInfo, typographyInfo].map(info => info.collection.id),
     createdVariableIds: created,
+    variablesByKey,
   }
 }
 
 async function createFoundationStyles(decision) {
   const existingText = await figma.getLocalTextStylesAsync()
   const createdText = []
+  const textStyles = []
   for (const scale of TYPE_SCALE) {
     for (const weight of TYPE_WEIGHTS) {
       const name = `Onda/Type/${scale.size} · ${weight}`
@@ -500,11 +505,13 @@ async function createFoundationStyles(decision) {
       style.fontSize = scale.size
       style.lineHeight = { unit: 'PIXELS', value: scale.lineHeight }
       style.letterSpacing = { unit: 'PIXELS', value: 0 }
+      textStyles.push(style)
       if (!existing) createdText.push(style.id)
     }
   }
   const existingEffects = await figma.getLocalEffectStylesAsync()
   const createdEffects = []
+  const effectStyles = []
   const effects = [
     { name: 'Onda/Shadow/Floating', radius: 12, opacity: 0.12, y: 4 },
     { name: 'Onda/Shadow/Overlay', radius: 24, opacity: 0.16, y: 8 },
@@ -518,12 +525,51 @@ async function createFoundationStyles(decision) {
       offset: { x: 0, y: effect.y }, radius: effect.radius, spread: 0,
       visible: true, blendMode: 'NORMAL',
     }]
+    effectStyles.push(style)
     if (!existing) createdEffects.push(style.id)
   }
-  return { createdTextStyleIds: createdText, createdEffectStyleIds: createdEffects }
+  return { createdTextStyleIds: createdText, createdEffectStyleIds: createdEffects, textStyles, effectStyles }
 }
 
-function ensureRadiusSample(parent, token) {
+function ensureVariableSwatch(parent, layer, name, variable, fallback, decision) {
+  const width = layer === 'primitive' ? 160 : 220
+  const swatchName = layer === 'primitive' ? `Swatch / ${name}` : `Swatch / ${layer} / ${name}`
+  const swatch = autoFrame(parent, swatchName, {
+    width, height: 150, padding: 12, gap: 8, fill: fallback, radius: 4,
+  }).node
+  swatch.effects = []
+  swatch.fills = [figma.variables.setBoundVariableForPaint(solid(fallback), 'color', variable)]
+  swatch.setPluginData('ondaFoundationArtifact', 'swatch')
+  swatch.setPluginData('ondaFoundationLayer', layer)
+  swatch.setPluginData('ondaBoundVariableId', variable.id)
+  textNode(swatch, `${swatchName} / Label`, name, decision, {
+    size: 12, weight: 500, dark: ['gray/700', 'gray/900', 'gray/1000'].includes(fallback), width: width - 24,
+  })
+  return swatch
+}
+
+function ensureSpacingBar(parent, token, variable, decision) {
+  const row = autoFrame(parent, `Spacing / ${token.value}`, {
+    width: 220, height: 96, direction: 'VERTICAL', padding: 12, gap: 8, radius: 4,
+  }).node
+  row.effects = []
+  const existing = directChild(row, `Spacing Bar / ${token.value}`)
+  if (existing && existing.type !== 'RECTANGLE') throw new Error(`Ungültiger bestehender Spacing-Sample: ${token.name}`)
+  const bar = existing || figma.createRectangle()
+  bar.name = `Spacing Bar / ${token.value}`
+  bar.resize(token.value, 16)
+  bar.fills = [solid('gray/700')]
+  bar.effects = []
+  bar.setBoundVariable('width', variable)
+  bar.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN)
+  bar.setPluginData('ondaFoundationArtifact', 'spacing-bar')
+  bar.setPluginData('ondaBoundVariableId', variable.id)
+  if (!existing) row.appendChild(bar)
+  textNode(row, `Spacing / ${token.value} / Label`, `${token.name} · ${token.value}px`, decision, { size: 12, weight: 500, width: 190 })
+  return bar
+}
+
+function ensureRadiusSample(parent, token, variable) {
   const name = `Radius / ${token.value}`
   const expectedType = token.geometry === 'ELLIPSE' ? 'ELLIPSE' : 'RECTANGLE'
   const existing = directChild(parent, name)
@@ -533,11 +579,28 @@ function ensureRadiusSample(parent, token) {
   sample.resize(112, 112)
   sample.fills = [solid('gray/100')]
   sample.strokes = [solid('gray/700')]
+  sample.effects = []
   sample.strokeWeight = 1
-  if (expectedType === 'RECTANGLE') sample.cornerRadius = token.value
+  if (expectedType === 'RECTANGLE') {
+    sample.cornerRadius = token.value
+    for (const field of ['topLeftRadius', 'topRightRadius', 'bottomLeftRadius', 'bottomRightRadius']) sample.setBoundVariable(field, variable)
+  }
   if (!existing) parent.appendChild(sample)
   sample.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN)
+  sample.setPluginData('ondaFoundationArtifact', 'radius-sample')
+  sample.setPluginData('ondaFoundationGeometry', expectedType)
+  sample.setPluginData('ondaBoundVariableId', expectedType === 'RECTANGLE' ? variable.id : '')
   return { node: sample, created: !existing }
+}
+
+async function ensureEffectStyleCard(parent, style, decision) {
+  const card = autoFrame(parent, `Effect / ${style.name}`, { width: 780, height: 150, padding: 24, gap: 8, radius: 6 }).node
+  await card.setEffectStyleIdAsync(style.id)
+  card.setPluginData('ondaFoundationArtifact', 'effect-style')
+  card.setPluginData('ondaEffectStyleName', style.name)
+  textNode(card, `Effect / ${style.name} / Label`, style.name, decision, { size: 15, weight: 700, width: 700 })
+  textNode(card, `Effect / ${style.name} / Detail`, 'Schatten sind ausschließlich für Floating- und Overlay-Flächen vorgesehen.', decision, { size: 12, muted: true, width: 700 })
+  return card
 }
 
 async function bindFoundationArtifacts(section) {
@@ -550,21 +613,15 @@ async function bindFoundationArtifacts(section) {
   if (background) section.fills = [figma.variables.setBoundVariableForPaint(solid('gray/025'), 'color', background)]
   const nodes = collectOndaNodes([section])
   for (const node of nodes) {
-    if (node.type === 'FRAME' && surface) node.fills = [figma.variables.setBoundVariableForPaint(solid('gray/000'), 'color', surface)]
+    const artifact = node.getPluginData('ondaFoundationArtifact')
+    if (node.type === 'FRAME' && artifact !== 'swatch' && surface) node.fills = [figma.variables.setBoundVariableForPaint(solid('gray/000'), 'color', surface)]
     if ('strokes' in node && border && node.strokes?.length) node.strokes = [figma.variables.setBoundVariableForPaint(solid('gray/200'), 'color', border)]
     if (node.type === 'TEXT') {
       const variable = /Untertitel|Fontstatus|Label/.test(node.name) ? muted : text
       if (variable) node.fills = [figma.variables.setBoundVariableForPaint(solid(variable === muted ? 'gray/500' : 'gray/900'), 'color', variable)]
     }
     if (node.type === 'FRAME' && spacing) node.setBoundVariable('itemSpacing', spacing)
-    if (node.name.startsWith('Swatch / ') && node.type === 'FRAME') {
-      const primitive = await localVariable(node.name.slice('Swatch / '.length), 'Onda · Primitive')
-      if (primitive) node.fills = [figma.variables.setBoundVariableForPaint(node.fills[0], 'color', primitive)]
-    }
-    if (node.name.startsWith('Radius / ') && node.type === 'RECTANGLE') {
-      const radius = await localVariable(`radius/${node.cornerRadius === 0 ? 'none' : node.cornerRadius === 4 ? 'control' : node.cornerRadius === 6 ? 'static' : 'overlay'}`, 'Onda · Dimension')
-      if (radius) for (const field of ['topLeftRadius', 'topRightRadius', 'bottomLeftRadius', 'bottomRightRadius']) node.setBoundVariable(field, radius)
-    }
+    if ('effects' in node && artifact !== 'effect-style') node.effects = []
     node.setPluginData('ondaFoundationBound', 'true')
   }
 }
@@ -573,31 +630,58 @@ async function runFoundations(page, ledger) {
   await loadDecisionFonts(ledger.fontDecision)
   const variables = await createFoundationVariables()
   const styles = await createFoundationStyles(ledger.fontDecision)
-  const sectionResult = ensureSection(page, ledger, '01 · Foundations', 3000)
+  const sectionResult = ensureSection(page, ledger, '01 · Foundations', 6400)
   const section = sectionResult.node
+  resizeNode(section, SECTION_WIDTH, 6400)
   const doc = autoFrame(section, 'Foundations / Dokumentation', { x: 80, y: 100, width: 1940, padding: 40, gap: 24, radius: 6 }).node
+  doc.effects = []
   heading(doc, 'Foundations', ledger.fontDecision, 'Monochrom · Radien 0/4/6/8 · ABC Diatype bevorzugt · Light und Dark als getrennte Single-Mode-Semantik')
   textNode(doc, 'Foundations / Fontstatus', ledger.fontDecision.warning || '✓ ABC Diatype ist verfügbar.', ledger.fontDecision, {
     size: 15, weight: 700, width: 1800,
   })
-  const palette = autoFrame(section, 'Foundations / Graustufen', { x: 80, y: 620, width: 1940, direction: 'HORIZONTAL', padding: 32, gap: 12, radius: 6 }).node
+  const palette = autoFrame(section, 'Foundations / Graustufen', { x: 80, y: 600, width: 1940, direction: 'HORIZONTAL', padding: 32, gap: 12, radius: 6 }).node
+  palette.effects = []
   for (const name of Object.keys(PALETTE)) {
-    const swatch = autoFrame(palette, `Swatch / ${name}`, { width: 150, height: 160, padding: 12, gap: 8, fill: name, radius: 4 }).node
-    swatch.fills = [solid(name)]
-    textNode(swatch, `Swatch / ${name} / Label`, name, ledger.fontDecision, { size: 12, weight: 500, dark: ['gray/700', 'gray/900', 'gray/1000'].includes(name), width: 120 })
+    ensureVariableSwatch(palette, 'primitive', name, variables.variablesByKey.get(`Onda · Primitive\u0000${name}`), name, ledger.fontDecision)
   }
-  const type = autoFrame(section, 'Foundations / Typografie', { x: 80, y: 1000, width: 1940, padding: 32, gap: 20, radius: 6 }).node
-  for (const scale of TYPE_SCALE) {
-    for (const weight of TYPE_WEIGHTS) {
-      textNode(type, `Typografie / ${scale.size} / ${weight}`, `${scale.size}px · ${weight} · Onda schreibt klar und ruhig.`, ledger.fontDecision, {
-        size: scale.size, weight, width: 1800,
-      })
+  for (const [collectionName, layer, key, y] of [
+    ['Onda · Semantic · Light', 'semantic-light', 'light', 1050],
+    ['Onda · Semantic · Dark', 'semantic-dark', 'dark', 1500],
+  ]) {
+    const semantic = autoFrame(section, `Foundations / ${key === 'light' ? 'Semantic Light' : 'Semantic Dark'}`, { x: 80, y, width: 1940, direction: 'HORIZONTAL', padding: 32, gap: 12, radius: 6 }).node
+    semantic.effects = []
+    for (const role of SEMANTIC_COLOR_ROLES) {
+      ensureVariableSwatch(semantic, layer, role.name, variables.variablesByKey.get(`${collectionName}\u0000${role.name}`), role[key], ledger.fontDecision)
     }
   }
-  const radius = autoFrame(section, 'Foundations / Radien', { x: 80, y: 2250, width: 1940, direction: 'HORIZONTAL', padding: 32, gap: 20, radius: 6 }).node
-  for (const token of RADIUS_TOKENS) {
-    ensureRadiusSample(radius, token)
+  const spacing = autoFrame(section, 'Foundations / Spacing', { x: 80, y: 1950, width: 1940, direction: 'HORIZONTAL', padding: 32, gap: 20, radius: 6 }).node
+  spacing.effects = []
+  for (const token of SPACING_TOKENS) ensureSpacingBar(spacing, token, variables.variablesByKey.get(`Onda · Dimension\u0000${token.name}`), ledger.fontDecision)
+
+  const type = autoFrame(section, 'Foundations / Typografie', { x: 80, y: 2400, width: 1940, padding: 32, gap: 20, radius: 6 }).node
+  type.effects = []
+  for (const style of styles.textStyles) {
+    const [size, weight] = style.name.replace('Onda/Type/', '').split(' · ').map(Number)
+    const specimen = textNode(type, `Typografie / ${size} / ${weight}`, `${size}px · ${weight} · Onda schreibt klar und ruhig.`, ledger.fontDecision, {
+      size, weight, width: 1800,
+    }).node
+    await specimen.setTextStyleIdAsync(style.id)
+    specimen.setPluginData('ondaFoundationArtifact', 'text-style')
+    specimen.setPluginData('ondaTextStyleName', style.name)
   }
+  const typographyVariables = autoFrame(section, 'Foundations / Typography Variables', { x: 80, y: 3600, width: 1940, direction: 'HORIZONTAL', padding: 32, gap: 20, radius: 6 }).node
+  typographyVariables.effects = []
+  for (const scale of TYPE_SCALE) textNode(typographyVariables, `Typography Variable / font-size/${scale.size}`, `font-size/${scale.size}`, ledger.fontDecision, { size: 12, width: 180 })
+  for (const weight of TYPE_WEIGHTS) textNode(typographyVariables, `Typography Variable / font-weight/${weight}`, `font-weight/${weight}`, ledger.fontDecision, { size: 12, weight, width: 180 })
+
+  const radius = autoFrame(section, 'Foundations / Radien', { x: 80, y: 4050, width: 1940, direction: 'HORIZONTAL', padding: 32, gap: 20, radius: 6 }).node
+  radius.effects = []
+  for (const token of RADIUS_TOKENS) {
+    ensureRadiusSample(radius, token, variables.variablesByKey.get(`Onda · Dimension\u0000${token.name}`))
+  }
+  const effects = autoFrame(section, 'Foundations / Effects', { x: 80, y: 4500, width: 1940, direction: 'HORIZONTAL', padding: 48, gap: 40, radius: 6 }).node
+  effects.effects = []
+  for (const style of styles.effectStyles) await ensureEffectStyleCard(effects, style, ledger.fontDecision)
   await bindFoundationArtifacts(section)
   return {
     sectionCreated: sectionResult.created,
@@ -1067,6 +1151,129 @@ function geometryEvidence(page, sections, allNodes, ledger, baselineRecords) {
   return { intersections, clearance, overflowNodes: [...new Set(overflowNodes)], undersizedHitTargets }
 }
 
+function sameScopes(actual, expected) {
+  return Array.isArray(actual)
+    && [...actual].sort().join('\u0000') === [...expected].sort().join('\u0000')
+}
+
+function paintIsBoundTo(node, variableId) {
+  return Array.isArray(node.fills)
+    && node.fills.some(paint => paint?.boundVariables?.color?.id === variableId)
+}
+
+function fieldIsBoundTo(node, field, variableId) {
+  return node.boundVariables?.[field]?.id === variableId
+}
+
+async function collectFoundationEvidence(foundationSection) {
+  const collectionExpectations = FOUNDATION_EXPECTATIONS.collections
+  const allCollections = await figma.variables.getLocalVariableCollectionsAsync()
+  const allVariables = await figma.variables.getLocalVariablesAsync()
+  const expectedNames = new Set(Object.keys(collectionExpectations))
+  const targetCollections = allCollections.filter(collection => expectedNames.has(collection.name))
+  const targetCollectionIds = new Set(targetCollections.map(collection => collection.id))
+  const targetVariables = allVariables.filter(variable => targetCollectionIds.has(variable.variableCollectionId))
+  const collectionCount = Object.entries(collectionExpectations).filter(([name, expectation]) => {
+    const matching = targetCollections.filter(collection => collection.name === name)
+    if (matching.length !== 1) return false
+    const collection = matching[0]
+    return collection.modes.length === 1
+      && collection.modes[0].name === expectation.mode
+      && targetVariables.filter(variable => variable.variableCollectionId === collection.id).length === expectation.variableCount
+  }).length
+
+  const collectionByName = new Map(targetCollections.map(collection => [collection.name, collection]))
+  const variableByKey = new Map(targetVariables.map(variable => {
+    const collection = targetCollections.find(item => item.id === variable.variableCollectionId)
+    return [`${collection?.name}\u0000${variable.name}`, variable]
+  }))
+  const specifications = []
+  for (const name of Object.keys(PALETTE)) specifications.push(['Onda · Primitive', name, 'COLOR', []])
+  for (const role of SEMANTIC_COLOR_ROLES) {
+    specifications.push(['Onda · Semantic · Light', role.name, 'COLOR', role.scopes])
+    specifications.push(['Onda · Semantic · Dark', role.name, 'COLOR', role.scopes])
+  }
+  for (const token of SPACING_TOKENS) specifications.push(['Onda · Dimension', token.name, 'FLOAT', ['GAP']])
+  for (const token of RADIUS_TOKENS) specifications.push(['Onda · Dimension', token.name, 'FLOAT', ['CORNER_RADIUS']])
+  for (const scale of TYPE_SCALE) specifications.push(['Onda · Typography', `font-size/${scale.size}`, 'FLOAT', ['FONT_SIZE']])
+  for (const weight of TYPE_WEIGHTS) specifications.push(['Onda · Typography', `font-weight/${weight}`, 'FLOAT', ['FONT_WEIGHT']])
+  const invalidScopeCount = specifications.filter(([collectionName, name, type, scopes]) => {
+    const variable = variableByKey.get(`${collectionName}\u0000${name}`)
+    return !variable || variable.resolvedType !== type || !sameScopes(variable.scopes, scopes)
+  }).length
+  const missingCodeSyntax = targetVariables.filter(variable => !variable.codeSyntax?.WEB).length
+
+  let brokenAliasCount = 0
+  for (const [collectionName, key] of [['Onda · Semantic · Light', 'light'], ['Onda · Semantic · Dark', 'dark']]) {
+    const collection = collectionByName.get(collectionName)
+    for (const role of SEMANTIC_COLOR_ROLES) {
+      const variable = variableByKey.get(`${collectionName}\u0000${role.name}`)
+      const expectedPrimitive = variableByKey.get(`Onda · Primitive\u0000${role[key]}`)
+      const value = collection && variable ? variable.valuesByMode[collection.modes[0].modeId] : null
+      if (value?.type !== 'VARIABLE_ALIAS' || value.id !== expectedPrimitive?.id) brokenAliasCount += 1
+    }
+  }
+
+  const nodes = foundationSection ? collectOndaNodes([foundationSection]) : []
+  const artifacts = kind => nodes.filter(node => node.getPluginData('ondaFoundationArtifact') === kind)
+  const swatches = artifacts('swatch')
+  const primitiveSwatches = swatches.filter(node => node.getPluginData('ondaFoundationLayer') === 'primitive').length
+  const semanticLightSwatches = swatches.filter(node => node.getPluginData('ondaFoundationLayer') === 'semantic-light').length
+  const semanticDarkSwatches = swatches.filter(node => node.getPluginData('ondaFoundationLayer') === 'semantic-dark').length
+  const boundSwatches = swatches.filter(node => paintIsBoundTo(node, node.getPluginData('ondaBoundVariableId'))).length
+  const spacingBars = artifacts('spacing-bar')
+  const boundSpacingBars = spacingBars.filter(node => fieldIsBoundTo(node, 'width', node.getPluginData('ondaBoundVariableId'))).length
+  const radiusSamples = artifacts('radius-sample')
+  const radiusRectangles = radiusSamples.filter(node => node.type === 'RECTANGLE')
+  const radiusEllipses = radiusSamples.filter(node => node.type === 'ELLIPSE').length
+  const radiusFields = ['topLeftRadius', 'topRightRadius', 'bottomLeftRadius', 'bottomRightRadius']
+  const boundRadiusRectangles = radiusRectangles.filter(node => radiusFields.every(field => fieldIsBoundTo(node, field, node.getPluginData('ondaBoundVariableId')))).length
+
+  const expectedTextStyleNames = TYPE_SCALE.flatMap(scale => TYPE_WEIGHTS.map(weight => `Onda/Type/${scale.size} · ${weight}`))
+  const localTextStyles = (await figma.getLocalTextStylesAsync()).filter(style => style.name.startsWith('Onda/Type/'))
+  const textStyleByName = new Map(localTextStyles.map(style => [style.name, style]))
+  const documentedTextStyles = new Set(artifacts('text-style').filter(node => {
+    const name = node.getPluginData('ondaTextStyleName')
+    return expectedTextStyleNames.includes(name) && node.textStyleId === textStyleByName.get(name)?.id
+  }).map(node => node.getPluginData('ondaTextStyleName'))).size
+
+  const effectOrder = new Map(FOUNDATION_EXPECTATIONS.effectStyles.map((name, index) => [name, index]))
+  const localEffectStyles = (await figma.getLocalEffectStylesAsync())
+    .filter(style => style.name.startsWith('Onda/Shadow/'))
+    .sort((left, right) => (effectOrder.get(left.name) ?? 99) - (effectOrder.get(right.name) ?? 99))
+  const effectStyleByName = new Map(localEffectStyles.map(style => [style.name, style]))
+  const documentedEffectStyles = new Set(artifacts('effect-style').filter(node => {
+    const name = node.getPluginData('ondaEffectStyleName')
+    return FOUNDATION_EXPECTATIONS.effectStyles.includes(name) && node.effectStyleId === effectStyleByName.get(name)?.id
+  }).map(node => node.getPluginData('ondaEffectStyleName'))).size
+  const unexpectedShadowNodes = nodes
+    .filter(node => 'effects' in node && Array.isArray(node.effects) && node.effects.length > 0)
+    .filter(node => node.getPluginData('ondaFoundationArtifact') !== 'effect-style')
+    .map(node => node.name)
+
+  return {
+    collectionCount,
+    variableCount: targetVariables.length,
+    missingCodeSyntax,
+    invalidScopeCount,
+    brokenAliasCount,
+    primitiveSwatches,
+    semanticLightSwatches,
+    semanticDarkSwatches,
+    boundSwatches,
+    spacingBars: spacingBars.length,
+    boundSpacingBars,
+    radiusSamples: radiusSamples.length,
+    boundRadiusRectangles,
+    radiusEllipses,
+    textStyleCount: localTextStyles.length,
+    documentedTextStyles,
+    effectStyleNames: localEffectStyles.map(style => style.name),
+    documentedEffectStyles,
+    unexpectedShadowNodes,
+  }
+}
+
 async function runVerify() {
   const inspection = await inspectCurrentTarget()
   const page = figma.currentPage
@@ -1099,6 +1306,7 @@ async function runVerify() {
   const radii = radiiFromNodes(allNodes)
   const foundationSection = sections.find(node => node.name === '01 · Foundations')
   const foundationNodes = foundationSection ? collectOndaNodes([foundationSection]) : []
+  const foundationEvidence = await collectFoundationEvidence(foundationSection)
   const effectsValid = allNodes.every(node => !('effects' in node) || !Array.isArray(node.effects) || node.effects.every(effect => !effect.color || isGrayColor(effect.color)))
   const fontStylesValid = TYPE_WEIGHTS.every(weight => ledger.fontDecision?.styles?.[weight])
   const reactionCount = (await Promise.all(allNodes.map(async node => (
@@ -1126,6 +1334,7 @@ async function runVerify() {
       effectsValid,
       fontsValid: fontStylesValid,
       docsBound: foundationNodes.length > 0 && foundationNodes.every(node => node.getPluginData('ondaFoundationBound') === 'true'),
+      ...foundationEvidence,
     },
     ...geometry,
     reactionCount,

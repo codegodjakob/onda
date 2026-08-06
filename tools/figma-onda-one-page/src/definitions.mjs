@@ -31,6 +31,21 @@ export const RADIUS_TOKENS = Object.freeze([
   Object.freeze({ name: 'radius/circle', value: 999, geometry: 'ELLIPSE' }),
 ])
 
+export const SPACING_TOKENS = Object.freeze([4, 8, 12, 16, 24, 32, 40].map(value => Object.freeze({
+  name: `spacing/${value}`,
+  value,
+})))
+
+export const SEMANTIC_COLOR_ROLES = Object.freeze([
+  Object.freeze({ name: 'color/background', light: 'gray/025', dark: 'gray/1000', scopes: Object.freeze(['FRAME_FILL', 'SHAPE_FILL']) }),
+  Object.freeze({ name: 'color/surface', light: 'gray/000', dark: 'gray/900', scopes: Object.freeze(['FRAME_FILL', 'SHAPE_FILL']) }),
+  Object.freeze({ name: 'color/text', light: 'gray/900', dark: 'gray/000', scopes: Object.freeze(['TEXT_FILL']) }),
+  Object.freeze({ name: 'color/text-muted', light: 'gray/500', dark: 'gray/300', scopes: Object.freeze(['TEXT_FILL']) }),
+  Object.freeze({ name: 'color/border', light: 'gray/200', dark: 'gray/700', scopes: Object.freeze(['STROKE_COLOR']) }),
+  Object.freeze({ name: 'color/inverted', light: 'gray/900', dark: 'gray/000', scopes: Object.freeze(['FRAME_FILL', 'SHAPE_FILL']) }),
+  Object.freeze({ name: 'color/on-inverted', light: 'gray/000', dark: 'gray/900', scopes: Object.freeze(['TEXT_FILL']) }),
+])
+
 export const TYPE_SCALE = Object.freeze([
   Object.freeze({ size: 12, lineHeight: 16 }),
   Object.freeze({ size: 15, lineHeight: 22 }),
@@ -39,6 +54,21 @@ export const TYPE_SCALE = Object.freeze([
 ])
 
 export const TYPE_WEIGHTS = Object.freeze([400, 500, 700])
+
+export const FOUNDATION_EXPECTATIONS = Object.freeze({
+  collections: Object.freeze({
+    'Onda · Primitive': Object.freeze({ mode: 'Value', variableCount: 10 }),
+    'Onda · Dimension': Object.freeze({ mode: 'Value', variableCount: 12 }),
+    'Onda · Semantic · Light': Object.freeze({ mode: 'Light', variableCount: 7 }),
+    'Onda · Semantic · Dark': Object.freeze({ mode: 'Dark', variableCount: 7 }),
+    'Onda · Typography': Object.freeze({ mode: 'Value', variableCount: 7 }),
+  }),
+  swatches: Object.freeze({ primitive: 10, semanticLight: 7, semanticDark: 7, bound: 24 }),
+  spacingBars: Object.freeze({ total: 7, bound: 7 }),
+  radiusSamples: Object.freeze({ total: 5, boundRectangles: 4, ellipses: 1 }),
+  textStyles: 12,
+  effectStyles: Object.freeze(['Onda/Shadow/Floating', 'Onda/Shadow/Overlay']),
+})
 
 export const ANNOTATION_VIEW_NAMES = Object.freeze([
   'Open',

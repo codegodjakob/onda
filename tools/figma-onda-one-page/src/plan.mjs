@@ -2,6 +2,7 @@ import {
   ANNOTATION_SECTIONS,
   COMPONENT_DEFINITIONS,
   DIALOG_FAMILIES,
+  FOUNDATION_EXPECTATIONS,
   PALETTE,
   PHASE_DEFINITIONS,
   PLUGIN_ORIGIN,
@@ -321,7 +322,31 @@ export function buildVerificationReport(snapshot) {
     && componentSets.every(item => expectedComponentIds.has(item.id))
     && componentSets.every(item => item.variants >= 2 && item.autoLayout && item.bound)
   const foundation = snapshot.foundation || {}
+  const expectedEffectStyles = [...FOUNDATION_EXPECTATIONS.effectStyles]
+  const actualEffectStyles = Array.isArray(foundation.effectStyleNames) ? foundation.effectStyleNames : []
+  const foundationInventoryValid = foundation.collectionCount === Object.keys(FOUNDATION_EXPECTATIONS.collections).length
+    && foundation.variableCount === Object.values(FOUNDATION_EXPECTATIONS.collections).reduce((total, item) => total + item.variableCount, 0)
+    && foundation.missingCodeSyntax === 0
+    && foundation.invalidScopeCount === 0
+    && foundation.brokenAliasCount === 0
+    && foundation.primitiveSwatches === FOUNDATION_EXPECTATIONS.swatches.primitive
+    && foundation.semanticLightSwatches === FOUNDATION_EXPECTATIONS.swatches.semanticLight
+    && foundation.semanticDarkSwatches === FOUNDATION_EXPECTATIONS.swatches.semanticDark
+    && foundation.boundSwatches === FOUNDATION_EXPECTATIONS.swatches.bound
+    && foundation.spacingBars === FOUNDATION_EXPECTATIONS.spacingBars.total
+    && foundation.boundSpacingBars === FOUNDATION_EXPECTATIONS.spacingBars.bound
+    && foundation.radiusSamples === FOUNDATION_EXPECTATIONS.radiusSamples.total
+    && foundation.boundRadiusRectangles === FOUNDATION_EXPECTATIONS.radiusSamples.boundRectangles
+    && foundation.radiusEllipses === FOUNDATION_EXPECTATIONS.radiusSamples.ellipses
+    && foundation.textStyleCount === FOUNDATION_EXPECTATIONS.textStyles
+    && foundation.documentedTextStyles === FOUNDATION_EXPECTATIONS.textStyles
+    && actualEffectStyles.length === expectedEffectStyles.length
+    && expectedEffectStyles.every((name, index) => actualEffectStyles[index] === name)
+    && foundation.documentedEffectStyles === FOUNDATION_EXPECTATIONS.effectStyles.length
+    && Array.isArray(foundation.unexpectedShadowNodes)
+    && foundation.unexpectedShadowNodes.length === 0
   const foundationValid = ['paintsValid', 'radiiValid', 'effectsValid', 'fontsValid', 'docsBound'].every(key => foundation[key] === true)
+    && foundationInventoryValid
   const annotationViewsValid = snapshot.annotationViews
     ? snapshot.annotationViews.length === expectedAnnotationViews.size && presentAnnotationViews.size === expectedAnnotationViews.size && [...expectedAnnotationViews].every(key => presentAnnotationViews.has(key))
     : new Set(snapshot.annotationKinds || []).size === ANNOTATION_SECTIONS.length
@@ -350,6 +375,7 @@ export function buildVerificationReport(snapshot) {
     instanceCount: Number(snapshot.instanceCount || 0),
     repeatedScreenInstanceCount: Number(snapshot.repeatedScreenInstanceCount || 0),
     foundationValid,
+    foundationInventoryValid,
     intersections: snapshot.intersections || [],
     clearance: Number(snapshot.clearance ?? 0),
     overflowNodes: snapshot.overflowNodes || [],

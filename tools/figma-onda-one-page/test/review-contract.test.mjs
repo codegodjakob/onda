@@ -108,7 +108,16 @@ function validSnapshot() {
     componentSets: COMPONENT_DEFINITIONS.map(component => ({ id: component.id, variants: 2, autoLayout: true, bound: true })),
     instanceCount: 20,
     repeatedScreenInstanceCount: 8,
-    foundation: { paintsValid: true, radiiValid: true, effectsValid: true, fontsValid: true, docsBound: true },
+    foundation: {
+      paintsValid: true, radiiValid: true, effectsValid: true, fontsValid: true, docsBound: true,
+      collectionCount: 5, variableCount: 43, missingCodeSyntax: 0, invalidScopeCount: 0, brokenAliasCount: 0,
+      primitiveSwatches: 10, semanticLightSwatches: 7, semanticDarkSwatches: 7, boundSwatches: 24,
+      spacingBars: 7, boundSpacingBars: 7,
+      radiusSamples: 5, boundRadiusRectangles: 4, radiusEllipses: 1,
+      textStyleCount: 12, documentedTextStyles: 12,
+      effectStyleNames: ['Onda/Shadow/Floating', 'Onda/Shadow/Overlay'], documentedEffectStyles: 2,
+      unexpectedShadowNodes: [],
+    },
     intersections: [],
     clearance: 2000,
     overflowNodes: [],
@@ -187,4 +196,85 @@ test('prototype reactions use the dynamic-page async API exclusively', () => {
   assert.match(runtime, /async function createPrototype/)
   assert.match(runtime, /await frame\.setReactionsAsync\(/)
   assert.match(runtime, /await createPrototype\(/)
+})
+
+test('foundation documentation uses real variable bindings and update-or-create helpers', () => {
+  const runtime = readFileSync(resolve(ROOT, 'src/runtime.mjs'), 'utf8')
+  for (const helper of ['ensureVariableSwatch', 'ensureSpacingBar', 'ensureRadiusSample', 'ensureEffectStyleCard']) {
+    assert.match(runtime, new RegExp(`function ${helper}|async function ${helper}`), helper)
+  }
+  assert.match(runtime, /setBoundVariable\('width'/)
+  assert.match(runtime, /setBoundVariableForPaint/)
+  assert.match(runtime, /Onda · Semantic · Light/)
+  assert.match(runtime, /Onda · Semantic · Dark/)
+  assert.match(runtime, /doc\.effects\s*=\s*\[\]/)
+})
+
+test('verify rejects every incomplete foundation inventory metric', () => {
+  const foundation = {
+    paintsValid: true,
+    radiiValid: true,
+    effectsValid: true,
+    fontsValid: true,
+    docsBound: true,
+    collectionCount: 5,
+    variableCount: 43,
+    missingCodeSyntax: 0,
+    invalidScopeCount: 0,
+    brokenAliasCount: 0,
+    primitiveSwatches: 10,
+    semanticLightSwatches: 7,
+    semanticDarkSwatches: 7,
+    boundSwatches: 24,
+    spacingBars: 7,
+    boundSpacingBars: 7,
+    radiusSamples: 5,
+    boundRadiusRectangles: 4,
+    radiusEllipses: 1,
+    textStyleCount: 12,
+    documentedTextStyles: 12,
+    effectStyleNames: ['Onda/Shadow/Floating', 'Onda/Shadow/Overlay'],
+    documentedEffectStyles: 2,
+    unexpectedShadowNodes: [],
+  }
+  const snapshot = {
+    targetAuthorized: true,
+    pageCount: 1,
+    pageName: 'Page 1',
+    sections: SECTION_DEFINITIONS.map(item => ({ name: item.name, type: 'SECTION', parentType: 'PAGE', parentName: 'Page 1', owner: 'onda-one-page' })),
+    annotationViews: ANNOTATION_SECTIONS.flatMap(annotation => annotation.views.map(view => ({ kind: annotation.kind, view: view.name }))),
+    dialogStates: DIALOG_FAMILIES.flatMap(family => family.states.map(state => ({ family: family.name, state }))),
+    componentSets: COMPONENT_DEFINITIONS.map(component => ({ id: component.id, variants: 2, autoLayout: true, bound: true })),
+    instanceCount: 20,
+    repeatedScreenInstanceCount: 8,
+    foundation,
+    intersections: [], clearance: 2000, overflowNodes: [], undersizedHitTargets: [],
+    reactionCount: 4, requiredReactionCount: 4,
+    baselineHash: 'abc', currentBaselineHash: 'abc', baselineMismatches: [],
+    baselinePages: [{ id: 'page', name: 'Page 1', index: 0 }],
+    currentPages: [{ id: 'page', name: 'Page 1', index: 0 }],
+    phases: Object.fromEntries([
+      'inspect', 'foundations', ...COMPONENT_DEFINITIONS.map(component => `component-${component.id}`),
+      'core-views', ...Array.from({ length: 6 }, (_, index) => `annotations-${index + 1}`), 'dialogs-and-secondary',
+    ].map(id => [id, { status: 'success' }])),
+  }
+  assert.equal(buildVerificationReport(snapshot).hardPass, true)
+  const mutations = [
+    value => { value.collectionCount = 4 },
+    value => { value.variableCount = 42 },
+    value => { value.missingCodeSyntax = 1 },
+    value => { value.invalidScopeCount = 1 },
+    value => { value.brokenAliasCount = 1 },
+    value => { value.boundSwatches = 23 },
+    value => { value.boundSpacingBars = 6 },
+    value => { value.boundRadiusRectangles = 3 },
+    value => { value.documentedTextStyles = 11 },
+    value => { value.documentedEffectStyles = 1 },
+    value => { value.unexpectedShadowNodes = ['Foundations / Graustufen'] },
+  ]
+  for (const mutate of mutations) {
+    const candidate = structuredClone(snapshot)
+    mutate(candidate.foundation)
+    assert.equal(buildVerificationReport(candidate).hardPass, false)
+  }
 })

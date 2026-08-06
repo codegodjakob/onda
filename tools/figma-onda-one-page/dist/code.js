@@ -141,6 +141,19 @@
     Object.freeze({ name: "radius/overlay", value: 8, geometry: "RECTANGLE" }),
     Object.freeze({ name: "radius/circle", value: 999, geometry: "ELLIPSE" })
   ]);
+  var SPACING_TOKENS = Object.freeze([4, 8, 12, 16, 24, 32, 40].map((value) => Object.freeze({
+    name: `spacing/${value}`,
+    value
+  })));
+  var SEMANTIC_COLOR_ROLES = Object.freeze([
+    Object.freeze({ name: "color/background", light: "gray/025", dark: "gray/1000", scopes: Object.freeze(["FRAME_FILL", "SHAPE_FILL"]) }),
+    Object.freeze({ name: "color/surface", light: "gray/000", dark: "gray/900", scopes: Object.freeze(["FRAME_FILL", "SHAPE_FILL"]) }),
+    Object.freeze({ name: "color/text", light: "gray/900", dark: "gray/000", scopes: Object.freeze(["TEXT_FILL"]) }),
+    Object.freeze({ name: "color/text-muted", light: "gray/500", dark: "gray/300", scopes: Object.freeze(["TEXT_FILL"]) }),
+    Object.freeze({ name: "color/border", light: "gray/200", dark: "gray/700", scopes: Object.freeze(["STROKE_COLOR"]) }),
+    Object.freeze({ name: "color/inverted", light: "gray/900", dark: "gray/000", scopes: Object.freeze(["FRAME_FILL", "SHAPE_FILL"]) }),
+    Object.freeze({ name: "color/on-inverted", light: "gray/000", dark: "gray/900", scopes: Object.freeze(["TEXT_FILL"]) })
+  ]);
   var TYPE_SCALE = Object.freeze([
     Object.freeze({ size: 12, lineHeight: 16 }),
     Object.freeze({ size: 15, lineHeight: 22 }),
@@ -148,6 +161,20 @@
     Object.freeze({ size: 40, lineHeight: 44 })
   ]);
   var TYPE_WEIGHTS = Object.freeze([400, 500, 700]);
+  var FOUNDATION_EXPECTATIONS = Object.freeze({
+    collections: Object.freeze({
+      "Onda \xB7 Primitive": Object.freeze({ mode: "Value", variableCount: 10 }),
+      "Onda \xB7 Dimension": Object.freeze({ mode: "Value", variableCount: 12 }),
+      "Onda \xB7 Semantic \xB7 Light": Object.freeze({ mode: "Light", variableCount: 7 }),
+      "Onda \xB7 Semantic \xB7 Dark": Object.freeze({ mode: "Dark", variableCount: 7 }),
+      "Onda \xB7 Typography": Object.freeze({ mode: "Value", variableCount: 7 })
+    }),
+    swatches: Object.freeze({ primitive: 10, semanticLight: 7, semanticDark: 7, bound: 24 }),
+    spacingBars: Object.freeze({ total: 7, bound: 7 }),
+    radiusSamples: Object.freeze({ total: 5, boundRectangles: 4, ellipses: 1 }),
+    textStyles: 12,
+    effectStyles: Object.freeze(["Onda/Shadow/Floating", "Onda/Shadow/Overlay"])
+  });
   var ANNOTATION_VIEW_NAMES = Object.freeze([
     "Open",
     "Accept \xB7 Undo",
@@ -558,7 +585,10 @@
     const expectedComponentIds = new Set(COMPONENT_DEFINITIONS.map((component) => component.id));
     const componentStructureValid = componentSets.length === COMPONENT_DEFINITIONS.length && new Set(componentSets.map((item) => item.id)).size === COMPONENT_DEFINITIONS.length && componentSets.every((item) => expectedComponentIds.has(item.id)) && componentSets.every((item) => item.variants >= 2 && item.autoLayout && item.bound);
     const foundation = snapshot.foundation || {};
-    const foundationValid = ["paintsValid", "radiiValid", "effectsValid", "fontsValid", "docsBound"].every((key) => foundation[key] === true);
+    const expectedEffectStyles = [...FOUNDATION_EXPECTATIONS.effectStyles];
+    const actualEffectStyles = Array.isArray(foundation.effectStyleNames) ? foundation.effectStyleNames : [];
+    const foundationInventoryValid = foundation.collectionCount === Object.keys(FOUNDATION_EXPECTATIONS.collections).length && foundation.variableCount === Object.values(FOUNDATION_EXPECTATIONS.collections).reduce((total, item) => total + item.variableCount, 0) && foundation.missingCodeSyntax === 0 && foundation.invalidScopeCount === 0 && foundation.brokenAliasCount === 0 && foundation.primitiveSwatches === FOUNDATION_EXPECTATIONS.swatches.primitive && foundation.semanticLightSwatches === FOUNDATION_EXPECTATIONS.swatches.semanticLight && foundation.semanticDarkSwatches === FOUNDATION_EXPECTATIONS.swatches.semanticDark && foundation.boundSwatches === FOUNDATION_EXPECTATIONS.swatches.bound && foundation.spacingBars === FOUNDATION_EXPECTATIONS.spacingBars.total && foundation.boundSpacingBars === FOUNDATION_EXPECTATIONS.spacingBars.bound && foundation.radiusSamples === FOUNDATION_EXPECTATIONS.radiusSamples.total && foundation.boundRadiusRectangles === FOUNDATION_EXPECTATIONS.radiusSamples.boundRectangles && foundation.radiusEllipses === FOUNDATION_EXPECTATIONS.radiusSamples.ellipses && foundation.textStyleCount === FOUNDATION_EXPECTATIONS.textStyles && foundation.documentedTextStyles === FOUNDATION_EXPECTATIONS.textStyles && actualEffectStyles.length === expectedEffectStyles.length && expectedEffectStyles.every((name, index) => actualEffectStyles[index] === name) && foundation.documentedEffectStyles === FOUNDATION_EXPECTATIONS.effectStyles.length && Array.isArray(foundation.unexpectedShadowNodes) && foundation.unexpectedShadowNodes.length === 0;
+    const foundationValid = ["paintsValid", "radiiValid", "effectsValid", "fontsValid", "docsBound"].every((key) => foundation[key] === true) && foundationInventoryValid;
     const annotationViewsValid = snapshot.annotationViews ? snapshot.annotationViews.length === expectedAnnotationViews.size && presentAnnotationViews.size === expectedAnnotationViews.size && [...expectedAnnotationViews].every((key) => presentAnnotationViews.has(key)) : new Set(snapshot.annotationKinds || []).size === ANNOTATION_SECTIONS.length;
     const dialogStatesValid = snapshot.dialogStates ? snapshot.dialogStates.length === expectedDialogStates.size && presentDialogStates.size === expectedDialogStates.size && [...expectedDialogStates].every((key) => presentDialogStates.has(key)) : new Set(snapshot.dialogFamilies || []).size === DIALOG_FAMILIES.length;
     const phasesComplete = snapshot.phases ? REQUIRED_PHASES.every((id) => {
@@ -584,6 +614,7 @@
       instanceCount: Number(snapshot.instanceCount || 0),
       repeatedScreenInstanceCount: Number(snapshot.repeatedScreenInstanceCount || 0),
       foundationValid,
+      foundationInventoryValid,
       intersections: snapshot.intersections || [],
       clearance: Number((_a = snapshot.clearance) != null ? _a : 0),
       overflowNodes: snapshot.overflowNodes || [],
@@ -955,9 +986,13 @@
     if (subtitle) textNode(parent, `${title} / Untertitel`, subtitle, decision, { size: 15, muted: true, width: 1500 });
   }
   async function ensureCollection(name, modeName) {
+    var _a;
     const collections = await figma.variables.getLocalVariableCollectionsAsync();
     const existing = collections.find((collection2) => collection2.name === name);
-    if (existing) return { collection: existing, modeId: existing.modes[0].modeId, created: false };
+    if (existing) {
+      if (((_a = existing.modes[0]) == null ? void 0 : _a.name) !== modeName) existing.renameMode(existing.modes[0].modeId, modeName);
+      return { collection: existing, modeId: existing.modes[0].modeId, created: false };
+    }
     const collection = figma.variables.createVariableCollection(name);
     collection.renameMode(collection.modes[0].modeId, modeName);
     return { collection, modeId: collection.modes[0].modeId, created: true };
@@ -979,6 +1014,7 @@
     const typographyInfo = await ensureCollection("Onda \xB7 Typography", "Value");
     const created = [];
     const primitiveByName = {};
+    const variablesByKey = /* @__PURE__ */ new Map();
     for (const [name, value] of Object.entries(PALETTE)) {
       const result = await ensureVariable(primitiveInfo.collection, primitiveInfo.modeId, {
         name,
@@ -988,18 +1024,10 @@
         css: `--onda-${name.replace("/", "-")}`
       });
       primitiveByName[name] = result.variable;
+      variablesByKey.set(`Onda \xB7 Primitive\0${name}`, result.variable);
       if (result.created) created.push(result.variable.id);
     }
-    const semanticRoles = [
-      { name: "color/background", light: "gray/025", dark: "gray/1000", scopes: ["FRAME_FILL", "SHAPE_FILL"] },
-      { name: "color/surface", light: "gray/000", dark: "gray/900", scopes: ["FRAME_FILL", "SHAPE_FILL"] },
-      { name: "color/text", light: "gray/900", dark: "gray/000", scopes: ["TEXT_FILL"] },
-      { name: "color/text-muted", light: "gray/500", dark: "gray/300", scopes: ["TEXT_FILL"] },
-      { name: "color/border", light: "gray/200", dark: "gray/700", scopes: ["STROKE_COLOR"] },
-      { name: "color/inverted", light: "gray/900", dark: "gray/000", scopes: ["FRAME_FILL", "SHAPE_FILL"] },
-      { name: "color/on-inverted", light: "gray/000", dark: "gray/900", scopes: ["TEXT_FILL"] }
-    ];
-    for (const role of semanticRoles) {
+    for (const role of SEMANTIC_COLOR_ROLES) {
       for (const [info, primitiveName, suffix] of [
         [lightInfo, role.light, "light"],
         [darkInfo, role.dark, "dark"]
@@ -1011,11 +1039,12 @@
           scopes: role.scopes,
           css: `--onda-${role.name.replaceAll("/", "-")}-${suffix}`
         });
+        variablesByKey.set(`${info.collection.name}\0${role.name}`, result.variable);
         if (result.created) created.push(result.variable.id);
       }
     }
     const dimensions = [
-      ...[4, 8, 12, 16, 24, 32, 40].map((value) => ({ name: `spacing/${value}`, value, scope: "GAP" })),
+      ...SPACING_TOKENS.map((token) => __spreadProps(__spreadValues({}, token), { scope: "GAP" })),
       ...RADIUS_TOKENS.map((token) => ({ name: token.name, value: token.value, scope: "CORNER_RADIUS" }))
     ];
     for (const item of dimensions) {
@@ -1026,6 +1055,7 @@
         scopes: [item.scope],
         css: `--onda-${item.name.replaceAll("/", "-")}`
       });
+      variablesByKey.set(`Onda \xB7 Dimension\0${item.name}`, result.variable);
       if (result.created) created.push(result.variable.id);
     }
     for (const item of TYPE_SCALE) {
@@ -1036,6 +1066,7 @@
         scopes: ["FONT_SIZE"],
         css: `--onda-font-size-${item.size}`
       });
+      variablesByKey.set(`Onda \xB7 Typography\0font-size/${item.size}`, result.variable);
       if (result.created) created.push(result.variable.id);
     }
     for (const weight of TYPE_WEIGHTS) {
@@ -1046,16 +1077,19 @@
         scopes: ["FONT_WEIGHT"],
         css: `--onda-font-weight-${weight}`
       });
+      variablesByKey.set(`Onda \xB7 Typography\0font-weight/${weight}`, result.variable);
       if (result.created) created.push(result.variable.id);
     }
     return {
       collections: [primitiveInfo, dimensionInfo, lightInfo, darkInfo, typographyInfo].map((info) => info.collection.id),
-      createdVariableIds: created
+      createdVariableIds: created,
+      variablesByKey
     };
   }
   async function createFoundationStyles(decision) {
     const existingText = await figma.getLocalTextStylesAsync();
     const createdText = [];
+    const textStyles = [];
     for (const scale of TYPE_SCALE) {
       for (const weight of TYPE_WEIGHTS) {
         const name = `Onda/Type/${scale.size} \xB7 ${weight}`;
@@ -1066,11 +1100,13 @@
         style.fontSize = scale.size;
         style.lineHeight = { unit: "PIXELS", value: scale.lineHeight };
         style.letterSpacing = { unit: "PIXELS", value: 0 };
+        textStyles.push(style);
         if (!existing) createdText.push(style.id);
       }
     }
     const existingEffects = await figma.getLocalEffectStylesAsync();
     const createdEffects = [];
+    const effectStyles = [];
     const effects = [
       { name: "Onda/Shadow/Floating", radius: 12, opacity: 0.12, y: 4 },
       { name: "Onda/Shadow/Overlay", radius: 24, opacity: 0.16, y: 8 }
@@ -1088,11 +1124,61 @@
         visible: true,
         blendMode: "NORMAL"
       }];
+      effectStyles.push(style);
       if (!existing) createdEffects.push(style.id);
     }
-    return { createdTextStyleIds: createdText, createdEffectStyleIds: createdEffects };
+    return { createdTextStyleIds: createdText, createdEffectStyleIds: createdEffects, textStyles, effectStyles };
   }
-  function ensureRadiusSample(parent, token) {
+  function ensureVariableSwatch(parent, layer, name, variable, fallback, decision) {
+    const width = layer === "primitive" ? 160 : 220;
+    const swatchName = layer === "primitive" ? `Swatch / ${name}` : `Swatch / ${layer} / ${name}`;
+    const swatch = autoFrame(parent, swatchName, {
+      width,
+      height: 150,
+      padding: 12,
+      gap: 8,
+      fill: fallback,
+      radius: 4
+    }).node;
+    swatch.effects = [];
+    swatch.fills = [figma.variables.setBoundVariableForPaint(solid(fallback), "color", variable)];
+    swatch.setPluginData("ondaFoundationArtifact", "swatch");
+    swatch.setPluginData("ondaFoundationLayer", layer);
+    swatch.setPluginData("ondaBoundVariableId", variable.id);
+    textNode(swatch, `${swatchName} / Label`, name, decision, {
+      size: 12,
+      weight: 500,
+      dark: ["gray/700", "gray/900", "gray/1000"].includes(fallback),
+      width: width - 24
+    });
+    return swatch;
+  }
+  function ensureSpacingBar(parent, token, variable, decision) {
+    const row = autoFrame(parent, `Spacing / ${token.value}`, {
+      width: 220,
+      height: 96,
+      direction: "VERTICAL",
+      padding: 12,
+      gap: 8,
+      radius: 4
+    }).node;
+    row.effects = [];
+    const existing = directChild(row, `Spacing Bar / ${token.value}`);
+    if (existing && existing.type !== "RECTANGLE") throw new Error(`Ung\xFCltiger bestehender Spacing-Sample: ${token.name}`);
+    const bar = existing || figma.createRectangle();
+    bar.name = `Spacing Bar / ${token.value}`;
+    bar.resize(token.value, 16);
+    bar.fills = [solid("gray/700")];
+    bar.effects = [];
+    bar.setBoundVariable("width", variable);
+    bar.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN);
+    bar.setPluginData("ondaFoundationArtifact", "spacing-bar");
+    bar.setPluginData("ondaBoundVariableId", variable.id);
+    if (!existing) row.appendChild(bar);
+    textNode(row, `Spacing / ${token.value} / Label`, `${token.name} \xB7 ${token.value}px`, decision, { size: 12, weight: 500, width: 190 });
+    return bar;
+  }
+  function ensureRadiusSample(parent, token, variable) {
     const name = `Radius / ${token.value}`;
     const expectedType = token.geometry === "ELLIPSE" ? "ELLIPSE" : "RECTANGLE";
     const existing = directChild(parent, name);
@@ -1102,11 +1188,27 @@
     sample.resize(112, 112);
     sample.fills = [solid("gray/100")];
     sample.strokes = [solid("gray/700")];
+    sample.effects = [];
     sample.strokeWeight = 1;
-    if (expectedType === "RECTANGLE") sample.cornerRadius = token.value;
+    if (expectedType === "RECTANGLE") {
+      sample.cornerRadius = token.value;
+      for (const field of ["topLeftRadius", "topRightRadius", "bottomLeftRadius", "bottomRightRadius"]) sample.setBoundVariable(field, variable);
+    }
     if (!existing) parent.appendChild(sample);
     sample.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN);
+    sample.setPluginData("ondaFoundationArtifact", "radius-sample");
+    sample.setPluginData("ondaFoundationGeometry", expectedType);
+    sample.setPluginData("ondaBoundVariableId", expectedType === "RECTANGLE" ? variable.id : "");
     return { node: sample, created: !existing };
+  }
+  async function ensureEffectStyleCard(parent, style, decision) {
+    const card = autoFrame(parent, `Effect / ${style.name}`, { width: 780, height: 150, padding: 24, gap: 8, radius: 6 }).node;
+    await card.setEffectStyleIdAsync(style.id);
+    card.setPluginData("ondaFoundationArtifact", "effect-style");
+    card.setPluginData("ondaEffectStyleName", style.name);
+    textNode(card, `Effect / ${style.name} / Label`, style.name, decision, { size: 15, weight: 700, width: 700 });
+    textNode(card, `Effect / ${style.name} / Detail`, "Schatten sind ausschlie\xDFlich f\xFCr Floating- und Overlay-Fl\xE4chen vorgesehen.", decision, { size: 12, muted: true, width: 700 });
+    return card;
   }
   async function bindFoundationArtifacts(section) {
     var _a;
@@ -1119,21 +1221,15 @@
     if (background) section.fills = [figma.variables.setBoundVariableForPaint(solid("gray/025"), "color", background)];
     const nodes = collectOndaNodes([section]);
     for (const node of nodes) {
-      if (node.type === "FRAME" && surface) node.fills = [figma.variables.setBoundVariableForPaint(solid("gray/000"), "color", surface)];
+      const artifact = node.getPluginData("ondaFoundationArtifact");
+      if (node.type === "FRAME" && artifact !== "swatch" && surface) node.fills = [figma.variables.setBoundVariableForPaint(solid("gray/000"), "color", surface)];
       if ("strokes" in node && border && ((_a = node.strokes) == null ? void 0 : _a.length)) node.strokes = [figma.variables.setBoundVariableForPaint(solid("gray/200"), "color", border)];
       if (node.type === "TEXT") {
         const variable = /Untertitel|Fontstatus|Label/.test(node.name) ? muted : text;
         if (variable) node.fills = [figma.variables.setBoundVariableForPaint(solid(variable === muted ? "gray/500" : "gray/900"), "color", variable)];
       }
       if (node.type === "FRAME" && spacing) node.setBoundVariable("itemSpacing", spacing);
-      if (node.name.startsWith("Swatch / ") && node.type === "FRAME") {
-        const primitive = await localVariable(node.name.slice("Swatch / ".length), "Onda \xB7 Primitive");
-        if (primitive) node.fills = [figma.variables.setBoundVariableForPaint(node.fills[0], "color", primitive)];
-      }
-      if (node.name.startsWith("Radius / ") && node.type === "RECTANGLE") {
-        const radius = await localVariable(`radius/${node.cornerRadius === 0 ? "none" : node.cornerRadius === 4 ? "control" : node.cornerRadius === 6 ? "static" : "overlay"}`, "Onda \xB7 Dimension");
-        if (radius) for (const field of ["topLeftRadius", "topRightRadius", "bottomLeftRadius", "bottomRightRadius"]) node.setBoundVariable(field, radius);
-      }
+      if ("effects" in node && artifact !== "effect-style") node.effects = [];
       node.setPluginData("ondaFoundationBound", "true");
     }
   }
@@ -1141,35 +1237,60 @@
     await loadDecisionFonts(ledger.fontDecision);
     const variables = await createFoundationVariables();
     const styles = await createFoundationStyles(ledger.fontDecision);
-    const sectionResult = ensureSection(page, ledger, "01 \xB7 Foundations", 3e3);
+    const sectionResult = ensureSection(page, ledger, "01 \xB7 Foundations", 6400);
     const section = sectionResult.node;
+    resizeNode(section, SECTION_WIDTH, 6400);
     const doc = autoFrame(section, "Foundations / Dokumentation", { x: 80, y: 100, width: 1940, padding: 40, gap: 24, radius: 6 }).node;
+    doc.effects = [];
     heading(doc, "Foundations", ledger.fontDecision, "Monochrom \xB7 Radien 0/4/6/8 \xB7 ABC Diatype bevorzugt \xB7 Light und Dark als getrennte Single-Mode-Semantik");
     textNode(doc, "Foundations / Fontstatus", ledger.fontDecision.warning || "\u2713 ABC Diatype ist verf\xFCgbar.", ledger.fontDecision, {
       size: 15,
       weight: 700,
       width: 1800
     });
-    const palette = autoFrame(section, "Foundations / Graustufen", { x: 80, y: 620, width: 1940, direction: "HORIZONTAL", padding: 32, gap: 12, radius: 6 }).node;
+    const palette = autoFrame(section, "Foundations / Graustufen", { x: 80, y: 600, width: 1940, direction: "HORIZONTAL", padding: 32, gap: 12, radius: 6 }).node;
+    palette.effects = [];
     for (const name of Object.keys(PALETTE)) {
-      const swatch = autoFrame(palette, `Swatch / ${name}`, { width: 150, height: 160, padding: 12, gap: 8, fill: name, radius: 4 }).node;
-      swatch.fills = [solid(name)];
-      textNode(swatch, `Swatch / ${name} / Label`, name, ledger.fontDecision, { size: 12, weight: 500, dark: ["gray/700", "gray/900", "gray/1000"].includes(name), width: 120 });
+      ensureVariableSwatch(palette, "primitive", name, variables.variablesByKey.get(`Onda \xB7 Primitive\0${name}`), name, ledger.fontDecision);
     }
-    const type = autoFrame(section, "Foundations / Typografie", { x: 80, y: 1e3, width: 1940, padding: 32, gap: 20, radius: 6 }).node;
-    for (const scale of TYPE_SCALE) {
-      for (const weight of TYPE_WEIGHTS) {
-        textNode(type, `Typografie / ${scale.size} / ${weight}`, `${scale.size}px \xB7 ${weight} \xB7 Onda schreibt klar und ruhig.`, ledger.fontDecision, {
-          size: scale.size,
-          weight,
-          width: 1800
-        });
+    for (const [collectionName, layer, key, y] of [
+      ["Onda \xB7 Semantic \xB7 Light", "semantic-light", "light", 1050],
+      ["Onda \xB7 Semantic \xB7 Dark", "semantic-dark", "dark", 1500]
+    ]) {
+      const semantic = autoFrame(section, `Foundations / ${key === "light" ? "Semantic Light" : "Semantic Dark"}`, { x: 80, y, width: 1940, direction: "HORIZONTAL", padding: 32, gap: 12, radius: 6 }).node;
+      semantic.effects = [];
+      for (const role of SEMANTIC_COLOR_ROLES) {
+        ensureVariableSwatch(semantic, layer, role.name, variables.variablesByKey.get(`${collectionName}\0${role.name}`), role[key], ledger.fontDecision);
       }
     }
-    const radius = autoFrame(section, "Foundations / Radien", { x: 80, y: 2250, width: 1940, direction: "HORIZONTAL", padding: 32, gap: 20, radius: 6 }).node;
-    for (const token of RADIUS_TOKENS) {
-      ensureRadiusSample(radius, token);
+    const spacing = autoFrame(section, "Foundations / Spacing", { x: 80, y: 1950, width: 1940, direction: "HORIZONTAL", padding: 32, gap: 20, radius: 6 }).node;
+    spacing.effects = [];
+    for (const token of SPACING_TOKENS) ensureSpacingBar(spacing, token, variables.variablesByKey.get(`Onda \xB7 Dimension\0${token.name}`), ledger.fontDecision);
+    const type = autoFrame(section, "Foundations / Typografie", { x: 80, y: 2400, width: 1940, padding: 32, gap: 20, radius: 6 }).node;
+    type.effects = [];
+    for (const style of styles.textStyles) {
+      const [size, weight] = style.name.replace("Onda/Type/", "").split(" \xB7 ").map(Number);
+      const specimen = textNode(type, `Typografie / ${size} / ${weight}`, `${size}px \xB7 ${weight} \xB7 Onda schreibt klar und ruhig.`, ledger.fontDecision, {
+        size,
+        weight,
+        width: 1800
+      }).node;
+      await specimen.setTextStyleIdAsync(style.id);
+      specimen.setPluginData("ondaFoundationArtifact", "text-style");
+      specimen.setPluginData("ondaTextStyleName", style.name);
     }
+    const typographyVariables = autoFrame(section, "Foundations / Typography Variables", { x: 80, y: 3600, width: 1940, direction: "HORIZONTAL", padding: 32, gap: 20, radius: 6 }).node;
+    typographyVariables.effects = [];
+    for (const scale of TYPE_SCALE) textNode(typographyVariables, `Typography Variable / font-size/${scale.size}`, `font-size/${scale.size}`, ledger.fontDecision, { size: 12, width: 180 });
+    for (const weight of TYPE_WEIGHTS) textNode(typographyVariables, `Typography Variable / font-weight/${weight}`, `font-weight/${weight}`, ledger.fontDecision, { size: 12, weight, width: 180 });
+    const radius = autoFrame(section, "Foundations / Radien", { x: 80, y: 4050, width: 1940, direction: "HORIZONTAL", padding: 32, gap: 20, radius: 6 }).node;
+    radius.effects = [];
+    for (const token of RADIUS_TOKENS) {
+      ensureRadiusSample(radius, token, variables.variablesByKey.get(`Onda \xB7 Dimension\0${token.name}`));
+    }
+    const effects = autoFrame(section, "Foundations / Effects", { x: 80, y: 4500, width: 1940, direction: "HORIZONTAL", padding: 48, gap: 40, radius: 6 }).node;
+    effects.effects = [];
+    for (const style of styles.effectStyles) await ensureEffectStyleCard(effects, style, ledger.fontDecision);
     await bindFoundationArtifacts(section);
     return {
       sectionCreated: sectionResult.created,
@@ -1608,6 +1729,122 @@
     const undersizedHitTargets = allNodes.filter((node) => node.type === "INSTANCE").filter((node) => node.width < 44 || node.height < 44).map((node) => node.id);
     return { intersections, clearance, overflowNodes: [...new Set(overflowNodes)], undersizedHitTargets };
   }
+  function sameScopes(actual, expected) {
+    return Array.isArray(actual) && [...actual].sort().join("\0") === [...expected].sort().join("\0");
+  }
+  function paintIsBoundTo(node, variableId) {
+    return Array.isArray(node.fills) && node.fills.some((paint) => {
+      var _a, _b;
+      return ((_b = (_a = paint == null ? void 0 : paint.boundVariables) == null ? void 0 : _a.color) == null ? void 0 : _b.id) === variableId;
+    });
+  }
+  function fieldIsBoundTo(node, field, variableId) {
+    var _a, _b;
+    return ((_b = (_a = node.boundVariables) == null ? void 0 : _a[field]) == null ? void 0 : _b.id) === variableId;
+  }
+  async function collectFoundationEvidence(foundationSection) {
+    const collectionExpectations = FOUNDATION_EXPECTATIONS.collections;
+    const allCollections = await figma.variables.getLocalVariableCollectionsAsync();
+    const allVariables = await figma.variables.getLocalVariablesAsync();
+    const expectedNames = new Set(Object.keys(collectionExpectations));
+    const targetCollections = allCollections.filter((collection) => expectedNames.has(collection.name));
+    const targetCollectionIds = new Set(targetCollections.map((collection) => collection.id));
+    const targetVariables = allVariables.filter((variable) => targetCollectionIds.has(variable.variableCollectionId));
+    const collectionCount = Object.entries(collectionExpectations).filter(([name, expectation]) => {
+      const matching = targetCollections.filter((collection2) => collection2.name === name);
+      if (matching.length !== 1) return false;
+      const collection = matching[0];
+      return collection.modes.length === 1 && collection.modes[0].name === expectation.mode && targetVariables.filter((variable) => variable.variableCollectionId === collection.id).length === expectation.variableCount;
+    }).length;
+    const collectionByName = new Map(targetCollections.map((collection) => [collection.name, collection]));
+    const variableByKey = new Map(targetVariables.map((variable) => {
+      const collection = targetCollections.find((item) => item.id === variable.variableCollectionId);
+      return [`${collection == null ? void 0 : collection.name}\0${variable.name}`, variable];
+    }));
+    const specifications = [];
+    for (const name of Object.keys(PALETTE)) specifications.push(["Onda \xB7 Primitive", name, "COLOR", []]);
+    for (const role of SEMANTIC_COLOR_ROLES) {
+      specifications.push(["Onda \xB7 Semantic \xB7 Light", role.name, "COLOR", role.scopes]);
+      specifications.push(["Onda \xB7 Semantic \xB7 Dark", role.name, "COLOR", role.scopes]);
+    }
+    for (const token of SPACING_TOKENS) specifications.push(["Onda \xB7 Dimension", token.name, "FLOAT", ["GAP"]]);
+    for (const token of RADIUS_TOKENS) specifications.push(["Onda \xB7 Dimension", token.name, "FLOAT", ["CORNER_RADIUS"]]);
+    for (const scale of TYPE_SCALE) specifications.push(["Onda \xB7 Typography", `font-size/${scale.size}`, "FLOAT", ["FONT_SIZE"]]);
+    for (const weight of TYPE_WEIGHTS) specifications.push(["Onda \xB7 Typography", `font-weight/${weight}`, "FLOAT", ["FONT_WEIGHT"]]);
+    const invalidScopeCount = specifications.filter(([collectionName, name, type, scopes]) => {
+      const variable = variableByKey.get(`${collectionName}\0${name}`);
+      return !variable || variable.resolvedType !== type || !sameScopes(variable.scopes, scopes);
+    }).length;
+    const missingCodeSyntax = targetVariables.filter((variable) => {
+      var _a;
+      return !((_a = variable.codeSyntax) == null ? void 0 : _a.WEB);
+    }).length;
+    let brokenAliasCount = 0;
+    for (const [collectionName, key] of [["Onda \xB7 Semantic \xB7 Light", "light"], ["Onda \xB7 Semantic \xB7 Dark", "dark"]]) {
+      const collection = collectionByName.get(collectionName);
+      for (const role of SEMANTIC_COLOR_ROLES) {
+        const variable = variableByKey.get(`${collectionName}\0${role.name}`);
+        const expectedPrimitive = variableByKey.get(`Onda \xB7 Primitive\0${role[key]}`);
+        const value = collection && variable ? variable.valuesByMode[collection.modes[0].modeId] : null;
+        if ((value == null ? void 0 : value.type) !== "VARIABLE_ALIAS" || value.id !== (expectedPrimitive == null ? void 0 : expectedPrimitive.id)) brokenAliasCount += 1;
+      }
+    }
+    const nodes = foundationSection ? collectOndaNodes([foundationSection]) : [];
+    const artifacts = (kind) => nodes.filter((node) => node.getPluginData("ondaFoundationArtifact") === kind);
+    const swatches = artifacts("swatch");
+    const primitiveSwatches = swatches.filter((node) => node.getPluginData("ondaFoundationLayer") === "primitive").length;
+    const semanticLightSwatches = swatches.filter((node) => node.getPluginData("ondaFoundationLayer") === "semantic-light").length;
+    const semanticDarkSwatches = swatches.filter((node) => node.getPluginData("ondaFoundationLayer") === "semantic-dark").length;
+    const boundSwatches = swatches.filter((node) => paintIsBoundTo(node, node.getPluginData("ondaBoundVariableId"))).length;
+    const spacingBars = artifacts("spacing-bar");
+    const boundSpacingBars = spacingBars.filter((node) => fieldIsBoundTo(node, "width", node.getPluginData("ondaBoundVariableId"))).length;
+    const radiusSamples = artifacts("radius-sample");
+    const radiusRectangles = radiusSamples.filter((node) => node.type === "RECTANGLE");
+    const radiusEllipses = radiusSamples.filter((node) => node.type === "ELLIPSE").length;
+    const radiusFields = ["topLeftRadius", "topRightRadius", "bottomLeftRadius", "bottomRightRadius"];
+    const boundRadiusRectangles = radiusRectangles.filter((node) => radiusFields.every((field) => fieldIsBoundTo(node, field, node.getPluginData("ondaBoundVariableId")))).length;
+    const expectedTextStyleNames = TYPE_SCALE.flatMap((scale) => TYPE_WEIGHTS.map((weight) => `Onda/Type/${scale.size} \xB7 ${weight}`));
+    const localTextStyles = (await figma.getLocalTextStylesAsync()).filter((style) => style.name.startsWith("Onda/Type/"));
+    const textStyleByName = new Map(localTextStyles.map((style) => [style.name, style]));
+    const documentedTextStyles = new Set(artifacts("text-style").filter((node) => {
+      var _a;
+      const name = node.getPluginData("ondaTextStyleName");
+      return expectedTextStyleNames.includes(name) && node.textStyleId === ((_a = textStyleByName.get(name)) == null ? void 0 : _a.id);
+    }).map((node) => node.getPluginData("ondaTextStyleName"))).size;
+    const effectOrder = new Map(FOUNDATION_EXPECTATIONS.effectStyles.map((name, index) => [name, index]));
+    const localEffectStyles = (await figma.getLocalEffectStylesAsync()).filter((style) => style.name.startsWith("Onda/Shadow/")).sort((left, right) => {
+      var _a, _b;
+      return ((_a = effectOrder.get(left.name)) != null ? _a : 99) - ((_b = effectOrder.get(right.name)) != null ? _b : 99);
+    });
+    const effectStyleByName = new Map(localEffectStyles.map((style) => [style.name, style]));
+    const documentedEffectStyles = new Set(artifacts("effect-style").filter((node) => {
+      var _a;
+      const name = node.getPluginData("ondaEffectStyleName");
+      return FOUNDATION_EXPECTATIONS.effectStyles.includes(name) && node.effectStyleId === ((_a = effectStyleByName.get(name)) == null ? void 0 : _a.id);
+    }).map((node) => node.getPluginData("ondaEffectStyleName"))).size;
+    const unexpectedShadowNodes = nodes.filter((node) => "effects" in node && Array.isArray(node.effects) && node.effects.length > 0).filter((node) => node.getPluginData("ondaFoundationArtifact") !== "effect-style").map((node) => node.name);
+    return {
+      collectionCount,
+      variableCount: targetVariables.length,
+      missingCodeSyntax,
+      invalidScopeCount,
+      brokenAliasCount,
+      primitiveSwatches,
+      semanticLightSwatches,
+      semanticDarkSwatches,
+      boundSwatches,
+      spacingBars: spacingBars.length,
+      boundSpacingBars,
+      radiusSamples: radiusSamples.length,
+      boundRadiusRectangles,
+      radiusEllipses,
+      textStyleCount: localTextStyles.length,
+      documentedTextStyles,
+      effectStyleNames: localEffectStyles.map((style) => style.name),
+      documentedEffectStyles,
+      unexpectedShadowNodes
+    };
+  }
   async function runVerify() {
     const inspection = await inspectCurrentTarget();
     const page = figma.currentPage;
@@ -1648,6 +1885,7 @@
     const radii = radiiFromNodes(allNodes);
     const foundationSection = sections.find((node) => node.name === "01 \xB7 Foundations");
     const foundationNodes = foundationSection ? collectOndaNodes([foundationSection]) : [];
+    const foundationEvidence = await collectFoundationEvidence(foundationSection);
     const effectsValid = allNodes.every((node) => !("effects" in node) || !Array.isArray(node.effects) || node.effects.every((effect) => !effect.color || isGrayColor(effect.color)));
     const fontStylesValid = TYPE_WEIGHTS.every((weight) => {
       var _a, _b;
@@ -1673,13 +1911,13 @@
       componentSets,
       instanceCount: allNodes.filter((node) => node.type === "INSTANCE").length,
       repeatedScreenInstanceCount: allNodes.filter((node) => node.type === "INSTANCE" && node.getPluginData("ondaRepeatedScreenInstance") === "true").length,
-      foundation: {
+      foundation: __spreadValues({
         paintsValid: paints.every(isGrayColor),
         radiiValid: radii.every((radius) => isValidRadius(radius.value, radius.geometry)),
         effectsValid,
         fontsValid: fontStylesValid,
         docsBound: foundationNodes.length > 0 && foundationNodes.every((node) => node.getPluginData("ondaFoundationBound") === "true")
-      }
+      }, foundationEvidence)
     }, geometry), {
       reactionCount,
       requiredReactionCount: 4,

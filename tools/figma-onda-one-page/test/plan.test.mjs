@@ -176,6 +176,24 @@ test('palette is grayscale and radii are restricted with 999 reserved for circle
   assert.equal(isValidRadius(10, 'RECTANGLE'), false)
 })
 
+test('foundation contract fixes collections, variable counts, docs, and allowed shadow styles', async () => {
+  const [{ FOUNDATION_EXPECTATIONS }] = await loadModules()
+  assert.deepEqual(FOUNDATION_EXPECTATIONS, {
+    collections: {
+      'Onda · Primitive': { mode: 'Value', variableCount: 10 },
+      'Onda · Dimension': { mode: 'Value', variableCount: 12 },
+      'Onda · Semantic · Light': { mode: 'Light', variableCount: 7 },
+      'Onda · Semantic · Dark': { mode: 'Dark', variableCount: 7 },
+      'Onda · Typography': { mode: 'Value', variableCount: 7 },
+    },
+    swatches: { primitive: 10, semanticLight: 7, semanticDark: 7, bound: 24 },
+    spacingBars: { total: 7, bound: 7 },
+    radiusSamples: { total: 5, boundRectangles: 4, ellipses: 1 },
+    textStyles: 12,
+    effectStyles: ['Onda/Shadow/Floating', 'Onda/Shadow/Overlay'],
+  })
+})
+
 test('origin is rounded rightward once and a persisted origin always wins', async () => {
   const [, { computeOndaOrigin }] = await loadModules()
   const children = [
