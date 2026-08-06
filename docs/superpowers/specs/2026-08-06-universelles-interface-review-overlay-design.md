@@ -2,7 +2,7 @@
 artifact: design-specification
 version: "1.0"
 created: 2026-08-06
-status: draft-for-review
+status: approved
 ---
 
 # Universelles Interface-Review-Overlay
@@ -82,7 +82,7 @@ Die physische Paketgrenze ist absichtlich früh vorhanden. Ein späteres Herausl
 
 Der Browser-Kern beobachtet Zeiger, Tastatur, Scroll-, Resize- und Navigationsereignisse. Er entscheidet ausschließlich über Auswahl und Darstellung; Dateizugriff und Quellcodeänderungen gehören nicht zu seinen Aufgaben.
 
-Seine sichtbare Oberfläche liegt in einem geschlossenen Shadow DOM. App-Styles dürfen Panel, Auswahlrahmen, Pins oder Fokuszustände nicht verändern. Umgekehrt dürfen Overlay-Styles nicht in die App gelangen. Auswahlrahmen und Pins werden in einer separaten festen Ebene gezeichnet und anhand von `getBoundingClientRect()` aktualisiert.
+Seine sichtbare Oberfläche liegt in einem offenen Shadow DOM. App-Styles dürfen Panel, Auswahlrahmen, Pins oder Fokuszustände nicht verändern. Umgekehrt dürfen Overlay-Styles nicht in die App gelangen. Der offene Root ist keine öffentliche Produkt-API, ermöglicht aber zuverlässige Playwright- und Barrierefreiheitsprüfungen; ein geschlossener Root würde keine zusätzliche CSS-Isolation bieten. Auswahlrahmen und Pins werden in einer separaten festen Ebene gezeichnet und anhand von `getBoundingClientRect()` aktualisiert.
 
 Das Overlay selbst, Skripte, Styles, nicht sichtbare Knoten, `head`, `body` und explizit ausgeschlossene Bereiche sind nicht auswählbar.
 
