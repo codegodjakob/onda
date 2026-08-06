@@ -72,8 +72,13 @@ function fillBindings(...variableIds) {
   return [{ index: 0, type: 'SOLID', variableIds }]
 }
 
-function textRanges(charactersLength, variableIdValue) {
-  return [{ start: 0, end: charactersLength, fills: fillBindings(variableIdValue) }]
+function textRanges(charactersLength, variableIdValue, fontSizeId, fontWeightId) {
+  return [{
+    start: 0,
+    end: charactersLength,
+    fills: fillBindings(variableIdValue),
+    fieldVariableIds: { fontSize: [fontSizeId], fontWeight: [fontWeightId] },
+  }]
 }
 
 export function createValidFoundationEvidence() {
@@ -126,7 +131,12 @@ export function createValidFoundationEvidence() {
       labelName: `Swatch / ${name} / Label`,
       labelFills: fillBindings(labelVariableId),
       labelCharactersLength: name.length,
-      labelTextRanges: textRanges(name.length, labelVariableId),
+      labelTextRanges: textRanges(
+        name.length,
+        labelVariableId,
+        variableId('Onda · Typography', 'font-size/12'),
+        variableId('Onda · Typography', 'font-weight/500'),
+      ),
     })
   }
   for (const [collectionName, layer, key, parentName] of [
@@ -145,7 +155,12 @@ export function createValidFoundationEvidence() {
         labelName: `${name} / Label`,
         labelFills: fillBindings(labelVariableId),
         labelCharactersLength: role.name.length,
-        labelTextRanges: textRanges(role.name.length, labelVariableId),
+        labelTextRanges: textRanges(
+          role.name.length,
+          labelVariableId,
+          variableId('Onda · Typography', 'font-size/12'),
+          variableId('Onda · Typography', 'font-weight/500'),
+        ),
       })
     }
   }
@@ -216,7 +231,12 @@ export function createValidFoundationEvidence() {
       fieldVariableIds: structuredClone(textStyles[index].fieldVariableIds),
       fills: fillBindings(textVariableId),
       charactersLength,
-      textRanges: textRanges(charactersLength, textVariableId),
+      textRanges: textRanges(
+        charactersLength,
+        textVariableId,
+        variableId('Onda · Typography', `font-size/${definition.size}`),
+        variableId('Onda · Typography', `font-weight/${definition.weight}`),
+      ),
     }
   })
   const effectStyles = [{

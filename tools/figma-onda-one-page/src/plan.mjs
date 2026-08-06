@@ -166,11 +166,34 @@ export function collectFieldVariableIds(entity, fields) {
 
 export function collectTextRangeBindings(textNode) {
   if (!textNode || typeof textNode.getStyledTextSegments !== 'function') return []
-  return textNode.getStyledTextSegments(['fills']).map(segment => ({
+  return textNode.getStyledTextSegments(['fills', 'boundVariables']).map(segment => ({
     start: segment.start,
     end: segment.end,
     fills: collectVisibleFillBindings(segment.fills),
+    fieldVariableIds: collectFieldVariableIds(segment, ['fontSize', 'fontWeight']),
   }))
+}
+
+export function validateTextRangeBindingCoverage(ranges, {
+  charactersLength,
+  fillVariableId,
+  fontSizeVariableId,
+  fontWeightVariableId,
+} = {}) {
+  if (!Number.isInteger(charactersLength) || charactersLength <= 0 || !Array.isArray(ranges) || ranges.length === 0) return false
+  let cursor = 0
+  for (const range of ranges) {
+    if (!Number.isInteger(range?.start)
+      || !Number.isInteger(range?.end)
+      || range.start !== cursor
+      || range.end <= range.start
+      || range.end > charactersLength
+      || !exactFillBindings(range.fills, [fillVariableId])
+      || !sameArray(range.fieldVariableIds?.fontSize, [fontSizeVariableId])
+      || !sameArray(range.fieldVariableIds?.fontWeight, [fontWeightVariableId])) return false
+    cursor = range.end
+  }
+  return cursor === charactersLength
 }
 
 export function validateFoundationMutationInventory(inventory = {}) {
@@ -268,14 +291,6 @@ function exactFillBindings(actual, variableIds) {
     && sameArray(actual[0]?.variableIds, variableIds)
 }
 
-function exactTextRangeBindings(actual, charactersLength, variableIds) {
-  return Array.isArray(actual)
-    && actual.length === 1
-    && actual[0]?.start === 0
-    && actual[0]?.end === charactersLength
-    && exactFillBindings(actual[0]?.fills, variableIds)
-}
-
 function strictSingle(items, predicate, errors, label) {
   const matching = items.filter(predicate)
   if (matching.length !== 1) errors.push(`${label}: erwartet 1, gefunden ${matching.length}`)
@@ -363,7 +378,12 @@ export function validateFoundationEvidence(evidence = {}) {
     if (!exactFillBindings(swatch.fills, [expected.variableId])) errors.push(`Swatch ${expected.name}: fill binding`)
     if (swatch.labelName !== expected.labelName
       || !exactFillBindings(swatch.labelFills, [expected.labelVariableId])
-      || !exactTextRangeBindings(swatch.labelTextRanges, swatch.labelCharactersLength, [expected.labelVariableId])) errors.push(`Swatch ${expected.name}: label binding`)
+      || !validateTextRangeBindingCoverage(swatch.labelTextRanges, {
+        charactersLength: swatch.labelCharactersLength,
+        fillVariableId: expected.labelVariableId,
+        fontSizeVariableId: variableId('Onda · Typography', 'font-size/12'),
+        fontWeightVariableId: variableId('Onda · Typography', 'font-weight/500'),
+      })) errors.push(`Swatch ${expected.name}: label binding`)
   }
 
   const spacingBars = Array.isArray(evidence.spacingBars) ? evidence.spacingBars : []
@@ -421,7 +441,12 @@ export function validateFoundationEvidence(evidence = {}) {
       || !sameArray(specimen.fieldVariableIds?.fontSize, [sizeId])
       || !sameArray(specimen.fieldVariableIds?.fontWeight, [weightId])
       || !exactFillBindings(specimen.fills, [textVariableId])
-      || !exactTextRangeBindings(specimen.textRanges, specimen.charactersLength, [textVariableId]))) errors.push(`Text specimen ${definition.role}: link`)
+      || !validateTextRangeBindingCoverage(specimen.textRanges, {
+        charactersLength: specimen.charactersLength,
+        fillVariableId: textVariableId,
+        fontSizeVariableId: sizeId,
+        fontWeightVariableId: weightId,
+      }))) errors.push(`Text specimen ${definition.role}: link`)
   }
 
   const effectStyles = Array.isArray(evidence.effectStyles) ? evidence.effectStyles : []

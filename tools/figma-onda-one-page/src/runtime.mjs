@@ -638,7 +638,7 @@ async function createFoundationStyles(decision, variablesByKey) {
   return { createdTextStyleIds: createdText, createdEffectStyleIds: createdEffects, textStyles, effectStyles }
 }
 
-function ensureVariableSwatch(parent, layer, name, variable, fallback, decision, labelVariable) {
+function ensureVariableSwatch(parent, layer, name, variable, fallback, decision, labelVariable, fontSizeVariable, fontWeightVariable) {
   const width = layer === 'primitive' ? 160 : 220
   const swatchName = layer === 'primitive' ? `Swatch / ${name}` : `Swatch / ${layer} / ${name}`
   const swatch = autoFrame(parent, swatchName, {
@@ -653,6 +653,8 @@ function ensureVariableSwatch(parent, layer, name, variable, fallback, decision,
     size: 12, weight: 500, dark: ['gray/700', 'gray/900', 'gray/1000'].includes(fallback), width: width - 24,
   }).node
   label.fills = [figma.variables.setBoundVariableForPaint(label.fills[0], 'color', labelVariable)]
+  label.setBoundVariable('fontSize', fontSizeVariable)
+  label.setBoundVariable('fontWeight', fontWeightVariable)
   label.setPluginData('ondaFoundationTextVariableId', labelVariable.id)
   return swatch
 }
@@ -757,10 +759,12 @@ async function runFoundations(page, ledger) {
   })
   const palette = autoFrame(section, 'Foundations / Graustufen', { x: 80, y: 600, width: 1940, direction: 'HORIZONTAL', padding: 32, gap: 12, radius: 6 }).node
   palette.effects = []
+  const labelFontSizeVariable = variables.variablesByKey.get('Onda · Typography\u0000font-size/12')
+  const labelFontWeightVariable = variables.variablesByKey.get('Onda · Typography\u0000font-weight/500')
   for (const name of Object.keys(PALETTE)) {
     const labelToken = foundationSwatchLabelToken('primitive', name)
     const labelVariable = variables.variablesByKey.get(`${labelToken.collectionName}\u0000${labelToken.variableName}`)
-    ensureVariableSwatch(palette, 'primitive', name, variables.variablesByKey.get(`Onda · Primitive\u0000${name}`), name, ledger.fontDecision, labelVariable)
+    ensureVariableSwatch(palette, 'primitive', name, variables.variablesByKey.get(`Onda · Primitive\u0000${name}`), name, ledger.fontDecision, labelVariable, labelFontSizeVariable, labelFontWeightVariable)
   }
   for (const [collectionName, layer, key, y] of [
     ['Onda · Semantic · Light', 'semantic-light', 'light', 1050],
@@ -771,7 +775,7 @@ async function runFoundations(page, ledger) {
     for (const role of SEMANTIC_COLOR_ROLES) {
       const labelToken = foundationSwatchLabelToken(layer, role[key])
       const labelVariable = variables.variablesByKey.get(`${labelToken.collectionName}\u0000${labelToken.variableName}`)
-      ensureVariableSwatch(semantic, layer, role.name, variables.variablesByKey.get(`${collectionName}\u0000${role.name}`), role[key], ledger.fontDecision, labelVariable)
+      ensureVariableSwatch(semantic, layer, role.name, variables.variablesByKey.get(`${collectionName}\u0000${role.name}`), role[key], ledger.fontDecision, labelVariable, labelFontSizeVariable, labelFontWeightVariable)
     }
   }
   const spacing = autoFrame(section, 'Foundations / Spacing', { x: 80, y: 1950, width: 1940, direction: 'HORIZONTAL', padding: 32, gap: 20, radius: 6 }).node

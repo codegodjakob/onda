@@ -129,12 +129,102 @@ test('pure binding collectors preserve every visible fill, duplicate ID, unbound
     ],
   }
   assert.deepEqual(plan.collectTextRangeBindings(textNode), [
-    { start: 0, end: 4, fills: [{ index: 0, type: 'SOLID', variableIds: ['variable:correct'] }] },
+    { start: 0, end: 4, fills: [{ index: 0, type: 'SOLID', variableIds: ['variable:correct'] }], fieldVariableIds: { fontSize: [], fontWeight: [] } },
     { start: 4, end: 8, fills: [
       { index: 0, type: 'SOLID', variableIds: ['variable:correct', 'variable:wrong'] },
       { index: 1, type: 'SOLID', variableIds: [] },
-    ] },
+    ], fieldVariableIds: { fontSize: [], fontWeight: [] } },
   ])
+})
+
+function twoBoundTextSegments() {
+  const fill = [{ index: 0, type: 'SOLID', variableIds: ['variable:text'] }]
+  return [
+    { start: 0, end: 5, fills: structuredClone(fill), fieldVariableIds: { fontSize: ['variable:size'], fontWeight: ['variable:weight'] } },
+    { start: 5, end: 10, fills: structuredClone(fill), fieldVariableIds: { fontSize: ['variable:size'], fontWeight: ['variable:weight'] } },
+  ]
+}
+
+test('text segment collector preserves fontSize and fontWeight aliases for every segment including empty and duplicate arrays', () => {
+  const node = {
+    getStyledTextSegments: fields => {
+      assert.deepEqual(fields, ['fills', 'boundVariables'])
+      return [
+        {
+          start: 0, end: 5,
+          fills: [{ type: 'SOLID', boundVariables: { color: { id: 'variable:text' } } }],
+          boundVariables: { fontSize: { id: 'variable:size' }, fontWeight: { id: 'variable:weight' } },
+        },
+        {
+          start: 5, end: 10,
+          fills: [{ type: 'SOLID', boundVariables: { color: { id: 'variable:text' } } }],
+          boundVariables: { fontSize: [], fontWeight: [{ id: 'variable:weight' }, { id: 'variable:weight' }] },
+        },
+      ]
+    },
+  }
+  assert.deepEqual(plan.collectTextRangeBindings(node), [
+    {
+      start: 0, end: 5,
+      fills: [{ index: 0, type: 'SOLID', variableIds: ['variable:text'] }],
+      fieldVariableIds: { fontSize: ['variable:size'], fontWeight: ['variable:weight'] },
+    },
+    {
+      start: 5, end: 10,
+      fills: [{ index: 0, type: 'SOLID', variableIds: ['variable:text'] }],
+      fieldVariableIds: { fontSize: [], fontWeight: ['variable:weight', 'variable:weight'] },
+    },
+  ])
+})
+
+test('pure text coverage validator accepts contiguous complete multi-segment bindings', () => {
+  assert.equal(typeof plan.validateTextRangeBindingCoverage, 'function')
+  assert.equal(plan.validateTextRangeBindingCoverage(twoBoundTextSegments(), {
+    charactersLength: 10,
+    fillVariableId: 'variable:text',
+    fontSizeVariableId: 'variable:size',
+    fontWeightVariableId: 'variable:weight',
+  }), true)
+})
+
+test('pure text coverage validator rejects unbound, wrong, duplicate, gap, overlap, zero-length, and extra second ranges', () => {
+  assert.equal(typeof plan.validateTextRangeBindingCoverage, 'function')
+  const mutations = [
+    value => { value[1].fieldVariableIds.fontSize = [] },
+    value => { value[1].fieldVariableIds.fontWeight = [] },
+    value => { value[1].fieldVariableIds.fontSize[0] = 'variable:wrong' },
+    value => { value[1].fieldVariableIds.fontWeight[0] = 'variable:wrong' },
+    value => { value[1].fieldVariableIds.fontSize.push('variable:size') },
+    value => { value[1].fieldVariableIds.fontWeight.push('variable:weight') },
+    value => { value[1].start = 6 },
+    value => { value[1].start = 4 },
+    value => { value[1].end = value[1].start },
+    value => { value.push({ ...structuredClone(value[1]), start: 10, end: 11 }) },
+  ]
+  for (const mutate of mutations) {
+    const ranges = twoBoundTextSegments()
+    mutate(ranges)
+    assert.equal(plan.validateTextRangeBindingCoverage(ranges, {
+      charactersLength: 10,
+      fillVariableId: 'variable:text',
+      fontSizeVariableId: 'variable:size',
+      fontWeightVariableId: 'variable:weight',
+    }), false)
+  }
+})
+
+test('strict foundation evidence accepts correct multi-segment aliases and rejects an unbound second half', () => {
+  const evidence = createValidFoundationEvidence()
+  const specimen = evidence.textSpecimens[0]
+  const original = specimen.textRanges[0]
+  const midpoint = Math.floor(specimen.charactersLength / 2)
+  specimen.textRanges = [
+    { ...structuredClone(original), start: 0, end: midpoint },
+    { ...structuredClone(original), start: midpoint, end: specimen.charactersLength },
+  ]
+  assert.equal(plan.validateFoundationEvidence(evidence).valid, true)
+  specimen.textRanges[1].fieldVariableIds.fontSize = []
+  assert.equal(plan.validateFoundationEvidence(evidence).valid, false)
 })
 
 test('strict validator rejects complete-cardinality attacks instead of accepting the first correct binding', () => {

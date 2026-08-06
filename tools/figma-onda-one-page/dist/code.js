@@ -467,11 +467,27 @@
   }
   function collectTextRangeBindings(textNode2) {
     if (!textNode2 || typeof textNode2.getStyledTextSegments !== "function") return [];
-    return textNode2.getStyledTextSegments(["fills"]).map((segment) => ({
+    return textNode2.getStyledTextSegments(["fills", "boundVariables"]).map((segment) => ({
       start: segment.start,
       end: segment.end,
-      fills: collectVisibleFillBindings(segment.fills)
+      fills: collectVisibleFillBindings(segment.fills),
+      fieldVariableIds: collectFieldVariableIds(segment, ["fontSize", "fontWeight"])
     }));
+  }
+  function validateTextRangeBindingCoverage(ranges, {
+    charactersLength,
+    fillVariableId,
+    fontSizeVariableId,
+    fontWeightVariableId
+  } = {}) {
+    var _a, _b;
+    if (!Number.isInteger(charactersLength) || charactersLength <= 0 || !Array.isArray(ranges) || ranges.length === 0) return false;
+    let cursor = 0;
+    for (const range of ranges) {
+      if (!Number.isInteger(range == null ? void 0 : range.start) || !Number.isInteger(range == null ? void 0 : range.end) || range.start !== cursor || range.end <= range.start || range.end > charactersLength || !exactFillBindings(range.fills, [fillVariableId]) || !sameArray((_a = range.fieldVariableIds) == null ? void 0 : _a.fontSize, [fontSizeVariableId]) || !sameArray((_b = range.fieldVariableIds) == null ? void 0 : _b.fontWeight, [fontWeightVariableId])) return false;
+      cursor = range.end;
+    }
+    return cursor === charactersLength;
   }
   function validateFoundationMutationInventory(inventory = {}) {
     var _a;
@@ -550,10 +566,6 @@
   function exactFillBindings(actual, variableIds) {
     var _a, _b, _c;
     return Array.isArray(actual) && actual.length === 1 && ((_a = actual[0]) == null ? void 0 : _a.index) === 0 && ((_b = actual[0]) == null ? void 0 : _b.type) === "SOLID" && sameArray((_c = actual[0]) == null ? void 0 : _c.variableIds, variableIds);
-  }
-  function exactTextRangeBindings(actual, charactersLength, variableIds) {
-    var _a, _b, _c;
-    return Array.isArray(actual) && actual.length === 1 && ((_a = actual[0]) == null ? void 0 : _a.start) === 0 && ((_b = actual[0]) == null ? void 0 : _b.end) === charactersLength && exactFillBindings((_c = actual[0]) == null ? void 0 : _c.fills, variableIds);
   }
   function strictSingle(items, predicate, errors, label) {
     const matching = items.filter(predicate);
@@ -639,7 +651,12 @@
       if (!swatch) continue;
       if (swatch.type !== "FRAME" || swatch.parentName !== expected.parentName) errors.push(`Swatch ${expected.name}: structure`);
       if (!exactFillBindings(swatch.fills, [expected.variableId])) errors.push(`Swatch ${expected.name}: fill binding`);
-      if (swatch.labelName !== expected.labelName || !exactFillBindings(swatch.labelFills, [expected.labelVariableId]) || !exactTextRangeBindings(swatch.labelTextRanges, swatch.labelCharactersLength, [expected.labelVariableId])) errors.push(`Swatch ${expected.name}: label binding`);
+      if (swatch.labelName !== expected.labelName || !exactFillBindings(swatch.labelFills, [expected.labelVariableId]) || !validateTextRangeBindingCoverage(swatch.labelTextRanges, {
+        charactersLength: swatch.labelCharactersLength,
+        fillVariableId: expected.labelVariableId,
+        fontSizeVariableId: variableId("Onda \xB7 Typography", "font-size/12"),
+        fontWeightVariableId: variableId("Onda \xB7 Typography", "font-weight/500")
+      })) errors.push(`Swatch ${expected.name}: label binding`);
     }
     const spacingBars = Array.isArray(evidence.spacingBars) ? evidence.spacingBars : [];
     if (spacingBars.length !== SPACING_TOKENS.length) errors.push(`Spacing: erwartet ${SPACING_TOKENS.length}, gefunden ${spacingBars.length}`);
@@ -691,7 +708,12 @@
       if (((_p = style.letterSpacing) == null ? void 0 : _p.unit) !== "PIXELS" || ((_q = style.letterSpacing) == null ? void 0 : _q.value) !== 0 || style.textCase !== "ORIGINAL" || style.textDecoration !== "NONE") errors.push(`Text style ${definition2.name}: properties`);
       if (!sameArray((_r = style.fieldVariableIds) == null ? void 0 : _r.fontSize, [sizeId]) || !sameArray((_s = style.fieldVariableIds) == null ? void 0 : _s.fontWeight, [weightId])) errors.push(`Text style ${definition2.name}: variable mapping`);
       const textVariableId = variableId("Onda \xB7 Semantic \xB7 Light", "color/text");
-      if (specimen && (specimen.type !== "TEXT" || specimen.parentName !== "Foundations / Typografie" || specimen.textStyleId !== style.id || !sameArray((_t = specimen.fieldVariableIds) == null ? void 0 : _t.fontSize, [sizeId]) || !sameArray((_u = specimen.fieldVariableIds) == null ? void 0 : _u.fontWeight, [weightId]) || !exactFillBindings(specimen.fills, [textVariableId]) || !exactTextRangeBindings(specimen.textRanges, specimen.charactersLength, [textVariableId]))) errors.push(`Text specimen ${definition2.role}: link`);
+      if (specimen && (specimen.type !== "TEXT" || specimen.parentName !== "Foundations / Typografie" || specimen.textStyleId !== style.id || !sameArray((_t = specimen.fieldVariableIds) == null ? void 0 : _t.fontSize, [sizeId]) || !sameArray((_u = specimen.fieldVariableIds) == null ? void 0 : _u.fontWeight, [weightId]) || !exactFillBindings(specimen.fills, [textVariableId]) || !validateTextRangeBindingCoverage(specimen.textRanges, {
+        charactersLength: specimen.charactersLength,
+        fillVariableId: textVariableId,
+        fontSizeVariableId: sizeId,
+        fontWeightVariableId: weightId
+      }))) errors.push(`Text specimen ${definition2.role}: link`);
     }
     const effectStyles = Array.isArray(evidence.effectStyles) ? evidence.effectStyles : [];
     const effectConsumers = Array.isArray(evidence.effectConsumers) ? evidence.effectConsumers : [];
@@ -1550,7 +1572,7 @@ ${result.errors.join("\n")}`);
     }
     return { createdTextStyleIds: createdText, createdEffectStyleIds: createdEffects, textStyles, effectStyles };
   }
-  function ensureVariableSwatch(parent, layer, name, variable, fallback, decision, labelVariable) {
+  function ensureVariableSwatch(parent, layer, name, variable, fallback, decision, labelVariable, fontSizeVariable, fontWeightVariable) {
     const width = layer === "primitive" ? 160 : 220;
     const swatchName = layer === "primitive" ? `Swatch / ${name}` : `Swatch / ${layer} / ${name}`;
     const swatch = autoFrame(parent, swatchName, {
@@ -1573,6 +1595,8 @@ ${result.errors.join("\n")}`);
       width: width - 24
     }).node;
     label.fills = [figma.variables.setBoundVariableForPaint(label.fills[0], "color", labelVariable)];
+    label.setBoundVariable("fontSize", fontSizeVariable);
+    label.setBoundVariable("fontWeight", fontWeightVariable);
     label.setPluginData("ondaFoundationTextVariableId", labelVariable.id);
     return swatch;
   }
@@ -1680,10 +1704,12 @@ ${result.errors.join("\n")}`);
     });
     const palette = autoFrame(section, "Foundations / Graustufen", { x: 80, y: 600, width: 1940, direction: "HORIZONTAL", padding: 32, gap: 12, radius: 6 }).node;
     palette.effects = [];
+    const labelFontSizeVariable = variables.variablesByKey.get("Onda \xB7 Typography\0font-size/12");
+    const labelFontWeightVariable = variables.variablesByKey.get("Onda \xB7 Typography\0font-weight/500");
     for (const name of Object.keys(PALETTE)) {
       const labelToken = foundationSwatchLabelToken("primitive", name);
       const labelVariable = variables.variablesByKey.get(`${labelToken.collectionName}\0${labelToken.variableName}`);
-      ensureVariableSwatch(palette, "primitive", name, variables.variablesByKey.get(`Onda \xB7 Primitive\0${name}`), name, ledger.fontDecision, labelVariable);
+      ensureVariableSwatch(palette, "primitive", name, variables.variablesByKey.get(`Onda \xB7 Primitive\0${name}`), name, ledger.fontDecision, labelVariable, labelFontSizeVariable, labelFontWeightVariable);
     }
     for (const [collectionName, layer, key, y] of [
       ["Onda \xB7 Semantic \xB7 Light", "semantic-light", "light", 1050],
@@ -1694,7 +1720,7 @@ ${result.errors.join("\n")}`);
       for (const role of SEMANTIC_COLOR_ROLES) {
         const labelToken = foundationSwatchLabelToken(layer, role[key]);
         const labelVariable = variables.variablesByKey.get(`${labelToken.collectionName}\0${labelToken.variableName}`);
-        ensureVariableSwatch(semantic, layer, role.name, variables.variablesByKey.get(`${collectionName}\0${role.name}`), role[key], ledger.fontDecision, labelVariable);
+        ensureVariableSwatch(semantic, layer, role.name, variables.variablesByKey.get(`${collectionName}\0${role.name}`), role[key], ledger.fontDecision, labelVariable, labelFontSizeVariable, labelFontWeightVariable);
       }
     }
     const spacing = autoFrame(section, "Foundations / Spacing", { x: 80, y: 1950, width: 1940, direction: "HORIZONTAL", padding: 32, gap: 20, radius: 6 }).node;
