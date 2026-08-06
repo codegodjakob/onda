@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import * as planModule from '../src/plan.mjs'
 import {
   buildBaselineShards,
   buildVerificationReport,
@@ -17,6 +18,8 @@ import {
   DIALOG_FAMILIES,
   SECTION_DEFINITIONS,
 } from '../src/definitions.mjs'
+
+const { foundationSwatchLabelToken, selectOwnedEntity } = planModule
 
 const ROOT = resolve(import.meta.dirname, '..')
 
@@ -114,8 +117,8 @@ function validSnapshot() {
       primitiveSwatches: 10, semanticLightSwatches: 7, semanticDarkSwatches: 7, boundSwatches: 24,
       spacingBars: 7, boundSpacingBars: 7,
       radiusSamples: 5, boundRadiusRectangles: 4, radiusEllipses: 1,
-      textStyleCount: 12, documentedTextStyles: 12,
-      effectStyleNames: ['Onda/Shadow/Floating', 'Onda/Shadow/Overlay'], documentedEffectStyles: 2,
+      textStyleCount: 5, documentedTextStyles: 5,
+      effectStyleNames: ['Onda/Shadow/Overlay'], documentedEffectStyles: 1,
       unexpectedShadowNodes: [],
     },
     intersections: [],
@@ -210,6 +213,69 @@ test('foundation documentation uses real variable bindings and update-or-create 
   assert.match(runtime, /doc\.effects\s*=\s*\[\]/)
 })
 
+for (const kind of ['VariableCollection', 'Variable', 'TextStyle', 'EffectStyle']) {
+  test(`unowned ${kind} name collision aborts instead of reusing it`, () => {
+    assert.equal(typeof selectOwnedEntity, 'function')
+    const collision = Object.freeze({ id: `${kind}-foreign`, name: 'Onda name', owner: '' })
+    assert.throws(() => selectOwnedEntity([collision], 'Onda name', kind), new RegExp(`Ungeschützte ${kind}-Namenskollision`))
+    assert.deepEqual(collision, { id: `${kind}-foreign`, name: 'Onda name', owner: '' })
+  })
+}
+
+test('owned foundation entities are reusable and duplicate names abort', () => {
+  assert.equal(typeof selectOwnedEntity, 'function')
+  const owned = { id: 'owned', name: 'Onda name', owner: 'onda-one-page' }
+  assert.equal(selectOwnedEntity([owned], 'Onda name', 'Variable'), owned)
+  assert.equal(selectOwnedEntity([], 'Onda name', 'Variable'), null)
+  assert.throws(() => selectOwnedEntity([owned, { ...owned, id: 'duplicate' }], 'Onda name', 'Variable'), /Mehrdeutige Variable-Namenskollision/)
+})
+
+test('dark semantic swatch labels use only Dark semantic text variables', () => {
+  assert.equal(typeof foundationSwatchLabelToken, 'function')
+  assert.deepEqual(foundationSwatchLabelToken('semantic-dark', 'gray/1000'), {
+    collectionName: 'Onda · Semantic · Dark', variableName: 'color/text',
+  })
+  assert.deepEqual(foundationSwatchLabelToken('semantic-dark', 'gray/900'), {
+    collectionName: 'Onda · Semantic · Dark', variableName: 'color/text',
+  })
+  assert.deepEqual(foundationSwatchLabelToken('semantic-dark', 'gray/000'), {
+    collectionName: 'Onda · Semantic · Dark', variableName: 'color/on-inverted',
+  })
+  assert.deepEqual(foundationSwatchLabelToken('semantic-dark', 'gray/300'), {
+    collectionName: 'Onda · Semantic · Dark', variableName: 'color/on-inverted',
+  })
+})
+
+test('primitive and Light semantic swatch labels keep readable Light semantic contrast', () => {
+  assert.deepEqual(foundationSwatchLabelToken('primitive', 'gray/1000'), {
+    collectionName: 'Onda · Semantic · Light', variableName: 'color/on-inverted',
+  })
+  assert.deepEqual(foundationSwatchLabelToken('semantic-light', 'gray/000'), {
+    collectionName: 'Onda · Semantic · Light', variableName: 'color/text',
+  })
+})
+
+test('foundation ownership is preflighted before any collection, variable, or style mutation', () => {
+  const runtime = readFileSync(resolve(ROOT, 'src/runtime.mjs'), 'utf8')
+  assert.match(runtime, /setSharedPluginData\([^)]*owner/)
+  assert.match(runtime, /async function preflightFoundationOwnership/)
+  const run = runtime.slice(runtime.indexOf('async function runFoundations'), runtime.indexOf('async function localVariable'))
+  assert.ok(run.indexOf('preflightFoundationOwnership') < run.indexOf('createFoundationVariables'))
+  assert.ok(run.indexOf('preflightFoundationOwnership') < run.indexOf('createFoundationStyles'))
+  assert.match(runtime, /selectOwnedEntity\([^;]*VariableCollection/)
+  assert.match(runtime, /selectOwnedEntity\([^;]*Variable/)
+  assert.match(runtime, /selectOwnedEntity\([^;]*TextStyle/)
+  assert.match(runtime, /selectOwnedEntity\([^;]*EffectStyle/)
+})
+
+test('dark swatch label binding is preserved from the broad Light documentation pass', () => {
+  const runtime = readFileSync(resolve(ROOT, 'src/runtime.mjs'), 'utf8')
+  assert.match(runtime, /foundationSwatchLabelToken/)
+  assert.match(runtime, /ondaFoundationTextVariableId/)
+  assert.match(runtime, /setBoundVariableForPaint\([^;]*labelVariable/)
+  assert.match(runtime, /if \(!node\.getPluginData\('ondaFoundationTextVariableId'\)\)/)
+})
+
 test('verify rejects every incomplete foundation inventory metric', () => {
   const foundation = {
     paintsValid: true,
@@ -231,10 +297,10 @@ test('verify rejects every incomplete foundation inventory metric', () => {
     radiusSamples: 5,
     boundRadiusRectangles: 4,
     radiusEllipses: 1,
-    textStyleCount: 12,
-    documentedTextStyles: 12,
-    effectStyleNames: ['Onda/Shadow/Floating', 'Onda/Shadow/Overlay'],
-    documentedEffectStyles: 2,
+    textStyleCount: 5,
+    documentedTextStyles: 5,
+    effectStyleNames: ['Onda/Shadow/Overlay'],
+    documentedEffectStyles: 1,
     unexpectedShadowNodes: [],
   }
   const snapshot = {
@@ -268,8 +334,8 @@ test('verify rejects every incomplete foundation inventory metric', () => {
     value => { value.boundSwatches = 23 },
     value => { value.boundSpacingBars = 6 },
     value => { value.boundRadiusRectangles = 3 },
-    value => { value.documentedTextStyles = 11 },
-    value => { value.documentedEffectStyles = 1 },
+    value => { value.documentedTextStyles = 4 },
+    value => { value.documentedEffectStyles = 0 },
     value => { value.unexpectedShadowNodes = ['Foundations / Graustufen'] },
   ]
   for (const mutate of mutations) {

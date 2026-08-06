@@ -189,8 +189,14 @@ test('foundation contract fixes collections, variable counts, docs, and allowed 
     swatches: { primitive: 10, semanticLight: 7, semanticDark: 7, bound: 24 },
     spacingBars: { total: 7, bound: 7 },
     radiusSamples: { total: 5, boundRectangles: 4, ellipses: 1 },
-    textStyles: 12,
-    effectStyles: ['Onda/Shadow/Floating', 'Onda/Shadow/Overlay'],
+    textStyles: [
+      { role: 'Display', name: 'Onda/Type/Display', size: 40, weight: 700, lineHeight: 44 },
+      { role: 'Heading', name: 'Onda/Type/Heading', size: 21, weight: 700, lineHeight: 28 },
+      { role: 'Body', name: 'Onda/Type/Body', size: 15, weight: 400, lineHeight: 22 },
+      { role: 'Body Strong', name: 'Onda/Type/Body Strong', size: 15, weight: 700, lineHeight: 22 },
+      { role: 'Caption', name: 'Onda/Type/Caption', size: 12, weight: 500, lineHeight: 16 },
+    ],
+    effectStyles: ['Onda/Shadow/Overlay'],
   })
 })
 

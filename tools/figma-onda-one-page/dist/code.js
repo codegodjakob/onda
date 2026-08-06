@@ -172,8 +172,14 @@
     swatches: Object.freeze({ primitive: 10, semanticLight: 7, semanticDark: 7, bound: 24 }),
     spacingBars: Object.freeze({ total: 7, bound: 7 }),
     radiusSamples: Object.freeze({ total: 5, boundRectangles: 4, ellipses: 1 }),
-    textStyles: 12,
-    effectStyles: Object.freeze(["Onda/Shadow/Floating", "Onda/Shadow/Overlay"])
+    textStyles: Object.freeze([
+      Object.freeze({ role: "Display", name: "Onda/Type/Display", size: 40, weight: 700, lineHeight: 44 }),
+      Object.freeze({ role: "Heading", name: "Onda/Type/Heading", size: 21, weight: 700, lineHeight: 28 }),
+      Object.freeze({ role: "Body", name: "Onda/Type/Body", size: 15, weight: 400, lineHeight: 22 }),
+      Object.freeze({ role: "Body Strong", name: "Onda/Type/Body Strong", size: 15, weight: 700, lineHeight: 22 }),
+      Object.freeze({ role: "Caption", name: "Onda/Type/Caption", size: 12, weight: 500, lineHeight: 16 })
+    ]),
+    effectStyles: Object.freeze(["Onda/Shadow/Overlay"])
   });
   var ANNOTATION_VIEW_NAMES = Object.freeze([
     "Open",
@@ -382,6 +388,24 @@
   function canReuseOwnedNode(node, baselineIds = /* @__PURE__ */ new Set()) {
     return (node == null ? void 0 : node.owner) === PLUGIN_ORIGIN && (!baselineIds.has(node.id) || node.owner === PLUGIN_ORIGIN);
   }
+  function selectOwnedEntity(entities, name, kind) {
+    const matching = entities.filter((entity) => entity.name === name);
+    if (matching.length > 1) throw new Error(`Mehrdeutige ${kind}-Namenskollision: ${name}`);
+    if (!matching.length) return null;
+    if (matching[0].owner !== PLUGIN_ORIGIN) throw new Error(`Ungesch\xFCtzte ${kind}-Namenskollision: ${name}`);
+    return matching[0];
+  }
+  function foundationSwatchLabelToken(layer, paintToken) {
+    const paint = PALETTE[paintToken];
+    if (!paint) throw new Error(`Unbekannter Foundation-Farbwert: ${paintToken}`);
+    const darkSemantic = layer === "semantic-dark";
+    const collectionName = darkSemantic ? "Onda \xB7 Semantic \xB7 Dark" : "Onda \xB7 Semantic \xB7 Light";
+    const darkPaint = paint.r < 0.55;
+    return {
+      collectionName,
+      variableName: darkSemantic === darkPaint ? "color/text" : "color/on-inverted"
+    };
+  }
   function protectedChildIds({ nodeType, children, baselineIds = /* @__PURE__ */ new Set() }) {
     if (nodeType !== "PAGE") return children.map((child) => child.id);
     return children.filter((child) => baselineIds.has(child.id) || child.owner !== PLUGIN_ORIGIN).map((child) => child.id);
@@ -587,7 +611,7 @@
     const foundation = snapshot.foundation || {};
     const expectedEffectStyles = [...FOUNDATION_EXPECTATIONS.effectStyles];
     const actualEffectStyles = Array.isArray(foundation.effectStyleNames) ? foundation.effectStyleNames : [];
-    const foundationInventoryValid = foundation.collectionCount === Object.keys(FOUNDATION_EXPECTATIONS.collections).length && foundation.variableCount === Object.values(FOUNDATION_EXPECTATIONS.collections).reduce((total, item) => total + item.variableCount, 0) && foundation.missingCodeSyntax === 0 && foundation.invalidScopeCount === 0 && foundation.brokenAliasCount === 0 && foundation.primitiveSwatches === FOUNDATION_EXPECTATIONS.swatches.primitive && foundation.semanticLightSwatches === FOUNDATION_EXPECTATIONS.swatches.semanticLight && foundation.semanticDarkSwatches === FOUNDATION_EXPECTATIONS.swatches.semanticDark && foundation.boundSwatches === FOUNDATION_EXPECTATIONS.swatches.bound && foundation.spacingBars === FOUNDATION_EXPECTATIONS.spacingBars.total && foundation.boundSpacingBars === FOUNDATION_EXPECTATIONS.spacingBars.bound && foundation.radiusSamples === FOUNDATION_EXPECTATIONS.radiusSamples.total && foundation.boundRadiusRectangles === FOUNDATION_EXPECTATIONS.radiusSamples.boundRectangles && foundation.radiusEllipses === FOUNDATION_EXPECTATIONS.radiusSamples.ellipses && foundation.textStyleCount === FOUNDATION_EXPECTATIONS.textStyles && foundation.documentedTextStyles === FOUNDATION_EXPECTATIONS.textStyles && actualEffectStyles.length === expectedEffectStyles.length && expectedEffectStyles.every((name, index) => actualEffectStyles[index] === name) && foundation.documentedEffectStyles === FOUNDATION_EXPECTATIONS.effectStyles.length && Array.isArray(foundation.unexpectedShadowNodes) && foundation.unexpectedShadowNodes.length === 0;
+    const foundationInventoryValid = foundation.collectionCount === Object.keys(FOUNDATION_EXPECTATIONS.collections).length && foundation.variableCount === Object.values(FOUNDATION_EXPECTATIONS.collections).reduce((total, item) => total + item.variableCount, 0) && foundation.missingCodeSyntax === 0 && foundation.invalidScopeCount === 0 && foundation.brokenAliasCount === 0 && foundation.primitiveSwatches === FOUNDATION_EXPECTATIONS.swatches.primitive && foundation.semanticLightSwatches === FOUNDATION_EXPECTATIONS.swatches.semanticLight && foundation.semanticDarkSwatches === FOUNDATION_EXPECTATIONS.swatches.semanticDark && foundation.boundSwatches === FOUNDATION_EXPECTATIONS.swatches.bound && foundation.spacingBars === FOUNDATION_EXPECTATIONS.spacingBars.total && foundation.boundSpacingBars === FOUNDATION_EXPECTATIONS.spacingBars.bound && foundation.radiusSamples === FOUNDATION_EXPECTATIONS.radiusSamples.total && foundation.boundRadiusRectangles === FOUNDATION_EXPECTATIONS.radiusSamples.boundRectangles && foundation.radiusEllipses === FOUNDATION_EXPECTATIONS.radiusSamples.ellipses && foundation.textStyleCount === FOUNDATION_EXPECTATIONS.textStyles.length && foundation.documentedTextStyles === FOUNDATION_EXPECTATIONS.textStyles.length && actualEffectStyles.length === expectedEffectStyles.length && expectedEffectStyles.every((name, index) => actualEffectStyles[index] === name) && foundation.documentedEffectStyles === FOUNDATION_EXPECTATIONS.effectStyles.length && Array.isArray(foundation.unexpectedShadowNodes) && foundation.unexpectedShadowNodes.length === 0;
     const foundationValid = ["paintsValid", "radiiValid", "effectsValid", "fontsValid", "docsBound"].every((key) => foundation[key] === true) && foundationInventoryValid;
     const annotationViewsValid = snapshot.annotationViews ? snapshot.annotationViews.length === expectedAnnotationViews.size && presentAnnotationViews.size === expectedAnnotationViews.size && [...expectedAnnotationViews].every((key) => presentAnnotationViews.has(key)) : new Set(snapshot.annotationKinds || []).size === ANNOTATION_SECTIONS.length;
     const dialogStatesValid = snapshot.dialogStates ? snapshot.dialogStates.length === expectedDialogStates.size && presentDialogStates.size === expectedDialogStates.size && [...expectedDialogStates].every((key) => presentDialogStates.has(key)) : new Set(snapshot.dialogFamilies || []).size === DIALOG_FAMILIES.length;
@@ -645,6 +669,18 @@
   var BASELINE_SHARD_PREFIX = "ondaBaselineShard:";
   var lastInspection = null;
   figma.showUI(__html__, { width: 420, height: 720, themeColors: true });
+  function foundationEntityRecord(entity) {
+    return {
+      id: entity.id,
+      name: entity.name,
+      owner: entity.getSharedPluginData("onda", "owner"),
+      entity
+    };
+  }
+  function markFoundationEntity(entity) {
+    entity.setSharedPluginData("onda", "owner", PLUGIN_ORIGIN);
+    return entity;
+  }
   function color(key) {
     const value = PALETTE[key];
     return { r: value.r, g: value.g, b: value.b };
@@ -985,22 +1021,56 @@
     textNode(parent, `${title} / Titel`, title, decision, { size: 40, weight: 700, width: 1500 });
     if (subtitle) textNode(parent, `${title} / Untertitel`, subtitle, decision, { size: 15, muted: true, width: 1500 });
   }
-  async function ensureCollection(name, modeName) {
-    var _a;
+  function foundationVariableNamesByCollection() {
+    return /* @__PURE__ */ new Map([
+      ["Onda \xB7 Primitive", Object.keys(PALETTE)],
+      ["Onda \xB7 Dimension", [...SPACING_TOKENS.map((token) => token.name), ...RADIUS_TOKENS.map((token) => token.name)]],
+      ["Onda \xB7 Semantic \xB7 Light", SEMANTIC_COLOR_ROLES.map((role) => role.name)],
+      ["Onda \xB7 Semantic \xB7 Dark", SEMANTIC_COLOR_ROLES.map((role) => role.name)],
+      ["Onda \xB7 Typography", [
+        ...TYPE_SCALE.map((scale) => `font-size/${scale.size}`),
+        ...TYPE_WEIGHTS.map((weight) => `font-weight/${weight}`)
+      ]]
+    ]);
+  }
+  async function preflightFoundationOwnership() {
     const collections = await figma.variables.getLocalVariableCollectionsAsync();
-    const existing = collections.find((collection2) => collection2.name === name);
+    const variables = await figma.variables.getLocalVariablesAsync();
+    for (const [collectionName, variableNames] of foundationVariableNamesByCollection()) {
+      const collectionRecord = selectOwnedEntity(collections.map(foundationEntityRecord), collectionName, "VariableCollection");
+      if (!collectionRecord) continue;
+      const collectionVariables = variables.filter((variable) => variable.variableCollectionId === collectionRecord.id).map(foundationEntityRecord);
+      for (const variableName of variableNames) selectOwnedEntity(collectionVariables, variableName, "Variable");
+    }
+    const textStyles = (await figma.getLocalTextStylesAsync()).map(foundationEntityRecord);
+    for (const definition2 of FOUNDATION_EXPECTATIONS.textStyles) selectOwnedEntity(textStyles, definition2.name, "TextStyle");
+    const effectStyles = (await figma.getLocalEffectStylesAsync()).map(foundationEntityRecord);
+    for (const name of FOUNDATION_EXPECTATIONS.effectStyles) selectOwnedEntity(effectStyles, name, "EffectStyle");
+  }
+  async function ensureCollection(name, modeName) {
+    var _a, _b;
+    const collections = await figma.variables.getLocalVariableCollectionsAsync();
+    const existing = (_a = selectOwnedEntity(collections.map(foundationEntityRecord), name, "VariableCollection")) == null ? void 0 : _a.entity;
     if (existing) {
-      if (((_a = existing.modes[0]) == null ? void 0 : _a.name) !== modeName) existing.renameMode(existing.modes[0].modeId, modeName);
+      if (((_b = existing.modes[0]) == null ? void 0 : _b.name) !== modeName) existing.renameMode(existing.modes[0].modeId, modeName);
       return { collection: existing, modeId: existing.modes[0].modeId, created: false };
     }
     const collection = figma.variables.createVariableCollection(name);
+    markFoundationEntity(collection);
     collection.renameMode(collection.modes[0].modeId, modeName);
     return { collection, modeId: collection.modes[0].modeId, created: true };
   }
   async function ensureVariable(collection, modeId, definition2) {
+    var _a;
     const variables = await figma.variables.getLocalVariablesAsync();
-    const existing = variables.find((variable2) => variable2.variableCollectionId === collection.id && variable2.name === definition2.name);
+    const existing = (_a = selectOwnedEntity(
+      variables.filter((variable2) => variable2.variableCollectionId === collection.id).map(foundationEntityRecord),
+      definition2.name,
+      "Variable"
+    )) == null ? void 0 : _a.entity;
+    if (existing && existing.resolvedType !== definition2.type) throw new Error(`Onda-Variable hat den falschen Typ: ${definition2.name}`);
     const variable = existing || figma.variables.createVariable(definition2.name, collection, definition2.type);
+    if (!existing) markFoundationEntity(variable);
     variable.setValueForMode(modeId, definition2.value);
     if (definition2.type !== "BOOLEAN") variable.scopes = definition2.scopes || [];
     variable.setVariableCodeSyntax("WEB", `var(${definition2.css})`);
@@ -1087,33 +1157,32 @@
     };
   }
   async function createFoundationStyles(decision) {
+    var _a, _b;
     const existingText = await figma.getLocalTextStylesAsync();
     const createdText = [];
     const textStyles = [];
-    for (const scale of TYPE_SCALE) {
-      for (const weight of TYPE_WEIGHTS) {
-        const name = `Onda/Type/${scale.size} \xB7 ${weight}`;
-        const existing = existingText.find((style2) => style2.name === name);
-        const style = existing || figma.createTextStyle();
-        style.name = name;
-        style.fontName = { family: decision.family, style: decision.styles[weight] };
-        style.fontSize = scale.size;
-        style.lineHeight = { unit: "PIXELS", value: scale.lineHeight };
-        style.letterSpacing = { unit: "PIXELS", value: 0 };
-        textStyles.push(style);
-        if (!existing) createdText.push(style.id);
-      }
+    for (const definition2 of FOUNDATION_EXPECTATIONS.textStyles) {
+      const existing = (_a = selectOwnedEntity(existingText.map(foundationEntityRecord), definition2.name, "TextStyle")) == null ? void 0 : _a.entity;
+      const style = existing || figma.createTextStyle();
+      if (!existing) markFoundationEntity(style);
+      style.name = definition2.name;
+      style.fontName = { family: decision.family, style: decision.styles[definition2.weight] };
+      style.fontSize = definition2.size;
+      style.lineHeight = { unit: "PIXELS", value: definition2.lineHeight };
+      style.letterSpacing = { unit: "PIXELS", value: 0 };
+      textStyles.push(style);
+      if (!existing) createdText.push(style.id);
     }
     const existingEffects = await figma.getLocalEffectStylesAsync();
     const createdEffects = [];
     const effectStyles = [];
     const effects = [
-      { name: "Onda/Shadow/Floating", radius: 12, opacity: 0.12, y: 4 },
       { name: "Onda/Shadow/Overlay", radius: 24, opacity: 0.16, y: 8 }
     ];
     for (const effect of effects) {
-      const existing = existingEffects.find((style2) => style2.name === effect.name);
+      const existing = (_b = selectOwnedEntity(existingEffects.map(foundationEntityRecord), effect.name, "EffectStyle")) == null ? void 0 : _b.entity;
       const style = existing || figma.createEffectStyle();
+      if (!existing) markFoundationEntity(style);
       style.name = effect.name;
       style.effects = [{
         type: "DROP_SHADOW",
@@ -1129,7 +1198,7 @@
     }
     return { createdTextStyleIds: createdText, createdEffectStyleIds: createdEffects, textStyles, effectStyles };
   }
-  function ensureVariableSwatch(parent, layer, name, variable, fallback, decision) {
+  function ensureVariableSwatch(parent, layer, name, variable, fallback, decision, labelVariable) {
     const width = layer === "primitive" ? 160 : 220;
     const swatchName = layer === "primitive" ? `Swatch / ${name}` : `Swatch / ${layer} / ${name}`;
     const swatch = autoFrame(parent, swatchName, {
@@ -1145,12 +1214,14 @@
     swatch.setPluginData("ondaFoundationArtifact", "swatch");
     swatch.setPluginData("ondaFoundationLayer", layer);
     swatch.setPluginData("ondaBoundVariableId", variable.id);
-    textNode(swatch, `${swatchName} / Label`, name, decision, {
+    const label = textNode(swatch, `${swatchName} / Label`, name, decision, {
       size: 12,
       weight: 500,
       dark: ["gray/700", "gray/900", "gray/1000"].includes(fallback),
       width: width - 24
-    });
+    }).node;
+    label.fills = [figma.variables.setBoundVariableForPaint(label.fills[0], "color", labelVariable)];
+    label.setPluginData("ondaFoundationTextVariableId", labelVariable.id);
     return swatch;
   }
   function ensureSpacingBar(parent, token, variable, decision) {
@@ -1226,7 +1297,9 @@
       if ("strokes" in node && border && ((_a = node.strokes) == null ? void 0 : _a.length)) node.strokes = [figma.variables.setBoundVariableForPaint(solid("gray/200"), "color", border)];
       if (node.type === "TEXT") {
         const variable = /Untertitel|Fontstatus|Label/.test(node.name) ? muted : text;
-        if (variable) node.fills = [figma.variables.setBoundVariableForPaint(solid(variable === muted ? "gray/500" : "gray/900"), "color", variable)];
+        if (!node.getPluginData("ondaFoundationTextVariableId")) {
+          if (variable) node.fills = [figma.variables.setBoundVariableForPaint(solid(variable === muted ? "gray/500" : "gray/900"), "color", variable)];
+        }
       }
       if (node.type === "FRAME" && spacing) node.setBoundVariable("itemSpacing", spacing);
       if ("effects" in node && artifact !== "effect-style") node.effects = [];
@@ -1234,6 +1307,7 @@
     }
   }
   async function runFoundations(page, ledger) {
+    await preflightFoundationOwnership();
     await loadDecisionFonts(ledger.fontDecision);
     const variables = await createFoundationVariables();
     const styles = await createFoundationStyles(ledger.fontDecision);
@@ -1251,7 +1325,9 @@
     const palette = autoFrame(section, "Foundations / Graustufen", { x: 80, y: 600, width: 1940, direction: "HORIZONTAL", padding: 32, gap: 12, radius: 6 }).node;
     palette.effects = [];
     for (const name of Object.keys(PALETTE)) {
-      ensureVariableSwatch(palette, "primitive", name, variables.variablesByKey.get(`Onda \xB7 Primitive\0${name}`), name, ledger.fontDecision);
+      const labelToken = foundationSwatchLabelToken("primitive", name);
+      const labelVariable = variables.variablesByKey.get(`${labelToken.collectionName}\0${labelToken.variableName}`);
+      ensureVariableSwatch(palette, "primitive", name, variables.variablesByKey.get(`Onda \xB7 Primitive\0${name}`), name, ledger.fontDecision, labelVariable);
     }
     for (const [collectionName, layer, key, y] of [
       ["Onda \xB7 Semantic \xB7 Light", "semantic-light", "light", 1050],
@@ -1260,7 +1336,9 @@
       const semantic = autoFrame(section, `Foundations / ${key === "light" ? "Semantic Light" : "Semantic Dark"}`, { x: 80, y, width: 1940, direction: "HORIZONTAL", padding: 32, gap: 12, radius: 6 }).node;
       semantic.effects = [];
       for (const role of SEMANTIC_COLOR_ROLES) {
-        ensureVariableSwatch(semantic, layer, role.name, variables.variablesByKey.get(`${collectionName}\0${role.name}`), role[key], ledger.fontDecision);
+        const labelToken = foundationSwatchLabelToken(layer, role[key]);
+        const labelVariable = variables.variablesByKey.get(`${labelToken.collectionName}\0${labelToken.variableName}`);
+        ensureVariableSwatch(semantic, layer, role.name, variables.variablesByKey.get(`${collectionName}\0${role.name}`), role[key], ledger.fontDecision, labelVariable);
       }
     }
     const spacing = autoFrame(section, "Foundations / Spacing", { x: 80, y: 1950, width: 1940, direction: "HORIZONTAL", padding: 32, gap: 20, radius: 6 }).node;
@@ -1268,11 +1346,11 @@
     for (const token of SPACING_TOKENS) ensureSpacingBar(spacing, token, variables.variablesByKey.get(`Onda \xB7 Dimension\0${token.name}`), ledger.fontDecision);
     const type = autoFrame(section, "Foundations / Typografie", { x: 80, y: 2400, width: 1940, padding: 32, gap: 20, radius: 6 }).node;
     type.effects = [];
-    for (const style of styles.textStyles) {
-      const [size, weight] = style.name.replace("Onda/Type/", "").split(" \xB7 ").map(Number);
-      const specimen = textNode(type, `Typografie / ${size} / ${weight}`, `${size}px \xB7 ${weight} \xB7 Onda schreibt klar und ruhig.`, ledger.fontDecision, {
-        size,
-        weight,
+    for (const [index, style] of styles.textStyles.entries()) {
+      const definition2 = FOUNDATION_EXPECTATIONS.textStyles[index];
+      const specimen = textNode(type, `Typografie / ${definition2.role}`, `${definition2.role} \xB7 ${definition2.size}px \xB7 ${definition2.weight} \xB7 Onda schreibt klar und ruhig.`, ledger.fontDecision, {
+        size: definition2.size,
+        weight: definition2.weight,
         width: 1800
       }).node;
       await specimen.setTextStyleIdAsync(style.id);
@@ -1803,7 +1881,7 @@
     const radiusEllipses = radiusSamples.filter((node) => node.type === "ELLIPSE").length;
     const radiusFields = ["topLeftRadius", "topRightRadius", "bottomLeftRadius", "bottomRightRadius"];
     const boundRadiusRectangles = radiusRectangles.filter((node) => radiusFields.every((field) => fieldIsBoundTo(node, field, node.getPluginData("ondaBoundVariableId")))).length;
-    const expectedTextStyleNames = TYPE_SCALE.flatMap((scale) => TYPE_WEIGHTS.map((weight) => `Onda/Type/${scale.size} \xB7 ${weight}`));
+    const expectedTextStyleNames = FOUNDATION_EXPECTATIONS.textStyles.map((definition2) => definition2.name);
     const localTextStyles = (await figma.getLocalTextStylesAsync()).filter((style) => style.name.startsWith("Onda/Type/"));
     const textStyleByName = new Map(localTextStyles.map((style) => [style.name, style]));
     const documentedTextStyles = new Set(artifacts("text-style").filter((node) => {

@@ -66,8 +66,14 @@ export const FOUNDATION_EXPECTATIONS = Object.freeze({
   swatches: Object.freeze({ primitive: 10, semanticLight: 7, semanticDark: 7, bound: 24 }),
   spacingBars: Object.freeze({ total: 7, bound: 7 }),
   radiusSamples: Object.freeze({ total: 5, boundRectangles: 4, ellipses: 1 }),
-  textStyles: 12,
-  effectStyles: Object.freeze(['Onda/Shadow/Floating', 'Onda/Shadow/Overlay']),
+  textStyles: Object.freeze([
+    Object.freeze({ role: 'Display', name: 'Onda/Type/Display', size: 40, weight: 700, lineHeight: 44 }),
+    Object.freeze({ role: 'Heading', name: 'Onda/Type/Heading', size: 21, weight: 700, lineHeight: 28 }),
+    Object.freeze({ role: 'Body', name: 'Onda/Type/Body', size: 15, weight: 400, lineHeight: 22 }),
+    Object.freeze({ role: 'Body Strong', name: 'Onda/Type/Body Strong', size: 15, weight: 700, lineHeight: 22 }),
+    Object.freeze({ role: 'Caption', name: 'Onda/Type/Caption', size: 12, weight: 500, lineHeight: 16 }),
+  ]),
+  effectStyles: Object.freeze(['Onda/Shadow/Overlay']),
 })
 
 export const ANNOTATION_VIEW_NAMES = Object.freeze([

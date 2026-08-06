@@ -83,6 +83,26 @@ export function canReuseOwnedNode(node, baselineIds = new Set()) {
   return node?.owner === PLUGIN_ORIGIN && (!baselineIds.has(node.id) || node.owner === PLUGIN_ORIGIN)
 }
 
+export function selectOwnedEntity(entities, name, kind) {
+  const matching = entities.filter(entity => entity.name === name)
+  if (matching.length > 1) throw new Error(`Mehrdeutige ${kind}-Namenskollision: ${name}`)
+  if (!matching.length) return null
+  if (matching[0].owner !== PLUGIN_ORIGIN) throw new Error(`Ungeschützte ${kind}-Namenskollision: ${name}`)
+  return matching[0]
+}
+
+export function foundationSwatchLabelToken(layer, paintToken) {
+  const paint = PALETTE[paintToken]
+  if (!paint) throw new Error(`Unbekannter Foundation-Farbwert: ${paintToken}`)
+  const darkSemantic = layer === 'semantic-dark'
+  const collectionName = darkSemantic ? 'Onda · Semantic · Dark' : 'Onda · Semantic · Light'
+  const darkPaint = paint.r < 0.55
+  return {
+    collectionName,
+    variableName: darkSemantic === darkPaint ? 'color/text' : 'color/on-inverted',
+  }
+}
+
 export function protectedChildIds({ nodeType, children, baselineIds = new Set() }) {
   if (nodeType !== 'PAGE') return children.map(child => child.id)
   return children
@@ -338,8 +358,8 @@ export function buildVerificationReport(snapshot) {
     && foundation.radiusSamples === FOUNDATION_EXPECTATIONS.radiusSamples.total
     && foundation.boundRadiusRectangles === FOUNDATION_EXPECTATIONS.radiusSamples.boundRectangles
     && foundation.radiusEllipses === FOUNDATION_EXPECTATIONS.radiusSamples.ellipses
-    && foundation.textStyleCount === FOUNDATION_EXPECTATIONS.textStyles
-    && foundation.documentedTextStyles === FOUNDATION_EXPECTATIONS.textStyles
+    && foundation.textStyleCount === FOUNDATION_EXPECTATIONS.textStyles.length
+    && foundation.documentedTextStyles === FOUNDATION_EXPECTATIONS.textStyles.length
     && actualEffectStyles.length === expectedEffectStyles.length
     && expectedEffectStyles.every((name, index) => actualEffectStyles[index] === name)
     && foundation.documentedEffectStyles === FOUNDATION_EXPECTATIONS.effectStyles.length
