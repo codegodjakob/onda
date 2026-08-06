@@ -274,9 +274,9 @@ test('verify rejects incomplete or mismatched strict foundation evidence', () =>
   const mutations = [
     value => { value.collections.pop() },
     value => { value.variables.pop() },
-    value => { value.swatches[0].fillVariableId = 'variable:wrong' },
+    value => { value.swatches[0].fills[0].variableIds[0] = 'variable:wrong' },
     value => { value.spacingBars.pop() },
-    value => { value.radiusSamples[0].boundVariableIds.topLeftRadius = 'variable:wrong' },
+    value => { value.radiusSamples[0].fieldVariableIds.topLeftRadius[0] = 'variable:wrong' },
     value => { value.textStyles[0].fontSize += 1 },
     value => { value.textSpecimens[0].textStyleId = 'text-style:wrong' },
     value => { value.effectStyles[0].effects[0].radius += 1 },

@@ -22,7 +22,11 @@ import {
   buildBaselineShards,
   buildVerificationReport,
   canReuseOwnedNode,
+  collectFieldVariableIds,
+  collectTextRangeBindings,
+  collectVisibleFillBindings,
   computeOndaOrigin,
+  executeFoundationMutation,
   hashBaselineRecords,
   isGrayColor,
   isValidRadius,
@@ -34,6 +38,7 @@ import {
   foundationCodeSyntax,
   foundationSwatchLabelToken,
   validateDesignPlan,
+  validateFoundationMutationInventory,
   validatePhaseTransition,
   validateTargetContext,
   buildDesignPlan,
@@ -433,6 +438,52 @@ function foundationVariableNamesByCollection() {
       ...TYPE_WEIGHTS.map(weight => `font-weight/${weight}`),
     ]],
   ])
+}
+
+async function collectFoundationMutationInventory() {
+  const collections = await figma.variables.getLocalVariableCollectionsAsync()
+  const collectionById = new Map(collections.map(collection => [collection.id, collection]))
+  const variables = await figma.variables.getLocalVariablesAsync()
+  const textStyles = await figma.getLocalTextStylesAsync()
+  const effectStyles = await figma.getLocalEffectStylesAsync()
+  return {
+    collections: collections.map(collection => ({
+      id: collection.id,
+      name: collection.name,
+      owner: collection.getSharedPluginData('onda', 'owner'),
+      modes: collection.modes.map(mode => ({ modeId: mode.modeId, name: mode.name })),
+    })),
+    variables: variables.map(variable => {
+      const collection = collectionById.get(variable.variableCollectionId)
+      return {
+        id: variable.id,
+        name: variable.name,
+        owner: variable.getSharedPluginData('onda', 'owner'),
+        collectionId: variable.variableCollectionId,
+        collectionName: collection?.name || '',
+        resolvedType: variable.resolvedType,
+        scopes: [...variable.scopes],
+        modeId: collection?.modes?.[0]?.modeId || null,
+      }
+    }),
+    textStyles: textStyles.map(style => ({
+      id: style.id,
+      name: style.name,
+      owner: style.getSharedPluginData('onda', 'owner'),
+    })),
+    effectStyles: effectStyles.map(style => ({
+      id: style.id,
+      name: style.name,
+      owner: style.getSharedPluginData('onda', 'owner'),
+    })),
+  }
+}
+
+async function preflightFoundationMutation() {
+  const inventory = await collectFoundationMutationInventory()
+  const result = validateFoundationMutationInventory(inventory)
+  if (!result.valid) throw new Error(`Foundation-Preflight abgebrochen:\n${result.errors.join('\n')}`)
+  return inventory
 }
 
 async function preflightFoundationOwnership() {
@@ -1223,17 +1274,6 @@ function geometryEvidence(page, sections, allNodes, ledger, baselineRecords) {
 }
 
 async function collectFoundationEvidence(foundationSection, fontDecision) {
-  function variableId(value) {
-    if (Array.isArray(value)) return value[0]?.id || null
-    return value?.id || null
-  }
-  function boundVariableId(entity, field) {
-    return variableId(entity?.boundVariables?.[field])
-  }
-  function fillVariableId(node) {
-    if (!Array.isArray(node?.fills)) return null
-    return node.fills.map(paint => variableId(paint?.boundVariables?.color)).find(Boolean) || null
-  }
   function childFrame(name) {
     return foundationSection ? directChild(foundationSection, name, ['FRAME']) : null
   }
@@ -1283,9 +1323,11 @@ async function collectFoundationEvidence(foundationSection, fontDecision) {
         name: swatch.name,
         parentName: parent?.name || '',
         type: swatch.type,
-        fillVariableId: fillVariableId(swatch),
+        fills: collectVisibleFillBindings(swatch.fills),
         labelName: label?.name || '',
-        labelFillVariableId: fillVariableId(label),
+        labelFills: collectVisibleFillBindings(label?.fills),
+        labelCharactersLength: label?.characters?.length || 0,
+        labelTextRanges: collectTextRangeBindings(label),
       })
     }
   }
@@ -1298,7 +1340,8 @@ async function collectFoundationEvidence(foundationSection, fontDecision) {
     containerName: spacing?.name || '',
     type: bar.type,
     width: bar.width,
-    widthVariableId: boundVariableId(bar, 'width'),
+    fills: collectVisibleFillBindings(bar.fills),
+    fieldVariableIds: collectFieldVariableIds(bar, ['width']),
   })))
 
   const radius = childFrame('Foundations / Radien')
@@ -1311,7 +1354,8 @@ async function collectFoundationEvidence(foundationSection, fontDecision) {
     width: sample.width,
     height: sample.height,
     cornerRadius: typeof sample.cornerRadius === 'number' ? sample.cornerRadius : null,
-    boundVariableIds: Object.fromEntries(radiusFields.map(field => [field, boundVariableId(sample, field)])),
+    fills: collectVisibleFillBindings(sample.fills),
+    fieldVariableIds: collectFieldVariableIds(sample, radiusFields),
   }))
 
   const typography = childFrame('Foundations / Typografie')
@@ -1323,10 +1367,10 @@ async function collectFoundationEvidence(foundationSection, fontDecision) {
       parentName: typography?.name || '',
       type: node.type,
       textStyleId: node.textStyleId,
-      boundVariableIds: {
-        fontSize: boundVariableId(node, 'fontSize'),
-        fontWeight: boundVariableId(node, 'fontWeight'),
-      },
+      fills: collectVisibleFillBindings(node.fills),
+      charactersLength: node.characters.length,
+      textRanges: collectTextRangeBindings(node),
+      fieldVariableIds: collectFieldVariableIds(node, ['fontSize', 'fontWeight']),
     }))
   const localTextStyles = (await figma.getLocalTextStylesAsync()).filter(style => style.name.startsWith('Onda/Type/'))
   const textStyles = localTextStyles.map(style => ({
@@ -1339,10 +1383,7 @@ async function collectFoundationEvidence(foundationSection, fontDecision) {
     letterSpacing: cloneSerializable(style.letterSpacing),
     textCase: style.textCase,
     textDecoration: style.textDecoration,
-    boundVariableIds: {
-      fontSize: boundVariableId(style, 'fontSize'),
-      fontWeight: boundVariableId(style, 'fontWeight'),
-    },
+    fieldVariableIds: collectFieldVariableIds(style, ['fontSize', 'fontWeight']),
   }))
 
   const localEffectStyles = (await figma.getLocalEffectStylesAsync()).filter(style => style.name.startsWith('Onda/Shadow/'))
@@ -1363,6 +1404,7 @@ async function collectFoundationEvidence(foundationSection, fontDecision) {
         type: consumer.node.type,
         effectStyleId: consumer.node.effectStyleId,
         fields: [...consumer.fields].sort(),
+        fills: collectVisibleFillBindings(consumer.node.fills),
       })
     }
   }
@@ -1504,18 +1546,29 @@ async function handleCommand(command) {
     postResult(command, hardPass, hardPass ? 'Alle strukturellen Hard Gates bestanden.' : 'Verify hat offene Hard Gates gefunden.', report, true)
     return
   }
-  const { page, ledger } = await requireMutationContext()
-  const transition = validatePhaseTransition(command, ledger.phases)
-  if (!transition.ok) throw new Error(transition.warning)
-  let counts
-  if (command === 'foundations') counts = await runFoundations(page, ledger)
-  else if (command === 'core-views') counts = await runCoreViews(page, ledger)
-  else if (command === 'dialogs-and-secondary') counts = await runDialogsAndSecondary(page, ledger)
-  else if (command.startsWith('component-')) counts = await runComponent(page, ledger, command.slice('component-'.length))
-  else if (command.startsWith('annotations-')) counts = await runAnnotationBatch(page, ledger, Number(command.slice('annotations-'.length)) - 1)
-  else throw new Error(`Unbekannter Befehl: ${command}`)
-  markPhase(page, ledger, command, counts)
-  postResult(command, true, 'Phase erfolgreich abgeschlossen und strukturell gezählt.', counts, true)
+  async function runMutation({ page, ledger }) {
+    const transition = validatePhaseTransition(command, ledger.phases)
+    if (!transition.ok) throw new Error(transition.warning)
+    let counts
+    if (command === 'foundations') counts = await runFoundations(page, ledger)
+    else if (command === 'core-views') counts = await runCoreViews(page, ledger)
+    else if (command === 'dialogs-and-secondary') counts = await runDialogsAndSecondary(page, ledger)
+    else if (command.startsWith('component-')) counts = await runComponent(page, ledger, command.slice('component-'.length))
+    else if (command.startsWith('annotations-')) counts = await runAnnotationBatch(page, ledger, Number(command.slice('annotations-'.length)) - 1)
+    else throw new Error(`Unbekannter Befehl: ${command}`)
+    markPhase(page, ledger, command, counts)
+    postResult(command, true, 'Phase erfolgreich abgeschlossen und strukturell gezählt.', counts, true)
+  }
+  if (command === 'foundations') {
+    await executeFoundationMutation({
+      preflight: preflightFoundationMutation,
+      requireContext: requireMutationContext,
+      mutate: runMutation,
+    })
+    return
+  }
+  const context = await requireMutationContext()
+  await runMutation(context)
 }
 
 figma.ui.onmessage = async message => {

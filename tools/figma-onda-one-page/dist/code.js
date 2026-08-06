@@ -444,6 +444,96 @@
     for (const weight of TYPE_WEIGHTS) add("Onda \xB7 Typography", "Value", `font-weight/${weight}`, "FLOAT", ["FONT_WEIGHT"], weight);
     return definitions;
   }
+  function collectVariableBindingIds(binding) {
+    if (Array.isArray(binding)) return binding.flatMap(collectVariableBindingIds);
+    return binding && typeof binding.id === "string" ? [binding.id] : [];
+  }
+  function collectVisibleFillBindings(fills) {
+    if (!Array.isArray(fills)) return [];
+    return fills.flatMap((paint, index) => {
+      var _a;
+      return (paint == null ? void 0 : paint.visible) === false ? [] : [{
+        index,
+        type: (paint == null ? void 0 : paint.type) || null,
+        variableIds: collectVariableBindingIds((_a = paint == null ? void 0 : paint.boundVariables) == null ? void 0 : _a.color)
+      }];
+    });
+  }
+  function collectFieldVariableIds(entity, fields) {
+    return Object.fromEntries(fields.map((field) => {
+      var _a;
+      return [field, collectVariableBindingIds((_a = entity == null ? void 0 : entity.boundVariables) == null ? void 0 : _a[field])];
+    }));
+  }
+  function collectTextRangeBindings(textNode2) {
+    if (!textNode2 || typeof textNode2.getStyledTextSegments !== "function") return [];
+    return textNode2.getStyledTextSegments(["fills"]).map((segment) => ({
+      start: segment.start,
+      end: segment.end,
+      fills: collectVisibleFillBindings(segment.fills)
+    }));
+  }
+  function validateFoundationMutationInventory(inventory = {}) {
+    var _a;
+    const errors = [];
+    const collections = Array.isArray(inventory.collections) ? inventory.collections : [];
+    const variables = Array.isArray(inventory.variables) ? inventory.variables : [];
+    const textStyles = Array.isArray(inventory.textStyles) ? inventory.textStyles : [];
+    const effectStyles = Array.isArray(inventory.effectStyles) ? inventory.effectStyles : [];
+    const collectionExpectations = FOUNDATION_EXPECTATIONS.collections;
+    const expectedCollectionNames = new Set(Object.keys(collectionExpectations));
+    const namespaceCollections = collections.filter((collection) => collection.name.startsWith("Onda \xB7"));
+    const collectionByName = /* @__PURE__ */ new Map();
+    for (const collection of namespaceCollections) {
+      if (!expectedCollectionNames.has(collection.name)) errors.push(`Unerwartete Onda-Collection: ${collection.name}`);
+    }
+    for (const [name, expectation] of Object.entries(collectionExpectations)) {
+      const matching = collections.filter((collection2) => collection2.name === name);
+      if (matching.length > 1) errors.push(`Doppelte Onda-Collection: ${name}`);
+      if (matching.length !== 1) continue;
+      const collection = matching[0];
+      collectionByName.set(name, collection);
+      if (collection.owner !== PLUGIN_ORIGIN) errors.push(`Ungesch\xFCtzte Onda-Collection: ${name}`);
+      if (!Array.isArray(collection.modes) || collection.modes.length !== 1 || collection.modes[0].name !== expectation.mode) errors.push(`Ung\xFCltige Modi: ${name}`);
+    }
+    if (new Set(namespaceCollections.map((collection) => collection.id)).size !== namespaceCollections.length) errors.push("Doppelte Onda-Collection-IDs");
+    const definitions = foundationVariableDefinitions();
+    const definitionByKey = new Map(definitions.map((definition2) => [`${definition2.collectionName}\0${definition2.name}`, definition2]));
+    const expectedCollectionIds = new Set([...collectionByName.values()].map((collection) => collection.id));
+    const relevantVariables = variables.filter((variable) => variable.owner === PLUGIN_ORIGIN || expectedCollectionIds.has(variable.collectionId) || expectedCollectionNames.has(variable.collectionName));
+    const keys = [];
+    for (const variable of relevantVariables) {
+      const collection = collectionByName.get(variable.collectionName);
+      const key = `${variable.collectionName}\0${variable.name}`;
+      const definition2 = definitionByKey.get(key);
+      keys.push(key);
+      if (!collection || variable.collectionId !== collection.id) errors.push(`Falsche Collection-Zuordnung: ${variable.name}`);
+      if (!definition2) errors.push(`Unerwartete Variable in Onda-Inventar: ${variable.collectionName}/${variable.name}`);
+      if (variable.owner !== PLUGIN_ORIGIN) errors.push(`Ungesch\xFCtzte Onda-Variable: ${variable.collectionName}/${variable.name}`);
+      if (!definition2) continue;
+      if (variable.resolvedType !== definition2.resolvedType) errors.push(`Falscher Variablentyp: ${variable.collectionName}/${variable.name}`);
+      if (!sameArray([...variable.scopes || []].sort(), [...definition2.scopes].sort())) errors.push(`Falsche Scopes: ${variable.collectionName}/${variable.name}`);
+      if (((_a = collection == null ? void 0 : collection.modes) == null ? void 0 : _a.length) === 1 && variable.modeId !== collection.modes[0].modeId) errors.push(`Falscher Variablenmodus: ${variable.collectionName}/${variable.name}`);
+    }
+    if (new Set(keys).size !== keys.length) errors.push("Doppelte Onda-Variablen");
+    function validateStyleNamespace(styles, prefix, expectedNames, kind) {
+      const namespace = styles.filter((style) => style.name.startsWith(prefix));
+      for (const style of namespace) {
+        if (!expectedNames.has(style.name)) errors.push(`Unerwarteter ${kind}: ${style.name}`);
+        if (style.owner !== PLUGIN_ORIGIN) errors.push(`Ungesch\xFCtzter ${kind}: ${style.name}`);
+      }
+      const names = namespace.map((style) => style.name);
+      if (new Set(names).size !== names.length) errors.push(`Doppelte ${kind}`);
+    }
+    validateStyleNamespace(textStyles, "Onda/Type/", new Set(FOUNDATION_EXPECTATIONS.textStyles.map((style) => style.name)), "TextStyle");
+    validateStyleNamespace(effectStyles, "Onda/Shadow/", new Set(FOUNDATION_EXPECTATIONS.effectStyles), "EffectStyle");
+    return { valid: errors.length === 0, errors };
+  }
+  async function executeFoundationMutation({ preflight, requireContext, mutate }) {
+    await preflight();
+    const context = await requireContext();
+    return mutate(context);
+  }
   function sameArray(actual, expected) {
     return Array.isArray(actual) && actual.length === expected.length && actual.every((value, index) => value === expected[index]);
   }
@@ -457,13 +547,21 @@
       return right && typeof right === "object" ? sameObject(left, right) : left === right;
     });
   }
+  function exactFillBindings(actual, variableIds) {
+    var _a, _b, _c;
+    return Array.isArray(actual) && actual.length === 1 && ((_a = actual[0]) == null ? void 0 : _a.index) === 0 && ((_b = actual[0]) == null ? void 0 : _b.type) === "SOLID" && sameArray((_c = actual[0]) == null ? void 0 : _c.variableIds, variableIds);
+  }
+  function exactTextRangeBindings(actual, charactersLength, variableIds) {
+    var _a, _b, _c;
+    return Array.isArray(actual) && actual.length === 1 && ((_a = actual[0]) == null ? void 0 : _a.start) === 0 && ((_b = actual[0]) == null ? void 0 : _b.end) === charactersLength && exactFillBindings((_c = actual[0]) == null ? void 0 : _c.fills, variableIds);
+  }
   function strictSingle(items, predicate, errors, label) {
     const matching = items.filter(predicate);
     if (matching.length !== 1) errors.push(`${label}: erwartet 1, gefunden ${matching.length}`);
     return matching.length === 1 ? matching[0] : null;
   }
   function validateFoundationEvidence(evidence = {}) {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u;
     const errors = [];
     const collections = Array.isArray(evidence.collections) ? evidence.collections : [];
     const variables = Array.isArray(evidence.variables) ? evidence.variables : [];
@@ -540,8 +638,8 @@
       const swatch = strictSingle(swatches, (item) => item.name === expected.name, errors, `Swatch ${expected.name}`);
       if (!swatch) continue;
       if (swatch.type !== "FRAME" || swatch.parentName !== expected.parentName) errors.push(`Swatch ${expected.name}: structure`);
-      if (swatch.fillVariableId !== expected.variableId) errors.push(`Swatch ${expected.name}: fill binding`);
-      if (swatch.labelName !== expected.labelName || swatch.labelFillVariableId !== expected.labelVariableId) errors.push(`Swatch ${expected.name}: label binding`);
+      if (!exactFillBindings(swatch.fills, [expected.variableId])) errors.push(`Swatch ${expected.name}: fill binding`);
+      if (swatch.labelName !== expected.labelName || !exactFillBindings(swatch.labelFills, [expected.labelVariableId]) || !exactTextRangeBindings(swatch.labelTextRanges, swatch.labelCharactersLength, [expected.labelVariableId])) errors.push(`Swatch ${expected.name}: label binding`);
     }
     const spacingBars = Array.isArray(evidence.spacingBars) ? evidence.spacingBars : [];
     if (spacingBars.length !== SPACING_TOKENS.length) errors.push(`Spacing: erwartet ${SPACING_TOKENS.length}, gefunden ${spacingBars.length}`);
@@ -552,7 +650,8 @@
       if (!bar) continue;
       if (bar.type !== "RECTANGLE" || bar.parentName !== `Spacing / ${token.value}` || bar.containerName !== "Foundations / Spacing") errors.push(`Spacing ${name}: structure`);
       if (bar.width !== token.value) errors.push(`Spacing ${name}: value`);
-      if (bar.widthVariableId !== variableId("Onda \xB7 Dimension", token.name)) errors.push(`Spacing ${name}: binding`);
+      if (!exactFillBindings(bar.fills, [])) errors.push(`Spacing ${name}: fills`);
+      if (!sameArray((_f = bar.fieldVariableIds) == null ? void 0 : _f.width, [variableId("Onda \xB7 Dimension", token.name)])) errors.push(`Spacing ${name}: binding`);
     }
     const radiusSamples = Array.isArray(evidence.radiusSamples) ? evidence.radiusSamples : [];
     if (radiusSamples.length !== RADIUS_TOKENS.length) errors.push(`Radius: erwartet ${RADIUS_TOKENS.length}, gefunden ${radiusSamples.length}`);
@@ -563,13 +662,14 @@
       if (!sample) continue;
       const tokenId = variableId("Onda \xB7 Dimension", token.name);
       if (sample.type !== token.geometry || sample.parentName !== "Foundations / Radien") errors.push(`Radius ${name}: structure`);
+      if (!exactFillBindings(sample.fills, [])) errors.push(`Radius ${name}: fills`);
       if (token.geometry === "ELLIPSE") {
-        if (sample.width !== 112 || sample.height !== 112 || ((_f = sample.boundVariableIds) == null ? void 0 : _f.maxWidth) !== tokenId || ((_g = sample.boundVariableIds) == null ? void 0 : _g.maxHeight) !== tokenId) errors.push(`Radius ${name}: ellipse mapping`);
+        if (sample.width !== 112 || sample.height !== 112 || !sameArray((_g = sample.fieldVariableIds) == null ? void 0 : _g.maxWidth, [tokenId]) || !sameArray((_h = sample.fieldVariableIds) == null ? void 0 : _h.maxHeight, [tokenId])) errors.push(`Radius ${name}: ellipse mapping`);
       } else {
         const fields = ["topLeftRadius", "topRightRadius", "bottomLeftRadius", "bottomRightRadius"];
         if (sample.cornerRadius !== token.value || !fields.every((field) => {
           var _a2;
-          return ((_a2 = sample.boundVariableIds) == null ? void 0 : _a2[field]) === tokenId;
+          return sameArray((_a2 = sample.fieldVariableIds) == null ? void 0 : _a2[field], [tokenId]);
         })) errors.push(`Radius ${name}: rectangle binding`);
       }
     }
@@ -586,11 +686,12 @@
       const sizeId = variableId("Onda \xB7 Typography", `font-size/${definition2.size}`);
       const weightId = variableId("Onda \xB7 Typography", `font-weight/${definition2.weight}`);
       if (style.owner !== PLUGIN_ORIGIN) errors.push(`Text style ${definition2.name}: owner`);
-      if (((_h = style.fontName) == null ? void 0 : _h.family) !== ((_i = evidence.fontDecision) == null ? void 0 : _i.family) || ((_j = style.fontName) == null ? void 0 : _j.style) !== ((_l = (_k = evidence.fontDecision) == null ? void 0 : _k.styles) == null ? void 0 : _l[definition2.weight])) errors.push(`Text style ${definition2.name}: font`);
-      if (style.fontSize !== definition2.size || ((_m = style.lineHeight) == null ? void 0 : _m.unit) !== "PIXELS" || ((_n = style.lineHeight) == null ? void 0 : _n.value) !== definition2.lineHeight) errors.push(`Text style ${definition2.name}: metrics`);
-      if (((_o = style.letterSpacing) == null ? void 0 : _o.unit) !== "PIXELS" || ((_p = style.letterSpacing) == null ? void 0 : _p.value) !== 0 || style.textCase !== "ORIGINAL" || style.textDecoration !== "NONE") errors.push(`Text style ${definition2.name}: properties`);
-      if (((_q = style.boundVariableIds) == null ? void 0 : _q.fontSize) !== sizeId || ((_r = style.boundVariableIds) == null ? void 0 : _r.fontWeight) !== weightId) errors.push(`Text style ${definition2.name}: variable mapping`);
-      if (specimen && (specimen.type !== "TEXT" || specimen.parentName !== "Foundations / Typografie" || specimen.textStyleId !== style.id || ((_s = specimen.boundVariableIds) == null ? void 0 : _s.fontSize) !== sizeId || ((_t = specimen.boundVariableIds) == null ? void 0 : _t.fontWeight) !== weightId)) errors.push(`Text specimen ${definition2.role}: link`);
+      if (((_i = style.fontName) == null ? void 0 : _i.family) !== ((_j = evidence.fontDecision) == null ? void 0 : _j.family) || ((_k = style.fontName) == null ? void 0 : _k.style) !== ((_m = (_l = evidence.fontDecision) == null ? void 0 : _l.styles) == null ? void 0 : _m[definition2.weight])) errors.push(`Text style ${definition2.name}: font`);
+      if (style.fontSize !== definition2.size || ((_n = style.lineHeight) == null ? void 0 : _n.unit) !== "PIXELS" || ((_o = style.lineHeight) == null ? void 0 : _o.value) !== definition2.lineHeight) errors.push(`Text style ${definition2.name}: metrics`);
+      if (((_p = style.letterSpacing) == null ? void 0 : _p.unit) !== "PIXELS" || ((_q = style.letterSpacing) == null ? void 0 : _q.value) !== 0 || style.textCase !== "ORIGINAL" || style.textDecoration !== "NONE") errors.push(`Text style ${definition2.name}: properties`);
+      if (!sameArray((_r = style.fieldVariableIds) == null ? void 0 : _r.fontSize, [sizeId]) || !sameArray((_s = style.fieldVariableIds) == null ? void 0 : _s.fontWeight, [weightId])) errors.push(`Text style ${definition2.name}: variable mapping`);
+      const textVariableId = variableId("Onda \xB7 Semantic \xB7 Light", "color/text");
+      if (specimen && (specimen.type !== "TEXT" || specimen.parentName !== "Foundations / Typografie" || specimen.textStyleId !== style.id || !sameArray((_t = specimen.fieldVariableIds) == null ? void 0 : _t.fontSize, [sizeId]) || !sameArray((_u = specimen.fieldVariableIds) == null ? void 0 : _u.fontWeight, [weightId]) || !exactFillBindings(specimen.fills, [textVariableId]) || !exactTextRangeBindings(specimen.textRanges, specimen.charactersLength, [textVariableId]))) errors.push(`Text specimen ${definition2.role}: link`);
     }
     const effectStyles = Array.isArray(evidence.effectStyles) ? evidence.effectStyles : [];
     const effectConsumers = Array.isArray(evidence.effectConsumers) ? evidence.effectConsumers : [];
@@ -603,7 +704,7 @@
       if (!effect || !isGrayColor(effect.color)) errors.push("Overlay effect style: monochrome");
       if (effectConsumers.length !== 1) errors.push(`Overlay consumers: erwartet 1, gefunden ${effectConsumers.length}`);
       const consumer = strictSingle(effectConsumers, (item) => item.name === "Effect / Onda/Shadow/Overlay", errors, "Overlay consumer");
-      if (consumer && (consumer.type !== "FRAME" || consumer.parentName !== "Foundations / Effects" || consumer.effectStyleId !== overlay.id || !sameArray(consumer.fields, ["effectStyleId"]))) errors.push("Overlay consumer: invalid");
+      if (consumer && (consumer.type !== "FRAME" || consumer.parentName !== "Foundations / Effects" || consumer.effectStyleId !== overlay.id || !sameArray(consumer.fields, ["effectStyleId"]) || !exactFillBindings(consumer.fills, [variableId("Onda \xB7 Semantic \xB7 Light", "color/surface")]))) errors.push("Overlay consumer: invalid");
     }
     return { valid: errors.length === 0, errors };
   }
@@ -1233,6 +1334,52 @@
         ...TYPE_WEIGHTS.map((weight) => `font-weight/${weight}`)
       ]]
     ]);
+  }
+  async function collectFoundationMutationInventory() {
+    const collections = await figma.variables.getLocalVariableCollectionsAsync();
+    const collectionById = new Map(collections.map((collection) => [collection.id, collection]));
+    const variables = await figma.variables.getLocalVariablesAsync();
+    const textStyles = await figma.getLocalTextStylesAsync();
+    const effectStyles = await figma.getLocalEffectStylesAsync();
+    return {
+      collections: collections.map((collection) => ({
+        id: collection.id,
+        name: collection.name,
+        owner: collection.getSharedPluginData("onda", "owner"),
+        modes: collection.modes.map((mode) => ({ modeId: mode.modeId, name: mode.name }))
+      })),
+      variables: variables.map((variable) => {
+        var _a, _b;
+        const collection = collectionById.get(variable.variableCollectionId);
+        return {
+          id: variable.id,
+          name: variable.name,
+          owner: variable.getSharedPluginData("onda", "owner"),
+          collectionId: variable.variableCollectionId,
+          collectionName: (collection == null ? void 0 : collection.name) || "",
+          resolvedType: variable.resolvedType,
+          scopes: [...variable.scopes],
+          modeId: ((_b = (_a = collection == null ? void 0 : collection.modes) == null ? void 0 : _a[0]) == null ? void 0 : _b.modeId) || null
+        };
+      }),
+      textStyles: textStyles.map((style) => ({
+        id: style.id,
+        name: style.name,
+        owner: style.getSharedPluginData("onda", "owner")
+      })),
+      effectStyles: effectStyles.map((style) => ({
+        id: style.id,
+        name: style.name,
+        owner: style.getSharedPluginData("onda", "owner")
+      }))
+    };
+  }
+  async function preflightFoundationMutation() {
+    const inventory = await collectFoundationMutationInventory();
+    const result = validateFoundationMutationInventory(inventory);
+    if (!result.valid) throw new Error(`Foundation-Preflight abgebrochen:
+${result.errors.join("\n")}`);
+    return inventory;
   }
   async function preflightFoundationOwnership() {
     const collections = await figma.variables.getLocalVariableCollectionsAsync();
@@ -2019,23 +2166,7 @@
     return { intersections, clearance, overflowNodes: [...new Set(overflowNodes)], undersizedHitTargets };
   }
   async function collectFoundationEvidence(foundationSection, fontDecision) {
-    var _a;
-    function variableId(value) {
-      var _a2;
-      if (Array.isArray(value)) return ((_a2 = value[0]) == null ? void 0 : _a2.id) || null;
-      return (value == null ? void 0 : value.id) || null;
-    }
-    function boundVariableId(entity, field) {
-      var _a2;
-      return variableId((_a2 = entity == null ? void 0 : entity.boundVariables) == null ? void 0 : _a2[field]);
-    }
-    function fillVariableId(node) {
-      if (!Array.isArray(node == null ? void 0 : node.fills)) return null;
-      return node.fills.map((paint) => {
-        var _a2;
-        return variableId((_a2 = paint == null ? void 0 : paint.boundVariables) == null ? void 0 : _a2.color);
-      }).find(Boolean) || null;
-    }
+    var _a, _b;
     function childFrame(name) {
       return foundationSection ? directChild(foundationSection, name, ["FRAME"]) : null;
     }
@@ -2056,9 +2187,9 @@
       modes: collection.modes.map((mode) => ({ modeId: mode.modeId, name: mode.name }))
     }));
     const variables = sourceVariables.map((variable) => {
-      var _a2, _b;
+      var _a2, _b2;
       const collection = collectionById.get(variable.variableCollectionId);
-      const modeId = ((_b = (_a2 = collection == null ? void 0 : collection.modes) == null ? void 0 : _a2[0]) == null ? void 0 : _b.modeId) || null;
+      const modeId = ((_b2 = (_a2 = collection == null ? void 0 : collection.modes) == null ? void 0 : _a2[0]) == null ? void 0 : _b2.modeId) || null;
       return {
         id: variable.id,
         collectionId: variable.variableCollectionId,
@@ -2083,9 +2214,11 @@
           name: swatch.name,
           parentName: (parent == null ? void 0 : parent.name) || "",
           type: swatch.type,
-          fillVariableId: fillVariableId(swatch),
+          fills: collectVisibleFillBindings(swatch.fills),
           labelName: (label == null ? void 0 : label.name) || "",
-          labelFillVariableId: fillVariableId(label)
+          labelFills: collectVisibleFillBindings(label == null ? void 0 : label.fills),
+          labelCharactersLength: ((_a = label == null ? void 0 : label.characters) == null ? void 0 : _a.length) || 0,
+          labelTextRanges: collectTextRangeBindings(label)
         });
       }
     }
@@ -2097,7 +2230,8 @@
       containerName: (spacing == null ? void 0 : spacing.name) || "",
       type: bar.type,
       width: bar.width,
-      widthVariableId: boundVariableId(bar, "width")
+      fills: collectVisibleFillBindings(bar.fills),
+      fieldVariableIds: collectFieldVariableIds(bar, ["width"])
     })));
     const radius = childFrame("Foundations / Radien");
     const radiusFields = ["topLeftRadius", "topRightRadius", "bottomLeftRadius", "bottomRightRadius", "maxWidth", "maxHeight"];
@@ -2109,7 +2243,8 @@
       width: sample.width,
       height: sample.height,
       cornerRadius: typeof sample.cornerRadius === "number" ? sample.cornerRadius : null,
-      boundVariableIds: Object.fromEntries(radiusFields.map((field) => [field, boundVariableId(sample, field)]))
+      fills: collectVisibleFillBindings(sample.fills),
+      fieldVariableIds: collectFieldVariableIds(sample, radiusFields)
     }));
     const typography = childFrame("Foundations / Typografie");
     const textSpecimens = childNodes(typography, ["TEXT"]).filter((node) => node.name.startsWith("Typografie / ")).map((node) => ({
@@ -2118,10 +2253,10 @@
       parentName: (typography == null ? void 0 : typography.name) || "",
       type: node.type,
       textStyleId: node.textStyleId,
-      boundVariableIds: {
-        fontSize: boundVariableId(node, "fontSize"),
-        fontWeight: boundVariableId(node, "fontWeight")
-      }
+      fills: collectVisibleFillBindings(node.fills),
+      charactersLength: node.characters.length,
+      textRanges: collectTextRangeBindings(node),
+      fieldVariableIds: collectFieldVariableIds(node, ["fontSize", "fontWeight"])
     }));
     const localTextStyles = (await figma.getLocalTextStylesAsync()).filter((style) => style.name.startsWith("Onda/Type/"));
     const textStyles = localTextStyles.map((style) => ({
@@ -2134,10 +2269,7 @@
       letterSpacing: cloneSerializable(style.letterSpacing),
       textCase: style.textCase,
       textDecoration: style.textDecoration,
-      boundVariableIds: {
-        fontSize: boundVariableId(style, "fontSize"),
-        fontWeight: boundVariableId(style, "fontWeight")
-      }
+      fieldVariableIds: collectFieldVariableIds(style, ["fontSize", "fontWeight"])
     }));
     const localEffectStyles = (await figma.getLocalEffectStylesAsync()).filter((style) => style.name.startsWith("Onda/Shadow/"));
     const effectStyles = localEffectStyles.map((style) => ({
@@ -2153,10 +2285,11 @@
         effectConsumers.push({
           nodeId: consumer.node.id,
           name: consumer.node.name,
-          parentName: ((_a = consumer.node.parent) == null ? void 0 : _a.name) || "",
+          parentName: ((_b = consumer.node.parent) == null ? void 0 : _b.name) || "",
           type: consumer.node.type,
           effectStyleId: consumer.node.effectStyleId,
-          fields: [...consumer.fields].sort()
+          fields: [...consumer.fields].sort(),
+          fills: collectVisibleFillBindings(consumer.node.fills)
         });
       }
     }
@@ -2298,26 +2431,37 @@
       return;
     }
     if (command === "verify") {
-      const ledger2 = readLedger(figma.currentPage);
-      const transition2 = validatePhaseTransition(command, (ledger2 == null ? void 0 : ledger2.phases) || {});
-      if (!transition2.ok) throw new Error(transition2.warning);
+      const ledger = readLedger(figma.currentPage);
+      const transition = validatePhaseTransition(command, (ledger == null ? void 0 : ledger.phases) || {});
+      if (!transition.ok) throw new Error(transition.warning);
       const report = await runVerify();
       const hardPass = report.hardPass;
       postResult(command, hardPass, hardPass ? "Alle strukturellen Hard Gates bestanden." : "Verify hat offene Hard Gates gefunden.", report, true);
       return;
     }
-    const { page, ledger } = await requireMutationContext();
-    const transition = validatePhaseTransition(command, ledger.phases);
-    if (!transition.ok) throw new Error(transition.warning);
-    let counts;
-    if (command === "foundations") counts = await runFoundations(page, ledger);
-    else if (command === "core-views") counts = await runCoreViews(page, ledger);
-    else if (command === "dialogs-and-secondary") counts = await runDialogsAndSecondary(page, ledger);
-    else if (command.startsWith("component-")) counts = await runComponent(page, ledger, command.slice("component-".length));
-    else if (command.startsWith("annotations-")) counts = await runAnnotationBatch(page, ledger, Number(command.slice("annotations-".length)) - 1);
-    else throw new Error(`Unbekannter Befehl: ${command}`);
-    markPhase(page, ledger, command, counts);
-    postResult(command, true, "Phase erfolgreich abgeschlossen und strukturell gez\xE4hlt.", counts, true);
+    async function runMutation({ page, ledger }) {
+      const transition = validatePhaseTransition(command, ledger.phases);
+      if (!transition.ok) throw new Error(transition.warning);
+      let counts;
+      if (command === "foundations") counts = await runFoundations(page, ledger);
+      else if (command === "core-views") counts = await runCoreViews(page, ledger);
+      else if (command === "dialogs-and-secondary") counts = await runDialogsAndSecondary(page, ledger);
+      else if (command.startsWith("component-")) counts = await runComponent(page, ledger, command.slice("component-".length));
+      else if (command.startsWith("annotations-")) counts = await runAnnotationBatch(page, ledger, Number(command.slice("annotations-".length)) - 1);
+      else throw new Error(`Unbekannter Befehl: ${command}`);
+      markPhase(page, ledger, command, counts);
+      postResult(command, true, "Phase erfolgreich abgeschlossen und strukturell gez\xE4hlt.", counts, true);
+    }
+    if (command === "foundations") {
+      await executeFoundationMutation({
+        preflight: preflightFoundationMutation,
+        requireContext: requireMutationContext,
+        mutate: runMutation
+      });
+      return;
+    }
+    const context = await requireMutationContext();
+    await runMutation(context);
   }
   figma.ui.onmessage = async (message) => {
     if (!message) return;

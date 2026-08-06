@@ -68,6 +68,14 @@ function labelVariable(layer, paintName) {
   return variableId(collectionName, name)
 }
 
+function fillBindings(...variableIds) {
+  return [{ index: 0, type: 'SOLID', variableIds }]
+}
+
+function textRanges(charactersLength, variableIdValue) {
+  return [{ start: 0, end: charactersLength, fills: fillBindings(variableIdValue) }]
+}
+
 export function createValidFoundationEvidence() {
   const collections = COLLECTIONS.map(([name, modeName]) => ({
     id: collectionId(name),
@@ -108,14 +116,17 @@ export function createValidFoundationEvidence() {
 
   const swatches = []
   for (const name of Object.keys(TEST_PALETTE)) {
+    const labelVariableId = labelVariable('primitive', name)
     swatches.push({
       nodeId: `swatch:primitive:${name}`,
       name: `Swatch / ${name}`,
       parentName: 'Foundations / Graustufen',
       type: 'FRAME',
-      fillVariableId: variableId('Onda · Primitive', name),
+      fills: fillBindings(variableId('Onda · Primitive', name)),
       labelName: `Swatch / ${name} / Label`,
-      labelFillVariableId: labelVariable('primitive', name),
+      labelFills: fillBindings(labelVariableId),
+      labelCharactersLength: name.length,
+      labelTextRanges: textRanges(name.length, labelVariableId),
     })
   }
   for (const [collectionName, layer, key, parentName] of [
@@ -124,14 +135,17 @@ export function createValidFoundationEvidence() {
   ]) {
     for (const role of TEST_ROLES) {
       const name = `Swatch / ${layer} / ${role.name}`
+      const labelVariableId = labelVariable(layer, role[key])
       swatches.push({
         nodeId: `swatch:${layer}:${role.name}`,
         name,
         parentName,
         type: 'FRAME',
-        fillVariableId: variableId(collectionName, role.name),
+        fills: fillBindings(variableId(collectionName, role.name)),
         labelName: `${name} / Label`,
-        labelFillVariableId: labelVariable(layer, role[key]),
+        labelFills: fillBindings(labelVariableId),
+        labelCharactersLength: role.name.length,
+        labelTextRanges: textRanges(role.name.length, labelVariableId),
       })
     }
   }
@@ -143,7 +157,8 @@ export function createValidFoundationEvidence() {
     containerName: 'Foundations / Spacing',
     type: 'RECTANGLE',
     width: value,
-    widthVariableId: variableId('Onda · Dimension', `spacing/${value}`),
+    fills: fillBindings(),
+    fieldVariableIds: { width: [variableId('Onda · Dimension', `spacing/${value}`)] },
   }))
   const radiusSamples = [
     ['radius/none', 0], ['radius/control', 4], ['radius/static', 6], ['radius/overlay', 8],
@@ -153,7 +168,8 @@ export function createValidFoundationEvidence() {
     parentName: 'Foundations / Radien',
     type: 'RECTANGLE',
     cornerRadius: value,
-    boundVariableIds: Object.fromEntries(['topLeftRadius', 'topRightRadius', 'bottomLeftRadius', 'bottomRightRadius'].map(field => [field, variableId('Onda · Dimension', token)])),
+    fills: fillBindings(),
+    fieldVariableIds: Object.fromEntries(['topLeftRadius', 'topRightRadius', 'bottomLeftRadius', 'bottomRightRadius'].map(field => [field, [variableId('Onda · Dimension', token)]])),
   }))
   radiusSamples.push({
     nodeId: 'radius:999',
@@ -162,9 +178,10 @@ export function createValidFoundationEvidence() {
     type: 'ELLIPSE',
     width: 112,
     height: 112,
-    boundVariableIds: {
-      maxWidth: variableId('Onda · Dimension', 'radius/circle'),
-      maxHeight: variableId('Onda · Dimension', 'radius/circle'),
+    fills: fillBindings(),
+    fieldVariableIds: {
+      maxWidth: [variableId('Onda · Dimension', 'radius/circle')],
+      maxHeight: [variableId('Onda · Dimension', 'radius/circle')],
     },
   })
 
@@ -182,19 +199,26 @@ export function createValidFoundationEvidence() {
     letterSpacing: { unit: 'PIXELS', value: 0 },
     textCase: 'ORIGINAL',
     textDecoration: 'NONE',
-    boundVariableIds: {
-      fontSize: variableId('Onda · Typography', `font-size/${definition.size}`),
-      fontWeight: variableId('Onda · Typography', `font-weight/${definition.weight}`),
+    fieldVariableIds: {
+      fontSize: [variableId('Onda · Typography', `font-size/${definition.size}`)],
+      fontWeight: [variableId('Onda · Typography', `font-weight/${definition.weight}`)],
     },
   }))
-  const textSpecimens = TEST_TEXT_STYLES.map((definition, index) => ({
-    nodeId: `specimen:${slug(definition.role)}`,
-    name: `Typografie / ${definition.role}`,
-    parentName: 'Foundations / Typografie',
-    type: 'TEXT',
-    textStyleId: textStyles[index].id,
-    boundVariableIds: { ...textStyles[index].boundVariableIds },
-  }))
+  const textSpecimens = TEST_TEXT_STYLES.map((definition, index) => {
+    const charactersLength = 80 + index
+    const textVariableId = variableId('Onda · Semantic · Light', 'color/text')
+    return {
+      nodeId: `specimen:${slug(definition.role)}`,
+      name: `Typografie / ${definition.role}`,
+      parentName: 'Foundations / Typografie',
+      type: 'TEXT',
+      textStyleId: textStyles[index].id,
+      fieldVariableIds: structuredClone(textStyles[index].fieldVariableIds),
+      fills: fillBindings(textVariableId),
+      charactersLength,
+      textRanges: textRanges(charactersLength, textVariableId),
+    }
+  })
   const effectStyles = [{
     id: 'effect-style:overlay',
     name: 'Onda/Shadow/Overlay',
@@ -216,6 +240,7 @@ export function createValidFoundationEvidence() {
     type: 'FRAME',
     effectStyleId: 'effect-style:overlay',
     fields: ['effectStyleId'],
+    fills: fillBindings(variableId('Onda · Semantic · Light', 'color/surface')),
   }]
   return {
     paintsValid: true,

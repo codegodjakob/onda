@@ -53,8 +53,8 @@ test('every collection mode and every variable syntax, type, scope, value, alias
 test('all 24 swatches reject missing, duplicate, wrong token name, and wrong real fill binding', () => {
   const base = createValidFoundationEvidence()
   for (const [index, swatch] of base.swatches.entries()) {
-    expectInvalid(base, value => { value.swatches[index].fillVariableId = 'variable:wrong' }, `${swatch.name}: wrong fill binding`)
-    expectInvalid(base, value => { value.swatches[index].labelFillVariableId = 'variable:wrong' }, `${swatch.name}: wrong label binding`)
+    expectInvalid(base, value => { value.swatches[index].fills[0].variableIds[0] = 'variable:wrong' }, `${swatch.name}: wrong fill binding`)
+    expectInvalid(base, value => { value.swatches[index].labelFills[0].variableIds[0] = 'variable:wrong' }, `${swatch.name}: wrong label binding`)
     expectInvalid(base, value => { value.swatches[index].name = `${swatch.name} wrong` }, `${swatch.name}: wrong token name`)
     expectInvalid(base, value => { value.swatches.splice(index, 1) }, `${swatch.name}: missing`)
     expectInvalid(base, value => { value.swatches.push(structuredClone(value.swatches[index])) }, `${swatch.name}: duplicate`)
@@ -64,7 +64,7 @@ test('all 24 swatches reject missing, duplicate, wrong token name, and wrong rea
 test('all spacing and radius artifacts reject missing, duplicate, wrong token, geometry, value, and VariableId bindings', () => {
   const base = createValidFoundationEvidence()
   for (const [index, bar] of base.spacingBars.entries()) {
-    expectInvalid(base, value => { value.spacingBars[index].widthVariableId = 'variable:wrong' }, `${bar.name}: wrong binding`)
+    expectInvalid(base, value => { value.spacingBars[index].fieldVariableIds.width[0] = 'variable:wrong' }, `${bar.name}: wrong binding`)
     expectInvalid(base, value => { value.spacingBars[index].width += 1 }, `${bar.name}: wrong width`)
     expectInvalid(base, value => { value.spacingBars[index].name = `${bar.name} wrong` }, `${bar.name}: wrong token`)
     expectInvalid(base, value => { value.spacingBars.splice(index, 1) }, `${bar.name}: missing`)
@@ -72,7 +72,7 @@ test('all spacing and radius artifacts reject missing, duplicate, wrong token, g
   }
   for (const [index, sample] of base.radiusSamples.entries()) {
     const field = sample.type === 'ELLIPSE' ? 'maxWidth' : 'topLeftRadius'
-    expectInvalid(base, value => { value.radiusSamples[index].boundVariableIds[field] = 'variable:wrong' }, `${sample.name}: wrong binding`)
+    expectInvalid(base, value => { value.radiusSamples[index].fieldVariableIds[field][0] = 'variable:wrong' }, `${sample.name}: wrong binding`)
     expectInvalid(base, value => { value.radiusSamples[index].type = sample.type === 'ELLIPSE' ? 'RECTANGLE' : 'ELLIPSE' }, `${sample.name}: wrong geometry`)
     expectInvalid(base, value => { value.radiusSamples[index].name = `${sample.name} wrong` }, `${sample.name}: wrong token`)
     expectInvalid(base, value => { value.radiusSamples.splice(index, 1) }, `${sample.name}: missing`)
@@ -89,15 +89,15 @@ test('each text style and specimen rejects wrong name, font decision, size, line
     expectInvalid(base, value => { value.textStyles[index].fontSize += 1 }, `${style.name}: wrong size`)
     expectInvalid(base, value => { value.textStyles[index].lineHeight.value += 1 }, `${style.name}: wrong line height`)
     expectInvalid(base, value => { value.textStyles[index].letterSpacing.value = 1 }, `${style.name}: wrong letter spacing`)
-    expectInvalid(base, value => { value.textStyles[index].boundVariableIds.fontSize = 'variable:wrong' }, `${style.name}: wrong size variable`)
-    expectInvalid(base, value => { value.textStyles[index].boundVariableIds.fontWeight = 'variable:wrong' }, `${style.name}: wrong weight variable`)
+    expectInvalid(base, value => { value.textStyles[index].fieldVariableIds.fontSize[0] = 'variable:wrong' }, `${style.name}: wrong size variable`)
+    expectInvalid(base, value => { value.textStyles[index].fieldVariableIds.fontWeight[0] = 'variable:wrong' }, `${style.name}: wrong weight variable`)
     expectInvalid(base, value => { value.textStyles.splice(index, 1) }, `${style.name}: missing`)
     expectInvalid(base, value => { value.textStyles.push(structuredClone(value.textStyles[index])) }, `${style.name}: duplicate`)
   }
   for (const [index, specimen] of base.textSpecimens.entries()) {
     expectInvalid(base, value => { value.textSpecimens[index].textStyleId = 'text-style:wrong' }, `${specimen.name}: wrong style link`)
-    expectInvalid(base, value => { value.textSpecimens[index].boundVariableIds.fontSize = 'variable:wrong' }, `${specimen.name}: wrong size mapping`)
-    expectInvalid(base, value => { value.textSpecimens[index].boundVariableIds.fontWeight = 'variable:wrong' }, `${specimen.name}: wrong weight mapping`)
+    expectInvalid(base, value => { value.textSpecimens[index].fieldVariableIds.fontSize[0] = 'variable:wrong' }, `${specimen.name}: wrong size mapping`)
+    expectInvalid(base, value => { value.textSpecimens[index].fieldVariableIds.fontWeight[0] = 'variable:wrong' }, `${specimen.name}: wrong weight mapping`)
     expectInvalid(base, value => { value.textSpecimens.splice(index, 1) }, `${specimen.name}: missing`)
     expectInvalid(base, value => { value.textSpecimens.push(structuredClone(value.textSpecimens[index])) }, `${specimen.name}: duplicate`)
   }
@@ -140,7 +140,9 @@ test('runtime gathers real API properties and deterministic node names instead o
   const collector = runtime.slice(start, end)
   assert.match(collector, /valuesByMode/)
   assert.match(collector, /codeSyntax/)
-  assert.match(collector, /boundVariables/)
+  assert.match(collector, /collectVisibleFillBindings/)
+  assert.match(collector, /collectFieldVariableIds/)
+  assert.match(collector, /collectTextRangeBindings/)
   assert.match(collector, /fontName/)
   assert.match(collector, /lineHeight/)
   assert.match(collector, /getStyleConsumersAsync/)
