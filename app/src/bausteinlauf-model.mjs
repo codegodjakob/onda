@@ -96,14 +96,26 @@ export function normalisiereBausteinarten(wert) {
   const arten = []
   const nachName = new Map()
   const umleitung = new Map()
+  const benutztIds = new Set()
   wert.arten.forEach((roh, index) => {
     if (!roh || typeof roh !== 'object') return
     const name = text(roh.name)
     if (!name) return
-    const id = text(roh.id) || `art-${index + 1}`
+    let id = text(roh.id) || `art-${index + 1}`
     const schluessel = name.toLocaleLowerCase('de')
     const bekannt = nachName.get(schluessel)
     if (bekannt) { umleitung.set(id, bekannt); return }
+    // Doppelte ids bekommen eine neue eindeutige Kennung
+    if (benutztIds.has(id)) {
+      let suffix = 2
+      let neueId = `${id}-${suffix}`
+      while (benutztIds.has(neueId)) {
+        suffix += 1
+        neueId = `${id}-${suffix}`
+      }
+      id = neueId
+    }
+    benutztIds.add(id)
     const art = {
       id,
       name,
@@ -112,7 +124,7 @@ export function normalisiereBausteinarten(wert) {
     }
     arten.push(art)
     nachName.set(schluessel, id)
-    umleitung.set(id, id)
+    umleitung.set(text(roh.id) || `art-${index + 1}`, id)
   })
   if (!arten.length) return null
 
@@ -163,8 +175,8 @@ export function bestandAusAltenRollen(docJson, jetzt = Date.now()) {
     kennungen.push(id)
     if (node.type === 'heading') return
     const rolle = node?.attrs?.semanticRole
+    if (!Object.hasOwn(ALTE_ROLLEN, rolle)) return
     const name = ALTE_ROLLEN[rolle]
-    if (!name) return
     const inhalt = knotenText(node).trim()
     if (!inhalt) return
     if (!nachRolle.has(rolle)) {
@@ -188,26 +200,18 @@ export function bestandAusAltenRollen(docJson, jetzt = Date.now()) {
 // Zwei getrennte Karten, weil zwei getrennte Zwecke: Die Funktion speist block.role und
 // damit die Rechenlogik; der Name steht in der Struktur-Spalte. Eine Art ohne Funktion
 // hat trotzdem einen Namen — sie taucht nur in der Rechenlogik nicht auf.
-export function bausteinRollen(bestand) {
+function bausteinKarte(bestand, feld) {
   const karte = new Map()
   const gueltig = normalisiereBausteinarten(bestand)
   if (!gueltig) return karte
-  const funktionen = new Map(gueltig.arten.map(art => [art.id, art.funktion]))
+  const werte = new Map(gueltig.arten.map(art => [art.id, art[feld]]))
   Object.entries(gueltig.zuordnung).forEach(([blockId, eintrag]) => {
-    const funktion = funktionen.get(eintrag.artId)
-    if (funktion) karte.set(blockId, funktion)
+    const wert = werte.get(eintrag.artId)
+    if (wert) karte.set(blockId, wert)
   })
   return karte
 }
 
-export function bausteinNamen(bestand) {
-  const karte = new Map()
-  const gueltig = normalisiereBausteinarten(bestand)
-  if (!gueltig) return karte
-  const namen = new Map(gueltig.arten.map(art => [art.id, art.name]))
-  Object.entries(gueltig.zuordnung).forEach(([blockId, eintrag]) => {
-    const name = namen.get(eintrag.artId)
-    if (name) karte.set(blockId, name)
-  })
-  return karte
-}
+export function bausteinRollen(bestand) { return bausteinKarte(bestand, 'funktion') }
+
+export function bausteinNamen(bestand) { return bausteinKarte(bestand, 'name') }

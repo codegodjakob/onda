@@ -278,3 +278,40 @@ test('ensureWorkspaceState raeumt eine kaputte Ablage weg und laesst eine gute s
   ensureWorkspaceState(gut)
   assert.equal(gut.workspace.bausteinarten.arten[0].name, 'Befund')
 })
+
+test('eine semanticRole von "constructor" wird nicht als gueltige alte Rolle behandelt', () => {
+  const docJson = {
+    content: [
+      { type: 'paragraph', attrs: { blockId: 'b1', semanticRole: 'constructor' }, content: [{ type: 'text', text: 'Verdaechtiger Text.' }] },
+      { type: 'paragraph', attrs: { blockId: 'b2', semanticRole: 'claim' }, content: [{ type: 'text', text: 'Eine echte Behauptung.' }] },
+    ],
+  }
+  const bestand = bestandAusAltenRollen(docJson, 1)
+  // b1 bleibt unzugeordnet, nur b2 (mit echtem claim) ergibt eine Art
+  assert.equal(bestand.arten.length, 1)
+  assert.equal(bestand.arten[0].funktion, 'claim')
+  assert.deepEqual(Object.keys(bestand.zuordnung), ['b2'])
+})
+
+test('doppelte Ids bekommen eindeutige neue Kennungen, zuordnungen bleiben konsistent', () => {
+  const bestand = normalisiereBausteinarten({
+    arten: [
+      { id: 'art-dup', name: 'Befund', funktion: 'evidence' },
+      { id: 'art-dup', name: 'Einordnung', funktion: null },
+    ],
+    zuordnung: {
+      b1: { artId: 'art-dup', zeichen: 5 },
+      b2: { artId: 'art-dup', zeichen: 5 },
+    },
+  })
+  // Beide Namen bleiben
+  assert.equal(bestand.arten.length, 2)
+  assert.equal(bestand.arten[0].name, 'Befund')
+  assert.equal(bestand.arten[1].name, 'Einordnung')
+  // Aber die Ids sind verschieden
+  assert.notEqual(bestand.arten[0].id, bestand.arten[1].id)
+  // Zuordnungen bleiben sauber — auch mit der neuen Id
+  assert.equal(Object.keys(bestand.zuordnung).length, 2)
+  assert.ok(bestand.zuordnung.b1.artId)
+  assert.ok(bestand.zuordnung.b2.artId)
+})
