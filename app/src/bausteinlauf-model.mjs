@@ -12,7 +12,11 @@ export const FUNKTIONEN = Object.freeze(['claim', 'evidence', 'counterpoint', 't
 // verstellbar und an beiden Raendern geprueft.
 export const UMSCHREIB_GRENZE = 0.5
 
-function benennbar(block) {
+// Exportiert, damit bausteinarten-kontext.mjs und verarbeiteBausteinantwort beide
+// nach den gleichen Kriterien entscheiden, welche Absätze benennbar sind. Eine private
+// Kopie würde sie auseinanderdriften lassen — das Verzeichnis würde dem Modell andere
+// Absätze zeigen als die Antwort verarbeitet werden kann.
+export function benennbar(block) {
   if (!block?.id) return false
   if (block.type === 'heading' || block.role === 'heading') return false
   return Boolean(String(block.text || '').trim())

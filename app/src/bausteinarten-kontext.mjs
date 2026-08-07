@@ -2,18 +2,13 @@
 // Übersetzt die Rohdaten auf den tatsächlichen baueAnfrage-Vertrag
 // ({verstaendnis, docText, volatiles}). Vorbild: hinweis-kontext.mjs.
 import { BAUSTEINARTEN_ANWEISUNG } from './agent-prompts.mjs'
+import { benennbar } from './bausteinlauf-model.mjs'
 
-const ANRISS_ZEICHEN = 120
-
-function benennbar(block) {
-  if (!block?.id) return false
-  if (block.type === 'heading' || block.role === 'heading') return false
-  return Boolean(String(block.text || '').trim())
-}
+export const ANRISS_ZEICHEN = 120
 
 // Das Absatzverzeichnis ist volatil, nicht gecacht: Es ändert sich mit jedem neuen
 // Absatz, während der Dokumenttext im Cache-Präfix liegt und dort stabil bleiben muss
-// (Cache-Präfix-Stabilität, agent-tasks.mjs:196).
+// (Cache-Präfix-Stabilität; siehe agent-tasks.mjs).
 //
 // Der Anriss statt des vollen Absatzes: Der ganze Wortlaut steht bereits im <dokument>.
 // Das Verzeichnis hat nur die Aufgabe, Kennung und Absatz zusammenzubringen -- dafür

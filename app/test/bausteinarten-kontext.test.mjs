@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { baueBausteinKontext } from '../src/bausteinarten-kontext.mjs'
+import { baueBausteinKontext, ANRISS_ZEICHEN } from '../src/bausteinarten-kontext.mjs'
 import { BAUSTEINARTEN_ANWEISUNG } from '../src/agent-prompts.mjs'
 import { baueAnfrage } from '../src/agent-tasks.mjs'
 
@@ -59,6 +59,18 @@ test('ohne offene-Liste stehen alle benennbaren Absaetze drin', () => {
   const kontext = baueBausteinKontext({ docText: 'Text', blocks: BLOCKS, offene: null })
   const verzeichnis = kontext.volatiles.find(block => block.startsWith('Absätze:'))
   assert.match(verzeichnis, /b1/)
+})
+
+test('ein langer Absatz wird auf ANRISS_ZEICHEN Zeichen gekuerzt', () => {
+  const langText = 'a'.repeat(200)
+  const blocks = [
+    { id: 'b1', type: 'paragraph', role: 'paragraph', text: langText },
+  ]
+  const kontext = baueBausteinKontext({ docText: 'Text', blocks })
+  const verzeichnis = kontext.volatiles.find(block => block.startsWith('Absätze:'))
+  assert.ok(verzeichnis)
+  const verzeichnisObj = JSON.parse(verzeichnis.slice('Absätze: '.length))
+  assert.equal(verzeichnisObj[0].anriss.length, ANRISS_ZEICHEN, `erwartet ${ANRISS_ZEICHEN} Zeichen, aber ${verzeichnisObj[0].anriss.length} gefunden`)
 })
 
 test('baueAnfrage nimmt diesen Kontext ohne Verlust an', () => {
