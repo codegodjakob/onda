@@ -1,0 +1,11 @@
+/* Onda · radii. Knapp und ruhig — keine Pillen mehr im UI. Nur drei Stufen im Gebrauch: Control (8), Fläche (12), rund (nur echte Kreise: Orb, Avatar, Punkte). */
+:root{
+  --radius-none:0; --radius-xs:2px; --radius-sm:4px; --radius-md:6px; --radius-lg:8px;
+  --radius-xl:12px; --radius-full:999px;
+  /* Semantic */
+  --radius-control:var(--radius-lg);  /* Buttons, Felder, Selects, Tabs, Chips */
+  --radius-card:var(--radius-xl);     /* Karten und Widgets */
+  --radius-overlay:var(--radius-xl);  /* Dialoge, Menüs, Toasts */
+  --radius-panel:var(--radius-xl);    /* weiche Flächen: Panels, Composer, Sprechblasen */
+  --radius-pill:var(--radius-full);   /* nur echte Kreise: Orb, Avatar, Statuspunkte */
+}

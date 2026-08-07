@@ -1,0 +1,21 @@
+/* Onda · elevation. Soft, warm-tinted, low-opacity layered shadows; borders do most of the work. */
+:root{
+  --shadow-xs:0 1px 2px rgba(28,26,23,0.05);
+  --shadow-sm:0 1px 2px rgba(28,26,23,0.06),0 1px 1px rgba(28,26,23,0.04);
+  --shadow-md:0 2px 4px rgba(28,26,23,0.05),0 6px 16px rgba(28,26,23,0.07);
+  --shadow-lg:0 4px 8px rgba(28,26,23,0.06),0 16px 32px rgba(28,26,23,0.1);
+  --shadow-xl:0 8px 16px rgba(28,26,23,0.08),0 28px 56px rgba(28,26,23,0.14);
+  --shadow-inset:inset 0 1px 2px rgba(28,26,23,0.07);
+  /* Fokus: EIN weicher Halo, keine Outline — Tastatur (:focus-visible) und Felder nutzen dasselbe */
+  --shadow-focus:0 0 0 4px var(--focus-ring);
+  --shadow-glow:0 0 0 1px rgba(28,26,23,0.1),0 4px 22px rgba(28,26,23,0.14);
+}
+[data-theme="dark"]{
+  --shadow-xs:0 1px 2px rgba(0,0,0,0.3);
+  --shadow-sm:0 1px 2px rgba(0,0,0,0.35),0 1px 1px rgba(0,0,0,0.25);
+  --shadow-md:0 2px 4px rgba(0,0,0,0.3),0 6px 16px rgba(0,0,0,0.35);
+  --shadow-lg:0 4px 8px rgba(0,0,0,0.35),0 16px 32px rgba(0,0,0,0.45);
+  --shadow-xl:0 8px 16px rgba(0,0,0,0.4),0 28px 56px rgba(0,0,0,0.55);
+  --shadow-inset:inset 0 1px 2px rgba(0,0,0,0.4);
+  --shadow-glow:0 0 0 1px rgba(244,241,234,0.16),0 4px 26px rgba(244,241,234,0.2);
+}

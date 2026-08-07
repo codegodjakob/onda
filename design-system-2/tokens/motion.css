@@ -1,0 +1,27 @@
+/* Onda · motion. Smooth, weighted, premium — fast to respond, gentle to settle.
+   ease-out = default (gentle expo settle) · ease-standard = movement across the canvas ·
+   ease-in-out = symmetric/looping · ease-spring = aura presence ONLY. No bounce in functional UI. */
+:root{
+  --ease-out:cubic-bezier(0.16,1,0.3,1); /* @kind other */
+  --ease-standard:cubic-bezier(0.2,0,0,1); /* @kind other */
+  --ease-in-out:cubic-bezier(0.65,0,0.35,1); /* @kind other */
+  --ease-spring:cubic-bezier(0.34,1.4,0.64,1); /* @kind other */
+  --dur-fast:120ms; /* @kind other */
+  --dur-quick:180ms; /* @kind other */
+  --dur-normal:240ms; /* @kind other */
+  --dur-slow:360ms; /* @kind other */
+  --dur-slower:560ms; /* @kind other */
+  --transition-colors:color var(--dur-fast) var(--ease-out),background-color var(--dur-fast) var(--ease-out),border-color var(--dur-fast) var(--ease-out); /* @kind other */
+  --transition-transform:transform var(--dur-normal) var(--ease-out); /* @kind other */
+  --transition-opacity:opacity var(--dur-normal) var(--ease-out); /* @kind other */
+  --transition-all:all var(--dur-quick) var(--ease-out); /* @kind other */
+}
+@media (prefers-reduced-motion:reduce){
+  :root{
+    --dur-fast:1ms; /* @kind other */
+    --dur-quick:1ms; /* @kind other */
+    --dur-normal:1ms; /* @kind other */
+    --dur-slow:1ms; /* @kind other */
+    --dur-slower:1ms; /* @kind other */
+  }
+}

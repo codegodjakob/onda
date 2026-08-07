@@ -1,0 +1,165 @@
+<!-- @dsCard group="Annotation" viewport="1180x6600" name="Anmerkungsarten" subtitle="Jede Art in der Form, die zu ihr passt — Korrektur am Wort, Umschreibung im Text, Beleg am Rand, Frage als Dialog" -->
+<!DOCTYPE html>
+<html lang="de"><head><meta charset="utf-8"><link rel="stylesheet" href="../../styles.css">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<style>
+body{margin:0;background:var(--bg-app);font-family:var(--font-sans);color:var(--text-primary)}
+.ct{padding:10px;display:flex}
+.ct__sheet{flex:1;background:var(--bg-surface);border-radius:var(--radius-panel);padding:44px 48px 56px}
+.ct__title{font-size:var(--text-4xl);font-weight:var(--fw-bold);letter-spacing:var(--tracking-tighter);line-height:var(--leading-tight)}
+.ct__lead{font:var(--type-body);color:var(--text-secondary);max-width:660px;text-wrap:pretty;margin:16px 0 0}
+.ct__cat{font-size:var(--text-xl);font-weight:var(--fw-bold);letter-spacing:var(--tracking-tight);margin:48px 0 4px;padding-top:24px;border-top:1px solid var(--border-subtle)}
+.ex{padding:22px 0 24px;display:flex;flex-direction:column;gap:14px}
+.ex__form{display:flex;align-items:baseline;gap:10px}
+.ex__kind{font:var(--type-label);color:var(--text-primary)}
+.ex__mode{font:var(--type-body);color:var(--text-tertiary)}
+.ex__row{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:40px;align-items:start}
+.ex__text{font-size:var(--text-base);line-height:var(--leading-relaxed);color:var(--text-primary);text-wrap:pretty;margin:0;max-width:620px}
+.ex--pop{padding-bottom:96px}
+.ex--wide .ex__row{grid-template-columns:minmax(0,1fr)}
+.ex__hint{font:var(--type-body);color:var(--text-secondary);margin:0;max-width:620px}
+.ex__bars{display:flex;flex-direction:column;gap:7px;margin-top:4px}
+.ex__bar{height:8px;border-radius:var(--radius-control);background:var(--bg-sunken)}
+.ex__bar--on{background:var(--accent-tint)}
+.ex__doc{display:flex;align-items:baseline;gap:14px}
+.ex__doctitle{font-size:var(--text-4xl);font-weight:var(--fw-bold);letter-spacing:var(--tracking-tighter);line-height:var(--leading-tight)}
+</style></head>
+<body><div id="ct-root"></div>
+<script type="text/babel">
+const {Annotation, Mark, Correction, Insertion, Rewrite, Slot, Region, Bubble, Aura, Composer} = window.AuraDesignSystem_6ddaae;
+const noop=()=>{};
+
+function Ex({kind,mode,pop,wide,children}){
+  return <div className={`ex${pop?' ex--pop':''}${wide?' ex--wide':''}`}>
+    <div className="ex__form"><span className="ex__kind">{kind}</span><span className="ex__mode">{mode}</span></div>
+    <div className="ex__row">{children}</div>
+  </div>;
+}
+
+const items=[
+ ['Korrektur',[
+  <Ex kind="Rechtschreibung" mode="Korrektur am Wort — alt → neu, ein Klick" pop>
+    <p className="ex__text">Trotzdem behandeln wir sie wie einen Vorrat, aus dem man beliebig schöpfen kann — ein teurer <Correction kind="rechtschreibung" open to="Zeitvertreib" onAccept={noop} onDismiss={noop}>Zeit vertreib</Correction>.</p>
+  </Ex>,
+  <Ex kind="Grammatik" mode="Korrektur am Wort — die Form, die nicht passt" pop>
+    <p className="ex__text"><Correction kind="grammatik" open to="wurden" onAccept={noop} onDismiss={noop}>Die Ergebnisse der Studie wurde</Correction> 2009 veröffentlicht und seither mehrfach bestätigt.</p>
+  </Ex>,
+  <Ex kind="Zeichensetzung" mode="Korrektur am Wort — Zeichen statt Text" pop>
+    <p className="ex__text">Er kam <Correction kind="zeichensetzung" open to="früher, weil" note="Komma vor dem Nebensatz" onAccept={noop} onDismiss={noop}>früher weil</Correction> er die Zahlen selbst sehen wollte.</p>
+  </Ex>]],
+ ['Stil',[
+  <Ex kind="Wortwahl" mode="Korrektur am Wort — Alternative direkt anbieten" pop>
+    <p className="ex__text">Wer dann noch Rückmeldung <Correction kind="wortwahl" open to="erhält" onAccept={noop} onDismiss={noop}>kriegt</Correction>, arbeitet an einem Text, den er längst abgeschlossen hätte.</p>
+  </Ex>,
+  <Ex kind="Satzstil" mode="Vorschlagskarte rechts — die Stelle bleibt im Text markiert">
+    <p className="ex__text"><Mark kind="satzstil">Weil die Aufmerksamkeit, die wir am Morgen haben, wenn wir noch nicht abgelenkt sind, die wertvollste Ressource ist, sollte man sie schützen.</Mark></p>
+    <Rewrite to="Am Morgen ist die Aufmerksamkeit am größten. Diese Zeit sollte man schützen." meta="24 → 12 Wörter" onAccept={noop} onDismiss={noop}>Schachtelsatz mit drei Nebensätzen.</Rewrite>
+  </Ex>,
+  <Ex kind="Absatzstil" mode="Vorschlagskarte rechts — ganzer Absatz markiert">
+    <p className="ex__text"><Mark kind="absatzstil">Wir planen montags. Wir schützen die Blöcke. Wir prüfen am Freitag. Wir passen an.</Mark></p>
+    <Rewrite label="Rhythmus lösen" to="Geplant wird montags; die Blöcke bleiben geschützt, freitags folgt die Prüfung." meta="4 → 1 Satz" onAccept={noop} onDismiss={noop}>Vier Sätze, vier gleiche Anfänge.</Rewrite>
+  </Ex>,
+  <Ex kind="Straffen" mode="Vorschlagskarte rechts — Wortzahl als Beweis">
+    <p className="ex__text"><Mark kind="straffen">Es wurde eine Entscheidung getroffen, die Reihenfolge zu ändern.</Mark></p>
+    <Rewrite label="Straffen" to="Wir ändern die Reihenfolge." meta="9 → 4 Wörter" onAccept={noop} onDismiss={noop}>Nominalstil und Passiv.</Rewrite>
+  </Ex>,
+  <Ex kind="Wiederholung" mode="Alle Vorkommen markiert — Sammelkarte mit Anzahl">
+    <p className="ex__text">Die <Mark kind="wiederholung" n={1}>Aufmerksamkeit</Mark> zerfällt in Bruchstücke, und mit der <Mark kind="wiederholung" n={2}>Aufmerksamkeit</Mark> die Qualität. Wer seine <Mark kind="wiederholung" n={3}>Aufmerksamkeit</Mark> schützt, schützt seine Arbeit.</p>
+    <Annotation kind="wiederholung" scope="Absatz" count={3} active suggestion={{from:'2. und 3. Stelle',to:'Konzentration · Fokus'}} acceptLabel="Beide ersetzen" onAccept={noop} onDismiss={noop}>Dasselbe Wort in drei aufeinanderfolgenden Sätzen.</Annotation>
+  </Ex>,
+  <Ex kind="Ton & Register" mode="Bereichsmarkierung — betrifft den ganzen Abschnitt">
+    <p className="ex__text"><Region>Man sollte Blöcke schützen, sobald du deine Woche danach planst. Wer sich daran hält, gewinnt zwei ruhige Tage.</Region></p>
+    <Annotation kind="ton" scope="Abschnitt" active suggestion={{from:'man · du gemischt',to:'durchgehend du'}} acceptLabel="Anrede vereinheitlichen" onAccept={noop} onDismiss={noop}>{'Der Abschnitt wechselt zwischen „man“ und „du“.'}</Annotation>
+  </Ex>,
+  <Ex kind="Stilmittel" mode="Einfügemarke im Text — der Vorschlag öffnet eine Lücke, verdeckt nichts" wide>
+    <p className="ex__text">Zwölf Unterbrechungen am Tag summieren sich.<Insertion open label="Bild einfügen" text="Zwölf Unterbrechungen sind kein Sandkorn, sondern ein halber Vormittag." onAccept={noop} onDismiss={noop}/> Der Rest des Tages gehört der Aufholjagd.</p>
+  </Ex>,
+  <Ex kind="Anglizismus" mode="Korrektur am Wort — deutsches Wort daneben" pop>
+    <p className="ex__text">Bis zur <Correction kind="anglizismus" open to="Abgabetermin" onAccept={noop} onDismiss={noop}>Deadline</Correction> bleiben zwei ruhige Tage.</p>
+  </Ex>,
+  <Ex kind="Terminologie" mode="Textweite Sammelkarte — kein einzelner Anker">
+    <p className="ex__text">Im Text stehen <Mark kind="terminologie" n={1}>Nutzer</Mark>, <Mark kind="terminologie" n={2}>Anwender</Mark> und <Mark kind="terminologie" n={3}>User</Mark> nebeneinander.</p>
+    <Annotation kind="terminologie" scope="Text" count={10} active compare={[{ref:'Nutzer',text:'7 Stellen'},{ref:'Anwender',text:'2 Stellen'},{ref:'User',text:'1 Stelle'}]} acceptLabel={'Auf „Nutzer“ vereinheitlichen'} onAccept={noop} onDismiss={noop}>Drei Begriffe für dieselbe Sache.</Annotation>
+  </Ex>]],
+ ['Struktur',[
+  <Ex kind="Verschieben" mode="Zielplatz im Text — Ursprung gedimmt, Ziel gestrichelt" wide>
+    <div style={{display:'flex',flexDirection:'column',gap:'14px',maxWidth:'620px'}}>
+      <p className="ex__text" style={{opacity:.45}}>Ein Kalender mit geschützten Blöcken kostet nichts und wirkt sofort.</p>
+      <p className="ex__text">Der Effekt summiert sich. Zwölf Unterbrechungen am Tag sind keine zwölf verlorenen Minuten, sondern ein Vormittag.</p>
+      <Slot label="Hierher — zu den Gegenmitteln" text="Ein Kalender mit geschützten Blöcken kostet nichts und wirkt sofort." onAccept={noop} onDismiss={noop}/>
+    </div>
+  </Ex>,
+  <Ex kind="Übergang" mode="Einfügemarke zwischen zwei Absätzen — Brücke im Fluss" wide>
+    <p className="ex__text">… und mit ihr die Qualität der Arbeit.<Insertion open label="Brücke einfügen" text="Was folgt daraus für den Arbeitstag?" onAccept={noop} onDismiss={noop}/> Drei Regeln helfen: feste Blöcke, Benachrichtigungen aus, eine Liste.</p>
+  </Ex>,
+  <Ex kind="Gliederung" mode="Zielplatz — Zwischentitel an der Bruchstelle" wide>
+    <div style={{display:'flex',flexDirection:'column',gap:'14px',maxWidth:'620px'}}>
+      <p className="ex__text">Der Effekt summiert sich; die Ursachen sind bekannt und messbar.</p>
+      <Slot label="Zwischentitel hier" text="Was hilft" onAccept={noop} onDismiss={noop}/>
+      <p className="ex__text">Drei Regeln helfen: feste Blöcke am Morgen, Benachrichtigungen aus, eine Liste.</p>
+    </div>
+  </Ex>,
+  <Ex kind="Textfluss" mode="Vorschlagskarte rechts — Rhythmus im Vergleich">
+    <p className="ex__text"><Mark kind="fluss">Der Tag beginnt. Das Postfach ruft. Der Fokus bricht. Die Stunde ist weg.</Mark></p>
+    <Rewrite label="Sätze verbinden" to="Der Tag beginnt, das Postfach ruft — und mit dem Fokus ist die Stunde weg." meta="4 → 1 Satz" onAccept={noop} onDismiss={noop}>Vier kurze Sätze in Folge — der Rhythmus stockt.</Rewrite>
+  </Ex>,
+  <Ex kind="Roter Faden" mode="Struktur-Karte über die Textbreite — mit Absatzverlauf" wide>
+    <div style={{display:'flex',gap:'40px',alignItems:'flex-start'}}>
+      <div style={{flex:1,maxWidth:'620px',display:'flex',flexDirection:'column',gap:'10px'}}>
+        <p className="ex__hint">Trägt die Kernaussage „begrenzte Ressource" bis Absatz 3 — ab Absatz 5 übernehmen die Werkzeuge.</p>
+        <div className="ex__bars">
+          <span className="ex__bar ex__bar--on"></span><span className="ex__bar ex__bar--on"></span>
+          <span className="ex__bar ex__bar--on"></span><span className="ex__bar"></span><span className="ex__bar"></span>
+        </div>
+      </div>
+      <Annotation kind="faden" scope="Text" active style={{width:'340px'}} onDismiss={noop}>Ein Rückbezug im letzten Absatz schließt den Bogen.</Annotation>
+    </div>
+  </Ex>,
+  <Ex kind="Überschrift" mode="Am Titel markiert, Vorschlag rechts">
+    <div className="ex__doc"><span className="ex__doctitle"><Mark kind="ueberschrift">Über Konzentration</Mark></span></div>
+    <Rewrite label="Titel" to="Die begrenzte Ressource" acceptLabel="Titel übernehmen" dismissLabel="Behalten" onAccept={noop} onDismiss={noop}>Der Titel benennt das Thema, nicht die These.</Rewrite>
+  </Ex>]],
+ ['Inhalt',[
+  <Ex kind="Beleg fehlt" mode="Quellenkarte am Rand — Link und Ausschnitt zum Prüfen">
+    <p className="ex__text"><Mark kind="beleg" n={1}>Nach jeder Unterbrechung dauert es 23 Minuten bis zur alten Konzentration.</Mark></p>
+    <Annotation kind="beleg" scope="Satz" n={1} active source={{title:'Attention Residue and Task Switching — Journal of Applied Psychology',url:'#',excerpt:'Nach einer Unterbrechung dauert es im Mittel 23 Minuten, bis Probanden die ursprüngliche Aufgabe mit vergleichbarer Konzentration fortsetzen.'}} acceptLabel="Als Fußnote einfügen" onAccept={noop} onDismiss={noop}>Zahl ohne Quelle. Ein passender Beleg liegt vor:</Annotation>
+  </Ex>,
+  <Ex kind="Faktencheck" mode="Quellenkarte am Rand — Zahl gegen Quelle gestellt">
+    <p className="ex__text">Der Markt wuchs im selben Zeitraum um <Mark kind="faktencheck" n={2}>sechs Prozent</Mark>.</p>
+    <Annotation kind="faktencheck" scope="Satz" n={2} active source={{title:'Marktbericht Q3 2026 — Branchenverband',url:'#',excerpt:'Der Gesamtmarkt legte im dritten Quartal um 4,1 Prozent zu.'}} acceptLabel="Auf 4,1 % korrigieren" onAccept={noop} onDismiss={noop}>Weicht von der angegebenen Quelle ab.</Annotation>
+  </Ex>,
+  <Ex kind="Widerspruch" mode="Gegenüberstellung — beide Stellen sichtbar, eine gewinnt">
+    <p className="ex__text">Bis ein unterbrochener Gedanke wieder trägt, vergeht <Mark kind="widerspruch" n={3}>eine ganze Stunde</Mark>.</p>
+    <Annotation kind="widerspruch" scope="Text" n={3} active compare={[{ref:'Absatz 2',text:'23 Minuten'},{ref:'Absatz 4',text:'eine ganze Stunde'}]} acceptLabel="Auf 23 Minuten angleichen" onAccept={noop} onDismiss={noop}>Zwei Angaben zur gleichen Sache.</Annotation>
+  </Ex>,
+  <Ex kind="Anmerkung" mode="Dialog-Blase — eine Meinung, keine Operation">
+    <p className="ex__text"><Mark kind="anmerkung">Wer früh Nachrichten liest, verschenkt den besten Teil des Tages.</Mark></p>
+    <Bubble from="agent" seat="top" name="Onda" avatar={<Aura size={36}/>}>Die Behauptung ist stark — hast du ein Beispiel aus deinem Alltag? Zwei Sätze würden sie tragen.</Bubble>
+  </Ex>,
+  <Ex kind="Gegenargument fehlt" mode="Dialog-Blase mit Antwortfeld — der Text bleibt offen">
+    <p className="ex__text"><Mark kind="luecke">Wer im Support arbeitet, kennt den Einwand.</Mark></p>
+    <div style={{display:'flex',flexDirection:'column',gap:'12px'}}>
+      <Bubble from="agent" seat="top" name="Onda" avatar={<Aura size={36}/>}>Bereitschaftsdienste können Blöcke nicht schützen. Soll ich einen Absatz dazu vorschlagen?</Bubble>
+      <Composer placeholder="Antworten …"/>
+    </div>
+  </Ex>,
+  <Ex kind="Verständlichkeit" mode="Einfügemarke am Begriff — Erklärung im Fluss" wide>
+    <p className="ex__text">Der Effekt heißt <Mark kind="verstaendlichkeit">Attention Residue</Mark><Insertion open label="Erklärung einfügen" text="— der Teil der Aufmerksamkeit, der bei der alten Aufgabe hängen bleibt" onAccept={noop} onDismiss={noop}/> und wirkt über Stunden.</p>
+  </Ex>]]
+];
+
+const mount=document.getElementById('ct-root');
+if(mount&&Annotation&&Correction&&Insertion&&Rewrite&&Slot)ReactDOM.createRoot(mount).render(
+  <div className="ct"><div className="ct__sheet">
+    <h1 className="ct__title">Anmerkungsarten</h1>
+    <p className="ct__lead">24 Arten, vier Kategorien — und für jede die Form, die ihrer Natur entspricht: Was eindeutig falsch ist, wird am Wort korrigiert. Was verglichen werden muss, erscheint als Umschreibung im Text. Was hinzukommt, sitzt an einer Einfügemarke. Was viele Stellen betrifft, wird als Bereich getönt und gesammelt. Was belegt werden muss, kommt als Quellenkarte an den Rand. Und was eine Meinung ist, spricht als Dialog.</p>
+    {items.map(([cat,list])=>
+      <React.Fragment key={cat}>
+        <h2 className="ct__cat">{cat}</h2>
+        {list.map((el,i)=><React.Fragment key={i}>{el}</React.Fragment>)}
+      </React.Fragment>)}
+  </div></div>);
+</script></body></html>

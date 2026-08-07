@@ -1,0 +1,53 @@
+/* Onda · color tokens. KEINE Farbe: das System ist rein achromatisch — warmes Papier bis Tinte.
+   Der Akzent ist Tinte selbst; Hierarchie entsteht über Helligkeit, nicht über Buntheit.
+   Components must reference ALIASES (--text-*, --bg-*, --border-*, --accent*) so dark mode works. */
+:root{
+  color-scheme:light;
+  /* Neutrals · warm paper → ink. Die einzige Skala des Systems. */
+  --paper:#fbfaf8; --surface:#ffffff; --surface-2:#f4f2ee; --surface-3:#ece9e3; --surface-inset:#f1efea;
+  --ink-950:#131210; --ink-900:#1c1a17; --ink-800:#2c2926; --ink-700:#423e39; --ink-600:#57524b;
+  --ink-500:#736d64; --ink-400:#948d82; --ink-300:#b6afa4; --ink-200:#d5cfc5; --ink-100:#e7e2da; --ink-50:#f2efe9;
+  --line-soft:rgba(28,26,23,0.07); --line:rgba(28,26,23,0.12); --line-strong:rgba(28,26,23,0.2);
+  /* Signature aura gradient — der einzige Ort mit Verlauf. Achromatisch. */
+  --aura-1:#f6f4f0; --aura-2:#e3ded6; --aura-3:#bdb6ac; --aura-4:#d3ccc3;
+  --gradient-aura:linear-gradient(115deg,var(--aura-1) 0%,var(--aura-2) 34%,var(--aura-3) 62%,var(--aura-4) 100%); /* @kind color */
+  --gradient-aura-soft:linear-gradient(115deg,#faf8f5 0%,#efece6 40%,#e7e3dc 68%,#eeeae4 100%); /* @kind color */
+  --gradient-surface:linear-gradient(180deg,#fbfaf8 0%,#f4f2ec 100%);
+  /* Gefahr — die einzige Ausnahme, entsättigt bis fast ins Grau */
+  --red-500:#6b4a44;   --red-100:#e8e0dd;
+  /* Aliases · backgrounds */
+  --bg-app:var(--paper); --bg-surface:var(--surface); --bg-raised:var(--surface); --bg-sunken:var(--surface-2);
+  --bg-inset:var(--surface-inset); --bg-hover:rgba(28,26,23,0.04); --bg-active:rgba(28,26,23,0.07);
+  /* Aliases · text */
+  --text-primary:var(--ink-900); --text-secondary:var(--ink-600); --text-tertiary:var(--ink-500);
+  --text-disabled:var(--ink-300); --text-on-accent:#faf8f3; --text-link:var(--ink-900);
+  /* Aliases · borders */
+  --border-subtle:var(--line-soft); --border-default:var(--line); --border-strong:var(--line-strong);
+  /* Aliases · accent + focus — der Akzent IST Tinte */
+  --accent:var(--ink-900); --accent-hover:var(--ink-800); --accent-active:var(--ink-950);
+  --accent-tint:var(--ink-100); --accent-tint-hover:var(--ink-200); --on-accent:#faf8f3;
+  --focus-ring:rgba(28,26,23,0.28);
+  /* Aliases · status — KEINE Statusfarben. Auch Gefahr bleibt fast grau; sie wird über Wort und Ort erkannt. */
+  --success:var(--text-secondary); --success-tint:var(--bg-sunken);
+  --warning:var(--text-secondary); --warning-tint:var(--bg-sunken);
+  --danger:var(--red-500);         --danger-tint:var(--red-100);
+  --info:var(--text-secondary);    --info-tint:var(--bg-sunken);
+}
+[data-theme="dark"]{
+  color-scheme:dark;
+  --paper:#141310; --surface:#1d1b17; --surface-2:#242019; --surface-3:#2d2820; --surface-inset:#100f0c;
+  --line-soft:rgba(245,241,234,0.06); --line:rgba(245,241,234,0.11); --line-strong:rgba(245,241,234,0.18);
+  --gradient-aura:linear-gradient(115deg,#4a463f 0%,#6a655c 34%,#8d877c 62%,#5f5a52 100%); /* @kind color */
+  --gradient-aura-soft:linear-gradient(115deg,#26231d 0%,#302c25 40%,#38332b 68%,#2b2721 100%); /* @kind color */
+  --gradient-surface:linear-gradient(180deg,#1d1b17 0%,#141310 100%);
+  --bg-app:var(--paper); --bg-surface:var(--surface); --bg-raised:var(--surface-2); --bg-sunken:var(--surface-inset);
+  --bg-inset:var(--surface-inset); --bg-hover:rgba(245,241,234,0.05); --bg-active:rgba(245,241,234,0.09);
+  --text-primary:#f4f1ea; --text-secondary:#c4bdb1; --text-tertiary:#8f887c;
+  --text-disabled:#5c574e; --text-on-accent:#1c1a15; --text-link:#f4f1ea;
+  --accent:#f4f1ea; --accent-hover:#ffffff; --accent-active:#d8d3c9;
+  --accent-tint:rgba(244,241,234,0.14); --accent-tint-hover:rgba(244,241,234,0.2); --on-accent:#1c1a15;
+  --focus-ring:rgba(244,241,234,0.34);
+  --success:var(--text-secondary); --info:var(--text-secondary); --warning:var(--text-secondary); --danger:#c2a09a;
+  --success-tint:var(--bg-sunken); --warning-tint:var(--bg-sunken);
+  --danger-tint:rgba(194,160,154,0.16);   --info-tint:var(--bg-sunken);
+}
