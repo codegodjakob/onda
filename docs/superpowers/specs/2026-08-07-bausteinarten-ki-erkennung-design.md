@@ -118,9 +118,9 @@ doc.workspace.bausteinarten = {
     { id, name: 'Einordnung',     beschreibung: '…', funktion: null },
   ],
   zuordnung: {
-    '<blockId>': { artId, signatur: '<Signatur des Absatztextes beim Lauf>' },
+    '<blockId>': { artId, zeichen: <Zeichenzahl des Absatzes bei seiner Benennung> },
   },
-  laufSignatur: '<Struktur-Signatur beim letzten Lauf>',
+  laufSignatur: '<Reihenfolge der Absatz-IDs beim letzten Lauf>',
   standAt: <Zeitstempel>,
 }
 ```
@@ -129,9 +129,14 @@ doc.workspace.bausteinarten = {
 | question | null`. Bewusst die vorhandenen englischen Schlüssel: so bleibt die
 nachgelagerte Logik unberührt.
 
-`signatur` je Absatz ist der Grund, warum Namen nicht springen: Ein Absatz behält seinen
-Namen, solange seine Signatur stimmt, auch wenn der Lauf wegen eines *anderen* Absatzes
-startet.
+`zeichen` je Absatz ist der Grund, warum Namen nicht springen: Ein Absatz behält seinen
+Namen, solange seine Länge sich nicht um mehr als die Hälfte verschoben hat — auch wenn der
+Lauf wegen eines *anderen* Absatzes startet.
+
+**Bekannte Lücke, bewusst in Kauf genommen:** Ein Absatz, der bei gleicher Länge vollständig
+umgeschrieben wird, behält seinen Namen bis zur nächsten Änderung am Absatzbestand. Die
+Alternative wäre, den Wortlaut jedes Absatzes ein zweites Mal in der Ablage zu führen — ein
+zweites Exemplar des Textes neben dem Text, für einen seltenen Fall.
 
 `ensureWorkspaceState` (`app/src/workspace-model.mjs:107`) normalisiert an Ort und Stelle
 und lässt unbekannte Felder stehen — das neue Feld braucht keine zerstörende Umstellung,
