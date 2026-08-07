@@ -26,13 +26,20 @@ test('jede Anmerkungsart besitzt einen vollständigen unveränderlichen Darstell
     assert.ok(info.label)
     assert.ok(['korrektur', 'stil', 'struktur', 'inhalt', 'notiz'].includes(info.category))
     assert.ok(['fehler', 'empfehlung', 'geschmack'].includes(info.priority))
-    assert.ok(['correction', 'rewrite', 'insertion', 'slot', 'region', 'source', 'compare', 'dialogue', 'title'].includes(info.form))
+    // 'card' ist am 07.08.2026 dazugekommen: die gewoehnliche Karte der Vorlage
+    // (<Annotation> in components/annotation/Annotation.jsx) fuer Arten, die
+    // KEINE Textoperation haben. "Roter Faden" stand vorher auf 'rewrite' —
+    // einer Form, die einen Ersatztext verspricht, den es dort nicht gibt.
+    assert.ok(['correction', 'rewrite', 'insertion', 'slot', 'region', 'source', 'compare', 'dialogue', 'title', 'card'].includes(info.form))
     assert.ok(info.scope)
     assert.equal(Object.isFrozen(info), true)
   }
 })
 
-test('die Natur des Hinweises bestimmt neun unterschiedliche Darstellungsformen', () => {
+test('die Natur des Hinweises bestimmt zehn unterschiedliche Darstellungsformen', () => {
+  // Eine Form ohne Textoperation darf keine Form sein, die eine verspricht.
+  assert.equal(resolveAnnotationPresentation({ anmerkungsart: 'faden' }).form, 'card')
+  assert.equal(kindInfo('faden').operation, null)
   assert.equal(resolveAnnotationPresentation({ anmerkungsart: 'rechtschreibung' }).form, 'correction')
   assert.equal(resolveAnnotationPresentation({ anmerkungsart: 'satzstil' }).form, 'rewrite')
   assert.equal(resolveAnnotationPresentation({ anmerkungsart: 'uebergang' }).form, 'insertion')

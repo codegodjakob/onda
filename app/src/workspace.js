@@ -109,6 +109,12 @@ import {
 } from './annotation-operations.mjs'
 import { ondaIcon } from './onda-icons.mjs'
 import { blaseAmOrbAusrichten, blaseAnhaengen } from './onda-blase-dom.mjs'
+import {
+  KNOTEN_PLATZHALTER,
+  markenBereich,
+  markenBereiche,
+  markiertAlleVorkommen,
+} from './annotation-marken.mjs'
 import { VARIANTEN, VARIANTEN_ERKLAERUNG, VARIANTEN_LABEL, bilanzText, bilanzVorlesetext, normalisiereVariante, punkteFuer } from './bilanz-varianten.mjs'
 
 const BLOCK_TYPES = [
@@ -145,6 +151,9 @@ let localDecoratedDocId = null
 let localDecoratedFindingId = null
 let localDecoratedBlockId = null
 let localDecoratedSpacing = 0
+// Die aktuell markierte Anmerkung selbst — das Plugin braucht sie, um die
+// STELLE im Absatz zu finden statt nur den Absatz.
+let localDecoratedFinding = null
 let localFeedbackError = null
 let localPositionFrame = null
 let localSummaryFocusRequest = null
@@ -229,6 +238,20 @@ function activeBlockPlugin() {
   })
 }
 
+// Die Textstellen, die im markierten Absatz eine Marke bekommen. Der
+// Platzhalter zaehlt Nicht-Text-Knoten mit: ein Bild ist eine Position im
+// Dokument, aber null Zeichen im Text — ohne ihn verschieben sich alle Marken
+// dahinter um genau diese Knoten.
+function markenFuerBlock(node, findingState) {
+  const finding = findingState?.finding
+  if (!finding) return []
+  const text = node.textBetween(0, node.content.size, undefined, KNOTEN_PLATZHALTER)
+  if (!text) return []
+  if (markiertAlleVorkommen(finding)) return markenBereiche(text, finding)
+  const einzeln = markenBereich(text, finding)
+  return einzeln ? [einzeln] : []
+}
+
 function localFindingPlugin() {
   return new Plugin({
     key: localFindingKey,
@@ -243,6 +266,18 @@ function localFindingPlugin() {
         transaction.doc.forEach((node, offset) => {
           if (node.attrs.blockId === findingState.blockId) {
             local.push(Decoration.node(offset, offset + node.nodeSize, { class: 'has-local-finding' }))
+            // Die Marke sitzt auf der STELLE, nicht auf dem Absatz — so macht es
+            // das Design System (components/annotation/Mark.jsx). Vier Kategorien,
+            // vier Prinzipien: Rahmen, Flaeche, angehobener Block, Akzentflaeche.
+            markenFuerBlock(node, findingState).forEach(marke => {
+              // +1: die Position 0 eines Knotens ist seine oeffnende Marke, der
+              // Text beginnt erst dahinter.
+              local.push(Decoration.inline(
+                offset + 1 + marke.von,
+                offset + 1 + marke.bis,
+                { class: `aura-mark aura-mark--${marke.kategorie}`, 'data-marke-nummer': marke.nummer ?? '' },
+              ))
+            })
             if (findingState.spacing > 0) {
               local.push(Decoration.widget(offset + node.nodeSize, () => {
                 const spacer = document.createElement('div')
@@ -268,14 +303,24 @@ function localFindingPlugin() {
   })
 }
 
-function setLocalFindingDecoration(blockId, spacing = 0, force = false) {
+function setLocalFindingDecoration(blockId, spacing = 0, force = false, finding = localDecoratedFinding) {
   const nextSpacing = blockId ? Math.max(0, Math.ceil(spacing)) : 0
-  if (!force && localDecoratedBlockId === blockId && localDecoratedSpacing === nextSpacing) return false
+  const nextFinding = blockId ? finding : null
+  if (
+    !force
+    && localDecoratedBlockId === blockId
+    && localDecoratedSpacing === nextSpacing
+    && localDecoratedFinding === nextFinding
+  ) return false
   localDecoratedBlockId = blockId
   localDecoratedSpacing = nextSpacing
+  localDecoratedFinding = nextFinding
   ctx.editor.view.dispatch(ctx.editor.state.tr.setMeta(localFindingKey, {
     blockId,
     spacing: nextSpacing,
+    // Die Anmerkung reist mit: ohne sie weiss das Plugin nicht, WELCHE Stelle
+    // im Absatz es markieren soll, und faellt auf den ganzen Absatz zurueck.
+    finding: nextFinding,
   }))
   return true
 }
@@ -3111,7 +3156,18 @@ function positionLocalSurface(blockId) {
     : Math.min(sideWidth, availableRight - 42)
 
   local.classList.toggle('is-below', below)
-  local.style.width = `${localWidth}px`
+  // Korrektur und Einfuegung sind in der Vorlage KEINE Karten: die eine ist eine
+  // Zeile, die andere waechst mit ihrem Vorschlag. Presst man sie auf
+  // Kartenbreite, bricht "alt → neu" auf drei Zeilen um und sieht wieder aus wie
+  // das, was sie nicht sein soll. Sie bekommen deshalb nur eine Obergrenze.
+  const kompakt = local.classList.contains('aura-corr__pop') || local.classList.contains('aura-ins__pop')
+  if (kompakt) {
+    local.style.width = ''
+    local.style.maxWidth = `${Math.max(localWidth, below ? localWidth : sideWidth + 120)}px`
+  } else {
+    local.style.maxWidth = ''
+    local.style.width = `${localWidth}px`
+  }
   local.style.left = `${below ? Math.max(gutter, blockRect.left - layerRect.left) : blockRect.right - layerRect.left + 34}px`
   local.style.top = `${below ? blockRect.bottom - layerRect.top + 14 : blockRect.top - layerRect.top}px`
   local.hidden = Boolean(scrollRect && (blockRect.bottom < scrollRect.top || blockRect.top > scrollRect.bottom))
@@ -3155,7 +3211,7 @@ function renderLocalFinding() {
   ) {
     localDecoratedDocId = doc.id
     localDecoratedFindingId = finding?.id || null
-    setLocalFindingDecoration(blockId, 0, true)
+    setLocalFindingDecoration(blockId, 0, true, finding || null)
   }
 
   ui.localLayer.replaceChildren()
@@ -4728,6 +4784,7 @@ export function initWorkspace(context) {
     localDecoratedFindingId = null
     localDecoratedBlockId = null
     localDecoratedSpacing = 0
+    localDecoratedFinding = null
     localFeedbackError = null
     localPositionFrame = null
     localSummaryFocusRequest = null
