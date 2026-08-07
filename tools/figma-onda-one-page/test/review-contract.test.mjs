@@ -124,7 +124,7 @@ function validSnapshot() {
     componentSets: createValidComponentEvidence(foundation),
     componentTargetPage,
     componentContainers,
-    instanceCount: 20,
+    instanceCount: COMPONENT_DEFINITIONS.length + 8,
     documentationInstanceCount: COMPONENT_DEFINITIONS.length,
     repeatedScreenInstanceCount: 8,
     foundation,

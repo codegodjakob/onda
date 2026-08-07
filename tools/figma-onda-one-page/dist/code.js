@@ -662,6 +662,176 @@
         componentVariant("State=Error", { Eyebrow: "Fehler", Title: "Speichern fehlgeschlagen", Body: "Deine Eingabe bleibt erhalten.", Status: "Erneut versuchen m\xF6glich", "Primary Action": "Erneut versuchen", "Secondary Action": "Abbrechen" }, { inverted: true, strokeWeight: 2 }),
         componentVariant("Size=Long", { Eyebrow: "Information", Title: "Datenkontrolle und Export", Body: "Pr\xFCfe offene Hinweise, Datenumfang und Exportziel, bevor du fortf\xE4hrst.", Status: "Bitte vollst\xE4ndig lesen", "Primary Action": "Fortfahren", "Secondary Action": "Zur\xFCck" })
       ]
+    }),
+    componentDefinition({
+      id: "aura",
+      name: "Onda/Aura",
+      label: "Aura",
+      labelRole: "Label",
+      tier: 2,
+      radius: 0,
+      radiusToken: "radius/none",
+      roles: [componentRole("Orb", "ELLIPSE"), componentRole("Symbol", "TEXT"), componentRole("Label", "TEXT")],
+      variants: [
+        componentVariant("State=Idle", { Symbol: "\u25CB", Label: "Aura ist bereit" }),
+        componentVariant("State=Working", { Symbol: "\u2026", Label: "Aura pr\xFCft den Auftrag" }, { strokeWeight: 2, opacity: 0.75 }),
+        componentVariant("State=Complete", { Symbol: "\u2713", Label: "Aura hat den Schritt abgeschlossen" }, { inverted: true }),
+        componentVariant("State=Error", { Symbol: "!", Label: "Aura konnte den Schritt nicht abschlie\xDFen" }, { inverted: true, strokeWeight: 2 })
+      ]
+    }),
+    componentDefinition({
+      id: "agent-message",
+      name: "Onda/Agent Message",
+      label: "Agent Message",
+      labelRole: "Body",
+      tier: 2,
+      direction: "VERTICAL",
+      targetHeight: 120,
+      radius: 6,
+      radiusToken: "radius/static",
+      gap: 12,
+      gapToken: "spacing/12",
+      padding: { top: 16, right: 16, bottom: 16, left: 16 },
+      paddingTokens: { top: "spacing/16", right: "spacing/16", bottom: "spacing/16", left: "spacing/16" },
+      roles: [componentRole("Avatar", "ELLIPSE"), componentRole("Author", "TEXT"), componentRole("Body", "TEXT"), componentRole("Meta", "TEXT"), componentRole("Status", "TEXT")],
+      variants: [
+        componentVariant("Role=User", { Author: "Du", Body: "Pr\xFCfe die offenen Quellenhinweise.", Meta: "Gerade gesendet", Status: "Gesendet" }),
+        componentVariant("Role=Agent", { Author: "Onda Agent", Body: "Drei Quellenhinweise warten auf deine Pr\xFCfung.", Meta: "Antwort bereit", Status: "Zur Pr\xFCfung" }, { inverted: true }),
+        componentVariant("State=Streaming", { Author: "Onda Agent", Body: "Antwort wird schrittweise erstellt \u2026", Meta: "In Bearbeitung", Status: "Wird geladen" }, { strokeWeight: 2, opacity: 0.75 }),
+        componentVariant("State=Error", { Author: "Onda Agent", Body: "Antwort konnte nicht geladen werden. Deine Anfrage bleibt erhalten.", Meta: "Verbindung unterbrochen", Status: "Erneut versuchen" }, { inverted: true, strokeWeight: 2 })
+      ]
+    }),
+    componentDefinition({
+      id: "decision-card",
+      name: "Onda/Decision Card",
+      label: "Decision Card",
+      labelRole: "Decision",
+      tier: 2,
+      direction: "VERTICAL",
+      targetHeight: 140,
+      radius: 6,
+      radiusToken: "radius/static",
+      gap: 12,
+      gapToken: "spacing/12",
+      padding: { top: 16, right: 16, bottom: 16, left: 16 },
+      paddingTokens: { top: "spacing/16", right: "spacing/16", bottom: "spacing/16", left: "spacing/16" },
+      roles: [componentRole("Symbol", "TEXT"), componentRole("Decision", "TEXT"), componentRole("Rationale", "TEXT"), componentRole("Actor", "TEXT"), componentRole("Time", "TEXT")],
+      variants: [
+        componentVariant("Status=Pending", { Symbol: "?", Decision: "Quellenhinweis pr\xFCfen", Rationale: "Die Aussage ist noch nicht belegt.", Actor: "Noch nicht entschieden", Time: "Jetzt" }),
+        componentVariant("Status=Accepted", { Symbol: "\u2713", Decision: "Quellenhinweis \xFCbernehmen", Rationale: "Der Beleg passt zur markierten Aussage.", Actor: "Von dir best\xE4tigt", Time: "Gerade eben" }, { inverted: true }),
+        componentVariant("Status=Rejected", { Symbol: "\xD7", Decision: "Quellenhinweis ablehnen", Rationale: "Der Beleg st\xFCtzt die Aussage nicht ausreichend.", Actor: "Von dir abgelehnt", Time: "Gerade eben" }, { strokeWeight: 2, opacity: 0.65, textToken: "color/text-muted" }),
+        componentVariant("Status=Overridden", { Symbol: "\u21BA", Decision: "Entscheidung \xFCberschrieben", Rationale: "Eine neuere manuelle Entscheidung gilt.", Actor: "Von dir ge\xE4ndert", Time: "Soeben" }, { inverted: true, strokeWeight: 2 })
+      ]
+    }),
+    componentDefinition({
+      id: "evidence-card",
+      name: "Onda/Evidence Card",
+      label: "Evidence Card",
+      labelRole: "Claim",
+      tier: 2,
+      direction: "VERTICAL",
+      targetHeight: 140,
+      radius: 6,
+      radiusToken: "radius/static",
+      gap: 12,
+      gapToken: "spacing/12",
+      padding: { top: 16, right: 16, bottom: 16, left: 16 },
+      paddingTokens: { top: "spacing/16", right: "spacing/16", bottom: "spacing/16", left: "spacing/16" },
+      roles: [componentRole("Symbol", "TEXT"), componentRole("Claim", "TEXT"), componentRole("Source", "TEXT"), componentRole("Confidence", "TEXT"), componentRole("Action", "TEXT")],
+      variants: [
+        componentVariant("Status=Unverified", { Symbol: "?", Claim: "Aussage ohne gepr\xFCften Beleg", Source: "Quelle noch nicht gepr\xFCft", Confidence: "Einsch\xE4tzung: offen", Action: "Quelle pr\xFCfen" }),
+        componentVariant("Status=Verified", { Symbol: "\u2713", Claim: "Aussage durch Quelle gest\xFCtzt", Source: "Fundstelle gepr\xFCft", Confidence: "Einsch\xE4tzung: hoch", Action: "Quelle \xF6ffnen" }, { inverted: true }),
+        componentVariant("Status=Conflict", { Symbol: "!", Claim: "Quellen widersprechen sich", Source: "Zwei abweichende Fundstellen", Confidence: "Einsch\xE4tzung: unklar", Action: "Konflikt pr\xFCfen" }, { inverted: true, strokeWeight: 2 }),
+        componentVariant("Status=Missing", { Symbol: "\u2014", Claim: "Kein Beleg verkn\xFCpft", Source: "Quelle fehlt", Confidence: "Nicht bewertbar", Action: "Quelle hinzuf\xFCgen" }, { opacity: 0.6, textToken: "color/text-muted" })
+      ]
+    }),
+    componentDefinition({
+      id: "source-card",
+      name: "Onda/Source Card",
+      label: "Source Card",
+      labelRole: "Title",
+      tier: 2,
+      direction: "VERTICAL",
+      targetHeight: 120,
+      radius: 6,
+      radiusToken: "radius/static",
+      gap: 12,
+      gapToken: "spacing/12",
+      padding: { top: 16, right: 16, bottom: 16, left: 16 },
+      paddingTokens: { top: "spacing/16", right: "spacing/16", bottom: "spacing/16", left: "spacing/16" },
+      roles: [componentRole("Type", "TEXT"), componentRole("Title", "TEXT"), componentRole("Meta", "TEXT"), componentRole("Status", "TEXT"), componentRole("Action", "TEXT")],
+      variants: [
+        componentVariant("Status=Ready", { Type: "Webquelle", Title: "Studie zur Schreibforschung", Meta: "Quelle bereit zur Pr\xFCfung", Status: "Bereit", Action: "Quelle \xF6ffnen" }),
+        componentVariant("Status=Loading", { Type: "Webquelle", Title: "Quelle wird geladen", Meta: "Metadaten werden angefragt", Status: "L\xE4dt", Action: "Abbrechen" }, { strokeWeight: 2, opacity: 0.75 }),
+        componentVariant("Status=Invalid", { Type: "Ung\xFCltige Quelle", Title: "Quelle kann nicht gelesen werden", Meta: "Adresse oder Format pr\xFCfen", Status: "Ung\xFCltig", Action: "Andere Quelle w\xE4hlen" }, { inverted: true, strokeWeight: 2 }),
+        componentVariant("Status=Offline", { Type: "Webquelle", Title: "Quelle derzeit nicht erreichbar", Meta: "Verbindung ist offline", Status: "Offline", Action: "Erneut versuchen" }, { opacity: 0.6, textToken: "color/text-muted" })
+      ]
+    }),
+    componentDefinition({
+      id: "import-panel",
+      name: "Onda/Import Panel",
+      label: "Import Panel",
+      labelRole: "Title",
+      tier: 2,
+      direction: "VERTICAL",
+      targetHeight: 160,
+      radius: 6,
+      radiusToken: "radius/static",
+      gap: 12,
+      gapToken: "spacing/12",
+      padding: { top: 16, right: 16, bottom: 16, left: 16 },
+      paddingTokens: { top: "spacing/16", right: "spacing/16", bottom: "spacing/16", left: "spacing/16" },
+      roles: [componentRole("Title", "TEXT"), componentRole("File", "TEXT"), componentRole("Progress", "TEXT"), componentRole("Status", "TEXT"), componentRole("Action", "TEXT")],
+      variants: [
+        componentVariant("State=Empty", { Title: "Quelle importieren", File: "Noch keine Datei gew\xE4hlt", Progress: "0 %", Status: "Bereit", Action: "Datei w\xE4hlen" }),
+        componentVariant("State=Validating", { Title: "Import wird gepr\xFCft", File: "recherche.pdf", Progress: "Pr\xFCfung l\xE4uft \u2026", Status: "Datei wird validiert", Action: "Abbrechen" }, { strokeWeight: 2, opacity: 0.75 }),
+        componentVariant("State=Ready", { Title: "Import bereit", File: "recherche.pdf", Progress: "100 %", Status: "Bereit zum \xDCbernehmen", Action: "Import \xFCbernehmen" }, { inverted: true }),
+        componentVariant("State=Error", { Title: "Import fehlgeschlagen", File: "recherche.pdf", Progress: "Pr\xFCfung abgebrochen", Status: "Datei blieb unver\xE4ndert", Action: "Erneut versuchen" }, { inverted: true, strokeWeight: 2 })
+      ]
+    }),
+    componentDefinition({
+      id: "reader-panel",
+      name: "Onda/Reader Panel",
+      label: "Reader Panel",
+      labelRole: "Title",
+      tier: 2,
+      direction: "VERTICAL",
+      targetHeight: 180,
+      radius: 6,
+      radiusToken: "radius/static",
+      gap: 12,
+      gapToken: "spacing/12",
+      padding: { top: 16, right: 16, bottom: 16, left: 16 },
+      paddingTokens: { top: "spacing/16", right: "spacing/16", bottom: "spacing/16", left: "spacing/16" },
+      roles: [componentRole("Title", "TEXT"), componentRole("Location", "TEXT"), componentRole("Excerpt", "TEXT"), componentRole("Status", "TEXT"), componentRole("Action", "TEXT")],
+      variants: [
+        componentVariant("State=Reading", { Title: "Quellenleser", Location: "Seite 12", Excerpt: "Die markierte Passage wird hier gelesen.", Status: "Leseansicht", Action: "Fundstelle markieren" }),
+        componentVariant("State=Highlight", { Title: "Markierte Fundstelle", Location: "Seite 12 \xB7 Absatz 3", Excerpt: "Diese Passage ist f\xFCr die Aussage relevant.", Status: "Zur Pr\xFCfung markiert", Action: "Mit Anmerkung verkn\xFCpfen" }, { inverted: true }),
+        componentVariant("State=Unavailable", { Title: "Quelle nicht verf\xFCgbar", Location: "Position gespeichert", Excerpt: "Inhalt konnte nicht geladen werden.", Status: "Offline oder Zugriff fehlt", Action: "Erneut versuchen" }, { inverted: true, strokeWeight: 2 })
+      ]
+    }),
+    componentDefinition({
+      id: "research-card",
+      name: "Onda/Research Card",
+      label: "Research Card",
+      labelRole: "Query",
+      tier: 2,
+      direction: "VERTICAL",
+      targetHeight: 140,
+      radius: 6,
+      radiusToken: "radius/static",
+      gap: 12,
+      gapToken: "spacing/12",
+      padding: { top: 16, right: 16, bottom: 16, left: 16 },
+      paddingTokens: { top: "spacing/16", right: "spacing/16", bottom: "spacing/16", left: "spacing/16" },
+      roles: [componentRole("Query", "TEXT"), componentRole("Progress", "TEXT"), componentRole("Sources", "TEXT"), componentRole("Status", "TEXT"), componentRole("Action", "TEXT")],
+      variants: [
+        componentVariant("Status=Planned", { Query: "Wirkung von Schreibassistenz", Progress: "Noch nicht gestartet", Sources: "0 Quellen", Status: "Geplant", Action: "Recherche starten" }),
+        componentVariant("Status=Running", { Query: "Wirkung von Schreibassistenz", Progress: "2 von 5 Schritten", Sources: "3 Quellen vorgemerkt", Status: "L\xE4uft", Action: "Pausieren" }, { strokeWeight: 2, opacity: 0.75 }),
+        componentVariant("Status=Paused", { Query: "Wirkung von Schreibassistenz", Progress: "2 von 5 Schritten", Sources: "3 Quellen vorgemerkt", Status: "Pausiert", Action: "Fortsetzen" }, { opacity: 0.65, textToken: "color/text-muted" }),
+        componentVariant("Status=Ready", { Query: "Wirkung von Schreibassistenz", Progress: "5 von 5 Schritten", Sources: "6 Quellen zur Pr\xFCfung", Status: "Bereit zur Pr\xFCfung", Action: "Ergebnisse \xF6ffnen" }, { inverted: true }),
+        componentVariant("Status=Error", { Query: "Wirkung von Schreibassistenz", Progress: "Recherche unterbrochen", Sources: "Quellenstand nicht aktualisiert", Status: "Verbindung fehlgeschlagen", Action: "Erneut versuchen" }, { inverted: true, strokeWeight: 2 })
+      ]
     })
   ]);
   var fixedSections = [

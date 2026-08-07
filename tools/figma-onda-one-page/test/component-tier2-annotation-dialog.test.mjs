@@ -94,9 +94,9 @@ function priorPhases(id) {
   ])
 }
 
-test('contract and workflow append five exact Tier2 annotation/dialog composites after fourteen bases and expose nineteen commands', () => {
-  assert.deepEqual(COMPONENT_DEFINITIONS.map(definition => definition.id), ALL_IDS)
-  assert.deepEqual(COMPONENT_DEFINITIONS.slice(-5).map(definition => ({
+test('contract and workflow preserve five exact Tier2 annotation/dialog composites as the first nineteen commands', () => {
+  assert.deepEqual(COMPONENT_DEFINITIONS.slice(0, ALL_IDS.length).map(definition => definition.id), ALL_IDS)
+  assert.deepEqual(COMPONENT_DEFINITIONS.filter(definition => TIER2_IDS.includes(definition.id)).map(definition => ({
     id: definition.id,
     name: definition.name,
     labelRole: definition.labelRole,
@@ -114,14 +114,14 @@ test('contract and workflow append five exact Tier2 annotation/dialog composites
   ])
   const ui = readFileSync(resolve(ROOT, 'ui.html'), 'utf8')
   const buttons = [...ui.matchAll(/data-command="component-([^"]+)"/g)].map(match => match[1])
-  assert.deepEqual(buttons, ALL_IDS)
-  assert.deepEqual(PHASE_DEFINITIONS.find(phase => phase.id === 'components').commands.map(command => command.componentId), ALL_IDS)
-  for (const forbidden of ['agent-panel', 'source-card', 'source-panel']) assert.doesNotMatch(ui, new RegExp(`component-${forbidden}`))
+  assert.deepEqual(buttons.slice(0, ALL_IDS.length), ALL_IDS)
+  assert.deepEqual(PHASE_DEFINITIONS.find(phase => phase.id === 'components').commands.slice(0, ALL_IDS.length).map(command => command.componentId), ALL_IDS)
+  for (const forbidden of ['agent-panel', 'source-panel']) assert.doesNotMatch(ui, new RegExp(`component-${forbidden}`))
 })
 
-test('strict nineteen-set evidence enforces exact copy, layout, properties, bindings, and overlay linkage with independent corruption per Tier2 set', () => {
+test('strict global evidence preserves exact copy, layout, properties, bindings, and overlay linkage for all nineteen prior sets', () => {
   const actual = evidence()
-  assert.equal(actual.componentSets.length, 19)
+  assert.equal(actual.componentSets.filter(set => ALL_IDS.includes(set.id)).length, 19)
   assert.deepEqual(plan.validateComponentEvidence(actual), { valid: true, errors: [] })
   const overlayId = actual.foundation.effectStyles.find(style => style.name === OVERLAY).id
   for (const id of TIER2_IDS) {
