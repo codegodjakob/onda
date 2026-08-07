@@ -57,7 +57,8 @@ const VARIABLE_IDS = Object.fromEntries([
   ['color/surface', 'variable:surface'], ['color/inverted', 'variable:inverted'],
   ['color/text', 'variable:text'], ['color/text-muted', 'variable:text-muted'], ['color/on-inverted', 'variable:on-inverted'],
   ['color/border', 'variable:border'], ['spacing/8', 'variable:spacing-8'], ['spacing/12', 'variable:spacing-12'],
-  ['spacing/16', 'variable:spacing-16'], ['radius/control', 'variable:radius-control'],
+  ['spacing/16', 'variable:spacing-16'], ['spacing/32', 'variable:spacing-32'],
+  ['radius/control', 'variable:radius-control'], ['radius/static', 'variable:radius-static'],
   ['radius/none', 'variable:radius-none'], ['radius/circle', 'variable:radius-circle'],
 ])
 
@@ -197,8 +198,8 @@ function componentEvidenceFixture() {
     }
   })
   const foundation = foundationEvidence()
-  const tier1aSets = createSharedComponentEvidence(foundation).filter(set => definitions.COMPONENT_DEFINITIONS.find(item => item.id === set.id)?.tier === 1)
-  return { componentSets: [...componentSets, ...tier1aSets], foundation, targetPage, containers: [container] }
+  const tier1Sets = createSharedComponentEvidence(foundation).filter(set => definitions.COMPONENT_DEFINITIONS.find(item => item.id === set.id)?.tier === 1)
+  return { componentSets: [...componentSets, ...tier1Sets], foundation, targetPage, containers: [container] }
 }
 
 test('Tier0 component contract is deeply frozen with exact sets, variants, roles, and meaningful state copy', () => {

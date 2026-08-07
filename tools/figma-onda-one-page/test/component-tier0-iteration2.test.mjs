@@ -30,16 +30,21 @@ function structuredComponentEvidence() {
       for (const role of variant.roles) Object.assign(role, { parentId: variant.nodeId, parentType: variant.type, parentName: variant.name })
       Object.assign(variant, {
         dimensionValues: {
-          itemSpacing: 8,
-          paddingTop: 12,
-          paddingRight: 16,
-          paddingBottom: 12,
-          paddingLeft: 16,
+          itemSpacing: definition.gap,
+          paddingTop: definition.padding.top,
+          paddingRight: definition.padding.right,
+          paddingBottom: definition.padding.bottom,
+          paddingLeft: definition.padding.left,
           minHeight: definition.targetHeight,
         },
       })
-      variant.fieldVariableIds.paddingTop = [foundation.variables.find(item => item.collectionName === 'Onda · Dimension' && item.name === 'spacing/12').id]
-      variant.fieldVariableIds.paddingBottom = [foundation.variables.find(item => item.collectionName === 'Onda · Dimension' && item.name === 'spacing/12').id]
+      const dimensionId = name => foundation.variables.find(item => item.collectionName === 'Onda · Dimension' && item.name === name).id
+      variant.fieldVariableIds.itemSpacing = [dimensionId(definition.gapToken)]
+      variant.fieldVariableIds.paddingTop = [dimensionId(definition.paddingTokens.top)]
+      variant.fieldVariableIds.paddingRight = [dimensionId(definition.paddingTokens.right)]
+      variant.fieldVariableIds.paddingBottom = [dimensionId(definition.paddingTokens.bottom)]
+      variant.fieldVariableIds.paddingLeft = [dimensionId(definition.paddingTokens.left)]
+      for (const field of ['topLeftRadius', 'topRightRadius', 'bottomLeftRadius', 'bottomRightRadius']) variant.fieldVariableIds[field] = [dimensionId(definition.radiusToken)]
     }
     Object.assign(set.sample, { parentId: section.nodeId, parentType: section.type, parentName: section.name })
   }

@@ -957,8 +957,10 @@ async function componentVariables() {
     ['spacing8', 'spacing/8', 'Onda · Dimension'],
     ['spacing12', 'spacing/12', 'Onda · Dimension'],
     ['spacing16', 'spacing/16', 'Onda · Dimension'],
+    ['spacing32', 'spacing/32', 'Onda · Dimension'],
     ['radiusNone', 'radius/none', 'Onda · Dimension'],
     ['radiusControl', 'radius/control', 'Onda · Dimension'],
+    ['radiusStatic', 'radius/static', 'Onda · Dimension'],
     ['radiusCircle', 'radius/circle', 'Onda · Dimension'],
   ]
   const entries = await Promise.all(requests.map(async ([key, name, collection]) => [key, await localVariable(name, collection)]))
@@ -979,8 +981,10 @@ async function componentVariables() {
       'spacing/8': variables.spacing8,
       'spacing/12': variables.spacing12,
       'spacing/16': variables.spacing16,
+      'spacing/32': variables.spacing32,
       'radius/none': variables.radiusNone,
       'radius/control': variables.radiusControl,
+      'radius/static': variables.radiusStatic,
       'radius/circle': variables.radiusCircle,
     },
   }

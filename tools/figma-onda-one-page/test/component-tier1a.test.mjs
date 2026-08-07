@@ -92,8 +92,8 @@ function expectedAxes(definition) {
 }
 
 test('frozen contract adds exactly five Tier1a definitions with exact roles, copy, layout, and visual state attributes', () => {
-  assert.deepEqual(COMPONENT_DEFINITIONS.map(item => item.id), ALL_IDS)
-  assert.deepEqual(COMPONENT_DEFINITIONS.filter(item => item.tier === 1).map(definition => ({
+  assert.deepEqual(COMPONENT_DEFINITIONS.slice(0, ALL_IDS.length).map(item => item.id), ALL_IDS)
+  assert.deepEqual(COMPONENT_DEFINITIONS.filter(item => TIER1A_IDS.includes(item.id)).map(definition => ({
     id: definition.id,
     name: definition.name,
     label: definition.label,
@@ -120,18 +120,18 @@ test('frozen contract adds exactly five Tier1a definitions with exact roles, cop
   }
 })
 
-test('UI and phase contract expose exactly nine component commands in dependency order and no Tier1b names', () => {
+test('UI and phase contract preserve the first nine Tier0/Tier1a component commands in dependency order', () => {
   const ui = readFileSync(resolve(ROOT, 'ui.html'), 'utf8')
   const buttons = [...ui.matchAll(/data-command="component-([^"]+)"/g)].map(match => match[1])
   const phase = PHASE_DEFINITIONS.find(item => item.id === 'components')
-  assert.deepEqual(buttons, ALL_IDS)
-  assert.deepEqual(phase.commands.map(command => command.componentId), ALL_IDS)
+  assert.deepEqual(buttons.slice(0, ALL_IDS.length), ALL_IDS)
+  assert.deepEqual(phase.commands.slice(0, ALL_IDS.length).map(command => command.componentId), ALL_IDS)
   for (const forbidden of ['checkbox', 'radio', 'tabs', 'tooltip', 'modal', 'toast']) assert.doesNotMatch(ui.toLowerCase(), new RegExp(`component-${forbidden}`))
 })
 
-test('executable nine-set fixture passes strict evidence and generated VARIANT properties are exact with Label as the only TEXT property', () => {
+test('executable shared fixture includes the nine Tier0/Tier1a sets and generated VARIANT properties remain exact with Label as the only TEXT property', () => {
   const actual = evidence()
-  assert.equal(actual.componentSets.length, 9)
+  assert.deepEqual(actual.componentSets.slice(0, ALL_IDS.length).map(item => item.id), ALL_IDS)
   assert.deepEqual(plan.validateComponentEvidence(actual), { valid: true, errors: [] })
   for (const set of actual.componentSets) {
     const definition = COMPONENT_DEFINITIONS.find(item => item.id === set.id)

@@ -298,6 +298,64 @@ export const COMPONENT_DEFINITIONS = Object.freeze([
       componentVariant('State=Disabled', { Icon: '×', Label: 'Quelle öffnen', Shortcut: 'Nicht verfügbar' }, { opacity: 0.45, textToken: 'color/text-muted' }),
     ],
   }),
+  componentDefinition({
+    id: 'nav-item', name: 'Onda/Nav Item', label: 'Nav Item', labelRole: 'Label', tier: 1,
+    radius: 0, radiusToken: 'radius/none', gap: 12, gapToken: 'spacing/12',
+    roles: [componentRole('Icon', 'TEXT'), componentRole('Label', 'TEXT'), componentRole('Count', 'TEXT'), componentRole('Status', 'TEXT')],
+    variants: [
+      componentVariant('State=Default', { Icon: '▤', Label: 'Dokumente', Count: '12', Status: 'Verfügbar' }),
+      componentVariant('State=Active', { Icon: '●', Label: 'Dokumente', Count: '12', Status: 'Aktiv' }, { inverted: true, strokeWeight: 2 }),
+      componentVariant('State=Hover', { Icon: '→', Label: 'Dokumente', Count: '12', Status: 'Bereit zum Öffnen' }, { strokeWeight: 2 }),
+      componentVariant('State=Collapsed', { Icon: '▤', Label: 'Dokumente', Count: '12', Status: 'Eingeklappt' }, { opacity: 0.6, textToken: 'color/text-muted' }),
+    ],
+  }),
+  componentDefinition({
+    id: 'list-row', name: 'Onda/List Row', label: 'List Row', labelRole: 'Title', tier: 1,
+    radius: 0, radiusToken: 'radius/none', targetHeight: 52, gap: 12, gapToken: 'spacing/12',
+    roles: [componentRole('Leading', 'TEXT'), componentRole('Title', 'TEXT'), componentRole('Meta', 'TEXT'), componentRole('Status', 'TEXT'), componentRole('Action', 'TEXT')],
+    variants: [
+      componentVariant('State=Default', { Leading: '▤', Title: 'Projekt Nordstern', Meta: '3 Dokumente', Status: 'Zuletzt bearbeitet', Action: 'Öffnen' }),
+      componentVariant('State=Selected', { Leading: '●', Title: 'Dokument: Die leise Architektur', Meta: 'Projekt Nordstern', Status: 'Ausgewählt', Action: 'Öffnen' }, { inverted: true, strokeWeight: 2 }),
+      componentVariant('State=Hover', { Leading: '→', Title: 'Projekt Nordstern', Meta: '3 Dokumente', Status: 'Bereit', Action: 'Öffnen' }, { strokeWeight: 2 }),
+      componentVariant('State=Trash', { Leading: '⌫', Title: 'Dokument: Alte Fassung', Meta: 'Papierkorb', Status: 'Wird gelöscht', Action: 'Endgültig löschen' }, { inverted: true, strokeWeight: 2 }),
+      componentVariant('State=Error', { Leading: '!', Title: 'Dokument: Die leise Architektur', Meta: 'Änderungen nicht geladen', Status: 'Fehler', Action: 'Erneut versuchen' }, { strokeWeight: 2 }),
+    ],
+  }),
+  componentDefinition({
+    id: 'mode-toggle', name: 'Onda/Mode Toggle', label: 'Mode Toggle', labelRole: 'Text Label', tier: 1,
+    roles: [componentRole('Text Label', 'TEXT'), componentRole('Note Label', 'TEXT'), componentRole('Indicator', 'TEXT')],
+    variants: [
+      componentVariant('Mode=Text, State=Active', { 'Text Label': 'Text', 'Note Label': 'Notiz', Indicator: 'Textmodus aktiv' }, { inverted: true, strokeWeight: 2 }),
+      componentVariant('Mode=Notiz, State=Active', { 'Text Label': 'Text', 'Note Label': 'Notiz', Indicator: 'Notizmodus aktiv' }, { strokeWeight: 2 }),
+      componentVariant('Mode=Text, State=Disabled', { 'Text Label': 'Text', 'Note Label': 'Notiz', Indicator: 'Textmodus deaktiviert' }, { opacity: 0.45, textToken: 'color/text-muted' }),
+    ],
+  }),
+  componentDefinition({
+    id: 'review-bar', name: 'Onda/Review Bar', label: 'Review Bar', labelRole: 'Message', tier: 1,
+    radius: 0, radiusToken: 'radius/none', targetHeight: 64, gap: 12, gapToken: 'spacing/12',
+    padding: { top: 16, right: 16, bottom: 16, left: 16 },
+    paddingTokens: { top: 'spacing/16', right: 'spacing/16', bottom: 'spacing/16', left: 'spacing/16' },
+    roles: [componentRole('Symbol', 'TEXT'), componentRole('Message', 'TEXT'), componentRole('Primary Action', 'TEXT'), componentRole('Secondary Action', 'TEXT')],
+    variants: [
+      componentVariant('Status=Open', { Symbol: '◎', Message: '3 Hinweise zur Prüfung', 'Primary Action': 'Nächster Hinweis', 'Secondary Action': 'Alle anzeigen' }),
+      componentVariant('Status=Saving', { Symbol: '…', Message: 'Änderungen werden gespeichert …', 'Primary Action': 'Speichern', 'Secondary Action': 'Abbrechen' }, { strokeWeight: 2, opacity: 0.75 }),
+      componentVariant('Status=Saved', { Symbol: '✓', Message: 'Änderungen gespeichert', 'Primary Action': 'Weiter prüfen', 'Secondary Action': 'Rückgängig' }, { inverted: true }),
+      componentVariant('Status=Error', { Symbol: '!', Message: 'Speichern fehlgeschlagen', 'Primary Action': 'Erneut versuchen', 'Secondary Action': 'Exportieren' }, { inverted: true, strokeWeight: 2 }),
+      componentVariant('Status=Quiet', { Symbol: '—', Message: 'Anmerkungen sind ruhig gestellt', 'Primary Action': 'Anmerkungen zeigen', 'Secondary Action': 'Schließen' }, { opacity: 0.6, textToken: 'color/text-muted' }),
+    ],
+  }),
+  componentDefinition({
+    id: 'empty-state', name: 'Onda/Empty State', label: 'Empty State', labelRole: 'Title', tier: 1,
+    radius: 6, radiusToken: 'radius/static', targetHeight: 160, gap: 16, gapToken: 'spacing/16', direction: 'VERTICAL',
+    padding: { top: 32, right: 32, bottom: 32, left: 32 },
+    paddingTokens: { top: 'spacing/32', right: 'spacing/32', bottom: 'spacing/32', left: 'spacing/32' },
+    roles: [componentRole('Symbol', 'TEXT'), componentRole('Title', 'TEXT'), componentRole('Description', 'TEXT'), componentRole('Action', 'TEXT')],
+    variants: [
+      componentVariant('Context=Library', { Symbol: '+', Title: 'Noch keine Projekte', Description: 'Erstelle ein Projekt, um Dokumente zu organisieren.', Action: 'Projekt erstellen' }),
+      componentVariant('Context=No Active Annotation', { Symbol: '○', Title: 'Keine aktive Anmerkung', Description: 'Wähle eine Anmerkung im Text aus, um sie zu prüfen.', Action: 'Anmerkungen anzeigen' }, { opacity: 0.8, textToken: 'color/text-muted' }),
+      componentVariant('Context=Recoverable Error', { Symbol: '!', Title: 'Inhalt konnte nicht geladen werden', Description: 'Deine Eingabe bleibt erhalten. Versuche es erneut.', Action: 'Erneut versuchen' }, { inverted: true, strokeWeight: 2 }),
+    ],
+  }),
 ])
 
 const fixedSections = [

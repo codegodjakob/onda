@@ -466,6 +466,100 @@
         componentVariant("State=Selected", { Icon: "\u2713", Label: "Quelle \xF6ffnen", Shortcut: "\u21B5 Ausgew\xE4hlt" }, { inverted: true, strokeWeight: 2 }),
         componentVariant("State=Disabled", { Icon: "\xD7", Label: "Quelle \xF6ffnen", Shortcut: "Nicht verf\xFCgbar" }, { opacity: 0.45, textToken: "color/text-muted" })
       ]
+    }),
+    componentDefinition({
+      id: "nav-item",
+      name: "Onda/Nav Item",
+      label: "Nav Item",
+      labelRole: "Label",
+      tier: 1,
+      radius: 0,
+      radiusToken: "radius/none",
+      gap: 12,
+      gapToken: "spacing/12",
+      roles: [componentRole("Icon", "TEXT"), componentRole("Label", "TEXT"), componentRole("Count", "TEXT"), componentRole("Status", "TEXT")],
+      variants: [
+        componentVariant("State=Default", { Icon: "\u25A4", Label: "Dokumente", Count: "12", Status: "Verf\xFCgbar" }),
+        componentVariant("State=Active", { Icon: "\u25CF", Label: "Dokumente", Count: "12", Status: "Aktiv" }, { inverted: true, strokeWeight: 2 }),
+        componentVariant("State=Hover", { Icon: "\u2192", Label: "Dokumente", Count: "12", Status: "Bereit zum \xD6ffnen" }, { strokeWeight: 2 }),
+        componentVariant("State=Collapsed", { Icon: "\u25A4", Label: "Dokumente", Count: "12", Status: "Eingeklappt" }, { opacity: 0.6, textToken: "color/text-muted" })
+      ]
+    }),
+    componentDefinition({
+      id: "list-row",
+      name: "Onda/List Row",
+      label: "List Row",
+      labelRole: "Title",
+      tier: 1,
+      radius: 0,
+      radiusToken: "radius/none",
+      targetHeight: 52,
+      gap: 12,
+      gapToken: "spacing/12",
+      roles: [componentRole("Leading", "TEXT"), componentRole("Title", "TEXT"), componentRole("Meta", "TEXT"), componentRole("Status", "TEXT"), componentRole("Action", "TEXT")],
+      variants: [
+        componentVariant("State=Default", { Leading: "\u25A4", Title: "Projekt Nordstern", Meta: "3 Dokumente", Status: "Zuletzt bearbeitet", Action: "\xD6ffnen" }),
+        componentVariant("State=Selected", { Leading: "\u25CF", Title: "Dokument: Die leise Architektur", Meta: "Projekt Nordstern", Status: "Ausgew\xE4hlt", Action: "\xD6ffnen" }, { inverted: true, strokeWeight: 2 }),
+        componentVariant("State=Hover", { Leading: "\u2192", Title: "Projekt Nordstern", Meta: "3 Dokumente", Status: "Bereit", Action: "\xD6ffnen" }, { strokeWeight: 2 }),
+        componentVariant("State=Trash", { Leading: "\u232B", Title: "Dokument: Alte Fassung", Meta: "Papierkorb", Status: "Wird gel\xF6scht", Action: "Endg\xFCltig l\xF6schen" }, { inverted: true, strokeWeight: 2 }),
+        componentVariant("State=Error", { Leading: "!", Title: "Dokument: Die leise Architektur", Meta: "\xC4nderungen nicht geladen", Status: "Fehler", Action: "Erneut versuchen" }, { strokeWeight: 2 })
+      ]
+    }),
+    componentDefinition({
+      id: "mode-toggle",
+      name: "Onda/Mode Toggle",
+      label: "Mode Toggle",
+      labelRole: "Text Label",
+      tier: 1,
+      roles: [componentRole("Text Label", "TEXT"), componentRole("Note Label", "TEXT"), componentRole("Indicator", "TEXT")],
+      variants: [
+        componentVariant("Mode=Text, State=Active", { "Text Label": "Text", "Note Label": "Notiz", Indicator: "Textmodus aktiv" }, { inverted: true, strokeWeight: 2 }),
+        componentVariant("Mode=Notiz, State=Active", { "Text Label": "Text", "Note Label": "Notiz", Indicator: "Notizmodus aktiv" }, { strokeWeight: 2 }),
+        componentVariant("Mode=Text, State=Disabled", { "Text Label": "Text", "Note Label": "Notiz", Indicator: "Textmodus deaktiviert" }, { opacity: 0.45, textToken: "color/text-muted" })
+      ]
+    }),
+    componentDefinition({
+      id: "review-bar",
+      name: "Onda/Review Bar",
+      label: "Review Bar",
+      labelRole: "Message",
+      tier: 1,
+      radius: 0,
+      radiusToken: "radius/none",
+      targetHeight: 64,
+      gap: 12,
+      gapToken: "spacing/12",
+      padding: { top: 16, right: 16, bottom: 16, left: 16 },
+      paddingTokens: { top: "spacing/16", right: "spacing/16", bottom: "spacing/16", left: "spacing/16" },
+      roles: [componentRole("Symbol", "TEXT"), componentRole("Message", "TEXT"), componentRole("Primary Action", "TEXT"), componentRole("Secondary Action", "TEXT")],
+      variants: [
+        componentVariant("Status=Open", { Symbol: "\u25CE", Message: "3 Hinweise zur Pr\xFCfung", "Primary Action": "N\xE4chster Hinweis", "Secondary Action": "Alle anzeigen" }),
+        componentVariant("Status=Saving", { Symbol: "\u2026", Message: "\xC4nderungen werden gespeichert \u2026", "Primary Action": "Speichern", "Secondary Action": "Abbrechen" }, { strokeWeight: 2, opacity: 0.75 }),
+        componentVariant("Status=Saved", { Symbol: "\u2713", Message: "\xC4nderungen gespeichert", "Primary Action": "Weiter pr\xFCfen", "Secondary Action": "R\xFCckg\xE4ngig" }, { inverted: true }),
+        componentVariant("Status=Error", { Symbol: "!", Message: "Speichern fehlgeschlagen", "Primary Action": "Erneut versuchen", "Secondary Action": "Exportieren" }, { inverted: true, strokeWeight: 2 }),
+        componentVariant("Status=Quiet", { Symbol: "\u2014", Message: "Anmerkungen sind ruhig gestellt", "Primary Action": "Anmerkungen zeigen", "Secondary Action": "Schlie\xDFen" }, { opacity: 0.6, textToken: "color/text-muted" })
+      ]
+    }),
+    componentDefinition({
+      id: "empty-state",
+      name: "Onda/Empty State",
+      label: "Empty State",
+      labelRole: "Title",
+      tier: 1,
+      radius: 6,
+      radiusToken: "radius/static",
+      targetHeight: 160,
+      gap: 16,
+      gapToken: "spacing/16",
+      direction: "VERTICAL",
+      padding: { top: 32, right: 32, bottom: 32, left: 32 },
+      paddingTokens: { top: "spacing/32", right: "spacing/32", bottom: "spacing/32", left: "spacing/32" },
+      roles: [componentRole("Symbol", "TEXT"), componentRole("Title", "TEXT"), componentRole("Description", "TEXT"), componentRole("Action", "TEXT")],
+      variants: [
+        componentVariant("Context=Library", { Symbol: "+", Title: "Noch keine Projekte", Description: "Erstelle ein Projekt, um Dokumente zu organisieren.", Action: "Projekt erstellen" }),
+        componentVariant("Context=No Active Annotation", { Symbol: "\u25CB", Title: "Keine aktive Anmerkung", Description: "W\xE4hle eine Anmerkung im Text aus, um sie zu pr\xFCfen.", Action: "Anmerkungen anzeigen" }, { opacity: 0.8, textToken: "color/text-muted" }),
+        componentVariant("Context=Recoverable Error", { Symbol: "!", Title: "Inhalt konnte nicht geladen werden", Description: "Deine Eingabe bleibt erhalten. Versuche es erneut.", Action: "Erneut versuchen" }, { inverted: true, strokeWeight: 2 })
+      ]
     })
   ]);
   var fixedSections = [
@@ -2502,8 +2596,10 @@ ${result.errors.join("\n")}`);
       ["spacing8", "spacing/8", "Onda \xB7 Dimension"],
       ["spacing12", "spacing/12", "Onda \xB7 Dimension"],
       ["spacing16", "spacing/16", "Onda \xB7 Dimension"],
+      ["spacing32", "spacing/32", "Onda \xB7 Dimension"],
       ["radiusNone", "radius/none", "Onda \xB7 Dimension"],
       ["radiusControl", "radius/control", "Onda \xB7 Dimension"],
+      ["radiusStatic", "radius/static", "Onda \xB7 Dimension"],
       ["radiusCircle", "radius/circle", "Onda \xB7 Dimension"]
     ];
     const entries = await Promise.all(requests.map(async ([key, name, collection]) => [key, await localVariable(name, collection)]));
@@ -2523,8 +2619,10 @@ ${result.errors.join("\n")}`);
         "spacing/8": variables.spacing8,
         "spacing/12": variables.spacing12,
         "spacing/16": variables.spacing16,
+        "spacing/32": variables.spacing32,
         "radius/none": variables.radiusNone,
         "radius/control": variables.radiusControl,
+        "radius/static": variables.radiusStatic,
         "radius/circle": variables.radiusCircle
       }
     });
