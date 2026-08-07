@@ -336,3 +336,96 @@ test('eine Id, die via Namensumleitung verbraucht wurde, bleibt fuer spätere Ei
   assert.equal(bestand.zuordnung.b1.artId, 'a1')
   assert.equal(bestand.zuordnung.b1.artId, bestand.arten[0].id)
 })
+
+import { verarbeiteBausteinantwort } from '../src/bausteinlauf-model.mjs'
+
+const DREI = [
+  { id: 'b1', type: 'paragraph', role: 'paragraph', text: 'Die tragende Aussage dieses Textes.' },
+  { id: 'b2', type: 'paragraph', role: 'paragraph', text: 'Eine Zahl aus der Erhebung.' },
+  { id: 'b3', type: 'paragraph', role: 'paragraph', text: 'Was daraus folgt.' },
+]
+
+const ANTWORT = {
+  textsorte: 'Wissenschaftliche Arbeit',
+  arten: [
+    { name: 'Kernaussage', beschreibung: 'Die These des Textes.', funktion: 'claim' },
+    { name: 'Befund', beschreibung: 'Ein Ergebnis der Erhebung.', funktion: 'evidence' },
+    { name: 'Einordnung', beschreibung: 'Ordnet ein Ergebnis ein.', funktion: null },
+  ],
+  zuordnung: [
+    { blockId: 'b1', art: 'Kernaussage' },
+    { blockId: 'b2', art: 'Befund' },
+    { blockId: 'b3', art: 'Einordnung' },
+  ],
+}
+
+test('eine saubere Antwort wird vollstaendig uebernommen', () => {
+  const { bestand, verworfen } = verarbeiteBausteinantwort({ antwort: ANTWORT, blocks: DREI, jetzt: 7 })
+  assert.equal(verworfen, 0)
+  assert.equal(bestand.textsorte, 'Wissenschaftliche Arbeit')
+  assert.deepEqual(bestand.arten.map(art => art.name), ['Kernaussage', 'Befund', 'Einordnung'])
+  assert.equal(bestand.standAt, 7)
+  assert.equal(bestand.laufSignatur, 'b1|b2|b3')
+  assert.equal(bestand.zuordnung.b2.zeichen, 'Eine Zahl aus der Erhebung.'.length)
+  assert.deepEqual([...bausteinRollen(bestand)], [['b1', 'claim'], ['b2', 'evidence']])
+  assert.equal(bausteinNamen(bestand).get('b3'), 'Einordnung')
+})
+
+test('eine Zuordnung auf einen unbekannten Absatz wird verworfen, nicht geraten', () => {
+  const antwort = { ...ANTWORT, zuordnung: [...ANTWORT.zuordnung, { blockId: 'b-gibt-es-nicht', art: 'Befund' }] }
+  const { bestand, verworfen } = verarbeiteBausteinantwort({ antwort, blocks: DREI, jetzt: 1 })
+  assert.equal(verworfen, 1)
+  assert.equal(bestand.zuordnung['b-gibt-es-nicht'], undefined)
+})
+
+test('eine Zuordnung auf eine nicht genannte Art wird verworfen', () => {
+  const antwort = { ...ANTWORT, zuordnung: [{ blockId: 'b1', art: 'Pointe' }] }
+  const { bestand, verworfen } = verarbeiteBausteinantwort({ antwort, blocks: DREI, jetzt: 1 })
+  assert.equal(verworfen, 1)
+  assert.equal(Object.keys(bestand.zuordnung).length, 0)
+})
+
+test('eine Ueberschrift bekommt nie einen Namen, auch wenn das Modell es versucht', () => {
+  const blocks = [...DREI, { id: 'h1', type: 'heading', role: 'heading', text: 'Ein Titel' }]
+  const antwort = { ...ANTWORT, zuordnung: [...ANTWORT.zuordnung, { blockId: 'h1', art: 'Befund' }] }
+  const { bestand, verworfen } = verarbeiteBausteinantwort({ antwort, blocks, jetzt: 1 })
+  assert.equal(verworfen, 1)
+  assert.equal(bestand.zuordnung.h1, undefined)
+})
+
+test('unerwaehnte Absaetze behalten ihren bisherigen Namen', () => {
+  const erst = verarbeiteBausteinantwort({ antwort: ANTWORT, blocks: DREI, jetzt: 1 }).bestand
+  const nurB3 = {
+    textsorte: 'Wissenschaftliche Arbeit',
+    arten: ANTWORT.arten,
+    zuordnung: [{ blockId: 'b3', art: 'Kernaussage' }],
+  }
+  const { bestand } = verarbeiteBausteinantwort({ antwort: nurB3, blocks: DREI, bestand: erst, jetzt: 2 })
+  assert.equal(bausteinNamen(bestand).get('b1'), 'Kernaussage')
+  assert.equal(bausteinNamen(bestand).get('b2'), 'Befund')
+  assert.equal(bausteinNamen(bestand).get('b3'), 'Kernaussage')
+})
+
+test('ein Absatz, den es nicht mehr gibt, faellt aus dem uebernommenen Bestand', () => {
+  const erst = verarbeiteBausteinantwort({ antwort: ANTWORT, blocks: DREI, jetzt: 1 }).bestand
+  const ohneB2 = DREI.filter(block => block.id !== 'b2')
+  const { bestand } = verarbeiteBausteinantwort({
+    antwort: { ...ANTWORT, zuordnung: [] }, blocks: ohneB2, bestand: erst, jetzt: 2,
+  })
+  assert.equal(bestand.zuordnung.b2, undefined)
+  assert.equal(bausteinNamen(bestand).get('b1'), 'Kernaussage')
+})
+
+test('eine Antwort ohne verwertbare Arten aendert nichts', () => {
+  const erst = verarbeiteBausteinantwort({ antwort: ANTWORT, blocks: DREI, jetzt: 1 }).bestand
+  const { bestand, verworfen } = verarbeiteBausteinantwort({
+    antwort: { textsorte: '', arten: [], zuordnung: [] }, blocks: DREI, bestand: erst, jetzt: 2,
+  })
+  assert.equal(bestand, erst)
+  assert.equal(verworfen, 0)
+})
+
+test('ohne bisherigen Bestand ergibt eine leere Antwort null', () => {
+  const { bestand } = verarbeiteBausteinantwort({ antwort: null, blocks: DREI, jetzt: 1 })
+  assert.equal(bestand, null)
+})

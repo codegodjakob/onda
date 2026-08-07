@@ -210,3 +210,62 @@ function bausteinKarte(bestand, feld) {
 export function bausteinRollen(bestand) { return bausteinKarte(bestand, 'funktion') }
 
 export function bausteinNamen(bestand) { return bausteinKarte(bestand, 'name') }
+
+// Die Antwort ist ein Vorschlag, kein Befehl. Was auf keinen vorhandenen, benennbaren
+// Absatz oder auf keine im selben Zug genannte Art zeigt, wird verworfen und gezaehlt --
+// nie geraten (dieselbe Regel wie bei den Ankern, hinweislauf-model.mjs:61).
+//
+// Absaetze, die die Antwort NICHT erwaehnt, behalten ihren bisherigen Namen. Genau das
+// haelt die Struktur-Spalte ruhig, wenn ein Lauf wegen eines einzigen neuen Absatzes
+// startet: die uebrigen Karten stehen still.
+export function verarbeiteBausteinantwort({ antwort, blocks, bestand = null, jetzt = Date.now() } = {}) {
+  const liste = (Array.isArray(blocks) ? blocks : []).filter(benennbar)
+  const vorhanden = new Set(liste.map(block => block.id))
+  const laengen = new Map(liste.map(block => [block.id, String(block.text || '').trim().length]))
+  const bisher = normalisiereBausteinarten(bestand)
+
+  const neueArten = normalisiereBausteinarten({
+    textsorte: antwort?.textsorte,
+    arten: Array.isArray(antwort?.arten) ? antwort.arten : [],
+    zuordnung: {},
+  })
+  if (!neueArten) {
+    if (!bisher) return { bestand: null, verworfen: 0 }
+    // Nichts Verwertbares geliefert: der bisherige Stand bleibt unangetastet.
+    return { bestand, verworfen: 0 }
+  }
+
+  const nachName = new Map(neueArten.arten.map(art => [art.name.toLocaleLowerCase('de'), art.id]))
+  const zuordnung = {}
+  let verworfen = 0
+
+  // Zuerst der Bestand: uebernommen wird, was noch existiert UND dessen Art die Antwort
+  // erneut nennt. Ein Name, dessen Art es nicht mehr gibt, waere sonst ein Waisenkind.
+  if (bisher) {
+    const alteNamen = new Map(bisher.arten.map(art => [art.id, art.name.toLocaleLowerCase('de')]))
+    Object.entries(bisher.zuordnung).forEach(([blockId, eintrag]) => {
+      if (!vorhanden.has(blockId)) return
+      const artId = nachName.get(alteNamen.get(eintrag.artId))
+      if (!artId) return
+      zuordnung[blockId] = { artId, zeichen: eintrag.zeichen }
+    })
+  }
+
+  ;(Array.isArray(antwort?.zuordnung) ? antwort.zuordnung : []).forEach(eintrag => {
+    const blockId = text(eintrag?.blockId)
+    const artId = nachName.get(text(eintrag?.art).toLocaleLowerCase('de'))
+    if (!blockId || !artId || !vorhanden.has(blockId)) { verworfen += 1; return }
+    zuordnung[blockId] = { artId, zeichen: laengen.get(blockId) || 0 }
+  })
+
+  return {
+    bestand: {
+      textsorte: neueArten.textsorte,
+      arten: neueArten.arten,
+      zuordnung,
+      laufSignatur: strukturSignatur(blocks),
+      standAt: Number(jetzt) || 0,
+    },
+    verworfen,
+  }
+}
