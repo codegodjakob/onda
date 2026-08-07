@@ -89,6 +89,37 @@ async function expectVisible(locator) {
   assert.equal(await locator.isVisible(), true)
 }
 
+// Das Einfügemenü ("Art des Textbausteins") hat seit dem 07.08.2026 keinen sichtbaren
+// Öffner mehr: das schwebende Plus am Absatz ist entfallen (c0a8f21), weil es nicht
+// erkennen ließ, wofür es steht — Hervorhebung und Angebot sind die Sprache der
+// Anmerkung, nicht des eigenen Schreibens (docs/PHILOSOPHIE.md §1). Das Menü selbst
+// lebt weiter und bekommt seinen Platz in der Struktur-Ansicht, wo Bausteine
+// hinzukommen dürfen. Bis dahin bliebe lebender Code ungeprüft, wenn hier niemand
+// aufmachte — deshalb die Klinke über den Testzugang.
+//
+// `oeffnerSelector` benennt das Element, das nach Escape den Fokus zurückbekommt.
+// Genommen wird dafür die Struktur-Karte des Bausteins: sie ist das nächste, was dem
+// künftigen Öffner entspricht, und sie überlebt jedes Neuzeichnen der Ansicht.
+async function oeffneEinfuegeMenue(page, { afterBlockId = null, oeffnerSelector = null } = {}) {
+  await page.evaluate(({ blockId, selector }) => {
+    const oeffner = selector ? document.querySelector(selector) : null
+    window.__einfuegeOeffner = oeffner
+    window.AIWT.__workspaceTestBridge.oeffneEinfuegeMenue(blockId, oeffner)
+  }, { blockId: afterBlockId, selector: oeffnerSelector })
+  await expectVisible(page.locator('.semantic-insert-menu'))
+  // Das offene Menü nimmt den Fokus sofort an sich. Ohne diese Zusage wären alle
+  // Escape-Prüfungen weiter unten inhaltsleer -- Escape träfe dann irgendetwas anderes.
+  assert.equal(
+    await page.evaluate(() => document.querySelector('.semantic-insert-menu')?.contains(document.activeElement)),
+    true,
+    'Das geöffnete Einfügemenü hat den Fokus nicht übernommen',
+  )
+}
+
+function strukturKarte(blockId) {
+  return `#structureNav .block-preview[data-block-id="${blockId}"]`
+}
+
 async function runSeedMigrationRegression(browser) {
   const page = await browser.newPage({ viewport: { width: 1100, height: 800 } })
   await page.goto(baseUrl, { waitUntil: 'networkidle' })
@@ -234,13 +265,17 @@ async function runDesktop(browser) {
   assert.equal(await page.locator('#editor .ProseMirror').evaluate(node => node.contains(document.activeElement)), true)
   assert.equal(await page.locator(`#editor .ProseMirror > [data-block-id="${previewTargetId}"]`).evaluate(node => node.classList.contains('is-active-block')), true)
 
-  // Einfügen läuft ausschließlich über den Editor-Trigger (die Seitenleiste hat keine Insert-Buttons mehr)
-  const trigger = page.locator('#blockInsertTrigger')
-  assert.equal(await trigger.count(), 1)
+  // ENTFERNT (07.08.2026): die Prüfung, dass genau ein Einfügeknopf am Absatz hängt.
+  // Das schwebende Plus gibt es nicht mehr — es sagte nicht, was es anbietet, und
+  // schwebte auch dann, wenn niemand etwas einfügen wollte (c0a8f21). Das Angebot
+  // wandert in die Struktur-Ansicht. Das Menü dahinter bleibt und wird hier weiter
+  // geprüft, nur eben ohne sichtbaren Öffner.
   const beforeInsert = await page.locator('#editor .ProseMirror > [data-block-id]').count()
-  await trigger.evaluate(node => node.click())
+  await oeffneEinfuegeMenue(page, {
+    afterBlockId: previewTargetId,
+    oeffnerSelector: strukturKarte(previewTargetId),
+  })
   const shelfMenu = page.locator('.semantic-insert-menu')
-  await expectVisible(shelfMenu)
   assert.deepEqual(await shelfMenu.getByRole('menuitem').allTextContents(), [
     'Freier Absatz',
     'Kernbehauptung',
@@ -254,32 +289,39 @@ async function runDesktop(browser) {
   const insertedBlock = page.locator('#editor .ProseMirror > [data-semantic-role="counterpoint"]')
   assert.equal(await insertedBlock.count(), 1)
 
-  await insertedBlock.hover()
-  await expectVisible(trigger)
-  const triggerPosition = await trigger.boundingBox()
-  const activePosition = await insertedBlock.boundingBox()
-  assert.ok(Math.abs(triggerPosition.y - activePosition.y - activePosition.height) < 28)
-  await trigger.focus()
-  await page.keyboard.press('Enter')
+  // Der neue Baustein landet unmittelbar hinter dem gewählten -- nicht am Textende.
+  // Das prüfte vorher niemand: der alte Knopf saß immer am aktiven Absatz, also fiel
+  // eine falsche Einfügestelle gar nicht auf.
+  const insertedBlockId = await insertedBlock.getAttribute('data-block-id')
+  const reihenfolge = await page.locator('#editor .ProseMirror > [data-block-id]')
+    .evaluateAll(nodes => nodes.map(node => node.dataset.blockId))
+  assert.equal(
+    reihenfolge.indexOf(insertedBlockId),
+    reihenfolge.indexOf(previewTargetId) + 1,
+    `Neuer Baustein steht an der falschen Stelle: ${JSON.stringify(reihenfolge)}`,
+  )
+
+  // ENTFERNT: Sichtbarkeit des Plus beim Überfahren, sein Abstand zur Unterkante des
+  // Absatzes, das Aufklappen mit Eingabetaste sowie sein Verblassen beim Tippen
+  // (Klasse is-typing, Deckkraft 0). All das beschrieb den Knopf selbst.
+  //
+  // Der Tastaturweg IM Menü bleibt geprüft: erster Eintrag hat den Fokus, Pfeiltasten
+  // wandern, Escape schließt und gibt den Fokus dem Öffner zurück.
+  await page.waitForFunction(
+    selector => Boolean(document.querySelector(selector)),
+    strukturKarte(insertedBlockId),
+  )
+  await oeffneEinfuegeMenue(page, {
+    afterBlockId: insertedBlockId,
+    oeffnerSelector: strukturKarte(insertedBlockId),
+  })
   const editorMenu = page.locator('.semantic-insert-menu')
-  await expectVisible(editorMenu)
   assert.equal(await page.locator('.semantic-insert-choice:focus').textContent(), 'Freier Absatz')
   await page.keyboard.press('ArrowDown')
   assert.equal(await page.locator('.semantic-insert-choice:focus').textContent(), 'Kernbehauptung')
   await page.keyboard.press('Escape')
   assert.equal(await editorMenu.count(), 0)
-  assert.equal(await trigger.evaluate(node => document.activeElement === node), true)
-
-  const insertedBlockId = await insertedBlock.getAttribute('data-block-id')
-  await page.evaluate(blockId => {
-    const block = window.AIWT.__blockIdentityTestBridge.getBlocks().find(candidate => candidate.id === blockId)
-    window.AIWT.state.editor.commands.setTextSelection(block.pos + 1)
-    window.AIWT.state.editor.view.focus()
-  }, insertedBlockId)
-  await page.keyboard.type('x')
-  assert.equal(await trigger.evaluate(node => node.classList.contains('is-typing')), true)
-  await page.waitForTimeout(200)
-  assert.equal(await trigger.evaluate(node => getComputedStyle(node).opacity), '0')
+  assert.equal(await page.evaluate(() => document.activeElement === window.__einfuegeOeffner), true)
 
   await page.evaluate(() => window.AIWT.flushSave())
   await page.reload({ waitUntil: 'networkidle' })
@@ -417,12 +459,15 @@ async function runPrintLayout(browser) {
   })
   await page.emulateMedia({ media: 'print' })
 
+  // ENTFERNT: '#blockInsertLayer' -- die Fläche, auf der das Plus schwebte, ist mit ihm
+  // verschwunden (c0a8f21). Die Prüfung liefe zwar grün weiter, denn ein Element, das
+  // es nicht gibt, gilt als verborgen; sie prüfte dann aber nichts mehr. Was gedruckt
+  // wird und was nicht, bleibt für alles andere geprüft.
   for (const selector of [
     '.onda-topbar',
     '#ondaSidebar',
     '#agentWidget',
     '#evidenceWindow',
-    '#blockInsertLayer',
     '#localAgentLayer',
     '#saveAlert',
   ]) {
@@ -734,8 +779,9 @@ async function runTask4InteractionRegressions(browser) {
   assert.equal(ruleSelection.selectedNodeType, 'horizontalRule')
   assert.equal(ruleSelection.activeBlockId, secondRuleId)
 
-  // Einfügen läuft über den Editor-Trigger; er fügt hinter dem aktiven Block (secondRule) ein
-  await page.locator('#blockInsertTrigger').evaluate(node => node.click())
+  // Ohne ausdrücklich genanntes Ziel fügt das Menü hinter dem AKTIVEN Baustein ein --
+  // hier hinter der zweiten Linie, nicht am Textende.
+  await oeffneEinfuegeMenue(page)
   await page.locator('.semantic-insert-choice[data-semantic-role="counterpoint"]').click()
   const insertedAfterSecondRule = await page.evaluate(() => window.AIWT.__blockIdentityTestBridge.getJSON())
   assert.deepEqual(insertedAfterSecondRule.content.map(node => node.type), [
@@ -777,15 +823,16 @@ async function runTask4InteractionRegressions(browser) {
   assert.equal(afterTextIdentity.previewsStable, true)
   assert.match(afterTextIdentity.wortlaut || '', /Neu Absatz danach/)
 
-  // Das Trigger-Menü schließt beim Öffnen des Agenten
-  await page.locator('#blockInsertTrigger').evaluate(node => node.click())
-  await expectVisible(page.locator('.semantic-insert-menu'))
+  // Nur EINE große Fläche steht offen: das Einfügemenü und der Agent weichen einander
+  // aus, in beide Richtungen.
+  const aktiverBlockId = await page.evaluate(() => window.AIWT.__blockIdentityTestBridge.getActiveBlockId())
+  await oeffneEinfuegeMenue(page, { oeffnerSelector: strukturKarte(aktiverBlockId) })
   await page.locator('#ondaAura').click()
   assert.equal(await page.locator('.semantic-insert-menu').count(), 0)
   assert.equal(await page.locator('#agentWidget').isVisible(), true)
 
-  // Das erneute Trigger-Menü schließt den Agenten; die Struktur bleibt dauerhaft sichtbar
-  await page.locator('#blockInsertTrigger').evaluate(node => node.click())
+  // Das erneut geöffnete Menü schließt den Agenten; die Struktur bleibt dauerhaft sichtbar
+  await oeffneEinfuegeMenue(page, { oeffnerSelector: strukturKarte(aktiverBlockId) })
   assert.equal(await page.locator('.semantic-insert-menu').count(), 1)
   assert.equal(await page.locator('#agentWidget').isHidden(), true)
   assert.equal(await page.locator('#structureNav .block-preview').count() > 0, true)
@@ -795,7 +842,8 @@ async function runTask4InteractionRegressions(browser) {
   assert.equal(await page.locator('#agentWidget').isVisible(), true)
   await page.locator('#ondaAura').click()
 
-  await page.locator('#blockInsertTrigger').evaluate(node => node.click())
+  // Dasselbe gegenüber dem Belegfenster
+  await oeffneEinfuegeMenue(page, { oeffnerSelector: strukturKarte(aktiverBlockId) })
   await page.evaluate(() => {
     const doc = window.AIWT.state.docs.find(candidate => candidate.id === window.AIWT.state.active)
     doc.workspace.evidenceFindingId = 'task-4-evidence'
@@ -804,52 +852,42 @@ async function runTask4InteractionRegressions(browser) {
   assert.equal(await page.locator('.semantic-insert-menu').count(), 0)
   assert.equal(await page.locator('#evidenceWindow').isVisible(), true)
 
-  await page.locator('#blockInsertTrigger').evaluate(node => node.click())
+  await oeffneEinfuegeMenue(page, { oeffnerSelector: strukturKarte(aktiverBlockId) })
   assert.equal(await page.locator('.semantic-insert-menu').count(), 1)
   assert.equal(await page.locator('#evidenceWindow').isHidden(), true)
   await expectVisible(shelf)
 
-  // Der Trigger ist ein stabiler Einzelknoten; Escape schließt das Menü und gibt ihm den Fokus zurück
-  const triggerOpenerConnected = await page.locator('#blockInsertTrigger').evaluate(node => {
-    window.__task4TriggerOpener = node
-    return node.isConnected
-  })
-  assert.equal(triggerOpenerConnected, true)
+  // ENTFERNT: dass der Einfügeknopf über Auswahlwechsel hinweg derselbe Knoten bleibt.
+  // Den Knopf gibt es nicht mehr; dieselbe Zusage gilt jetzt der Struktur-Karte und
+  // wird oben bei previewsStable geprüft.
+  //
+  // Was bleibt: Escape schließt das Menü und gibt den Fokus dorthin zurück, woher es
+  // geöffnet wurde -- auch wenn sich zwischendurch die Auswahl im Text verschiebt.
   await page.evaluate(() => {
     const blocks = window.AIWT.__blockIdentityTestBridge.getBlocks()
     window.AIWT.state.editor.commands.setTextSelection(blocks.at(-1).pos + 1)
   })
-  assert.equal(await page.evaluate(() => window.__task4TriggerOpener === document.getElementById('blockInsertTrigger')), true)
+  assert.equal(await page.evaluate(() => window.__einfuegeOeffner?.isConnected), true)
   await page.keyboard.press('Escape')
-  assert.equal(await page.evaluate(() => document.activeElement === window.__task4TriggerOpener), true)
+  assert.equal(await page.evaluate(() => document.activeElement === window.__einfuegeOeffner), true)
 
-  await page.locator('#blockInsertTrigger').evaluate(node => node.click())
+  // Scrollen und Größenänderung schließen das Menü: es steht an einer gemerkten
+  // Stelle im Fenster, die nach beidem nicht mehr stimmt.
+  await oeffneEinfuegeMenue(page, { oeffnerSelector: strukturKarte(aktiverBlockId) })
   await page.locator('#scroll').evaluate(node => {
     node.scrollTop += 80
     node.dispatchEvent(new Event('scroll'))
   })
   assert.equal(await page.locator('.semantic-insert-menu').count(), 0)
 
-  await page.locator('#blockInsertTrigger').evaluate(node => node.click())
+  await oeffneEinfuegeMenue(page, { oeffnerSelector: strukturKarte(aktiverBlockId) })
   await page.evaluate(() => window.dispatchEvent(new Event('resize')))
   assert.equal(await page.locator('.semantic-insert-menu').count(), 0)
 
-  const trigger = page.locator('#blockInsertTrigger')
-  await page.locator('#editor .ProseMirror > p').last().hover()
-  await page.evaluate(() => {
-    const editor = window.AIWT.state.editor.view.dom
-    editor.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true, data: 'に' }))
-  })
-  await page.waitForTimeout(620)
-  assert.equal(await trigger.evaluate(node => node.classList.contains('is-typing')), true)
-  assert.equal(await trigger.evaluate(node => getComputedStyle(node).opacity), '0')
-  await page.evaluate(() => {
-    window.AIWT.state.editor.view.dom.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: '日本' }))
-  })
-  await page.waitForTimeout(200)
-  assert.equal(await trigger.evaluate(node => node.classList.contains('is-typing')), true)
-  await page.waitForTimeout(380)
-  assert.equal(await trigger.evaluate(node => node.classList.contains('is-typing')), false)
+  // ENTFERNT: das Verhalten des Einfügeknopfes während einer Zeichenkomposition
+  // (japanische Eingabe) -- er trug dabei die Klasse is-typing und verblasste auf
+  // Deckkraft 0, und hielt das bis kurz nach dem Ende der Komposition durch. Geprüft
+  // wurde ausschließlich der Knopf; ohne ihn bleibt davon nichts übrig.
 
   await page.close()
 }
@@ -1520,7 +1558,14 @@ async function runTask5MobileFeedback(browser) {
   assert.ok(overlap.agentOverlap <= 0)
   assert.ok(overlap.spacerHeight > 0)
   assert.ok(overlap.agentBottom <= overlap.nextBlockTop)
-  const trigger = page.locator('#blockInsertTrigger')
+  // ENTFERNT: dass der Einfügeknopf auf dem Tastgerät sichtbar und anfassbar bleibt
+  // (Deckkraft über null, pointer-events auto) und dass er unterhalb von Absatz,
+  // Anmerkung und Vorschlag sitzt, ohne eines davon oder den Folgeabsatz zu berühren.
+  // Den Knopf gibt es seit dem 07.08.2026 nicht mehr (c0a8f21); Bausteine hinzufügen
+  // zieht in die Struktur-Ansicht.
+  //
+  // GERETTET: dass das Öffnen des Einfügemenüs den Vorschlag beiseiteräumt und Escape
+  // es wieder schließt -- das hing nie am Knopf, sondern am Menü.
   const activeBlock = page.locator(`#editor .ProseMirror > [data-block-id="${blockId}"]`)
   await activeBlock.tap()
   await page.waitForFunction(id => {
@@ -1528,65 +1573,16 @@ async function runTask5MobileFeedback(browser) {
     return doc.workspace.activeBlockId === id
   }, blockId)
   await page.waitForTimeout(220)
-  const touchTriggerStyle = await trigger.evaluate(node => ({
-    opacity: Number.parseFloat(getComputedStyle(node).opacity),
-    pointerEvents: getComputedStyle(node).pointerEvents,
-  }))
-  assert.ok(touchTriggerStyle.opacity > 0)
-  assert.equal(touchTriggerStyle.pointerEvents, 'auto')
-  await trigger.tap()
-  await expectVisible(page.locator('.semantic-insert-menu'))
+  await oeffneEinfuegeMenue(page, { afterBlockId: blockId })
   assert.equal(await page.locator('.local-suggestion').count(), 0)
   await page.keyboard.press('Escape')
   assert.equal(await page.locator('.semantic-insert-menu').count(), 0)
   await local.locator('.local-finding-summary').tap()
   await local.locator('.local-finding-summary').tap()
   await waitForLocalFeedbackLayout(page, blockId, true)
-  await page.waitForFunction(id => {
-    const triggerRect = document.getElementById('blockInsertTrigger').getBoundingClientRect()
-    const blockRect = document.querySelector(`#editor .ProseMirror > [data-block-id="${id}"]`).getBoundingClientRect()
-    const noteRect = document.querySelector(`#localAgentLayer .local-finding[data-block-id="${id}"]`).getBoundingClientRect()
-    const suggestionRect = document.querySelector(`#localAgentLayer .local-suggestion[data-block-id="${id}"]`).getBoundingClientRect()
-    return triggerRect.top >= Math.max(blockRect.bottom, noteRect.bottom, suggestionRect.bottom)
-  }, blockId)
 
-  const insertGeometry = await page.evaluate(id => {
-    const triggerRect = document.getElementById('blockInsertTrigger').getBoundingClientRect()
-    const block = document.querySelector(`#editor .ProseMirror > [data-block-id="${id}"]`)
-    const blockRect = block.getBoundingClientRect()
-    const noteRect = document.querySelector(`#localAgentLayer .local-finding[data-block-id="${id}"]`).getBoundingClientRect()
-    const suggestionRect = document.querySelector(`#localAgentLayer .local-suggestion[data-block-id="${id}"]`).getBoundingClientRect()
-    const spacer = block.nextElementSibling
-    const nextBlock = spacer?.classList.contains('local-feedback-spacer') ? spacer.nextElementSibling : spacer
-    const overlaps = rect => (
-      Math.min(triggerRect.right, rect.right) - Math.max(triggerRect.left, rect.left) > 0
-      && Math.min(triggerRect.bottom, rect.bottom) - Math.max(triggerRect.top, rect.top) > 0
-    )
-    return {
-      triggerTop: triggerRect.top,
-      triggerBottom: triggerRect.bottom,
-      contentBottom: Math.max(blockRect.bottom, noteRect.bottom, suggestionRect.bottom),
-      nextBlockTop: nextBlock?.getBoundingClientRect().top || Number.POSITIVE_INFINITY,
-      blockBottom: blockRect.bottom,
-      spacerTop: spacer?.getBoundingClientRect().top || null,
-      spacerBottom: spacer?.getBoundingClientRect().bottom || null,
-      spacerHeight: spacer?.getBoundingClientRect().height || null,
-      spacerStyleHeight: spacer ? getComputedStyle(spacer).height : null,
-      nextMarginTop: nextBlock ? getComputedStyle(nextBlock).marginTop : null,
-      overlapsBlock: overlaps(blockRect),
-      overlapsNote: overlaps(noteRect),
-      overlapsSuggestion: overlaps(suggestionRect),
-    }
-  }, blockId)
-  assert.ok(insertGeometry.triggerTop >= insertGeometry.contentBottom)
-  assert.ok(
-    insertGeometry.triggerBottom <= insertGeometry.nextBlockTop,
-    `Mobiler Einfügetrigger ragt in den Folgeblock: ${JSON.stringify(insertGeometry)}`,
-  )
-  assert.deepEqual(
-    [insertGeometry.overlapsBlock, insertGeometry.overlapsNote, insertGeometry.overlapsSuggestion],
-    [false, false, false],
-  )
+  // Der Abstandhalter unter dem Absatz bleibt geprüft: die Rückmeldung darf den
+  // Folgeabsatz nicht überdecken. Das steht bereits oben in `overlap`.
   await page.screenshot({ path: `${screenshotDir}/aiwt-v2-task5-mobile.png`, fullPage: true })
 
   await page.locator('#scroll').evaluate(node => {
@@ -1662,252 +1658,10 @@ async function injectTask6PassageFinding(page, withSources = false) {
   }, { withSources })
 }
 
-async function runTask6DialogueAndEvidence(browser) {
-  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } })
-  const errors = []
-  page.on('console', message => {
-    if (message.type() === 'error') errors.push(message.text())
-  })
-  page.on('pageerror', error => errors.push(error.message))
-  await openExample(page)
-  await installiereTransportMock(page)
-
-  assert.equal(await page.evaluate(() => window.AIWT.state.settings.exampleVersion), 9)
-  assert.equal(await page.locator('#agentWidget').isHidden(), true)
-  assert.equal(await page.locator('[data-agent-launcher]').count(), 0)
-  assert.equal(await page.locator('#ondaAura').count(), 1)
-
-  await page.evaluate(() => {
-    const blocks = window.AIWT.__blockIdentityTestBridge.getBlocks()
-    const block = blocks[blocks.length - 1]
-    window.AIWT.state.editor.commands.setTextSelection(block.pos + block.nodeSize - 1)
-    window.AIWT.state.editor.view.focus()
-  })
-  const focusBefore = await page.evaluate(() => document.activeElement === window.AIWT.state.editor.view.dom)
-  assert.equal(focusBefore, true)
-  await page.waitForTimeout(1600)
-  await page.keyboard.type('x')
-  const selectionBefore = await page.evaluate(() => window.AIWT.state.editor.state.selection.from)
-  await page.waitForTimeout(1700)
-  assert.equal(await page.locator('#agentWidget').isHidden(), true)
-  await page.waitForTimeout(1600)
-  const widget = page.locator('#agentWidget')
-  await expectVisible(widget)
-  const selectionAfter = await page.evaluate(() => window.AIWT.state.editor.state.selection.from)
-  assert.equal(selectionAfter, selectionBefore)
-  assert.equal(await page.evaluate(() => document.activeElement === window.AIWT.state.editor.view.dom), true)
-  assert.match(await widget.textContent(), /allgemeinere Frage/i)
-
-  const widgetGeometry = await widget.evaluate(node => {
-    const rect = node.getBoundingClientRect()
-    return {
-      width: rect.width,
-      height: rect.height,
-      rightInset: innerWidth - rect.right,
-      viewportHeight: innerHeight,
-      radius: getComputedStyle(node).borderRadius,
-      radiusToken: getComputedStyle(document.documentElement).getPropertyValue('--radius-panel').trim(),
-    }
-  })
-  assert.ok(widgetGeometry.width >= 360 && widgetGeometry.width <= 400)
-  assert.ok(widgetGeometry.height < widgetGeometry.viewportHeight - 100)
-  assert.ok(widgetGeometry.rightInset >= 16)
-  assert.equal(widgetGeometry.radius, widgetGeometry.radiusToken)
-
-  const globalForm = widget.locator('form')
-  const globalInput = globalForm.locator('input')
-  await globalInput.focus()
-  await globalInput.fill('Die gestaltete Bedingung.')
-  await globalInput.press('Enter')
-  assert.match(await widget.textContent(), /Die gestaltete Bedingung\./)
-  try {
-    await widget.getByText(/EVAL-Agentenreaktion/).waitFor({ timeout: 5000 })
-  } catch {
-    const diagnose = await page.evaluate(() => {
-      const doc = window.AIWT.state.docs.find(candidate => candidate.id === window.AIWT.state.active)
-      const message = doc?.workspace?.agent?.messages
-        ?.find(candidate => candidate.id === doc.workspace.agent.activeMessageId)
-      return {
-        activeProject: window.AIWT.state.activeProject,
-        mockAufrufe: window.__llmMock?.aufrufe?.length ?? null,
-        mockStreams: window.__llmMock?.aufrufe?.map(anfrage => anfrage?.body?.stream === true) ?? [],
-        thread: message?.thread ?? null,
-        liveStatus: document.getElementById('agentLiveStatus')?.textContent || '',
-        widgetText: document.getElementById('agentWidget')?.textContent || '',
-      }
-    })
-    assert.fail(`EVAL-Agentenreaktion fehlt: ${JSON.stringify(diagnose)}`)
-  }
-  assert.ok((await widget.locator('.agent-message').count()) >= 3)
-  assert.equal(await widget.locator('input').evaluate(node => document.activeElement === node), true)
-  assert.equal(await widget.locator('input').inputValue(), '')
-  assert.equal(await widget.locator('.agent-widget-messages').getAttribute('aria-live'), null)
-  await page.waitForFunction(() => /EVAL-Agentenreaktion/.test(document.getElementById('agentLiveStatus')?.textContent || ''))
-  assert.match(await page.locator('#agentLiveStatus').textContent(), /EVAL-Agentenreaktion/)
-  await page.keyboard.press('Escape')
-  assert.equal(await widget.isHidden(), true)
-  assert.equal(await page.locator('#ondaAura').evaluate(node => document.activeElement === node), true)
-  await page.evaluate(() => window.AIWT.flushSave())
-  await page.reload({ waitUntil: 'networkidle' })
-  await openExample(page, false)
-  await installiereTransportMock(page)
-  await page.waitForTimeout(3300)
-  assert.equal(await page.locator('#agentWidget').isHidden(), true)
-  const persistedGlobal = await page.evaluate(() => {
-    const doc = window.AIWT.state.docs.find(candidate => candidate.id === window.AIWT.state.active)
-    const message = doc.workspace.agent.messages.find(candidate => candidate.id === 'example-agent-initiative')
-    return {
-      dismissed: doc.workspace.agent.dismissedIds.includes(message.id),
-      texts: message.thread.map(entry => entry.text),
-    }
-  })
-  assert.equal(persistedGlobal.dismissed, true)
-  assert.ok(persistedGlobal.texts.includes('Die gestaltete Bedingung.'))
-
-  await page.locator('#ondaAura').click()
-  await expectVisible(page.locator('#agentWidget'))
-  await page.locator('#agentWidget [data-close-agent]').focus()
-  await page.keyboard.press('Enter')
-  assert.equal(await page.locator('#ondaAura').evaluate(node => document.activeElement === node), true)
-
-  const fixture = await injectTask6PassageFinding(page, false)
-  let local = page.locator(`#localAgentLayer [data-finding-id="${fixture.findingId}"]`)
-  await expectVisible(local)
-  await local.locator('.local-finding-summary').focus()
-  await page.keyboard.press('Enter')
-  await page.keyboard.press('Enter')
-  const localDialogue = local.locator('.local-dialogue')
-  await expectVisible(localDialogue)
-  assert.equal(await local.locator('.local-finding-connector').count(), 1)
-  assert.equal(await page.locator('#agentWidget').isHidden(), true)
-  assert.equal(await page.locator('#structureNav .block-preview').count() > 0, true)
-  assert.equal(await page.locator('.semantic-insert-menu').count(), 0)
-  assert.equal(await localDialogue.locator('form input').count(), 1)
-  await localDialogue.locator('input').focus()
-  await localDialogue.locator('input').fill('Als gestaltete Bedingung.')
-  await localDialogue.locator('input').press('Enter')
-  await localDialogue.getByText(/EVAL-Agentenreaktion/i).waitFor()
-  assert.match(await localDialogue.textContent(), /EVAL-Agentenreaktion/i)
-  assert.match(await localDialogue.textContent(), /Als gestaltete Bedingung\./)
-  assert.equal(await localDialogue.locator('input').evaluate(node => document.activeElement === node), true)
-  assert.equal(await localDialogue.locator('input').inputValue(), '')
-  assert.equal(await page.locator('#localAgentLayer').getAttribute('aria-live'), null)
-  await page.keyboard.press('Escape')
-  assert.equal(await localDialogue.count(), 0)
-  assert.equal(await local.locator('.local-finding-summary').evaluate(node => document.activeElement === node), true)
-  await page.keyboard.press('Enter')
-  await page.keyboard.press('Enter')
-  await page.waitForTimeout(260)
-  await page.screenshot({ path: `${screenshotDir}/aiwt-v2-task6-local-dialogue.png`, fullPage: true })
-
-  await page.evaluate(() => window.AIWT.flushSave())
-  await page.reload({ waitUntil: 'networkidle' })
-  await openExample(page, false)
-  await installiereTransportMock(page)
-  local = page.locator(`#localAgentLayer [data-finding-id="${fixture.findingId}"]`)
-  await expectVisible(local.locator('.local-dialogue'))
-  const persistedLocal = await page.evaluate(id => {
-    const doc = window.AIWT.state.docs.find(candidate => candidate.id === window.AIWT.state.active)
-    return doc.findings.find(finding => finding.id === id).thread.map(message => message.text)
-  }, fixture.findingId)
-  assert.ok(persistedLocal.includes('Als gestaltete Bedingung.'))
-
-  await injectTask6PassageFinding(page, true)
-  local = page.locator(`#localAgentLayer [data-finding-id="${fixture.findingId}"]`)
-  await local.locator('.local-finding-summary').press('Enter')
-  await local.locator('.local-finding-summary').focus()
-  await local.locator('.local-finding-summary').press('Enter')
-  const evidence = page.locator('#evidenceWindow')
-  await expectVisible(evidence)
-  assert.equal(await evidence.locator('[data-close-evidence]').evaluate(node => document.activeElement === node), true)
-  assert.equal(
-    (await evidence.locator('.evidence-claim').textContent()).trim(),
-    'Calm Technology kann Aufmerksamkeit schonen, indem Technik zwischen Zentrum und Peripherie wechselt.',
-  )
-  assert.equal(await evidence.getByText('Primärquelle', { exact: true }).count(), 1)
-  assert.equal(await evidence.getByText('Auszug', { exact: true }).count(), 1)
-  assert.equal(await evidence.getByText('Zusammenfassung', { exact: true }).count(), 1)
-  assert.equal(await evidence.getByText('Demoquelle - nicht live verifiziert', { exact: true }).count(), 1)
-  assert.equal(await evidence.getByText('Nicht verifiziert', { exact: true }).count(), 1)
-  assert.equal(await evidence.locator('[data-copy-citation]').nth(1).isDisabled(), true)
-  assert.match(await evidence.locator('[data-copy-citation]').nth(1).textContent(), /erst nach Prüfung/i)
-  assert.equal(await evidence.getByText('Fundstelle', { exact: true }).count(), 2)
-  assert.equal(await evidence.getByText('Demo-Fundstelle, Absatz 1', { exact: true }).count(), 1)
-  assert.equal(
-    (await evidence.locator('.evidence-source-preview').first().textContent()).trim(),
-    'The most potentially interesting, challenging, and profound change implied by the ubiquitous computing era is a focus on calm.',
-  )
-  assert.equal(await evidence.getByText('Einordnung', { exact: true }).count(), 1)
-  assert.equal(await evidence.getByText('Grenzen / Gegenbelege', { exact: true }).count(), 1)
-  assert.equal(
-    (await evidence.locator('.evidence-source-citation').first().textContent()).trim(),
-    'Weiser, M., & Brown, J. S. (1996). The Coming Age of Calm Technology.',
-  )
-  await page.evaluate(() => {
-    window.__copiedCitation = null
-    Object.defineProperty(navigator, 'clipboard', {
-      configurable: true,
-      value: { writeText: async value => { window.__copiedCitation = value } },
-    })
-  })
-  await evidence.locator('[data-copy-citation]').first().click()
-  assert.equal(
-    await page.evaluate(() => window.__copiedCitation),
-    'Weiser, M., & Brown, J. S. (1996). The Coming Age of Calm Technology.',
-  )
-  await page.waitForFunction(() => /kopiert/i.test(document.getElementById('agentLiveStatus')?.textContent || ''))
-  assert.match(await page.locator('#agentLiveStatus').textContent(), /Demo-Angabe.*prüfen/i)
-  assert.doesNotMatch(await page.locator('#agentLiveStatus').textContent(), /zitierfähig/i)
-  assert.equal(await evidence.locator('a[href="https://calmtech.com/papers"]').count(), 2)
-  assert.equal(await page.locator('#agentWidget').isHidden(), true)
-  assert.equal(await page.locator('#structureNav .block-preview').count() > 0, true)
-  assert.equal(await page.locator('.local-dialogue').count(), 0)
-  const evidenceGeometry = await evidence.evaluate(node => {
-    const rect = node.getBoundingClientRect()
-    const editorRect = document.querySelector('#editor .ProseMirror').getBoundingClientRect()
-    return {
-      height: rect.height,
-      viewportHeight: innerHeight,
-      left: rect.left,
-      right: rect.right,
-      editorRight: editorRect.right,
-      viewportWidth: innerWidth,
-    }
-  })
-  assert.ok(evidenceGeometry.height < evidenceGeometry.viewportHeight - 140)
-  assert.ok(evidenceGeometry.right <= evidenceGeometry.viewportWidth - 16)
-  assert.ok(evidenceGeometry.left >= evidenceGeometry.editorRight + 8)
-  await page.waitForTimeout(280)
-  await page.screenshot({ path: `${screenshotDir}/aiwt-v2-task6-evidence.png`, fullPage: true })
-  await evidence.locator('[data-close-evidence]').click()
-  assert.equal(await evidence.isHidden(), true)
-  assert.equal(await local.locator('.local-finding-summary').evaluate(node => document.activeElement === node), true)
-
-  await page.evaluate(id => {
-    const doc = window.AIWT.state.docs.find(candidate => candidate.id === window.AIWT.state.active)
-    const finding = doc.findings.find(candidate => candidate.id === id)
-    delete finding.claim
-    finding.target = 'Calm Technology beschreibt Technik'
-    finding.short = 'Ist Aufmerksamkeit hier Fähigkeit oder gestaltete Bedingung?'
-    doc.workspace.evidenceFindingId = id
-    document.getElementById('title').dispatchEvent(new Event('input'))
-  }, fixture.findingId)
-  await expectVisible(evidence)
-  assert.equal(
-    (await evidence.locator('.evidence-claim').textContent()).trim(),
-    'Zu belegende Aussage noch nicht erfasst',
-  )
-  assert.equal(await evidence.getByText('Zu belegende Aussage', { exact: true }).count(), 0)
-  assert.equal(await evidence.getByText('Calm Technology beschreibt Technik', { exact: true }).count(), 0)
-  assert.equal(await evidence.getByText('Ist Aufmerksamkeit hier Fähigkeit oder gestaltete Bedingung?', { exact: true }).count(), 0)
-  assert.equal(await evidence.getByText('Weiser & Brown (1996): The Coming Age of Calm Technology', { exact: true }).count(), 1)
-  assert.equal(await evidence.locator('[data-copy-citation]:enabled').count(), 0)
-  assert.equal(await evidence.locator('[data-copy-citation]:disabled').count(), 2)
-  await evidence.locator('[data-close-evidence]').click()
-
-  assert.deepEqual(errors, [])
-  await page.close()
-}
+// ENTFERNT (07.08.2026): runTask6DialogueAndEvidence. Die Funktion war seit dem
+// Umbau der Rückmeldungs-Oberfläche definiert, aber von niemandem mehr aufgerufen --
+// sie lief also nie und prüfte nichts. Was sie beschrieb (Gespräch am Absatz,
+// Belegfenster), prüft der semantische Onda-Smoke über alle Formen hinweg.
 
 async function runTask6Mobile(browser) {
   const context = await browser.newContext({
@@ -2204,12 +1958,14 @@ async function prepareTask7Scenario(page, name) {
 }
 
 async function assertTask7IconControls(page, label) {
+  // ENTFERNT: '.block-insert-trigger' -- das schwebende Plus am Absatz gibt es seit
+  // dem 07.08.2026 nicht mehr (c0a8f21). Alle übrigen Symbolknöpfe werden weiter auf
+  // zugänglichen Namen und sichtbaren Fokus geprüft.
   const selectors = [
     '.icon-button',
     '.surface-close',
     '.agent-chat-send',
     '.suggestion-action',
-    '.block-insert-trigger',
     '#newBtn',
     '#sortBtn',
     '.tico',
@@ -2309,10 +2065,13 @@ async function assertVisibleTabSequence(page, startSelector, steps, label) {
 }
 
 async function assertTask7MobileHitboxes(page, name) {
+  // ENTFERNT: '#blockInsertTrigger' aus den Lagen 'base' und 'finding'. Der Einfügeknopf
+  // ist fort (c0a8f21, 07.08.2026); seine Trefferfläche kann niemand mehr messen.
+  // Alle übrigen Knöpfe der jeweiligen Lage werden weiter auf 44 Punkt geprüft.
   const required = {
-    base: ['#sidebarBack', '#ondaAura', '#blockInsertTrigger'],
+    base: ['#sidebarBack', '#ondaAura'],
     shelf: ['#sidebarBack', '#ondaAura', '#structureNav .block-preview'],
-    finding: ['#sidebarReopen', '#ondaAura', '#blockInsertTrigger'],
+    finding: ['#sidebarReopen', '#ondaAura'],
     suggestion: ['#sidebarReopen', '#ondaAura', '.suggestion-action'],
     'local-dialogue': ['#sidebarReopen', '#ondaAura', '.local-dialogue .agent-chat-send'],
     agent: ['#sidebarReopen', '#ondaAura', '#agentWidget .surface-close', '#agentWidget .agent-chat-send'],
@@ -2330,36 +2089,9 @@ async function assertTask7MobileHitboxes(page, name) {
     }
   }
 
-  for (const selector of ['#blockInsertTrigger']) {
-    const control = page.locator(selector).first()
-    if (!await control.count() || !await control.isVisible()) continue
-    const contrast = await control.evaluate(node => {
-      const rgb = value => (value.match(/[\d.]+/g) || []).slice(0, 3).map(Number)
-      const linear = value => {
-        const channel = value / 255
-        return channel <= .04045 ? channel / 12.92 : ((channel + .055) / 1.055) ** 2.4
-      }
-      const luminance = color => .2126 * linear(color[0]) + .7152 * linear(color[1]) + .0722 * linear(color[2])
-      const style = getComputedStyle(node)
-      const foreground = rgb(style.color)
-      let parent = node.parentElement
-      let background = [255, 255, 255]
-      while (parent) {
-        const value = getComputedStyle(parent).backgroundColor
-        if (value && !/rgba?\(0, 0, 0(?:, 0)?\)/.test(value) && value !== 'transparent') {
-          background = rgb(value)
-          break
-        }
-        parent = parent.parentElement
-      }
-      const alpha = Number.parseFloat(style.opacity)
-      const composite = foreground.map((channel, index) => channel * alpha + background[index] * (1 - alpha))
-      const a = luminance(composite)
-      const b = luminance(background)
-      return (Math.max(a, b) + .05) / (Math.min(a, b) + .05)
-    })
-    assert.ok(contrast >= 3, `${name}: Plus-Kontrast ${contrast.toFixed(2)}:1`)
-  }
+  // ENTFERNT: die Kontrastmessung des Plus gegen seinen Untergrund (mindestens 3:1).
+  // Sie galt ausschließlich diesem einen Knopf, den es nicht mehr gibt. Ein Ersatz
+  // gehört dorthin, wo das Angebot künftig steht: in die Struktur-Ansicht.
 }
 
 async function assertTask7CommonLayout(page, name, mobile) {

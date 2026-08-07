@@ -68,7 +68,9 @@ const NATIVE = !!(window.webkit && window.webkit.messageHandlers && window.webki
 const DEFAULTS = DEFAULT_SETTINGS
 const TRASH_DAYS = 30
 const SCHEMA = 12
-const EX_VERSION = 9
+// 10: Der Beispieltext trägt jetzt jede der 29 Anmerkungsarten. Ohne diesen Schritt
+// behielten alle, die die App schon benutzen, die alte Fassung mit fünf Arten.
+const EX_VERSION = 10
 
 // Schmaler Rückkanal der nativen saveimg-Brücke. Der frühere Bildeditor ist
 // nicht mehr Teil der Onda-Oberfläche; die Mac-Startprobe prüft diesen

@@ -41,10 +41,19 @@ test('Ein Absatz wird nur angedeutet, wenn die Anmerkung ihm als Ganzem gilt', a
   assert.match(workspace, /ABSATZWEITE_REICHWEITEN = new Set\(\['Absatz', 'Abschnitt'\]\)/)
   assert.match(workspace, /function istAbsatzweit\(/)
 
-  // Angedeutet heißt angedeutet: eine Kante, keine Fläche.
-  const andeutung = css.match(/\.hat-absatzweite-anmerkung \{([^}]*)\}/)?.[1] || ''
-  assert.match(andeutung, /box-shadow:\s*inset/, 'Die Andeutung ist keine Kante')
-  assert.doesNotMatch(andeutung, /background:/, 'Die Andeutung ist wieder eine Fläche')
+  // Angedeutet heißt angedeutet: aus dem Punkt im Rand wird eine Linie — dieselbe
+  // Stelle, dieselbe Farbe, andere Gestalt. Keine Fläche auf dem Absatz.
+  const andeutung = css.match(/\.has-local-finding\.hat-absatzweite-anmerkung::before \{([^}]*)\}/)?.[1] || ''
+  assert.ok(andeutung.trim(), 'Die Randmarke für absatzweite Anmerkungen fehlt')
+  assert.match(andeutung, /width:\s*2px/, 'Die Andeutung ist keine Linie')
+  assert.match(andeutung, /height:\s*auto/, 'Die Linie läuft nicht über den ganzen Absatz')
+  assert.doesNotMatch(andeutung, /background:/, 'Die Andeutung malt eine Fläche')
+
+  // Und sie darf NICHT als Schatten am Absatz selbst versucht werden: .has-local-finding
+  // räumt direkt darüber `box-shadow: none` ab und gewinnt bei gleicher Spezifität,
+  // weil es später steht. Genau daran war der erste Versuch still verschwunden.
+  const amAbsatz = css.match(/\[data-block-id\]\.hat-absatzweite-anmerkung \{([^}]*)\}/)?.[1]
+  assert.equal(amAbsatz, undefined, 'Die Andeutung hängt wieder am Absatz — dort wird sie von .has-local-finding verschluckt')
 
   // Die Reichweiten müssen im Vertrag auch wirklich vorkommen — sonst deutet nie
   // etwas an, und die Prüfung oben wäre ein Papiertiger.

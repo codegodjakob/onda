@@ -1352,12 +1352,8 @@ body.zen #title:focus { opacity: 1; }
    struktur zu ueberdenken zum beispiel oder wenn ich feedback zu einem ganzen block
    paragraphen bekomme."
 
-   Angedeutet heisst angedeutet: eine Kante am Rand, keine Platte. Die Platte war
-   lauter als die Anmerkung, die sie ankuendigte. */
-#editorView #editor .ProseMirror > [data-block-id].hat-absatzweite-anmerkung {
-  box-shadow: inset 2px 0 0 var(--border-strong);
-  transition: box-shadow var(--dur-ankunft) var(--ease-out);
-}
+   Wie das aussieht, steht weiter unten bei der Randmarke — dort, wo auch der Punkt
+   definiert ist. Zwei Gestalten derselben Marke gehoeren nebeneinander. */
 
 /* Der Absatz mit einem Hinweis trug eine ganzflaechig blaue Fuellung. Das
    Design System vergibt Sky an Aktion, Auswahl, Fokus und Aura — nicht an
@@ -1380,6 +1376,20 @@ body.zen #title:focus { opacity: 1; }
   /* Der Stift setzt auf. Kein Aufblitzen, kein Sprung: der Punkt wird sichtbar, wie
      Tinte sichtbar wird (docs/PHILOSOPHIE.md §1). */
   animation: onda-ankunft-punkt var(--dur-ankunft) var(--ease-out) both;
+}
+
+/* Gilt die Anmerkung dem GANZEN Absatz, wird aus dem Punkt eine Linie: dieselbe Stelle
+   im Rand, dieselbe Farbe, andere Gestalt. Ein Punkt zeigt auf eine Stelle, eine Linie
+   auf eine Strecke — man muss nicht lesen, um den Unterschied zu sehen.
+
+   Bewusst hier und nicht als box-shadow am Absatz selbst: .has-local-finding raeumt
+   direkt darueber `box-shadow: none` ab, und bei gleicher Spezifitaet gewinnt die
+   spaetere Regel. Ein Schatten am Absatz waere still verschluckt worden. */
+#editorView #editor .ProseMirror > [data-block-id].has-local-finding.hat-absatzweite-anmerkung::before {
+  top: 0.35em;
+  bottom: 0.35em;
+  width: 2px;
+  height: auto;
 }
 
 @keyframes onda-ankunft-punkt {

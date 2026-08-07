@@ -4708,4 +4708,18 @@ export const __workspaceTestBridge = {
   gehoertRueckgaengigDerAnmerkung() {
     return letzteAenderungWarAnmerkung
   },
+  // Das Einfuege-Menue hat seit dem 7. August 2026 keinen sichtbaren Oeffner mehr — das
+  // Plus am Absatz ist fort (docs/PHILOSOPHIE.md §1, und Jakob verstand es schlicht
+  // nicht). Sein Platz wird die Struktur-Ansicht sein, in der Bausteine hinzukommen
+  // duerfen.
+  //
+  // Bis dahin haenge das Menue nicht ungetestet in der Luft: sein Verhalten —
+  // Tastaturweg, Fokusrueckgabe, Einfuegen an der richtigen Stelle — ist lebender Code
+  // und wird weiter geprueft. Dieser Zugang ist die Klinke dafuer, sonst nichts.
+  oeffneEinfuegeMenue(afterBlockId, opener = null) {
+    const blockId = afterBlockId || activeWorkspace()?.activeBlockId
+    if (!blockId) return null
+    openInsertMenu(blockId, opener || document.activeElement || ctx?.editor?.view?.dom || null)
+    return document.querySelector('.semantic-insert-menu')
+  },
 }
