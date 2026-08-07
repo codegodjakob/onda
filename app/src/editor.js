@@ -15,8 +15,9 @@ import { ensureErweiterungen } from './erweiterung-model.mjs'
 import { ensureWorkspaceState } from './workspace-model.mjs'
 import { DEFAULT_SETTINGS, normalizeSettings } from './settings-model.mjs'
 import { BlockIdentity, ensureTopLevelBlockIds, getActiveBlockId, getEditorBlocks, insertSemanticBlock, replaceAnchoredText, replaceAnchoredTexts, replaceFindingTarget } from './block-identity.js'
-import { buildExampleStructure, buildExampleNarrative, buildExampleCoach, buildExampleLane, buildExampleBody, buildExampleMaterial, buildExampleUnderstanding, buildExampleAgentMessages } from './example.js'
+import { buildExampleStructure, buildExampleNarrative, buildExampleCoach, buildExampleLane, buildExampleBody, buildExampleMaterial, buildExampleUnderstanding, buildExampleAgentMessages, buildExampleNotizen, buildExampleHinweisarten, buildExampleErweiterungen } from './example.js'
 import { EXAMPLE_PROJECT_ID, migrateExampleSeed } from './example-seed.mjs'
+import { NOTE_ANNOTATION_KINDS } from './annotation-contract.mjs'
 import { initGateway, runTask, hatSchluessel, setzeSchluessel, loescheSchluessel } from './agent-gateway.mjs'
 import { ensureProjectEvidenceShape } from './source-model.mjs'
 import { ensureProjectResearchShape } from './research-run.mjs'
@@ -68,7 +69,7 @@ const NATIVE = !!(window.webkit && window.webkit.messageHandlers && window.webki
 const DEFAULTS = DEFAULT_SETTINGS
 const TRASH_DAYS = 30
 const SCHEMA = 12
-const EX_VERSION = 9
+const EX_VERSION = 10
 
 // Schmaler Rückkanal der nativen saveimg-Brücke. Der frühere Bildeditor ist
 // nicht mehr Teil der Onda-Oberfläche; die Mac-Startprobe prüft diesen
@@ -224,6 +225,16 @@ function load() {
     createProject: buildExampleProjectSeed,
     createSeed: buildExampleDocumentSeed,
   })
+  // Der Notiz-Text ist ein zweites Dokument und laeuft bewusst NEBEN der
+  // Beispiel-Migration: die kennt genau einen Seed und seine Signaturen. Ein
+  // eigener Marker haelt ihn auseinander und verhindert, dass er sich bei jedem
+  // Start vermehrt. Wer ihn loescht, bekommt ihn nicht zurueck — er ist dann
+  // im Papierkorb und traegt seinen Marker weiter.
+  if (!state.docs.some(x => x.exampleNotesSeed === true)) {
+    const notizen = buildExampleNotesSeed()
+    notizen.exampleNotesSeed = true
+    state.docs.push(notizen)
+  }
   state.activeProject = (d && d.activeProject && state.projects.some(p => p.id === d.activeProject))
     ? d.activeProject : state.projects[0].id
   purgeTrash()
@@ -252,9 +263,28 @@ function buildExampleDocumentSeed() {
   return ensureDocShape({
     id: uid(), title: 'Calm Technology', body: buildExampleBody(), updated: now(), projectId: EXAMPLE_PROJECT_ID,
     structure: struct, narrative: buildExampleNarrative(struct),
-    coach: buildExampleCoach(), lane: buildExampleLane(),
+    // Der Beispieltext soll JEDEN Anwendungsfall zeigen (Jakobs dritter
+    // Auftrag). buildExampleHinweisarten liefert die acht Hinweisarten des
+    // Agenten, buildExampleLane die 24 Text-Anmerkungsarten,
+    // buildExampleErweiterungen die drei Erweiterungsarten. Was hier fehlt,
+    // kann Jakob nicht durchklicken — test/example-abdeckung.test.mjs zaehlt nach.
+    coach: [...buildExampleCoach(), ...buildExampleHinweisarten()],
+    lane: buildExampleLane(),
+    erweiterungen: buildExampleErweiterungen(),
     provenance: { actor: 'demo', action: 'example-seed', createdAt: now() },
     workspace: { agent: { messages: buildExampleAgentMessages() } },
+  })
+}
+
+// Die Notizen-Betriebsart braucht einen eigenen Text: an fertigen Saetzen
+// liesse sich nicht zeigen, dass der Agent hier NICHT korrigiert.
+function buildExampleNotesSeed() {
+  return ensureDocShape({
+    id: uid(), title: 'Notizen: Calm Technology', body: buildExampleNotizen(), updated: now(),
+    projectId: EXAMPLE_PROJECT_ID,
+    lane: buildExampleLane().filter(eintrag => NOTE_ANNOTATION_KINDS.includes(eintrag.anmerkungsart)),
+    workspace: { annotationMode: 'notiz' },
+    provenance: { actor: 'demo', action: 'example-seed', createdAt: now() },
   })
 }
 

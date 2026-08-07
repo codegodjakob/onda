@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   EXAMPLE_SEED_KEY,
+  LEGACY_SEED_SIGNATURES,
   migrateExampleSeed,
   seedBodySignature,
 } from '../src/example-seed.mjs'
@@ -98,12 +99,30 @@ test('pristine legacy seed with an older, drifted body is replaced, not duplicat
   // the title as an <h1>. It carries no exampleSeed* markers and the stored
   // exampleVersion is behind the target. It must be recognised as a pristine,
   // replaceable seed, so migration ends with exactly ONE example doc.
+  // Der historische Rumpf steht hier WOERTLICH und wird nicht aus
+  // buildExampleBody() gebaut. Vorher tat er genau das — und damit hing dieser
+  // Test am aktuellen Beispieltext: sobald der sich aenderte, passte die
+  // konstruierte Signatur nicht mehr zu LEGACY_SEED_SIGNATURES, und der Test
+  // meldete rot, obwohl an der Migration nichts kaputt war. Eine historische
+  // Fassung ist historisch; sie darf sich nicht mitbewegen.
   const currentBody = buildExampleBody()
-  const olderShippedBody = `<h1>Calm Technology</h1>${currentBody}`
+  const olderShippedBody = '<h1>Calm Technology</h1>'
+    + '<p>Calm Technology beschreibt Technik, die in der Peripherie bleibt und Aufmerksamkeit nur beansprucht, wenn sie wirklich gebraucht wird.</p>'
+    + '<h2>Warum es wichtig ist</h2>'
+    + '<p>Ständige Benachrichtigungen fragmentieren die Aufmerksamkeit und zerreißen den Denkfluss. Der eigentliche Schaden ist nicht die einzelne Meldung, sondern die Summe der kleinen Unterbrechungen über den Tag.</p>'
+    + '<p>Weiser und Brown beschrieben schon 1996, wie Technik zwischen Zentrum und Peripherie der Aufmerksamkeit wechseln kann. Eine gute Statusanzeige informiert, ohne sich in den Vordergrund zu drängen.</p>'
+    + '<h2>Was das fürs Schreiben heißt</h2>'
+    + '<p>Für Schreibsoftware bedeutet das: Werkzeuge erscheinen im Kontext, Hinweise sammeln sich leise, nichts drängt sich in den Fluss.</p>'
+    + '<p>Am Ende ist ruhige Technik keine Frage des Verzichts, sondern der Haltung: volle Kraft, leise Präsentation.</p>'
   assert.notEqual(
     seedBodySignature(olderShippedBody),
     seedBodySignature(currentBody),
     'guard: the older body must genuinely differ from the current one',
+  )
+  assert.ok(
+    LEGACY_SEED_SIGNATURES.has(seedBodySignature(olderShippedBody)),
+    'guard: dieser historische Rumpf muss in LEGACY_SEED_SIGNATURES stehen — sonst '
+    + 'prueft der Test die Erkennung gar nicht, sondern nur, dass irgendetwas passiert',
   )
 
   const projects = [{ id: 'p-example', name: 'Beispiel', material: [] }]
