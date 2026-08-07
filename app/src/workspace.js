@@ -94,7 +94,6 @@ import { createLanguageUi } from './language-ui.mjs'
 import { analyzeArgumentImpact } from './argument-graph.mjs'
 import { createAuditUi } from './audit-ui.mjs'
 import {
-  acceptsKindInMode,
   annotationSignature,
   annotationSummary,
   createAnnotationController,
@@ -108,7 +107,7 @@ import {
   validateAnnotationOperation,
 } from './annotation-operations.mjs'
 import { ondaIcon } from './onda-icons.mjs'
-import { VARIANTEN, VARIANTEN_ERKLAERUNG, VARIANTEN_LABEL, bilanzText, bilanzVorlesetext, normalisiereVariante, punkteFuer } from './bilanz-varianten.mjs'
+import { bilanzVorlesetext } from './anmerkung-wortlaut.mjs'
 
 const BLOCK_TYPES = [
   ['paragraph', 'Freier Absatz'],
@@ -147,6 +146,13 @@ let localDecoratedSpacing = 0
 let localFeedbackError = null
 let localPositionFrame = null
 let localSummaryFocusRequest = null
+// Wem gehoert Befehl+Z gerade? Seit die Anmerkungsleiste fort ist
+// (docs/PHILOSOPHIE.md §1), gibt es keinen Rueckgaengig-Knopf mehr — die Taste muss
+// beides koennen. Sie nimmt eine uebernommene Anmerkung zurueck, solange die Anmerkung
+// das Letzte war, was geschah. Sobald wieder getippt wird, gehoert sie dem Text.
+// Ohne diese Unterscheidung wuerde Befehl+Z nach zwanzig geschriebenen Woertern eine
+// Anmerkung von vorhin zurueckholen — und genau das erwartet niemand.
+let letzteAenderungWarAnmerkung = false
 let agentInitiativeTimer = null
 // Echter Hinweislauf (Etappe A, Spec §5): genau ein Lauf gleichzeitig; hinweislaufTimer ist
 // der Zeitgeber-Griff fuer den Pausen-Ausloeser (planeHinweislauf/clearHinweislaufTimer, H-3).
@@ -2121,7 +2127,47 @@ function completeRealEditorUpdate() {
   return true
 }
 
+// Befehl+Z nimmt eine gerade uebernommene Anmerkung zurueck. Nur dann — steht das
+// eigene Schreiben zuletzt, gehoert die Taste dem Text und wir fassen sie nicht an.
+//
+// Der Griff muss vollstaendig sein: undoLast() setzt die Aenderung im Text SELBST
+// zurueck. Liesse man das Ereignis weiterlaufen, machte Tiptaps eigene Historie
+// denselben Schritt ein zweites Mal — ein Tastendruck, zwei Ruecknahmen.
+function handleAnmerkungRueckgaengig(event) {
+  if (!letzteAenderungWarAnmerkung) return false
+  if (event.isComposing || isComposing) return false
+  if (event.shiftKey || event.altKey) return false
+  if (!event.metaKey && !event.ctrlKey) return false
+  if (String(event.key).toLowerCase() !== 'z') return false
+
+  const workspace = activeWorkspace()
+  const verworfen = Boolean(workspace?.lastAnnotationRejection)
+  if (!verworfen && !workspace?.undoStack?.length) return false
+
+  event.preventDefault()
+  event.stopPropagation()
+  letzteAenderungWarAnmerkung = false
+
+  // Eine verworfene Anmerkung wurde zuletzt entschieden, eine uebernommene zuletzt
+  // eingebaut. undoLatestRejection() macht ihre eigene Meldung und ihren eigenen
+  // Neuaufbau — deshalb hier nur zurueck.
+  if (verworfen) {
+    undoLatestRejection()
+    return true
+  }
+
+  const result = annotationController?.undoLast()
+  announceAgentStatus(result?.ok
+    ? 'Die Anmerkung wurde zurückgenommen.'
+    : result?.reason === 'stale-target'
+      ? 'Seit der Änderung wurde weitergeschrieben. Zurücknehmen hat deshalb nichts verändert.'
+      : 'Es gibt nichts zurückzunehmen.')
+  refreshWorkspace()
+  return true
+}
+
 function handleEditorKeyDown(event) {
+  if (handleAnmerkungRueckgaengig(event)) return
   if (
     event.key !== 'Enter'
     || event.isComposing
@@ -2136,6 +2182,14 @@ function handleEditorKeyDown(event) {
 }
 
 function handleBeforeInput(event) {
+  // Wer wieder schreibt, meint mit Befehl+Z sein eigenes Schreiben. Ab hier gehoert die
+  // Taste wieder dem Text (siehe handleAnmerkungRueckgaengig).
+  //
+  // Bewusst GANZ oben und nicht in recordRealEditorInput(): das hat Schranken, hinter
+  // denen es aussteigt (kein Zustand, anderes Dokument). Hinter einer davon bliebe die
+  // Taste bei der Anmerkung haengen, obwohl laengst weitergeschrieben wurde.
+  letzteAenderungWarAnmerkung = false
+
   const docId = ctx?.activeDoc()?.id || null
   const paragraphBoundary = !isComposing && (
     event?.inputType === 'insertParagraph'
@@ -2228,10 +2282,32 @@ function visiblePassageFindingRecords(doc, blocks) {
   ensureReasoningModel(doc)
   const moment = momentJetzt(doc?.id)
   const workspace = activeWorkspace()
+
+  // Der Stift ist abgelegt: nichts wird gezeigt — weder die Anmerkung noch der Punkt
+  // im Rand. Das ist die EINE Sache, die das eine verbliebene Bedienelement tut
+  // (docs/PHILOSOPHIE.md §1).
+  //
+  // Hier und nicht in der Steuerung, weil der Aufrufer sonst daran vorbeigreift:
+  // currentPassageFinding() faellt auf records[0] zurueck, wenn die Steuerung nichts
+  // liefert. "Ruhig" hat deshalb nie wirklich ausgeblendet, sondern nur die Steuerung
+  // stummgeschaltet, waehrend die Anmerkung weiter danebenstand.
+  //
+  // Ohne die frueh gesetzte Grenze wuerde ausserdem merkeGezeigt() unten mitlaufen und
+  // Anmerkungen als "schon gezeigt" vermerken, die niemand gesehen hat.
+  if (workspace?.quietAnnotations) return []
+
   const suppressionStore = suppressionStoreFor(doc, workspace)
   const records = []
   for (const finding of doc.findings.filter(candidate => candidate?.status === 'open')) {
-    if (!acceptsKindInMode(workspace?.annotationMode, finding.anmerkungsart)) continue
+    // Hier stand ein Filter nach Arbeitsmodus: im Modus "Text" blieben die fuenf
+    // Notiz-Arten unsichtbar (ausformulieren, buendeln, nachfrage, ordnen, aufgreifen)
+    // und umgekehrt. Umgeschaltet wurde in der Anmerkungsleiste — die es nicht mehr
+    // gibt (docs/PHILOSOPHIE.md §1). Der Filter musste mit: ohne Umschalter waere er
+    // eine Falltuer, die die Haelfte aller Arten fuer immer verschluckt.
+    //
+    // Es passt auch zum Grundsatz. Wer neben dir schreibt, fuehrt keine zwei getrennten
+    // Listen; ihm faellt auf, was ihm auffaellt. Ob es eine Rechtschreibung ist oder
+    // eine Nachfrage, entscheidet nicht, OB du es siehst.
     if (suppressionStore.suppresses(annotationSignature(finding), doc.id)) continue
     // Der Rhythmus folgt der Art, nicht dem Kanal (momente-model.mjs): eine
     // Formulierung darf sofort erscheinen, eine Strukturfrage erst beim Aufschauen.
@@ -2579,6 +2655,10 @@ function commitAnnotationRejection(finding, scope) {
     decisionId: decision?.id || null,
     scope,
   }
+  // Auch das Verwerfen ist eine Entscheidung ueber eine Anmerkung. Befehl+Z nimmt sie
+  // zurueck, solange nichts anderes dazwischenkam — frueher lag dafuer ein Link
+  // "Entscheidung zuruecknehmen" in der Anmerkungsleiste.
+  letzteAenderungWarAnmerkung = true
   refreshWorkspace()
   announceAgentStatus(scope === 'once'
     ? 'Diese Anmerkung wurde verworfen. Ähnliche Hinweise dürfen später wieder erscheinen.'
@@ -2954,13 +3034,16 @@ function acceptSemanticFinding(finding) {
     return operation
   }
   annotationController?.pushUndo(operation)
+  letzteAenderungWarAnmerkung = true
   refreshWorkspace()
+  // Zurueck an den Text. Frueher lag hier der Rueckgaengig-Knopf der Anmerkungsleiste
+  // dazwischen; die Leiste ist fort (docs/PHILOSOPHIE.md §1), und der Text ist ohnehin
+  // der bessere Ort — von dort aus nimmt Befehl+Z die Aenderung zurueck.
   requestAnimationFrame(() => (
     elements().localLayer?.querySelector('.onda-annotation button, .onda-annotation input')
-      || document.getElementById('annotationUndo')
       || ctx.editor.view.dom
   ).focus({ preventScroll: true }))
-  announceAgentStatus('Änderung übernommen. Rückgängig bleibt möglich.')
+  announceAgentStatus('Änderung übernommen. Befehl+Z nimmt sie zurück.')
   return operation
 }
 
@@ -2973,103 +3056,40 @@ function replyToAnnotation(finding, text) {
   sendeLocalChat(finding, text)
 }
 
-// Ein Umschalter zum Vergleichen, KEIN Bedienelement des Produkts. Er erscheint nur,
-// wenn jemand ihn ausdruecklich einschaltet (localStorage 'ondaVarianten' = '1'), und
-// fliegt wieder raus, sobald die Fassung entschieden ist. So laesst sich am eigenen
-// Text vergleichen statt an einer Beschreibung — jede Gestaltungsentscheidung dieses
-// Projekts, die aus blossem Ueberlegen kam, musste spaeter zurueckgenommen werden.
-function renderBilanzUmschalter(bar) {
-  if (!bar) return
-  const an = (() => { try { return localStorage.getItem('ondaVarianten') === '1' } catch { return false } })()
-  const vorhanden = bar.querySelector('.onda-varianten')
-  if (!an) { vorhanden?.remove(); return }
-  if (vorhanden) return
-
-  const leiste = createNode('div', 'onda-varianten')
-  leiste.setAttribute('aria-label', 'Fassungen der Anmerkungszeile vergleichen')
-  const aktuell = normalisiereVariante(document.documentElement.dataset.bilanzVariante)
-  VARIANTEN.forEach(variante => {
-    const knopf = createNode('button', 'onda-varianten-knopf', VARIANTEN_LABEL[variante])
-    knopf.type = 'button'
-    knopf.title = VARIANTEN_ERKLAERUNG[variante]
-    knopf.setAttribute('aria-pressed', String(variante === aktuell))
-    knopf.addEventListener('click', () => {
-      document.documentElement.dataset.bilanzVariante = variante
-      try { localStorage.setItem('ondaBilanzVariante', variante) } catch { /* egal */ }
-      leiste.remove()
-      refreshWorkspace()
-    })
-    leiste.append(knopf)
-  })
-  bar.prepend(leiste)
-}
-
-function renderAnnotationReviewBar() {
+// Der andere Stift (docs/PHILOSOPHIE.md §1). Das EINZIGE Bedienelement fuer
+// Anmerkungen, das uebrig ist. Es kann genau zwei Dinge: sagen, dass Anmerkungen da
+// sind, und sie aus- und einblenden.
+//
+// Was es ausdruecklich NICHT tut: zaehlen. "0 Fehler · 1 Empfehlung · 0 Geschmack" war
+// eine Punktetafel, und eine Punktetafel hat ein Ziel — sie auf null bringen. Wer neben
+// dir schreibt, sagt nicht, wie viele Anmerkungen er noch hat.
+//
+// Fuer die Augen also nur ein Stift. Fuer Vorlesegeraete der volle Wortlaut: wer nicht
+// sieht, dass jemand mitschreibt, muss es gesagt bekommen. Die Zurueckhaltung ist eine
+// Frage der Augen, nicht der Zugaenglichkeit.
+function renderAnnotationPresence() {
   const doc = ctx?.activeDoc()
   const workspace = activeWorkspace()
-  const bar = document.getElementById('annotationReviewBar')
-  if (!bar || !doc || !workspace) return
-  const modeFindings = (Array.isArray(doc.findings) ? doc.findings : []).filter(finding => (
-    acceptsKindInMode(workspace.annotationMode, finding.anmerkungsart)
-  ))
-  const summary = annotationSummary(modeFindings)
-  bar.hidden = summary.total === 0 && workspace.undoStack.length === 0 && !workspace.lastAnnotationRejection
-  const label = document.getElementById('annotationReviewSummary')
-  if (label) {
-    // Vier Fassungen zur Wahl (bilanz-varianten.mjs). Welche gilt, steht am
-    // Wurzelelement; unbekannt oder nicht gesetzt heisst: der heutige Stand.
-    const variante = normalisiereVariante(document.documentElement.dataset.bilanzVariante)
-    const text = bilanzText(variante, summary)
-    const punkte = punkteFuer(variante, summary)
+  const zeichen = document.getElementById('annotationPresence')
+  if (!zeichen || !doc || !workspace) return
 
-    label.replaceChildren()
-    label.classList.toggle('is-punkte', punkte.length > 0)
-    if (text) label.append(document.createTextNode(text))
-    punkte.forEach(art => {
-      const punkt = createNode('span', `onda-bilanz-punkt is-${art}`)
-      punkt.setAttribute('aria-hidden', 'true')
-      label.append(punkt)
-    })
-    // Vorlesegeraete bekommen IMMER den vollen Wortlaut — auch in der stillen
-    // Fassung. Die Zurueckhaltung ist eine Frage der Augen, nicht der Zugaenglichkeit.
-    label.setAttribute('aria-label', bilanzVorlesetext(summary))
-    label.hidden = !text && !punkte.length
-  }
-  renderBilanzUmschalter(bar)
-  const bulk = document.getElementById('annotationBulkAccept')
-  const safeCount = modeFindings.filter(finding => (
-    finding.status === 'open'
-    && ['rechtschreibung', 'grammatik', 'zeichensetzung'].includes(finding.anmerkungsart)
-    && finding.action
-  )).length
-  if (bulk) {
-    bulk.hidden = safeCount === 0
-    bulk.textContent = safeCount === 1 ? 'Sichere Korrektur übernehmen' : `${safeCount} sichere Korrekturen übernehmen`
-  }
-  const quiet = document.getElementById('annotationQuietToggle')
-  if (quiet) {
-    quiet.setAttribute('aria-pressed', String(workspace.quietAnnotations))
-    quiet.textContent = workspace.quietAnnotations ? 'Anmerkungen zeigen' : 'Ruhig'
-  }
-  const previous = document.getElementById('annotationPrevious')
-  const next = document.getElementById('annotationNext')
-  if (previous) previous.disabled = summary.total < 2 || workspace.quietAnnotations
-  if (next) next.disabled = summary.total < 2 || workspace.quietAnnotations
-  const undo = document.getElementById('annotationUndo')
-  if (undo) undo.disabled = workspace.undoStack.length === 0
-  document.querySelectorAll('[data-annotation-mode]').forEach(button => {
-    button.setAttribute('aria-pressed', String(button.dataset.annotationMode === workspace.annotationMode))
-  })
-  const rejectionNotice = document.getElementById('annotationRejectionNotice')
-  const rejectionText = document.getElementById('annotationRejectionText')
-  if (rejectionNotice) rejectionNotice.hidden = !workspace.lastAnnotationRejection
-  if (rejectionText && workspace.lastAnnotationRejection) {
-    rejectionText.textContent = workspace.lastAnnotationRejection.scope === 'once'
-      ? 'Ein Hinweis wurde verworfen.'
-      : workspace.lastAnnotationRejection.scope === 'document'
-        ? 'Eine Regel gilt jetzt für diesen Text.'
-        : 'Eine persönliche Präferenz ist aktiv.'
-  }
+  const offen = (Array.isArray(doc.findings) ? doc.findings : []).filter(finding => finding?.status === 'open')
+  const summary = annotationSummary(offen)
+
+  // Kein Anlass, kein Zeichen. Ein Stift, der nichts anzustreichen hat, liegt nicht
+  // sichtbar herum.
+  zeichen.hidden = summary.total === 0
+  if (zeichen.hidden) return
+
+  if (!zeichen.firstChild) zeichen.append(ondaIcon('edit', { size: 18 }))
+
+  const sichtbar = !workspace.quietAnnotations
+  zeichen.setAttribute('aria-pressed', String(sichtbar))
+  const wortlaut = bilanzVorlesetext(summary)
+  zeichen.setAttribute('aria-label', sichtbar
+    ? `${wortlaut}. Anmerkungen ausblenden.`
+    : `${wortlaut}. Anmerkungen einblenden.`)
+  zeichen.title = sichtbar ? 'Anmerkungen ausblenden' : 'Anmerkungen einblenden'
 }
 
 function scheduleLocalPosition(blockId) {
@@ -4383,7 +4403,7 @@ export function refreshWorkspace({ reconcileEditing = false } = {}) {
   renderProjectUnderstandingCard()
   renderMaterialEntry()
   syncThemeToggle()
-  renderAnnotationReviewBar()
+  renderAnnotationPresence()
   renderLocalFinding()
   renderAgentWidget()
   renderEvidenceWindow()
@@ -4512,50 +4532,25 @@ export function initWorkspace(context) {
   const onSidebarReopen = () => setSidebarCollapsed(false)
   applySidebarCollapsed(Boolean(ctx.state.settings.sidebarCollapsed))
 
-  const previousAnnotation = () => {
-    momentVonHand = true
-    annotationController?.previous('aufschauen')
-    persistWorkspace()
-    refreshWorkspace()
-  }
-  const nextAnnotation = () => {
-    momentVonHand = true
-    annotationController?.next('aufschauen')
-    persistWorkspace()
-    refreshWorkspace()
-  }
+  // Das eine, was vom Bedienteil blieb: aus- und einblenden. Es haengt am Stift-Zeichen
+  // in der Topbar (docs/PHILOSOPHIE.md §1).
+  //
+  // Mit der Leiste gingen vier Handlungen: vor und zurueck zwischen Anmerkungen, die
+  // Sammeluebernahme sicherer Korrekturen und der Wechsel des Arbeitsmodus. Sie
+  // wandern NICHT woandershin — sie sind fort. Wer neben dir schreibt, gibt dir keine
+  // Vor-Zurueck-Tasten fuer seine Anmerkungen.
+  //
+  // Rueckgaengig ist die Ausnahme: es blieb, aber als Taste statt als Knopf, siehe
+  // handleAnmerkungRueckgaengig().
   const toggleQuietAnnotations = () => {
     const workspace = activeWorkspace()
     annotationController?.setQuiet(!workspace?.quietAnnotations)
-    refreshWorkspace()
-  }
-  const switchAnnotationMode = event => {
-    annotationController?.setMode(event.currentTarget.dataset.annotationMode)
-    momentVonHand = true
-    refreshWorkspace()
-  }
-  const acceptSafeAnnotations = () => {
-    const result = annotationController?.acceptAllSafeCorrections()
-    if (result?.ok) announceAgentStatus(`${result.count} sichere Korrekturen übernommen. Rückgängig bleibt einzeln möglich.`)
-    refreshWorkspace()
-  }
-  const undoAnnotation = () => {
-    const result = annotationController?.undoLast()
-    if (!result?.ok) {
-      announceAgentStatus(result?.reason === 'stale-target'
-        ? 'Seit der Änderung wurde weitergeschrieben. Rückgängig hat deshalb nichts verändert.'
-        : 'Es gibt nichts rückgängig zu machen.')
-    } else {
-      announceAgentStatus('Die letzte Anmerkungsänderung wurde rückgängig gemacht.')
-    }
     refreshWorkspace()
   }
   document.getElementById('sidebarCollapse')?.replaceChildren(ondaIcon('chevron-left', { size: 18 }))
   document.getElementById('sidebarReopen')?.replaceChildren(ondaIcon('chevron-right', { size: 18 }))
   document.querySelector('.onda-side-back-chevron')?.replaceChildren(ondaIcon('arrow-left', { size: 16 }))
   document.getElementById('kiSettings')?.replaceChildren(ondaIcon('settings', { size: 18 }))
-  document.getElementById('annotationPrevious')?.replaceChildren(ondaIcon('chevron-left', { size: 18 }))
-  document.getElementById('annotationNext')?.replaceChildren(ondaIcon('chevron-right', { size: 18 }))
 
   const onPointerOver = event => {
     const block = event.target.closest('[data-block-id]')
@@ -4639,15 +4634,11 @@ export function initWorkspace(context) {
   listen(document.getElementById('materialSources'), 'click', event => openProjectSourcesModal(event.currentTarget))
   listen(document.getElementById('themeToggle'), 'click', toggleTheme)
   listen(document.getElementById('kiSettings'), 'click', event => openKiSettingsDialog(event.currentTarget))
-  listen(document.getElementById('annotationPrevious'), 'click', previousAnnotation)
-  listen(document.getElementById('annotationNext'), 'click', nextAnnotation)
-  listen(document.getElementById('annotationQuietToggle'), 'click', toggleQuietAnnotations)
-  listen(document.getElementById('annotationBulkAccept'), 'click', acceptSafeAnnotations)
-  listen(document.getElementById('annotationUndo'), 'click', undoAnnotation)
-  listen(document.getElementById('annotationRejectionUndo'), 'click', undoLatestRejection)
-  document.querySelectorAll('[data-annotation-mode]').forEach(button => (
-    listen(button, 'click', switchAnnotationMode)
-  ))
+  // Ein einziger Zuhoerer fuer Anmerkungen. Frueher waren es acht — vor, zurueck,
+  // ruhig, Sammeluebernahme, rueckgaengig, Entscheidung zuruecknehmen und zwei fuer
+  // den Arbeitsmodus. Sie hingen alle an der Leiste ueber dem Text, und die Leiste ist
+  // fort (docs/PHILOSOPHIE.md §1 "Der andere Stift").
+  listen(document.getElementById('annotationPresence'), 'click', toggleQuietAnnotations)
   listenEditor('selectionUpdate', onSelectionUpdate)
   listenEditor('update', onEditorUpdate)
 
@@ -4757,5 +4748,10 @@ export const __workspaceTestBridge = {
       boundaryAt: Number.NaN,
       boundaryGeneration: null,
     }
+  },
+  // Wem gehoert Befehl+Z gerade? Sonst nicht von aussen zu sehen, und genau daran haengt,
+  // ob eine Ruecknahme die Anmerkung trifft oder das eigene Schreiben.
+  gehoertRueckgaengigDerAnmerkung() {
+    return letzteAenderungWarAnmerkung
   },
 }

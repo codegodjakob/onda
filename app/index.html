@@ -121,31 +121,14 @@
       <div class="onda-editor-col">
         <header class="onda-topbar">
           <button id="sidebarReopen" class="onda-icon-btn" title="Seitenleiste einblenden" aria-label="Seitenleiste einblenden" aria-controls="ondaSidebar" aria-expanded="false" hidden></button>
-          <button id="ondaAura" class="onda-aura" title="Agentengespräch öffnen" aria-label="Agentengespräch öffnen" aria-controls="agentWidget" aria-expanded="false"></button>
+          <div class="onda-topbar__aside">
+            <!-- Der andere Stift (docs/PHILOSOPHIE.md §1). Das EINZIGE Bedienelement fuer
+                 Anmerkungen: es sagt, dass welche da sind, und blendet sie aus und ein.
+                 Es erscheint nur, wenn es etwas zu sagen gibt. -->
+            <button id="annotationPresence" class="onda-presence" type="button" aria-pressed="true" hidden></button>
+            <button id="ondaAura" class="onda-aura" title="Agentengespräch öffnen" aria-label="Agentengespräch öffnen" aria-controls="agentWidget" aria-expanded="false"></button>
+          </div>
         </header>
-        <section id="annotationReviewBar" class="onda-review-bar" aria-label="Anmerkungen zum Text" hidden>
-          <div class="onda-review-bar__summary">
-            <span class="onda-review-bar__eyebrow">Anmerkungen</span>
-            <span id="annotationReviewSummary">Keine offenen Anmerkungen</span>
-            <span id="annotationRejectionNotice" class="onda-review-bar__notice" hidden>
-              <span id="annotationRejectionText"></span>
-              <button id="annotationRejectionUndo" type="button">Entscheidung zurücknehmen</button>
-            </span>
-          </div>
-          <div class="onda-review-bar__actions">
-            <div class="onda-mode-switch" role="group" aria-label="Arbeitsmodus">
-              <button type="button" data-annotation-mode="text" aria-pressed="true">Text</button>
-              <button type="button" data-annotation-mode="notiz" aria-pressed="false">Notizen</button>
-            </div>
-            <button id="annotationBulkAccept" class="onda-review-control" type="button" hidden>Sichere Korrekturen übernehmen</button>
-            <button id="annotationQuietToggle" class="onda-review-control" type="button" aria-pressed="false">Ruhig</button>
-            <div class="onda-review-nav" role="group" aria-label="Zwischen Anmerkungen wechseln">
-              <button id="annotationPrevious" class="onda-review-icon" type="button" aria-label="Vorherige Anmerkung"></button>
-              <button id="annotationNext" class="onda-review-icon" type="button" aria-label="Nächste Anmerkung"></button>
-            </div>
-            <button id="annotationUndo" class="onda-review-control" type="button" disabled>Rückgängig</button>
-          </div>
-        </section>
         <div id="scroll" role="region" aria-label="Schreibfläche">
           <div id="page">
             <textarea id="title" rows="1" placeholder="Titel" spellcheck="false"></textarea>

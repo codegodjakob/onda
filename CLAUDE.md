@@ -31,6 +31,7 @@ Einzelner Kontext — `CONTEXT.md` und `docs/adr/` im Projektwurzelverzeichnis. 
 
 | Datei | Inhalt |
 |---|---|
+| `docs/PHILOSOPHIE.md` | Die Gestaltungsgrundsätze. Entschieden, nicht gesammelt — eine Oberfläche, die einem widerspricht, ist falsch |
 | `docs/ONDA-SYSTEM.md` | Das ganze System in 16 Kapiteln |
 | `docs/VISION-GEGEN-GEBAUTES.md` | Der Abstract gegen den Code geprüft |
 | `docs/REDESIGN-IDEEN.md` | Gesammelte Umgestaltungsideen, noch nichts entschieden |

@@ -1192,8 +1192,53 @@ body.zen #title:focus { opacity: 1; }
   padding: 0 var(--space-4);
 }
 
-#ondaAura {
+/* Die rechte Gruppe der Topbar. Das margin-left:auto sitzt am Behaelter, nicht an den
+   Knoepfen: haetten beide es, teilte der freie Platz sich zwischen ihnen auf und der
+   Stift triebe vom Orb weg. */
+.onda-topbar__aside {
   margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+/* Der andere Stift (docs/PHILOSOPHIE.md §1). Kein Werkzeugknopf, sondern ein Zeichen:
+   er ist nur da, wenn Anmerkungen da sind, und traegt keine Zahl. Wer neben dir
+   schreibt, sagt nicht, wie viele Anmerkungen er noch hat. */
+.onda-presence {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition:
+    color var(--dur-normal) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out),
+    opacity var(--dur-normal) var(--ease-out);
+}
+.onda-presence[hidden] { display: none; }
+.onda-presence:hover { background: var(--bg-hover); color: var(--text-secondary); }
+
+/* Angeschaltet heisst: die Anmerkungen sind zu sehen. Der Stift schreibt gerade mit. */
+.onda-presence[aria-pressed="true"] { color: var(--text-secondary); }
+
+/* Ausgeschaltet heisst: der Stift ist abgelegt. Sichtbar bleibt er trotzdem — sonst
+   waere nicht mehr zu erkennen, dass ueberhaupt jemand mitschreibt. */
+.onda-presence[aria-pressed="false"] { color: var(--text-tertiary); opacity: .55; }
+
+/* Der Auftritt des Zeichens selbst ist so beilaeufig wie der einer Anmerkung: es
+   verblasst herein, es springt nicht an. */
+.onda-presence { animation: onda-presence-in var(--dur-slower) var(--ease-out); }
+@keyframes onda-presence-in { from { opacity: 0; } }
+
+#ondaAura {
   --aura-size: 30px;
   width: 44px;
   height: 44px;
@@ -1308,6 +1353,13 @@ body.zen #title:focus { opacity: 1; }
   height: 6px;
   border-radius: var(--radius-full);
   background: var(--accent);
+  /* Der Stift setzt auf. Kein Aufblitzen, kein Sprung: der Punkt wird sichtbar, wie
+     Tinte sichtbar wird (docs/PHILOSOPHIE.md §1). */
+  animation: onda-ankunft-punkt var(--dur-ankunft) var(--ease-out) both;
+}
+
+@keyframes onda-ankunft-punkt {
+  from { opacity: 0; transform: scale(.3); }
 }
 
 #editorView #editor .ProseMirror > [data-block-id].has-local-finding.is-active-block {

@@ -108,16 +108,31 @@ async function runEditor(browser) {
   assert.ok(seeded)
   await page.locator('[data-annotation-form="rewrite"]').waitFor({ state: 'visible' })
   assert.equal(await page.locator('.local-finding-detail-row').count(), 0)
-  assert.equal(await page.locator('#annotationReviewBar').isVisible(), true)
-  assert.match(await page.locator('#annotationReviewSummary').textContent(), /Empfehlung/)
+  // Über dem Text steht nichts (docs/PHILOSOPHIE.md §1 "Der andere Stift"). Geblieben
+  // ist ein Stift-Zeichen in der Topbar, das nicht zählt — aber Vorlesegeräten den
+  // vollen Wortlaut gibt.
+  assert.equal(await page.locator('#annotationReviewBar').count(), 0, 'Die Anmerkungsleiste ist zurück')
+  const zeichen = page.locator('#annotationPresence')
+  assert.equal(await zeichen.isVisible(), true, 'Ohne Zeichen wäre gar nicht zu sehen, dass jemand mitschreibt')
+  assert.equal((await zeichen.textContent()).trim(), '', 'Das Zeichen zeigt eine Zahl — es soll nur ein Stift sein')
+  assert.match(await zeichen.getAttribute('aria-label'), /Empfehlung/)
 
   await page.getByRole('button', { name: /Fassung übernehmen/ }).click()
   assert.equal(await page.locator('#editor .ProseMirror').textContent().then(text => text.includes(seeded.action)), true)
   assert.equal(await page.evaluate(() => window.AIWT.state.docs.find(doc => doc.id === window.AIWT.state.active).findings.find(item => item.id === 'onda-editor-smoke').status), 'resolved')
 
-  await page.getByRole('button', { name: 'Rückgängig' }).click()
+  // Rückgängig ohne Knopf. Solange die Anmerkung das Letzte war, was geschah, nimmt
+  // Befehl+Z sie zurück — Text UND Vermerk, in einem Schritt.
+  await page.locator('#editor .ProseMirror').click()
+  await page.evaluate(() => new Promise(done => requestAnimationFrame(() => requestAnimationFrame(done))))
+  await page.keyboard.press('ControlOrMeta+z')
   assert.equal(await page.locator('#editor .ProseMirror').textContent().then(text => text.includes(seeded.target)), true)
   assert.equal(await page.evaluate(() => window.AIWT.state.docs.find(doc => doc.id === window.AIWT.state.active).findings.find(item => item.id === 'onda-editor-smoke').status), 'open')
+
+  // Und die Gegenprobe: wer weiterschreibt, meint mit Befehl+Z sein eigenes Schreiben.
+  // Ohne diese Grenze holte die Taste nach zwanzig Wörtern eine Anmerkung von vorhin
+  // zurück.
+  assert.equal(await page.evaluate(() => window.AIWT.__workspaceTestBridge.gehoertRueckgaengigDerAnmerkung()), false)
 
   await page.getByRole('button', { name: 'Original behalten' }).click()
   const consequence = page.getByRole('region', { name: 'Folge des Verwerfens wählen' })
@@ -127,7 +142,11 @@ async function runEditor(browser) {
   assert.match(await consequence.textContent(), /anderen Projekten zurück/)
   await consequence.getByRole('button', { name: /In diesem Text nicht mehr/ }).click()
   assert.equal(await page.evaluate(() => window.AIWT.state.docs.find(doc => doc.id === window.AIWT.state.active).findings.find(item => item.id === 'onda-editor-smoke').status), 'dismissed')
-  await page.getByRole('button', { name: 'Entscheidung zurücknehmen' }).click()
+  // Auch das Verwerfen ist eine Entscheidung über eine Anmerkung — dieselbe Taste holt
+  // sie zurück. Früher lag dafür ein Link "Entscheidung zurücknehmen" in der Leiste.
+  await page.locator('#editor .ProseMirror').click()
+  await page.evaluate(() => new Promise(done => requestAnimationFrame(() => requestAnimationFrame(done))))
+  await page.keyboard.press('ControlOrMeta+z')
   assert.equal(await page.evaluate(() => window.AIWT.state.docs.find(doc => doc.id === window.AIWT.state.active).findings.find(item => item.id === 'onda-editor-smoke').status), 'open')
 
   await page.evaluate(({ blockId, target }) => {
@@ -138,11 +157,12 @@ async function runEditor(browser) {
       anmerkungsart: 'nachfrage', createdAt: -2, thread: [],
     })
   }, seeded)
-  await page.getByRole('button', { name: 'Notizen', exact: true }).click()
+  // Eine Notiz-Anmerkung erscheint OHNE Umschalten. Früher lag "nachfrage" hinter dem
+  // Arbeitsmodus "Notizen" und war im Modus "Text" unsichtbar; der Umschalter saß in
+  // der Anmerkungsleiste. Beide sind fort (docs/PHILOSOPHIE.md §1) — wer neben dir
+  // schreibt, führt keine zwei getrennten Listen.
   await page.locator('[data-annotation-form="dialogue"][data-annotation-kind="nachfrage"]').waitFor({ state: 'visible' })
-  assert.equal(await page.locator('[data-annotation-kind="satzstil"]').count(), 0)
-  await page.getByRole('button', { name: 'Text', exact: true }).click()
-  await page.locator('[data-annotation-kind="satzstil"]').waitFor({ state: 'visible' })
+  assert.equal(await page.locator('[data-annotation-mode]').count(), 0, 'Der Arbeitsmodus-Umschalter ist zurück')
   await page.close()
 }
 
@@ -207,10 +227,16 @@ async function runShell(browser) {
 
   await page.setViewportSize({ width: 320, height: 760 })
   await page.waitForTimeout(50)
-  const annotationNavigation = await page.locator('#annotationPrevious, #annotationNext').evaluateAll(nodes => (
-    nodes.map(node => Math.round(node.getBoundingClientRect().top))
-  ))
-  assert.equal(annotationNavigation[0], annotationNavigation[1], 'Vorherige und nächste Anmerkung müssen mobil ein Bedienpaar bleiben')
+  // Hier wurde geprüft, dass "vorherige" und "nächste Anmerkung" mobil ein Bedienpaar
+  // auf einer Höhe bleiben. Beide Knöpfe gibt es nicht mehr (docs/PHILOSOPHIE.md §1).
+  // An ihre Stelle tritt die Frage, ob das eine verbliebene Zeichen mobil erreichbar
+  // bleibt — nicht abgeschnitten, nicht unter die Fensterkante gerutscht.
+  const zeichenMobil = await page.locator('#annotationPresence').evaluate(node => {
+    const kasten = node.getBoundingClientRect()
+    return { links: Math.round(kasten.left), rechts: Math.round(kasten.right), breite: Math.round(kasten.width) }
+  })
+  assert.ok(zeichenMobil.breite >= 44, `Das Zeichen ist mobil nur ${zeichenMobil.breite}px breit`)
+  assert.ok(zeichenMobil.links >= 0 && zeichenMobil.rechts <= 320, 'Das Zeichen liegt mobil außerhalb des Fensters')
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
   assert.ok(overflow <= 1, `Die App laeuft mobil ${overflow}px horizontal ueber`)
   assert.equal(await page.locator('#editor .ProseMirror').isVisible(), true)
