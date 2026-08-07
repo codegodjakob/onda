@@ -166,6 +166,197 @@ async function runEditor(browser) {
   await page.close()
 }
 
+// Die Tafel „Wissenschaftliches Risiko bewusst annehmen" (workspace.js
+// renderIntegrityRiskConfirmation). Wer ein Risiko annimmt, tut es benannt: mit einer
+// Begründung, die als Entscheidung stehenbleibt — statt dass eine Integritätsfrage
+// still abgelegt wird.
+//
+// WARUM diese Prüfung den Zustand von Hand setzt, statt „Verwerfen" zu klicken:
+// Bis zum 5. August 2026 öffnete „Verwerfen" bei einer Integritätsfrage genau diese
+// Tafel — handleSuggestionReject setzte riskConfirmationFindingId. Commit 92190c1
+// ("Notizmodus und Verwerfungsumfang vollenden") hat diese Zeile entfernt; derselbe
+// Knopf setzt heute pendingRejectionFindingId und fragt nach dem Verwerfungsumfang.
+// Im ganzen src/ wird riskConfirmationFindingId seither NUR NOCH auf null gesetzt.
+//
+// Die Tafel selbst ist geblieben und wird bei jedem Zeichnen abgefragt
+// (workspace.js:3174). Sie erscheint also weiterhin — aber nur für ein GESPEICHERTES
+// Dokument, dessen Arbeitszustand den Verweis von damals noch trägt. Genau diese Lage
+// wird hier gestellt. Ohne sie hätte der Zustand, der die Tafel überhaupt erscheinen
+// lässt, überhaupt keinen Beleg: weder im Browser noch am Modell.
+async function runRisikoTafel(browser) {
+  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } })
+  await openExample(page)
+
+  // Der Zustand wird VOR injectFinding gesetzt: injectFinding zeichnet neu, und erst
+  // beim Zeichnen fragt renderIntegrityRiskConfirmation danach. Umgekehrt bliebe die
+  // Tafel bis zum nächsten Anlass unsichtbar.
+  const stelleTafel = (findingId, createdAt) => page.evaluate(({ id, at }) => {
+    const block = window.AIWT.__blockIdentityTestBridge.getBlocks().find(kandidat => kandidat.text.length > 24)
+    const doc = window.AIWT.state.docs.find(kandidat => kandidat.id === window.AIWT.state.active)
+    doc.workspace.riskConfirmationFindingId = id
+    doc.workspace.riskReason = ''
+    window.AIWT.__workspaceTestBridge.injectFinding({
+      id, status: 'open', placement: 'passage', blockId: block.id, target: block.text.slice(0, 28),
+      // 'source' ohne Textart IST eine Integritätsfrage: eine fehlende Textart bedeutet
+      // fail-closed „alle vier" (textart-regeln.mjs integritaetsArten). Nur deshalb endet
+      // das Verwerfen in 'risk-accepted' statt in 'dismissed'.
+      category: 'source', anmerkungsart: 'beleg', priority: 'critical', createdAt: at,
+      short: 'Für diese Aussage fehlt ein belastbarer Beleg.',
+      why: 'Ohne Beleg bleibt die Aussage wissenschaftlich nicht abgesichert.',
+      consequence: 'Die Arbeit kann an dieser Stelle eine unbelegte Behauptung enthalten.',
+    })
+  }, { id: findingId, at: createdAt })
+
+  const zustand = findingId => page.evaluate(id => {
+    const doc = window.AIWT.state.docs.find(kandidat => kandidat.id === window.AIWT.state.active)
+    const entscheidung = doc.decisions.find(eintrag => eintrag.findingId === id)
+    return {
+      status: doc.findings.find(finding => finding.id === id).status,
+      ausgang: entscheidung?.outcome ?? null,
+      begruendung: entscheidung?.reason ?? null,
+      verweis: doc.workspace.riskConfirmationFindingId,
+      feldinhalt: doc.workspace.riskReason,
+    }
+  }, findingId)
+
+  await stelleTafel('onda-risiko-annehmen', -20)
+  const anmerkung = page.locator('#localAgentLayer [data-finding-id="onda-risiko-annehmen"]')
+  await anmerkung.waitFor({ state: 'visible' })
+  // Die Tafel hängt IN der heutigen Anmerkung — dem .onda-annotation aus renderAnnotation.
+  // Die alten Prüfungen suchten stattdessen die zweistufige Kurzzeile
+  // .local-finding-summary; die gibt es seit dem 5.8.2026 nicht mehr, und genau daran
+  // sind sie gescheitert.
+  assert.equal(await anmerkung.evaluate(node => node.classList.contains('onda-annotation')), true)
+  assert.equal(await anmerkung.getAttribute('data-annotation-form'), 'source')
+  const tafel = anmerkung.locator('.integrity-risk-confirmation')
+  await tafel.waitFor({ state: 'visible' })
+  assert.equal(await tafel.getAttribute('aria-label'), 'Wissenschaftliches Risiko bewusst annehmen')
+  // Wer ein Risiko annimmt, muss lesen können, welches. Die Folge steht auf der Tafel.
+  assert.match(await tafel.textContent(), /unbelegte Behauptung/)
+  assert.equal(await tafel.locator('textarea').getAttribute('aria-label'), 'Begründung für die bewusste Risikoannahme')
+
+  await tafel.locator('textarea').fill('Die Quelle bleibt für diese Fassung bewusst offen.')
+  await tafel.getByRole('button', { name: 'Wissenschaftliches Risiko bewusst annehmen', exact: true }).click()
+  await anmerkung.waitFor({ state: 'detached' })
+  // Der Kern: nicht 'dismissed', sondern 'risk-accepted' — und die getippte Begründung
+  // steht in der Entscheidung, nicht bloß im Feld.
+  assert.deepEqual(await zustand('onda-risiko-annehmen'), {
+    status: 'risk-accepted',
+    ausgang: 'risk-accepted',
+    begruendung: 'Die Quelle bleibt für diese Fassung bewusst offen.',
+    verweis: null,
+    feldinhalt: '',
+  })
+
+  // Und der andere Weg: Abbrechen nimmt kein Risiko an. Die Anmerkung bleibt offen, es
+  // wird nichts festgeschrieben, und die halb getippte Begründung wird nicht heimlich
+  // aufbewahrt.
+  await stelleTafel('onda-risiko-abbrechen', -19)
+  const zweite = page.locator('#localAgentLayer [data-finding-id="onda-risiko-abbrechen"] .integrity-risk-confirmation')
+  await zweite.waitFor({ state: 'visible' })
+  await zweite.locator('textarea').fill('Doch nicht — ich suche den Beleg.')
+  await zweite.getByRole('button', { name: 'Abbrechen', exact: true }).click()
+  await page.locator('.integrity-risk-confirmation').waitFor({ state: 'detached' })
+  assert.deepEqual(await zustand('onda-risiko-abbrechen'), {
+    status: 'open',
+    ausgang: null,
+    begruendung: null,
+    verweis: null,
+    feldinhalt: '',
+  })
+  await page.close()
+}
+
+// „Hinweise ohne sichere Textstelle" (workspace.js unplacedPassageFindings /
+// renderUnplacedFindingList). Ein Hinweis, dessen Ziel zweimal im Text vorkommt oder
+// dessen Absatz gelöscht wurde, verschwindet nicht still — er sammelt sich im
+// Agentenfeld. Bisher war das weder im Browser noch am Modell geprüft.
+async function runHinweiseOhneStelle(browser) {
+  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } })
+  await openExample(page)
+
+  const bloecke = await page.evaluate(() => {
+    const bridge = window.AIWT.__blockIdentityTestBridge
+    // Zwei Absätze mit DERSELBEN Wendung: dadurch findet resolveFindingPlacement zwei
+    // Treffer und kann sich nicht entscheiden ('ambiguous'). Ein einziger Treffer würde
+    // die Stelle festnageln, und der Hinweis stünde am Text statt in der Liste.
+    bridge.setContent({
+      type: 'doc',
+      content: [
+        { type: 'paragraph', content: [{ type: 'text', text: 'Eine doppelte Wendung steht hier im ersten Absatz.' }] },
+        { type: 'paragraph', content: [{ type: 'text', text: 'Auch im zweiten Absatz steht eine doppelte Wendung.' }] },
+      ],
+    })
+    const doc = window.AIWT.state.docs.find(kandidat => kandidat.id === window.AIWT.state.active)
+    // Leergeräumt, damit die Liste genau die gestellten Fälle zählt. Ohne das kämen die
+    // 29 Anmerkungen des Beispieltextes dazu, deren Blöcke der neue Inhalt gerade
+    // fortgenommen hat — sie wären selbst unplatziert und würden die Prüfung verwaschen.
+    //
+    // ALLE DREI Listen müssen fort: ensureReasoningModel (reasoning-model.mjs) füllt
+    // doc.findings bei JEDEM Aufruf wieder aus doc.lane und doc.coach nach. Wer nur
+    // findings leert, bekommt sie beim nächsten Zeichnen zurück.
+    doc.findings = []
+    doc.lane = []
+    doc.coach = []
+    const werkstatt = window.AIWT.__workspaceTestBridge
+    werkstatt.injectFinding({
+      id: 'onda-mehrdeutig', status: 'open', placement: 'passage', createdAt: -30,
+      // KEIN blockId: die Stelle wird über den Wortlaut gesucht — und zweimal gefunden.
+      target: 'doppelte Wendung',
+      short: 'Diese Wendung wiederholt sich.',
+      why: 'Zweimal dieselbe Formulierung schwächt beide Stellen.',
+      anmerkungsart: 'satzstil',
+    })
+    werkstatt.injectFinding({
+      id: 'onda-block-fort', status: 'open', placement: 'passage', createdAt: -29,
+      // Der Absatz, an dem dieser Hinweis hing, ist gelöscht.
+      blockId: 'block-den-es-nicht-mehr-gibt', target: 'ein längst gelöschter Wortlaut',
+      short: 'Der Absatz zu diesem Hinweis ist fort.',
+      why: 'Der Hinweis hing an einem Block, den es nicht mehr gibt.',
+      anmerkungsart: 'satzstil',
+    })
+    return bridge.getBlocks().map(block => block.id)
+  })
+
+  await page.locator('#ondaAura').click()
+  const agentenfeld = page.locator('#agentWidget')
+  await agentenfeld.waitFor({ state: 'visible' })
+  const liste = agentenfeld.locator('.unplaced-findings')
+  await liste.waitFor({ state: 'visible' })
+  assert.equal(
+    await liste.locator('.unplaced-findings-title').textContent(),
+    'Hinweise ohne sichere Textstelle',
+  )
+
+  const eintraege = () => liste.locator('.unplaced-finding').evaluateAll(knoten => knoten.map(node => ({
+    id: node.dataset.findingId,
+    grund: node.querySelector('.unplaced-finding-kind').textContent,
+    text: node.querySelector('.unplaced-finding-text').textContent,
+  })))
+  // Beide Gründe stehen dabei, und sie sind unterschiedlich benannt: mehrdeutig ist
+  // etwas anderes als verschwunden, und wer die Liste liest, soll das sehen.
+  assert.deepEqual(await eintraege(), [
+    { id: 'onda-mehrdeutig', grund: 'Mehrere mögliche Stellen', text: 'Diese Wendung wiederholt sich.' },
+    { id: 'onda-block-fort', grund: 'Textstelle nicht auffindbar', text: 'Der Absatz zu diesem Hinweis ist fort.' },
+  ])
+
+  // Die Gegenprobe. Ohne sie bestünde die Prüfung auch dann noch, wenn die Liste stumpf
+  // jeden Hinweis aufzählte: Was eine sichere Stelle hat, gehört an den Text und NICHT
+  // in diese Liste.
+  await page.evaluate(blockId => {
+    window.AIWT.__workspaceTestBridge.injectFinding({
+      id: 'onda-sichere-stelle', status: 'open', placement: 'passage', createdAt: -28,
+      blockId, target: 'im ersten Absatz',
+      short: 'Diese Stelle ist eindeutig.',
+      why: 'Der Wortlaut kommt genau einmal vor.',
+      anmerkungsart: 'satzstil',
+    })
+  }, bloecke[0])
+  await page.locator('#localAgentLayer [data-finding-id="onda-sichere-stelle"]').waitFor({ state: 'visible' })
+  assert.deepEqual((await eintraege()).map(eintrag => eintrag.id), ['onda-mehrdeutig', 'onda-block-fort'])
+  await page.close()
+}
+
 async function runShell(browser) {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } })
   await page.goto(baseUrl, { waitUntil: 'networkidle' })
@@ -441,6 +632,8 @@ try {
   if (requestedSection === 'all' || requestedSection === 'components') await runComponents(browser)
   if (requestedSection === 'all' || requestedSection === 'lab') await runLab(browser)
   if (requestedSection === 'all' || requestedSection === 'editor') await runEditor(browser)
+  if (requestedSection === 'all' || requestedSection === 'risiko') await runRisikoTafel(browser)
+  if (requestedSection === 'all' || requestedSection === 'unplatziert') await runHinweiseOhneStelle(browser)
   if (requestedSection === 'all' || requestedSection === 'shell') await runShell(browser)
   if (requestedSection === 'all' || requestedSection === 'surfaces') await runSurfaces(browser)
   if (requestedSection === 'all' || requestedSection === 'accessibility') await runAccessibility(browser)
