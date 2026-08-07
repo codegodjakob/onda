@@ -3,6 +3,7 @@ import {
   ANNOTATION_DEFINITIONS,
   TEXT_ANNOTATION_KINDS,
 } from '../../../app/src/annotation-contract.mjs'
+import { ANNOTATION_CASES } from '../../../app/evals/fixtures/annotation-cases.mjs'
 
 export const PLUGIN_ORIGIN = 'onda-one-page'
 export const LEDGER_KEY = 'ondaOnePageLedger'
@@ -536,6 +537,261 @@ export function componentRenderedHeight(definition) {
     ? roleHeights.reduce((total, height) => total + height, 0) + Math.max(0, roleHeights.length - 1) * definition.gap
     : Math.max(0, ...roleHeights)
   return Math.max(definition.targetHeight, contentHeight + definition.padding.top + definition.padding.bottom)
+}
+
+const FORM_VARIANTS = {
+  correction: 'Form=Correction',
+  rewrite: 'Form=Rewrite',
+  insertion: 'Form=Insertion',
+  slot: 'Form=Slot',
+  region: 'Form=Region',
+  source: 'Form=Source',
+  compare: 'Form=Compare',
+  dialogue: 'Form=Dialogue',
+  title: 'Form=Title',
+}
+
+export const ANNOTATION_FORM_VARIANTS = Object.freeze(FORM_VARIANTS)
+
+const UNSUPPORTED_ANNOTATION_KINDS = Object.freeze([
+  'faden',
+  'anmerkung',
+  'luecke',
+  'nachfrage',
+  'aufgreifen',
+])
+
+const UNSUPPORTED_ANNOTATION_KIND_SET = new Set(UNSUPPORTED_ANNOTATION_KINDS)
+
+const ANNOTATION_INSTANCE_ORDER = Object.freeze([
+  Object.freeze({ name: 'Anchor', setId: 'annotation-anchor' }),
+  Object.freeze({ name: 'Form', setId: 'annotation-form' }),
+  Object.freeze({ name: 'Card', setId: 'annotation-card' }),
+  Object.freeze({ name: 'Status', setId: 'status-symbol' }),
+  Object.freeze({ name: 'Primary Action', setId: 'dialog-action' }),
+  Object.freeze({ name: 'Secondary Action', setId: 'dialog-action' }),
+])
+
+const ANNOTATION_VIEW_SPECS = Object.freeze({
+  Open: Object.freeze({ width: 580, theme: 'Light', padding: 24, card: 'State=Open', status: 'Status=Warning', primary: 'Kind=Primary', secondary: 'Kind=Secondary' }),
+  'Accept · Undo': Object.freeze({ width: 580, theme: 'Light', padding: 24, card: 'State=Accepted', status: 'Status=Ready', primary: 'Kind=Secondary', secondary: 'Kind=Secondary' }),
+  'Reject · Scope': Object.freeze({ width: 580, theme: 'Light', padding: 24, card: 'State=Rejected', status: 'Status=Ready', primary: 'Kind=Secondary', secondary: 'Kind=Secondary' }),
+  'Error · Retry': Object.freeze({ width: 580, theme: 'Light', padding: 24, card: 'State=Error', status: 'Status=Error', primary: 'Kind=Primary', secondary: 'Kind=Secondary' }),
+  'Responsive · 320 px': Object.freeze({ width: 320, theme: 'Light', padding: 16, card: 'State=Open', status: 'Status=Warning', primary: 'Kind=Primary', secondary: 'Kind=Secondary' }),
+  Dark: Object.freeze({ width: 580, theme: 'Dark', padding: 24, card: 'State=Open', status: 'Status=Warning', primary: 'Kind=Primary', secondary: 'Kind=Secondary' }),
+})
+
+function deepFreezeAnnotationPayload(value) {
+  if (Array.isArray(value)) return Object.freeze(value.map(deepFreezeAnnotationPayload))
+  if (value && typeof value === 'object') {
+    return Object.freeze(Object.fromEntries(Object.entries(value).map(([key, child]) => [key, deepFreezeAnnotationPayload(child)])))
+  }
+  return value
+}
+
+function deepFreezeAnnotationContract(value) {
+  if (Array.isArray(value)) {
+    for (const item of value) deepFreezeAnnotationContract(item)
+  } else if (value && typeof value === 'object') {
+    for (const child of Object.values(value)) deepFreezeAnnotationContract(child)
+  }
+  return value && typeof value === 'object' ? Object.freeze(value) : value
+}
+
+function annotationComponent(id) {
+  return COMPONENT_DEFINITIONS.find(component => component.id === id)
+}
+
+function annotationRoleCopy(setId, variant, overrides = {}) {
+  const component = annotationComponent(setId)
+  const base = component?.variants.find(candidate => candidate.name === variant)?.copy || {}
+  return Object.freeze(Object.fromEntries(component.roles
+    .filter(role => role.type === 'TEXT')
+    .map(role => [role.name, String(overrides[role.name] ?? base[role.name] ?? '')])))
+}
+
+function annotationInstance(name, setId, variant, roleCopy, interactive = false) {
+  const definition = annotationComponent(setId)
+  return Object.freeze({
+    name,
+    setId,
+    variant,
+    region: 'Content',
+    roleCopy,
+    expectedHeight: componentRenderedHeight(definition),
+    interactive,
+  })
+}
+
+function annotationCardCopy(annotation, fixture, viewName, unsupportedAccept) {
+  const variant = unsupportedAccept ? 'State=Open' : ANNOTATION_VIEW_SPECS[viewName].card
+  const status = unsupportedAccept
+    ? 'Nur redaktioneller Hinweis'
+    : viewName === 'Accept · Undo'
+      ? 'Übernommen'
+      : viewName === 'Reject · Scope'
+        ? 'Abgelehnt'
+        : viewName === 'Error · Retry'
+          ? 'Fehler'
+          : 'Offen'
+  return annotationRoleCopy('annotation-card', variant, {
+    Type: annotation.label,
+    Title: annotation.label,
+    Body: fixture.short,
+    Scope: annotation.scope,
+    'Primary Action': unsupportedAccept ? 'Übernehmen nicht verfügbar' : !annotation.operation ? 'Nicht verfügbar' : viewName === 'Accept · Undo' || viewName === 'Reject · Scope' ? 'Rückgängig' : viewName === 'Error · Retry' ? 'Erneut versuchen' : fixture.action,
+    'Secondary Action': unsupportedAccept ? 'Als Hinweis behalten' : viewName === 'Accept · Undo' ? 'Schließen' : viewName === 'Reject · Scope' ? 'Gültigkeit ändern' : viewName === 'Error · Retry' ? 'Abbrechen' : 'Ablehnen',
+    Status: status,
+  })
+}
+
+function buildAnnotationViewContract(annotation, fixture, annotationIndex, name) {
+  const spec = ANNOTATION_VIEW_SPECS[name]
+  const unsupportedAccept = name === 'Accept · Undo' && UNSUPPORTED_ANNOTATION_KIND_SET.has(annotation.kind)
+  const formVariant = ANNOTATION_FORM_VARIANTS[annotation.form]
+  const formPrimaryAction = annotation.operation ? undefined : 'Nicht verfügbar'
+  const cardVariant = unsupportedAccept ? 'State=Open' : spec.card
+  const primaryVariant = unsupportedAccept ? 'Kind=Disabled' : spec.primary
+  const primaryLabel = unsupportedAccept
+    ? 'Übernehmen nicht verfügbar'
+    : name === 'Accept · Undo' || name === 'Reject · Scope'
+      ? 'Rückgängig'
+      : name === 'Error · Retry'
+        ? 'Erneut versuchen'
+        : undefined
+  const secondaryLabel = unsupportedAccept
+    ? 'Als Hinweis behalten'
+    : name === 'Accept · Undo'
+      ? 'Schließen'
+      : name === 'Reject · Scope'
+        ? 'Gültigkeit ändern'
+        : name === 'Error · Retry'
+          ? 'Abbrechen'
+          : undefined
+  const instances = [
+    annotationInstance('Anchor', 'annotation-anchor', `Kind=${annotationIndex < TEXT_ANNOTATION_KINDS.length ? 'Text' : 'Note'}, State=Active`, annotationRoleCopy('annotation-anchor', `Kind=${annotationIndex < TEXT_ANNOTATION_KINDS.length ? 'Text' : 'Note'}, State=Active`, { Label: annotation.label, Count: '1 aktiv' }), true),
+    annotationInstance('Form', 'annotation-form', formVariant, annotationRoleCopy('annotation-form', formVariant, {
+      Label: annotation.label,
+      Input: fixture.target,
+      Preview: fixture.action,
+      'Primary Action': formPrimaryAction,
+      Help: fixture.why,
+    }), true),
+    annotationInstance('Card', 'annotation-card', cardVariant, annotationCardCopy(annotation, fixture, name, unsupportedAccept), true),
+    annotationInstance('Status', 'status-symbol', spec.status, annotationRoleCopy('status-symbol', spec.status, { Label: name === 'Error · Retry' ? 'Fehler' : unsupportedAccept ? 'Hinweis' : name === 'Accept · Undo' || name === 'Reject · Scope' ? 'Bereit' : 'Prüfen' })),
+    annotationInstance('Primary Action', 'dialog-action', primaryVariant, annotationRoleCopy('dialog-action', primaryVariant, { Label: primaryLabel }), true),
+    annotationInstance('Secondary Action', 'dialog-action', spec.secondary, annotationRoleCopy('dialog-action', spec.secondary, { Label: secondaryLabel }), true),
+  ]
+  return Object.freeze({
+    name,
+    sectionName: annotation.sectionName,
+    kind: annotation.kind,
+    fixtureId: fixture.id,
+    width: spec.width,
+    theme: spec.theme,
+    padding: spec.padding,
+    layoutMode: 'VERTICAL',
+    regions: Object.freeze([Object.freeze({ name: 'Content', layoutMode: 'VERTICAL', width: spec.width, padding: spec.padding })]),
+    copyContracts: Object.freeze({
+      Target: fixture.target,
+      Finding: fixture.short,
+      Reason: fixture.why,
+      Consequence: fixture.folge,
+    }),
+    instances: Object.freeze(instances),
+  })
+}
+
+function buildAnnotationViewContracts(annotation, fixture, annotationIndex) {
+  return ANNOTATION_VIEW_NAMES.map(name => buildAnnotationViewContract(annotation, fixture, annotationIndex, name))
+}
+
+export const ANNOTATION_VIEW_DEFINITIONS = Object.freeze(ANNOTATION_CASES.map((fixture, annotationIndex) => deepFreezeAnnotationContract({
+  kind: fixture.anmerkungsart,
+  sectionName: ANNOTATION_SECTIONS[annotationIndex].sectionName,
+  definition: ANNOTATION_SECTIONS[annotationIndex],
+  fixture: deepFreezeAnnotationPayload(fixture),
+  views: Object.freeze(buildAnnotationViewContracts(ANNOTATION_SECTIONS[annotationIndex], fixture, annotationIndex)),
+})))
+
+function annotationViewErrors(view, annotation, fixture, annotationIndex) {
+  const errors = []
+  const spec = ANNOTATION_VIEW_SPECS[view?.name]
+  const unsupportedAccept = view?.name === 'Accept · Undo' && UNSUPPORTED_ANNOTATION_KIND_SET.has(annotation.kind)
+  if (!spec) return [`${annotation.kind}: unknown view ${view?.name}`]
+  for (const [key, expected] of Object.entries({
+    sectionName: annotation.sectionName,
+    kind: annotation.kind,
+    fixtureId: fixture.id,
+    width: spec.width,
+    theme: spec.theme,
+    padding: spec.padding,
+    layoutMode: 'VERTICAL',
+  })) if (view[key] !== expected) errors.push(`${annotation.kind}/${view.name}: ${key} is invalid`)
+  if (!Array.isArray(view.regions) || !view.regions.length || view.regions.some(region => region.layoutMode === 'NONE')) errors.push(`${annotation.kind}/${view.name}: regions need Auto Layout`)
+  if (!view.copyContracts || !['Target', 'Finding', 'Reason', 'Consequence'].every(key => view.copyContracts[key] === ({ Target: fixture.target, Finding: fixture.short, Reason: fixture.why, Consequence: fixture.folge })[key])) errors.push(`${annotation.kind}/${view.name}: fixture copy differs`)
+  if (!Array.isArray(view.instances) || view.instances.length !== ANNOTATION_INSTANCE_ORDER.length) {
+    errors.push(`${annotation.kind}/${view.name}: instance count is invalid`)
+    return errors
+  }
+  for (const [instanceIndex, expected] of ANNOTATION_INSTANCE_ORDER.entries()) {
+    const instance = view.instances[instanceIndex]
+    const component = annotationComponent(expected.setId)
+    if (!instance || instance.name !== expected.name || instance.setId !== expected.setId) errors.push(`${annotation.kind}/${view.name}: instance ${instanceIndex} is invalid`)
+    if (!view.regions.some(region => region.name === instance?.region)) errors.push(`${annotation.kind}/${view.name}: ${expected.name} has no owned region`)
+    if (instance?.expectedHeight !== componentRenderedHeight(component)) errors.push(`${annotation.kind}/${view.name}: ${expected.name} height is invalid`)
+    const roleNames = component.roles.filter(role => role.type === 'TEXT').map(role => role.name)
+    if (!instance?.roleCopy || Object.keys(instance.roleCopy).length !== roleNames.length || !roleNames.every(role => Object.hasOwn(instance.roleCopy, role))) errors.push(`${annotation.kind}/${view.name}: ${expected.name} has incomplete TEXT roles`)
+  }
+  const [anchor, form, card, status, primary, secondary] = view.instances
+  const expectedAnchor = `Kind=${annotationIndex < TEXT_ANNOTATION_KINDS.length ? 'Text' : 'Note'}, State=Active`
+  if (anchor.variant !== expectedAnchor || form.variant !== ANNOTATION_FORM_VARIANTS[annotation.form]) errors.push(`${annotation.kind}/${view.name}: anchor or form variant is invalid`)
+  if (form.roleCopy.Input !== fixture.target || form.roleCopy.Preview !== fixture.action || form.roleCopy.Help !== fixture.why) errors.push(`${annotation.kind}/${view.name}: form payload differs`)
+  if ((!annotation.operation && form.roleCopy['Primary Action'] !== 'Nicht verfügbar') || (annotation.operation && form.roleCopy['Primary Action'] === 'Nicht verfügbar')) errors.push(`${annotation.kind}/${view.name}: form operation is dishonest`)
+  if (card.variant !== (unsupportedAccept ? 'State=Open' : spec.card) || status.variant !== spec.status || primary.variant !== (unsupportedAccept ? 'Kind=Disabled' : spec.primary) || secondary.variant !== spec.secondary) errors.push(`${annotation.kind}/${view.name}: view variants are invalid`)
+  if (unsupportedAccept) {
+    if (card.roleCopy['Primary Action'] !== 'Übernehmen nicht verfügbar' || card.roleCopy.Status !== 'Nur redaktioneller Hinweis' || card.roleCopy.Body !== fixture.short || primary.roleCopy.Label !== 'Übernehmen nicht verfügbar' || secondary.roleCopy.Label !== 'Als Hinweis behalten' || Object.hasOwn(view, 'operation') || Object.hasOwn(view, 'effectiveOperation')) errors.push(`${annotation.kind}/${view.name}: unsupported operation is dishonest`)
+  }
+  if (!annotation.operation && card.roleCopy['Primary Action'] !== (unsupportedAccept ? 'Übernehmen nicht verfügbar' : 'Nicht verfügbar')) errors.push(`${annotation.kind}/${view.name}: unsupported card action is dishonest`)
+  if (view.name === 'Responsive · 320 px' && (!view.instances.filter(instance => instance.interactive).every(instance => instance.expectedHeight >= 44) || view.width !== 320 || view.padding !== 16)) errors.push(`${annotation.kind}/${view.name}: responsive constraints are invalid`)
+  if (view.name === 'Dark' && view.theme !== 'Dark') errors.push(`${annotation.kind}/${view.name}: dark constraints are invalid`)
+  return errors
+}
+
+function collectAnnotationDefinitionErrors(definitions, fixtures, annotations) {
+  const errors = []
+  if (!Array.isArray(definitions) || definitions.length !== 29) return ['Expected exactly 29 annotation definitions']
+  if (definitions.flatMap(definition => definition.views || []).length !== 174) errors.push('Expected exactly 174 annotation views')
+  for (const [index, definition] of definitions.entries()) {
+    const fixture = fixtures[index]
+    const annotation = annotations[index]
+    if (!fixture || !annotation || definition.kind !== fixture.anmerkungsart || definition.sectionName !== annotation.sectionName || definition.definition !== annotation) errors.push(`Annotation ${index + 1} has invalid identity`)
+    if (!annotationPayloadEquals(definition.fixture, fixture)) errors.push(`${definition.kind || index}: fixture payload differs`)
+    if (!isDeepFrozen(definition)) errors.push(`${definition.kind || index}: definition is not deeply frozen`)
+    const views = definition.views || []
+    if (views.length !== ANNOTATION_VIEW_NAMES.length || views.some((view, viewIndex) => view.name !== ANNOTATION_VIEW_NAMES[viewIndex])) errors.push(`${definition.kind || index}: views are unordered or incomplete`)
+    for (const view of views) errors.push(...annotationViewErrors(view, annotation, fixture, index))
+  }
+  return errors
+}
+
+function isDeepFrozen(value) {
+  if (!value || typeof value !== 'object') return true
+  return Object.isFrozen(value) && Object.values(value).every(isDeepFrozen)
+}
+
+function annotationPayloadEquals(actual, expected) {
+  if (Object.is(actual, expected)) return true
+  if (!actual || !expected || typeof actual !== 'object' || typeof expected !== 'object') return false
+  if (Array.isArray(actual) !== Array.isArray(expected)) return false
+  const actualKeys = Object.keys(actual)
+  const expectedKeys = Object.keys(expected)
+  return actualKeys.length === expectedKeys.length
+    && expectedKeys.every(key => Object.hasOwn(actual, key) && annotationPayloadEquals(actual[key], expected[key]))
+}
+
+export function validateAnnotationViewDefinitions(definitions = ANNOTATION_VIEW_DEFINITIONS) {
+  return collectAnnotationDefinitionErrors(definitions, ANNOTATION_CASES, ANNOTATION_SECTIONS)
 }
 
 export function estimateCoreTextWidth(characters, roleName = '') {
