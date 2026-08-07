@@ -7,7 +7,7 @@
 import { SYSTEM_COACH } from './agent-prompts.mjs'
 import { STILMITTEL } from './stilmittel.mjs'
 import { NOTE_ANNOTATION_KINDS, TEXT_ANNOTATION_KINDS } from './annotation-contract.mjs'
-import { FUNKTIONEN } from './bausteinlauf-model.mjs'
+import { FUNKTIONEN } from './bausteinarten-vertrag.mjs'
 
 export const API_URL = 'https://api.anthropic.com/v1/messages'
 export const API_VERSION = '2023-06-01'

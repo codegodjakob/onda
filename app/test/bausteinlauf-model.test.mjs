@@ -1,11 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import {
-  FUNKTIONEN,
-  UMSCHREIB_GRENZE,
-  pruefeBausteinBedarf,
-  strukturSignatur,
-} from '../src/bausteinlauf-model.mjs'
+import { UMSCHREIB_GRENZE } from '../src/bausteinarten-vertrag.mjs'
+import { pruefeBausteinBedarf, strukturSignatur } from '../src/bausteinlauf-model.mjs'
 
 function absatz(id, text, type = 'paragraph') {
   return { id, type, role: type === 'heading' ? 'heading' : 'paragraph', text, excerpt: text.slice(0, 160) }
@@ -156,10 +152,6 @@ test('Ueberschriften und leere Absaetze brauchen nie einen Namen', () => {
   ]
   const ergebnis = pruefeBausteinBedarf({ blocks, bestand: null })
   assert.deepEqual(ergebnis.offene, ['b2'])
-})
-
-test('die Funktionsschluessel bleiben genau die, die die Rechenlogik vergleicht', () => {
-  assert.deepEqual([...FUNKTIONEN], ['claim', 'evidence', 'counterpoint', 'transition', 'question'])
 })
 
 import {

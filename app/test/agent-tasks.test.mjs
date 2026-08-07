@@ -5,7 +5,7 @@ import {
   API_URL, baueAnfrage, schaetzeKostenCents,
 } from '../src/agent-tasks.mjs'
 import { SYSTEM_COACH } from '../src/agent-prompts.mjs'
-import { FUNKTIONEN } from '../src/bausteinlauf-model.mjs'
+import { FUNKTIONEN } from '../src/bausteinarten-vertrag.mjs'
 
 test('TASK_TABLE ist vollstaendig und zeigt auf gueltige Modelle', () => {
   const tasks = ['verstaendnis', 'hinweise', 'erweiterungen', 'bausteinarten', 'chat', 'titel', 'zusammenfassung']

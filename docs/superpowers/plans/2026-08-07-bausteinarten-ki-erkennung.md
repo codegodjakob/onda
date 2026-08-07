@@ -37,6 +37,7 @@
 
 | Datei | Verantwortung | Task |
 |---|---|---|
+| `app/src/bausteinarten-vertrag.mjs` | **Neu, nachträglich.** Das geteilte Vokabular: `FUNKTIONEN`, `UMSCHREIB_GRENZE`, `benennbar`. Ohne Importe. Siehe „Warum es diese Datei gibt" unten | 5 (Korrekturrunde) |
 | `app/src/bausteinlauf-model.mjs` | **Neu.** Alles Reine: Signatur, Bedarfsprüfung, Antwortverarbeitung, Normalisierung, Altübernahme, Nachschlagekarten, `versucheBausteinlauf` | 1–3, 6 |
 | `app/test/bausteinlauf-model.test.mjs` | **Neu.** Prüfung dieses Modells | 1–3, 6 |
 | `app/src/bausteinarten-kontext.mjs` | **Neu.** Übersetzt Rohdaten auf den `baueAnfrage`-Vertrag | 5 |
@@ -50,6 +51,26 @@
 | `app/src/style.css` | Löschung `.semantic-insert-*` | 10 |
 | `app/test/schreibansicht-ruhe.test.mjs` | Zusage umdrehen | 10 |
 | `app/test/v2-smoke.mjs` | Menü-Abschnitte ersetzen, verwaiste Zusagen retten | 11 |
+
+### Warum es `bausteinarten-vertrag.mjs` gibt
+
+Nachtrag aus der Korrekturrunde zu Task 5. Ursprünglich stand `benennbar` — was zählt als
+benennbarer Absatz — zweimal im Code: einmal in `bausteinlauf-model.mjs`, einmal in
+`bausteinarten-kontext.mjs`. Zwei Kopien derselben Regel können auseinanderlaufen, und dann
+zeigt das Absatzverzeichnis dem Modell andere Absätze, als die Antwortprüfung akzeptiert.
+
+Der naheliegende Weg — die eine Datei importiert aus der anderen — hätte einen Ring
+geschlossen, sobald Task 6 `bausteinlauf-model.mjs` den Kontextbauer importieren lässt:
+`bausteinlauf-model → bausteinarten-kontext → bausteinlauf-model`. Deshalb liegt das
+geteilte Vokabular in einer dritten, importfreien Datei. Beide Seiten holen es von dort,
+und die Richtung bleibt eindeutig:
+
+```
+              bausteinarten-vertrag.mjs   (keine Importe)
+                ↑          ↑          ↑
+   bausteinlauf-model → bausteinarten-kontext
+                                  agent-tasks.mjs
+```
 
 ---
 

@@ -1,26 +1,7 @@
 // Reine Logik fuer den Bausteinlauf — PUR, node-testbar, kein DOM, kein ctx.
 // workspace.js (fuehreBausteinlaufAus) orchestriert nur: Dokument/Editor lesen, diese
 // Funktionen aufrufen, runTask + Persistenz ausloesen. Vorbild: hinweislauf-model.mjs.
-
-// Die unsichtbare Funktion einer Bausteinart. Bewusst die englischen Schluessel, die die
-// vorhandene Rechenlogik zeichengenau vergleicht (claim-ledger.mjs:7, effect-analysis.mjs:46,
-// language-patterns.mjs:51). Der SICHTBARE Name ist davon unabhaengig und frei.
-export const FUNKTIONEN = Object.freeze(['claim', 'evidence', 'counterpoint', 'transition', 'question'])
-
-// Ab wann gilt ein Absatz als umgeschrieben statt fortgeschrieben? Gemessen an der
-// Zeichenzahl seit seiner Benennung. Gesetzt, nicht hergeleitet — deshalb von aussen
-// verstellbar und an beiden Raendern geprueft.
-export const UMSCHREIB_GRENZE = 0.5
-
-// Exportiert, damit bausteinarten-kontext.mjs und verarbeiteBausteinantwort beide
-// nach den gleichen Kriterien entscheiden, welche Absätze benennbar sind. Eine private
-// Kopie würde sie auseinanderdriften lassen — das Verzeichnis würde dem Modell andere
-// Absätze zeigen als die Antwort verarbeitet werden kann.
-export function benennbar(block) {
-  if (!block?.id) return false
-  if (block.type === 'heading' || block.role === 'heading') return false
-  return Boolean(String(block.text || '').trim())
-}
+import { FUNKTIONEN, UMSCHREIB_GRENZE, benennbar } from './bausteinarten-vertrag.mjs'
 
 // Bestand und Reihenfolge der Absaetze — bewusst OHNE Wortlaut. Wer in einem Absatz
 // weiterschreibt, aendert die Signatur nicht; wer einen anlegt, entfernt oder verschiebt,

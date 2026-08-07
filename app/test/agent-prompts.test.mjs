@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { SYSTEM_COACH, INTERVIEW_REGELN, HINWEIS_ANWEISUNG, ERWEITERUNG_ANWEISUNG, BAUSTEINARTEN_ANWEISUNG } from '../src/agent-prompts.mjs'
 import { HINWEISE_SCHEMA } from '../src/agent-tasks.mjs'
-import { FUNKTIONEN } from '../src/bausteinlauf-model.mjs'
+import { FUNKTIONEN } from '../src/bausteinarten-vertrag.mjs'
 import {
   FEHLERBILDER,
   MECHANISMEN,

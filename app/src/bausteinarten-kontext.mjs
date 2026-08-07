@@ -2,7 +2,7 @@
 // Übersetzt die Rohdaten auf den tatsächlichen baueAnfrage-Vertrag
 // ({verstaendnis, docText, volatiles}). Vorbild: hinweis-kontext.mjs.
 import { BAUSTEINARTEN_ANWEISUNG } from './agent-prompts.mjs'
-import { benennbar } from './bausteinlauf-model.mjs'
+import { benennbar } from './bausteinarten-vertrag.mjs'
 
 export const ANRISS_ZEICHEN = 120
 
