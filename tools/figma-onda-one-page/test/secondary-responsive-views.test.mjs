@@ -5,6 +5,8 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import * as definitions from '../src/definitions.mjs'
 import * as plan from '../src/plan.mjs'
+import { createValidComponentEvidence } from './component-fixture.mjs'
+import { createValidFoundationEvidence } from './foundation-fixture.mjs'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -265,6 +267,216 @@ function secondaryInventory({ complete = true } = {}) {
   return { targetPage, sections, views, legacyViews: [], components, variables }
 }
 
+const OVERLAY_EFFECT = Object.freeze({
+  type: 'DROP_SHADOW', color: { r: 0, g: 0, b: 0, a: 0.16 },
+  offset: { x: 0, y: 8 }, radius: 24, spread: 0, visible: true, blendMode: 'NORMAL',
+})
+
+function strictSecondaryEvidence() {
+  const entries = secondaryDefinitions()
+  const semanticNames = ['color/surface', 'color/inverted', 'color/border', 'color/text', 'color/text-muted', 'color/on-inverted']
+  const spacingValues = [...new Set(entries.flatMap(({ view }) => view.regions.flatMap(region => [
+    region.itemSpacing, region.padding.top, region.padding.right, region.padding.bottom, region.padding.left,
+  ])).filter(value => value > 0))]
+  const collections = ['Light', 'Dark'].map(theme => ({
+    id: `collection:semantic:${theme.toLowerCase()}`, name: `Onda · Semantic · ${theme}`, owner: definitions.PLUGIN_ORIGIN,
+  })).concat({ id: 'collection:dimension', name: 'Onda · Dimension', owner: definitions.PLUGIN_ORIGIN })
+  const variables = ['Light', 'Dark'].flatMap(theme => semanticNames.map(name => ({
+    id: `variable:${theme.toLowerCase()}:${name}`, name, owner: definitions.PLUGIN_ORIGIN,
+    collectionId: `collection:semantic:${theme.toLowerCase()}`, collectionName: `Onda · Semantic · ${theme}`,
+  }))).concat(spacingValues.map(value => ({
+    id: `variable:dimension:spacing/${value}`, name: `spacing/${value}`, owner: definitions.PLUGIN_ORIGIN,
+    collectionId: 'collection:dimension', collectionName: 'Onda · Dimension',
+  })))
+  const variableId = (collectionName, name) => variables.find(variable => variable.collectionName === collectionName && variable.name === name)?.id
+  const components = definitions.COMPONENT_DEFINITIONS.map(component => ({
+    id: component.id, nodeId: `set:${component.id}`, name: component.name, type: 'COMPONENT_SET', owner: definitions.PLUGIN_ORIGIN,
+    variants: component.variants.map((variant, index) => ({
+      nodeId: `component:${component.id}:${index}`, name: variant.name, type: 'COMPONENT', owner: definitions.PLUGIN_ORIGIN,
+      parentId: `set:${component.id}`, parentType: 'COMPONENT_SET', parentName: component.name,
+    })),
+  }))
+  const targetPage = {
+    nodeId: 'page:secondary-evidence', name: definitions.TARGET_PAGE_NAME, type: 'PAGE',
+    childIds: TARGET_SECTION_NAMES.map((_, index) => `section:evidence:${index}`), childCount: TARGET_SECTION_NAMES.length,
+  }
+  const sections = TARGET_SECTION_NAMES.map((name, index) => ({
+    nodeId: `section:evidence:${index}`, name, type: 'SECTION', owner: definitions.PLUGIN_ORIGIN,
+    parentId: targetPage.nodeId, parentType: 'PAGE', parentName: targetPage.name,
+    childIds: [], childCount: 0,
+    bounds: { x: 0, y: index * 100000, width: 2200, height: 1 },
+    absoluteBounds: { x: 0, y: index * 100000, width: 2200, height: 1 },
+  }))
+  const sectionByName = new Map(sections.map(section => [section.name, section]))
+  const sectionCursor = new Map(TARGET_SECTION_NAMES.map(name => [name, 100]))
+
+  function paintEvidence(type, theme, kind, textToken = 'color/text', surfaceToken = 'color/surface') {
+    const collection = `Onda · Semantic · ${theme}`
+    const token = kind === 'stroke' ? 'color/border' : type === 'TEXT' || type === 'ELLIPSE' ? textToken : surfaceToken
+    const gray = theme === 'Dark' ? (kind === 'stroke' ? .35 : type === 'TEXT' || type === 'ELLIPSE' ? .95 : .08) : (kind === 'stroke' ? .82 : type === 'TEXT' || type === 'ELLIPSE' ? .08 : 1)
+    return [{ type: 'SOLID', color: { r: gray, g: gray, b: gray }, variableIds: [variableId(collection, token)] }]
+  }
+
+  function baseRecord({ nodeId, name, type, parent, bounds, theme, textToken = 'color/text', surfaceToken = 'color/surface', effects = [], effectStyleId = null }) {
+    return {
+      nodeId, name, type, owner: definitions.PLUGIN_ORIGIN,
+      parentId: parent.nodeId, parentType: parent.type, parentName: parent.name,
+      x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height,
+      bounds: { ...bounds },
+      absoluteBounds: { x: parent.absoluteBounds.x + bounds.x, y: parent.absoluteBounds.y + bounds.y, width: bounds.width, height: bounds.height },
+      fills: paintEvidence(type, theme, 'fill', textToken, surfaceToken), strokes: type === 'TEXT' || type === 'ELLIPSE' ? [] : paintEvidence(type, theme, 'stroke', textToken, surfaceToken),
+      fillBindings: paintEvidence(type, theme, 'fill', textToken, surfaceToken).map(({ type: paintType, variableIds }, index) => ({ index, type: paintType, variableIds })),
+      strokeBindings: type === 'TEXT' || type === 'ELLIPSE' ? [] : paintEvidence(type, theme, 'stroke').map(({ type: paintType, variableIds }, index) => ({ index, type: paintType, variableIds })),
+      effects: structuredClone(effects), effectStyleId, opacity: 1, visible: true,
+      childIds: [], childCount: 0, pluginData: { owner: definitions.PLUGIN_ORIGIN },
+    }
+  }
+
+  const views = entries.map(({ group, view }, viewIndex) => {
+    const section = sectionByName.get(view.sectionName)
+    const viewY = sectionCursor.get(view.sectionName)
+    sectionCursor.set(view.sectionName, viewY + view.height + 76)
+    const viewRecord = baseRecord({
+      nodeId: `view:evidence:${viewIndex}`, name: view.name, type: 'FRAME', parent: section,
+      bounds: { x: 80, y: viewY, width: view.width, height: view.height }, theme: view.theme,
+    })
+    viewRecord.layoutMode = view.layoutMode
+    viewRecord.paddingTop = view.width === 320 ? 16 : 0
+    viewRecord.paddingRight = view.width === 320 ? 16 : 0
+    viewRecord.paddingBottom = view.width === 320 ? 16 : 0
+    viewRecord.paddingLeft = view.width === 320 ? 16 : 0
+    viewRecord.itemSpacing = 0
+    viewRecord.secondaryView = { group, theme: view.theme, subject: view.subject || null, breakpoint: view.breakpoint ?? null }
+    Object.assign(viewRecord, viewRecord.secondaryView)
+    viewRecord.pluginData.secondaryView = JSON.stringify(viewRecord.secondaryView)
+    const layoutRegions = []
+    const copyNodes = []
+    const instances = []
+    const regionByName = new Map()
+
+    function addChildren(parent, parentContractName) {
+      const padding = {
+        top: parent.paddingTop || 0, right: parent.paddingRight || 0,
+        bottom: parent.paddingBottom || 0, left: parent.paddingLeft || 0,
+      }
+      const contentWidth = parent.width - padding.left - padding.right
+      let cursor = parent.layoutMode === 'HORIZONTAL' ? padding.left : padding.top
+      const childRecords = []
+      const regionContracts = view.regions.filter(region => region.parentName === parentContractName)
+      const copyContracts = view.copyContracts.filter(copy => copy.region === parentContractName)
+      const instanceContracts = view.instances.filter(instance => instance.region === parentContractName)
+      for (const [kind, contracts] of [['region', regionContracts], ['copy', copyContracts], ['instance', instanceContracts]]) for (const contract of contracts) {
+        let width
+        let height
+        if (kind === 'region') {
+          width = Math.min(contract.width, contentWidth)
+          height = contract.height
+        } else if (kind === 'copy') {
+          width = contentWidth
+          height = contract.expectedHeight
+        } else {
+          width = Math.min(contract.expectedWidth, contentWidth)
+          height = Math.max(view.width === 320 ? 44 : 0, contract.expectedHeight)
+        }
+        const bounds = parent.layoutMode === 'HORIZONTAL'
+          ? { x: cursor, y: padding.top, width, height }
+          : { x: padding.left, y: cursor, width, height }
+        if (kind === 'region') {
+          const record = baseRecord({
+            nodeId: `region:evidence:${viewIndex}:${layoutRegions.length}`, name: contract.name, type: 'FRAME', parent, bounds, theme: view.theme,
+          })
+          record.layoutMode = contract.layoutMode
+          record.itemSpacing = contract.itemSpacing
+          record.paddingTop = contract.padding.top
+          record.paddingRight = contract.padding.right
+          record.paddingBottom = contract.padding.bottom
+          record.paddingLeft = contract.padding.left
+          record.fieldVariableIds = Object.fromEntries([
+            ['itemSpacing', contract.itemSpacing], ['paddingTop', contract.padding.top], ['paddingRight', contract.padding.right],
+            ['paddingBottom', contract.padding.bottom], ['paddingLeft', contract.padding.left],
+          ].map(([field, value]) => [field, value === 0 ? [] : [variableId('Onda · Dimension', `spacing/${value}`)]]))
+          record.pluginData.secondaryRegionContract = JSON.stringify({ width: contract.width, height: contract.height })
+          layoutRegions.push(record)
+          regionByName.set(contract.name, record)
+          childRecords.push(record)
+          addChildren(record, contract.name)
+        } else if (kind === 'copy') {
+          const record = baseRecord({
+            nodeId: `copy:evidence:${viewIndex}:${copyNodes.length}`, name: `Copy / ${contract.role}`, type: 'TEXT', parent, bounds, theme: view.theme,
+            textToken: contract.kind === 'title' ? 'color/text' : 'color/text-muted',
+          })
+          Object.assign(record, { role: contract.role, characters: contract.characters, fieldVariableIds: {}, textRangeBindings: [] })
+          record.pluginData.role = contract.role
+          copyNodes.push(record)
+          childRecords.push(record)
+        } else {
+          const component = definitions.COMPONENT_DEFINITIONS.find(item => item.id === contract.setId)
+          const variantIndex = component.variants.findIndex(item => item.name === contract.variant)
+          const allowedEffect = Boolean(component.effectStyleName)
+          const record = baseRecord({
+            nodeId: `instance:evidence:${viewIndex}:${instances.length}`, name: contract.name, type: 'INSTANCE', parent, bounds, theme: view.theme,
+            surfaceToken: component.variants[variantIndex].surfaceToken,
+            effects: allowedEffect ? [OVERLAY_EFFECT] : [], effectStyleId: allowedEffect ? 'effect-style:overlay' : null,
+          })
+          Object.assign(record, {
+            region: contract.region, repeatedScreen: true, documentation: false,
+            mainComponentId: `component:${contract.setId}:${variantIndex}`, componentId: `component:${contract.setId}:${variantIndex}`,
+            componentSetId: `set:${contract.setId}`, componentSetName: component.name, variantName: contract.variant,
+            labelValue: contract.label, componentProperties: { 'Label#fixture': { type: 'TEXT', value: contract.label } },
+            roleCopy: structuredClone(contract.roleCopy), cornerRadius: component.radius,
+          })
+          const roleDescendants = []
+          let roleCursor = component.direction === 'HORIZONTAL' ? component.padding.left : component.padding.top
+          for (const [roleIndex, role] of component.roles.entries()) {
+            const roleWidth = role.type === 'ELLIPSE' ? 16 : definitions.estimateCoreTextWidth(contract.roleCopy[role.name], role.name)
+            const roleHeight = role.type === 'ELLIPSE' || role.name === 'Description' ? 16 : 22
+            const roleBounds = component.direction === 'HORIZONTAL'
+              ? { x: roleCursor, y: component.padding.top, width: roleWidth, height: roleHeight }
+              : { x: component.padding.left, y: roleCursor, width: roleWidth, height: roleHeight }
+            const roleRecord = baseRecord({
+              nodeId: `${record.nodeId}:role:${roleIndex}`, name: `Role/${role.name}`, type: role.type, parent: record, bounds: roleBounds, theme: view.theme,
+              textToken: component.variants[variantIndex].textToken,
+            })
+            Object.assign(roleRecord, {
+              parentInstanceId: record.nodeId, ancestorIds: [record.nodeId], ancestorChain: [], role: role.name,
+              ...(role.type === 'TEXT' ? { characters: contract.roleCopy[role.name] } : {}),
+            })
+            roleRecord.pluginData.role = role.name
+            roleDescendants.push(roleRecord)
+            roleCursor += (component.direction === 'HORIZONTAL' ? roleWidth : roleHeight) + component.gap
+          }
+          record.roleDescendants = roleDescendants
+          record.childIds = roleDescendants.map(role => role.nodeId)
+          record.childCount = record.childIds.length
+          instances.push(record)
+          childRecords.push(record)
+        }
+        cursor += (parent.layoutMode === 'HORIZONTAL' ? width : height) + (parent.itemSpacing || 0)
+      }
+      parent.childIds = childRecords.map(record => record.nodeId)
+      parent.childCount = parent.childIds.length
+    }
+
+    addChildren(viewRecord, view.name)
+    viewRecord.layoutRegions = layoutRegions
+    viewRecord.copyNodes = copyNodes
+    viewRecord.instances = instances
+    viewRecord.standIns = []
+    section.childIds.push(viewRecord.nodeId)
+    section.childCount = section.childIds.length
+    return viewRecord
+  })
+  for (const section of sections) {
+    section.height = sectionCursor.get(section.name) + 100
+    section.bounds.height = section.height
+    section.absoluteBounds.height = section.height
+  }
+  return {
+    targetPage, sections, views, legacyViews: [], components, collections, variables,
+    effectStyles: [{ id: 'effect-style:overlay', name: 'Onda/Shadow/Overlay', owner: definitions.PLUGIN_ORIGIN, effects: [structuredClone(OVERLAY_EFFECT)] }],
+  }
+}
+
 function nestInventoryChild(child, container, prefix) {
   const childId = child.nodeId
   const inner = {
@@ -341,6 +553,47 @@ function priorSecondaryPhases() {
     ...definitions.COMPONENT_DEFINITIONS.map(component => `component-${component.id}`),
     'core-views', ...Array.from({ length: 6 }, (_, index) => `annotations-${index + 1}`),
   ].map(id => [id, { status: 'success' }]))
+}
+
+function secondaryVerificationSnapshot(secondaryViews) {
+  const foundation = createValidFoundationEvidence()
+  return {
+    targetAuthorized: true,
+    pageCount: 1,
+    pageName: definitions.TARGET_PAGE_NAME,
+    sections: definitions.SECTION_DEFINITIONS.map(section => ({
+      name: section.name,
+      type: 'SECTION',
+      parentType: 'PAGE',
+      parentName: definitions.TARGET_PAGE_NAME,
+      owner: definitions.PLUGIN_ORIGIN,
+    })),
+    annotationViews: definitions.ANNOTATION_SECTIONS.flatMap(annotation => annotation.views.map(view => ({ kind: annotation.kind, view: view.name }))),
+    dialogStates: definitions.DIALOG_FAMILIES.flatMap(family => family.states.map(state => ({ family: family.name, state }))),
+    componentSets: createValidComponentEvidence(foundation),
+    componentTargetPage: { id: 'page:1', name: definitions.TARGET_PAGE_NAME, type: 'PAGE' },
+    componentContainers: [{
+      nodeId: 'section:components', name: '02 · Komponenten', type: 'SECTION', owner: definitions.PLUGIN_ORIGIN,
+      parentId: 'page:1', parentType: 'PAGE', parentName: definitions.TARGET_PAGE_NAME,
+    }],
+    secondaryViews,
+    instanceCount: definitions.COMPONENT_DEFINITIONS.length + 8,
+    documentationInstanceCount: definitions.COMPONENT_DEFINITIONS.length,
+    repeatedScreenInstanceCount: 8,
+    foundation,
+    intersections: [],
+    clearance: 2000,
+    overflowNodes: [],
+    undersizedHitTargets: [],
+    reactionCount: 4,
+    requiredReactionCount: 4,
+    baselineHash: 'baseline',
+    currentBaselineHash: 'baseline',
+    baselineMismatches: [],
+    baselinePages: [{ id: 'page:1', name: definitions.TARGET_PAGE_NAME, index: 0 }],
+    currentPages: [{ id: 'page:1', name: definitions.TARGET_PAGE_NAME, index: 0 }],
+    phases: { ...priorSecondaryPhases(), 'dialogs-and-secondary': { status: 'success' } },
+  }
 }
 
 async function rejectBeforeSecondaryWrite(currentInventory, pattern = /Secondary|TOCTOU|Nebenansicht/i) {
@@ -970,11 +1223,40 @@ test('Runtime binds visible Dark secondary nodes to exact Dark semantic variable
   assert.match(binding, /theme === 'Dark'\s*\?\s*variables\.semanticByTheme\.Dark\s*:\s*variables\.semanticByTheme\.Light/)
   assert.match(binding, /figma\.variables\.setBoundVariableForPaint/)
   const executableBinding = sourceFunction(source, 'applySecondaryThemeBinding', 'bindSecondaryNodeTheme')
-  assert.match(executableBinding, /for \(const child of node\.children\) applySecondaryThemeBinding\(\{ node: child, theme, variables, bindPaint \}\)/)
+  assert.match(executableBinding, /semantic\.semanticByToken\[textToken\]/)
+  assert.match(executableBinding, /semantic\.semanticByToken\[surfaceToken\]/)
+  assert.match(executableBinding, /for \(const child of node\.children\) applySecondaryThemeBinding\(\{ node: child, theme, variables, bindPaint, textToken, surfaceToken, recursive \}\)/)
+
+  const copy = sourceFunction(source, 'configureSecondaryCopy', 'ownedSecondaryVariant')
+  assert.match(copy, /contract\.kind === 'title'\s*\?\s*'color\/text'\s*:\s*'color\/text-muted'/)
+  const instance = sourceFunction(source, 'ensureSecondaryVariantInstance', 'positionSecondaryInstance')
+  assert.match(instance, /variantDefinition\.textToken/)
+  assert.match(instance, /variantDefinition\.surfaceToken/)
+  const render = sourceFunction(source, 'runSecondaryViews', 'createAgentAndSources')
+  assert.match(render, /bindSecondaryNodeTheme\(frame, definition\.theme, variables, 'color\/text', 'color\/surface', false\)/)
 
   const mutation = source.slice(source.indexOf('async function collectSecondaryViewMutationInventory'), source.indexOf('function collectOndaNodes'))
   assert.doesNotMatch(mutation, /createComponent\(|combineAsVariants|addComponentProperty|editComponentProperty/)
   assert.doesNotMatch(mutation, /\.appendChild\([^)]*variant|variant\.appendChild|set\.appendChild/)
+})
+
+test('Runtime secondary variable inventory contains every variable identity at most once', () => {
+  const source = runtimeSource()
+  const uniqueRecords = executableRuntimeFunction(source, 'uniqueSecondaryVariableRecords')
+  const surface = { id: 'variable:surface', name: 'color/surface' }
+  const border = { id: 'variable:border', name: 'color/border' }
+  const text = { id: 'variable:text', name: 'color/text' }
+
+  assert.deepEqual(
+    uniqueRecords([surface, border, surface, text, surface]),
+    [surface, border, text],
+    'the surface alias and semantic token entry must resolve to one inventory record',
+  )
+
+  const variables = sourceFunction(source, 'secondaryVariableContext', 'secondaryBoundPaint')
+  assert.match(variables, /inventory:\s*uniqueSecondaryVariableRecords\(\[/)
+  assert.match(variables, /\[context\.border, \.\.\.Object\.values\(context\.semanticByToken\)\]/)
+  assert.doesNotMatch(variables, /\[context\.surface, context\.border/)
 })
 
 test('secondary recovery distinguishes exact Light and Dark semantic variable identities', () => {
@@ -1068,23 +1350,39 @@ test('executable Runtime adapters apply real nesting, exact height, async copy o
   assert.ok(events.indexOf('swap:component:expected') < events.indexOf('fonts'))
   assert.ok(events.indexOf('fonts') < events.indexOf('properties'))
 
-  const darkChild = { fills: [{ type: 'SOLID' }], strokes: [{ type: 'SOLID' }], children: [] }
-  const darkRoot = { fills: [{ type: 'SOLID' }], strokes: [{ type: 'SOLID' }], children: [darkChild] }
+  const darkChild = { type: 'TEXT', fills: [{ type: 'SOLID' }], strokes: [], children: [] }
+  const darkRoot = { type: 'FRAME', fills: [{ type: 'SOLID' }], strokes: [{ type: 'SOLID' }], children: [darkChild] }
   const variables = {
     semanticByTheme: {
-      Light: { surface: { id: 'variable:light:surface' }, border: { id: 'variable:light:border' }, text: { id: 'variable:light:text' } },
-      Dark: { surface: { id: 'variable:dark:surface' }, border: { id: 'variable:dark:border' }, text: { id: 'variable:dark:text' } },
+      Light: {
+        surface: { id: 'variable:light:surface' }, border: { id: 'variable:light:border' },
+        semanticByToken: {
+          'color/surface': { id: 'variable:light:surface' }, 'color/inverted': { id: 'variable:light:inverted' },
+          'color/text': { id: 'variable:light:text' }, 'color/text-muted': { id: 'variable:light:text-muted' },
+        },
+      },
+      Dark: {
+        surface: { id: 'variable:dark:surface' }, border: { id: 'variable:dark:border' },
+        semanticByToken: {
+          'color/surface': { id: 'variable:dark:surface' }, 'color/inverted': { id: 'variable:dark:inverted' },
+          'color/text': { id: 'variable:dark:text' }, 'color/text-muted': { id: 'variable:dark:text-muted' },
+        },
+      },
     },
   }
   applyTheme({
     node: darkRoot,
     theme: 'Dark',
     variables,
+    textToken: 'color/text-muted',
+    surfaceToken: 'color/inverted',
     bindPaint(_paint, variable) { return { boundVariableId: variable.id } },
   })
   const boundIds = [darkRoot, darkChild].flatMap(node => [...node.fills, ...node.strokes]).map(paint => paint.boundVariableId)
   assert.ok(boundIds.every(id => id.startsWith('variable:dark:')))
   assert.ok(boundIds.every(id => !id.includes(':light:')))
+  assert.deepEqual(darkRoot.fills.map(paint => paint.boundVariableId), ['variable:dark:inverted'])
+  assert.deepEqual(darkChild.fills.map(paint => paint.boundVariableId), ['variable:dark:text-muted'])
 })
 
 test('Runtime inventory retains every exact-set child, every duplicate or unknown visible Role, and recursive legacy leaves', () => {
@@ -1234,7 +1532,8 @@ test('every 320 Instance keeps honest complete compact copy within the real 192p
       const expected = expectedBySet[instance.setId](navigationLabel)
       assert.deepEqual(instance.roleCopy, expected, `${view.name}/${instance.name}: compact semantic copy mismatch`)
       assert.deepEqual(Object.keys(instance.roleCopy).sort(), component.roles.filter(role => role.type === 'TEXT').map(role => role.name).sort())
-      assert.equal(instance.label, instance.roleCopy[component.labelRole], `${view.name}/${instance.name}: Label property disagrees with label Role`)
+      const visibleLabelRole = instance.setId === 'select' ? 'Value' : component.labelRole
+      assert.equal(instance.label, instance.roleCopy[visibleLabelRole], `${view.name}/${instance.name}: Label property disagrees with visible label Role`)
       const computedMinimum = definitions.componentMinimumWidth(component, instance.roleCopy)
       assert.equal(instance.minimumWidth, computedMinimum)
       assert.ok(computedMinimum <= 192, `${view.name}/${instance.name}: ${computedMinimum}px exceeds real Detail content width`)
@@ -1392,4 +1691,285 @@ test('exact semantic collection indexing rejects duplicate Light, Dark, and Dime
     assert.throws(() => indexCollections(collections, () => { writes += 1 }), new RegExp(collectionName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
     assert.equal(writes, 0)
   }
+})
+
+test('strict modern secondary evidence API accepts one complete independently built fixture and hard-gates Verify', () => {
+  assert.equal(typeof plan.validateSecondaryViewEvidence, 'function', 'validateSecondaryViewEvidence missing')
+  const evidence = strictSecondaryEvidence()
+  assert.deepEqual(plan.validateSecondaryViewEvidence(evidence), { valid: true, errors: [], counts: { agentSources: 15, secondary: 9, responsive: 16 } })
+  const report = plan.buildVerificationReport(secondaryVerificationSnapshot(evidence))
+  assert.equal(report.hardPass, true)
+  assert.deepEqual({
+    agentSources: report.agentSourceViewCount,
+    secondary: report.secondaryViewCount,
+    responsive: report.responsiveViewCount,
+  }, { agentSources: 15, secondary: 9, responsive: 16 })
+  assert.deepEqual(report.secondaryViewErrors, [])
+})
+
+test('strict secondary evidence derives exact Role text tokens from the selected Variant and keeps Summary Copy muted', async t => {
+  const roleCase = (evidence, theme, textToken) => {
+    for (const view of evidence.views.filter(candidate => candidate.theme === theme)) for (const instance of view.instances) {
+      const component = definitions.COMPONENT_DEFINITIONS.find(candidate => candidate.name === instance.componentSetName)
+      const variant = component?.variants.find(candidate => candidate.name === instance.variantName)
+      if (variant?.textToken === textToken) return { view, instance, roles: instance.roleDescendants.filter(role => ['TEXT', 'ELLIPSE'].includes(role.type)) }
+    }
+    return null
+  }
+  const replaceFillToken = (record, theme, textToken) => {
+    const variableIds = [`variable:${theme.toLowerCase()}:${textToken}`]
+    record.fills[0].variableIds = variableIds
+    record.fillBindings[0].variableIds = variableIds
+  }
+  const assertStrictFailure = (evidence, pattern, label) => {
+    const strict = plan.validateSecondaryViewEvidence(evidence)
+    assert.equal(strict.valid, false, `${label}: strict validator false-pass`)
+    assert.match(strict.errors.join('\n'), pattern, `${label}: own named token error missing`)
+    const report = plan.buildVerificationReport(secondaryVerificationSnapshot(evidence))
+    assert.equal(report.hardPass, false, `${label}: Verify false-pass`)
+    assert.match(report.secondaryViewErrors.join('\n'), pattern, `${label}: Verify omitted named token error`)
+  }
+
+  for (const theme of ['Light', 'Dark']) await t.test(`${theme} muted Variant rejects text binding`, () => {
+    const evidence = strictSecondaryEvidence()
+    const selected = roleCase(evidence, theme, 'color/text-muted')
+    assert.ok(selected?.roles.length, `${theme}: no selected muted Variant roles in fixture`)
+    for (const role of selected.roles) assert.deepEqual(role.fillBindings[0].variableIds, [`variable:${theme.toLowerCase()}:color/text-muted`])
+    replaceFillToken(selected.roles[0], theme, 'color/text')
+    assertStrictFailure(evidence, new RegExp(`${theme} Role semantic token color/text-muted binding`), `${theme} muted Variant`)
+  })
+
+  for (const theme of ['Light', 'Dark']) await t.test(`${theme} normal Variant rejects muted binding`, () => {
+    const evidence = strictSecondaryEvidence()
+    const selected = roleCase(evidence, theme, 'color/text')
+    assert.ok(selected?.roles.length, `${theme}: no selected normal Variant roles in fixture`)
+    for (const role of selected.roles) assert.deepEqual(role.fillBindings[0].variableIds, [`variable:${theme.toLowerCase()}:color/text`])
+    replaceFillToken(selected.roles[0], theme, 'color/text-muted')
+    assertStrictFailure(evidence, new RegExp(`${theme} Role semantic token color/text binding`), `${theme} normal Variant`)
+  })
+
+  for (const theme of ['Light', 'Dark']) await t.test(`${theme} Summary Copy rejects normal text binding`, () => {
+    const evidence = strictSecondaryEvidence()
+    const view = evidence.views.find(candidate => candidate.theme === theme)
+    const summary = view.copyNodes.find(copy => copy.role === 'summary')
+    assert.deepEqual(summary.fillBindings[0].variableIds, [`variable:${theme.toLowerCase()}:color/text-muted`])
+    replaceFillToken(summary, theme, 'color/text')
+    assertStrictFailure(evidence, new RegExp(`${theme} Copy semantic token color/text-muted binding`), `${theme} Summary Copy`)
+  })
+})
+
+test('strict secondary evidence derives exact Instance surface tokens from the selected Variant', async t => {
+  const instanceCase = (evidence, theme, surfaceToken) => {
+    for (const view of evidence.views.filter(candidate => candidate.theme === theme)) for (const instance of view.instances) {
+      const component = definitions.COMPONENT_DEFINITIONS.find(candidate => candidate.name === instance.componentSetName)
+      const variant = component?.variants.find(candidate => candidate.name === instance.variantName)
+      if (variant?.surfaceToken === surfaceToken) return { view, instance }
+    }
+    return null
+  }
+  const replaceFillToken = (record, theme, surfaceToken) => {
+    const variableIds = [`variable:${theme.toLowerCase()}:${surfaceToken}`]
+    record.fills[0].variableIds = variableIds
+    record.fillBindings[0].variableIds = variableIds
+  }
+  const assertStrictFailure = (evidence, pattern, label) => {
+    const strict = plan.validateSecondaryViewEvidence(evidence)
+    assert.equal(strict.valid, false, `${label}: strict validator false-pass`)
+    assert.match(strict.errors.join('\n'), pattern, `${label}: own named surface-token error missing`)
+    const report = plan.buildVerificationReport(secondaryVerificationSnapshot(evidence))
+    assert.equal(report.hardPass, false, `${label}: Verify false-pass`)
+    assert.match(report.secondaryViewErrors.join('\n'), pattern, `${label}: Verify omitted named surface-token error`)
+  }
+
+  for (const theme of ['Light', 'Dark']) await t.test(`${theme} inverted Variant rejects surface binding`, () => {
+    const evidence = strictSecondaryEvidence()
+    const selected = instanceCase(evidence, theme, 'color/inverted')
+    assert.ok(selected, `${theme}: no selected inverted Variant in fixture`)
+    assert.deepEqual(selected.instance.fillBindings[0].variableIds, [`variable:${theme.toLowerCase()}:color/inverted`])
+    replaceFillToken(selected.instance, theme, 'color/surface')
+    assertStrictFailure(evidence, new RegExp(`${theme} Instance surface token color/inverted binding`), `${theme} inverted Variant`)
+  })
+
+  for (const theme of ['Light', 'Dark']) await t.test(`${theme} normal Variant rejects inverted binding`, () => {
+    const evidence = strictSecondaryEvidence()
+    const selected = instanceCase(evidence, theme, 'color/surface')
+    assert.ok(selected, `${theme}: no selected normal-surface Variant in fixture`)
+    assert.deepEqual(selected.instance.fillBindings[0].variableIds, [`variable:${theme.toLowerCase()}:color/surface`])
+    replaceFillToken(selected.instance, theme, 'color/inverted')
+    assertStrictFailure(evidence, new RegExp(`${theme} Instance surface token color/surface binding`), `${theme} normal-surface Variant`)
+  })
+})
+
+test('every strict secondary corruption independently fails validation and Verify', async t => {
+  const viewNamed = (evidence, name) => evidence.views.find(view => view.name === name)
+  const narrowView = evidence => evidence.views.find(view => view.width === 320)
+  const darkView = evidence => evidence.views.find(view => view.theme === 'Dark')
+  const lightView = evidence => evidence.views.find(view => view.theme === 'Light')
+  const firstTextRole = view => view.instances.flatMap(instance => instance.roleDescendants.map(role => ({ instance, role }))).find(({ role }) => role.type === 'TEXT')
+  const firstEllipseRole = view => view.instances.flatMap(instance => instance.roleDescendants.map(role => ({ instance, role }))).find(({ role }) => role.type === 'ELLIPSE')
+  const syncWidth = (record, width) => { record.width = width; record.bounds.width = width; record.absoluteBounds.width = width }
+  const syncHeight = (record, height) => { record.height = height; record.bounds.height = height; record.absoluteBounds.height = height }
+  const move = (record, x, y) => {
+    record.x = x; record.y = y; record.bounds.x = x; record.bounds.y = y
+    record.absoluteBounds.x = x; record.absoluteBounds.y = y
+  }
+  const corruptions = [
+    ['missing view', /Cardinality|fehlt/i, evidence => {
+      const [removed] = evidence.views.splice(0, 1)
+      const section = evidence.sections.find(item => item.nodeId === removed.parentId)
+      section.childIds = section.childIds.filter(id => id !== removed.nodeId); section.childCount = section.childIds.length
+    }],
+    ['extra view', /unerwartet|extra|Cardinality/i, evidence => {
+      const section = evidence.sections[0]
+      evidence.views.push({ ...structuredClone(evidence.views[0]), nodeId: 'view:evidence:extra', name: 'Secondary / Extra', layoutRegions: [], copyNodes: [], instances: [], childIds: [], childCount: 0 })
+      section.childIds.push('view:evidence:extra'); section.childCount = section.childIds.length
+    }],
+    ['duplicate view', /doppelt|duplicate/i, evidence => {
+      const section = evidence.sections[0]
+      evidence.views.push({ ...structuredClone(evidence.views[0]), nodeId: 'view:evidence:duplicate', layoutRegions: [], copyNodes: [], instances: [], childIds: [], childCount: 0 })
+      section.childIds.push('view:evidence:duplicate'); section.childCount = section.childIds.length
+    }],
+    ['wrong Section ancestry', /Section|Ancestry|parent/i, evidence => {
+      const view = evidence.views[0]; const from = evidence.sections[0]; const to = evidence.sections[1]
+      from.childIds = from.childIds.filter(id => id !== view.nodeId); from.childCount = from.childIds.length
+      to.childIds.push(view.nodeId); to.childCount = to.childIds.length
+      view.parentId = to.nodeId; view.parentName = to.name
+    }],
+    ['wrong View type', /type|Typ|View/i, evidence => { evidence.views[0].type = 'GROUP' }],
+    ['wrong View width', /width|Breite/i, evidence => { syncWidth(evidence.views[0], evidence.views[0].width - 1) }],
+    ['wrong theme', /theme|Theme/i, evidence => { evidence.views[0].theme = 'Dark' }],
+    ['wrong marker', /marker|Marker/i, evidence => { evidence.views[0].secondaryView.breakpoint = 'wrong' }],
+    ['wrong Component Set', /Component Set|Set/i, evidence => { evidence.views[0].instances[0].componentSetId = 'set:wrong' }],
+    ['wrong Variant', /Variant/i, evidence => { evidence.views[0].instances[0].variantName = 'State=Wrong' }],
+    ['View layoutMode NONE', /Auto Layout|layoutMode/i, evidence => { evidence.views[0].layoutMode = 'NONE' }],
+    ['Region layoutMode NONE', /Auto Layout|layoutMode/i, evidence => { evidence.views[0].layoutRegions[0].layoutMode = 'NONE' }],
+    ['fake self-reported height', /Bounds|height|Höhe/i, evidence => { evidence.views[0].height += 1 }],
+    ['Region overflow', /Region.*overflow|overflow.*Region/i, evidence => { const region = evidence.views[0].layoutRegions[0]; region.absoluteBounds.x = evidence.views[0].absoluteBounds.x - 1 }],
+    ['Copy overflow', /Copy.*overflow|overflow.*Copy/i, evidence => { const copy = evidence.views[0].copyNodes[0]; copy.absoluteBounds.x = -1 }],
+    ['Instance overflow', /Instance.*overflow|overflow.*Instance/i, evidence => { const instance = evidence.views[0].instances[0]; instance.absoluteBounds.x = -1 }],
+    ['Role overflow', /Role.*overflow|overflow.*Role/i, evidence => { const { role } = firstTextRole(evidence.views[0]); role.absoluteBounds.x = -1 }],
+    ['sibling overlap', /overlap|überlapp/i, evidence => {
+      const view = evidence.views.find(item => item.instances.length > 1)
+      view.instances[1].absoluteBounds = { ...view.instances[0].absoluteBounds }
+    }],
+    ['Role overlap', /Role.*overlap|Role.*überlapp/i, evidence => {
+      const view = evidence.views.find(item => item.instances.some(instance => instance.roleDescendants.length > 1))
+      const instance = view.instances.find(item => item.roleDescendants.length > 1)
+      instance.roleDescendants[1].absoluteBounds = { ...instance.roleDescendants[0].absoluteBounds }
+    }],
+    ['320 target below 44', /44|target|Ziel/i, evidence => { syncHeight(narrowView(evidence).instances[0], 43) }],
+    ['wrong 320 padding', /320.*padding|padding.*320/i, evidence => { narrowView(evidence).paddingLeft = 15 }],
+    ['wrong 320 direction', /320.*vertical|vertical.*320/i, evidence => { narrowView(evidence).layoutMode = 'HORIZONTAL' }],
+    ['320 over-minimum Instance', /minimum|Mindestbreite/i, evidence => {
+      const instance = narrowView(evidence).instances.find(item => {
+        const contract = narrowView(evidence).name && definitions.SECONDARY_VIEW_DEFINITIONS.responsive.find(view => view.name === narrowView(evidence).name).instances.find(candidate => candidate.name === item.name)
+        return contract.minimumWidth > 1
+      })
+      const definition = definitions.SECONDARY_VIEW_DEFINITIONS.responsive.find(view => view.name === narrowView(evidence).name)
+      const contract = definition.instances.find(item => item.name === instance.name)
+      syncWidth(instance, contract.minimumWidth - 1)
+    }],
+    ['missing Role', /Role.*fehlt|Rollenanzahl/i, evidence => {
+      const instance = evidence.views[0].instances[0]; const [role] = instance.roleDescendants.splice(0, 1)
+      instance.childIds = instance.childIds.filter(id => id !== role.nodeId); instance.childCount = instance.childIds.length
+    }],
+    ['duplicate Role', /Role.*doppelt|doppelte Role/i, evidence => {
+      const instance = evidence.views[0].instances[0]; const duplicate = { ...structuredClone(instance.roleDescendants[0]), nodeId: 'role:evidence:duplicate' }
+      instance.roleDescendants.push(duplicate); instance.childIds.push(duplicate.nodeId); instance.childCount = instance.childIds.length
+    }],
+    ['wrong Role type', /Role.*type|Role.*Typ/i, evidence => { firstTextRole(evidence.views[0]).role.type = 'ELLIPSE' }],
+    ['wrong Role name', /Role.*name|Role.*Name/i, evidence => { firstTextRole(evidence.views[0]).role.name = 'Role/Wrong' }],
+    ['wrong Role characters', /Role.*copy|Role.*Copy|characters/i, evidence => { firstTextRole(evidence.views[0]).role.characters = 'Widerspruch' }],
+    ['incomplete roleCopy', /roleCopy|Role-Copy/i, evidence => { const instance = evidence.views[0].instances[0]; delete instance.roleCopy[Object.keys(instance.roleCopy)[0]] }],
+    ['extra roleCopy', /roleCopy|Role-Copy/i, evidence => { evidence.views[0].instances[0].roleCopy.Extra = 'Nein' }],
+    ['wrong label/property', /Label/i, evidence => { evidence.views[0].instances[0].componentProperties['Label#fixture'].value = 'Widerspruch' }],
+    ['non-TEXT Role masquerades as copy', /Role-Copy|non-TEXT|Textrolle/i, evidence => {
+      const pair = evidence.views.map(firstEllipseRole).find(Boolean); pair.instance.roleCopy[pair.role.role] = 'Falsch'; pair.role.characters = 'Falsch'
+    }],
+    ['contradictory search/count copy', /Role-Copy|Copy/i, evidence => {
+      const view = viewNamed(evidence, 'Nebenansicht / Slash-Menü · Keine Treffer')
+      const search = view.instances.find(instance => instance.componentSetName === 'Onda/Search')
+      search.roleCopy.Count = '3 Treffer'; search.roleDescendants.find(role => role.role === 'Count').characters = '3 Treffer'
+    }],
+    ['contradictory empty-state copy', /Role-Copy|Copy/i, evidence => {
+      const view = viewNamed(evidence, 'Nebenansicht / Slash-Menü · Keine Treffer')
+      const empty = view.instances.find(instance => instance.componentSetName === 'Onda/Empty State')
+      empty.roleCopy.Title = 'Treffer gefunden'; empty.roleDescendants.find(role => role.role === 'Title').characters = 'Treffer gefunden'
+    }],
+    ['contradictory recovery copy', /Role-Copy|Copy/i, evidence => {
+      const view = viewNamed(evidence, 'Nebenansicht / Rechercheablauf · Pausiert und Fehler')
+      const recovery = view.instances.find(instance => instance.roleCopy.Shortcut === 'Wiederherstellung')
+      recovery.roleCopy.Shortcut = 'Löschen'; recovery.roleDescendants.find(role => role.role === 'Shortcut').characters = 'Löschen'
+    }],
+    ['colored paint', /grayscale|Graustufe|Farbe/i, evidence => { evidence.views[0].fills[0].color.r = .5 }],
+    ['Light binding in Dark', /Dark.*binding|binding.*Dark/i, evidence => { darkView(evidence).fillBindings[0].variableIds = ['variable:light:color/surface'] }],
+    ['Dark binding in Light', /Light.*binding|binding.*Light/i, evidence => { lightView(evidence).fillBindings[0].variableIds = ['variable:dark:color/surface'] }],
+    ['missing semantic binding', /binding|Bindung/i, evidence => { evidence.views[0].fillBindings = [] }],
+    ['wrong semantic role ID', /binding|Bindung/i, evidence => { evidence.views[0].fillBindings[0].variableIds = ['variable:light:color/border'] }],
+    ['wrong Dimension binding', /Dimension|spacing|Abstand/i, evidence => { evidence.views[0].layoutRegions[0].fieldVariableIds.paddingLeft = ['variable:dimension:spacing/999'] }],
+    ['unauthorized effect', /effect|Effekt/i, evidence => {
+      const instance = evidence.views[0].instances.find(item => !['Onda/Annotation Card', 'Onda/Dialog'].includes(item.componentSetName))
+      instance.effectStyleId = 'effect-style:overlay'; instance.effects = [structuredClone(OVERLAY_EFFECT)]
+    }],
+    ['missing overlay style', /overlay.*style|Overlay.*Stil/i, evidence => { evidence.effectStyles = [] }],
+    ['wrong effect-style ID', /effect.*style|Effektstil/i, evidence => {
+      const instance = evidence.views.flatMap(view => view.instances).find(item => ['Onda/Annotation Card', 'Onda/Dialog'].includes(item.componentSetName))
+      instance.effectStyleId = 'effect-style:wrong'
+    }],
+    ['duplicate overlay effect', /effect.*cardinality|Effekt.*Anzahl|Effekt/i, evidence => {
+      const instance = evidence.views.flatMap(view => view.instances).find(item => ['Onda/Annotation Card', 'Onda/Dialog'].includes(item.componentSetName))
+      instance.effects.push(structuredClone(OVERLAY_EFFECT))
+    }],
+    ['extra overlay style', /overlay.*style|Overlay.*Stil/i, evidence => { evidence.effectStyles.push({ ...structuredClone(evidence.effectStyles[0]), id: 'effect-style:extra' }) }],
+  ]
+  assert.ok(corruptions.length >= 31)
+  for (const [label, pattern, corrupt] of corruptions) await t.test(label, () => {
+    const evidence = strictSecondaryEvidence()
+    corrupt(evidence)
+    const strict = plan.validateSecondaryViewEvidence(evidence)
+    assert.equal(strict.valid, false, `${label}: strict validator false-pass`)
+    assert.match(strict.errors.join('\n'), pattern, `${label}: own named strict error missing`)
+    const report = plan.buildVerificationReport(secondaryVerificationSnapshot(evidence))
+    assert.equal(report.hardPass, false, `${label}: Verify false-pass`)
+    assert.ok(report.secondaryViewErrors.length > 0, `${label}: Verify omitted strict errors`)
+  })
+})
+
+test('Verify keeps legacy compatibility only when modern secondary evidence is entirely absent', () => {
+  const legacy = secondaryVerificationSnapshot(undefined)
+  delete legacy.secondaryViews
+  assert.equal(plan.buildVerificationReport(legacy).hardPass, true)
+
+  const emptyModern = secondaryVerificationSnapshot({ views: [] })
+  const emptyReport = plan.buildVerificationReport(emptyModern)
+  assert.equal(emptyReport.hardPass, false)
+  assert.ok(emptyReport.secondaryViewErrors.length > 0)
+
+  const partialModern = secondaryVerificationSnapshot({ views: [strictSecondaryEvidence().views[0]] })
+  const partialReport = plan.buildVerificationReport(partialModern)
+  assert.equal(partialReport.hardPass, false)
+  assert.ok(partialReport.secondaryViewErrors.length > 0)
+})
+
+test('Runtime Verify supplies complete read-only modern evidence for Sections 07/09/10 only', () => {
+  const source = runtimeSource()
+  const collectStart = source.indexOf('async function collectSecondaryViewEvidence')
+  const verifyStart = source.indexOf('async function runVerify')
+  assert.ok(collectStart >= 0, 'collectSecondaryViewEvidence missing')
+  assert.ok(verifyStart > collectStart, 'secondary evidence collector must precede Verify')
+  const collect = source.slice(collectStart, verifyStart)
+  assert.match(collect, /collectSecondaryViewMutationInventory\(page\)/)
+  assert.match(collect, /page\.findAll\(/, 'modern evidence detection must scan the Page recursively')
+  assert.match(collect, /getLocalVariableCollectionsAsync/)
+  assert.match(collect, /getLocalVariablesAsync/)
+  assert.match(collect, /getLocalEffectStylesAsync/)
+  assert.match(collect, /getSharedPluginData\('onda', 'owner'\) === PLUGIN_ORIGIN/, 'owned extra effect styles must remain visible to strict evidence')
+  assert.match(collect, /style\.name === 'Onda\/Shadow\/Overlay'/, 'an unowned exact-name overlay lookalike must remain visible to strict evidence')
+  assert.match(collect, /readEffectStyleId/)
+  assert.match(collect, /absoluteBounds/)
+  assert.match(collect, /childIds/)
+  assert.doesNotMatch(collect, /08 · Dialoge|11 · Prototyp|createPrototype|setReactionsAsync/)
+  const verify = source.slice(verifyStart, source.indexOf('function postResult', verifyStart))
+  assert.match(verify, /await collectSecondaryViewEvidence\(page\)/)
+  assert.match(verify, /secondaryViews:\s*secondaryViewEvidence/)
 })

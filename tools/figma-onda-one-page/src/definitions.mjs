@@ -957,9 +957,13 @@ function secondaryRoleCopy(name, setId, variant, label, overrides = {}) {
 }
 
 function secondaryInstance(name, setId, variant, label, region = 'Layout / Content', roleCopy = {}) {
-  return coreInstance(name, setId, variant, label, {
+  const completeRoleCopy = secondaryRoleCopy(name, setId, variant, label, roleCopy)
+  const component = COMPONENT_DEFINITIONS.find(item => item.id === setId)
+  const visibleLabelRole = setId === 'select' ? 'Value' : component?.labelRole
+  const visibleLabel = completeRoleCopy[visibleLabelRole] ?? label
+  return coreInstance(name, setId, variant, visibleLabel, {
     region,
-    roleCopy: secondaryRoleCopy(name, setId, variant, label, roleCopy),
+    roleCopy: completeRoleCopy,
   })
 }
 
@@ -987,16 +991,30 @@ function secondaryCopyContracts(name, subject, theme, width) {
 function secondaryRegions(viewName, width, layoutMode, instances, copyContracts) {
   const narrow = width === 320
   const padding = narrow ? { top: 16, right: 16, bottom: 16, left: 16 } : { top: 24, right: 32, bottom: 24, left: 32 }
-  const shellMode = narrow ? 'VERTICAL' : 'HORIZONTAL'
+  const shellMode = narrow || width <= 720 ? 'VERTICAL' : 'HORIZONTAL'
   if (!narrow) {
-    const contentWidth = Math.max(480, width - 320)
+    const shellPadding = { top: 24, right: 24, bottom: 24, left: 24 }
+    const nestedPadding = { top: 16, right: 16, bottom: 16, left: 16 }
+    const shellContentWidth = width - shellPadding.left - shellPadding.right
+    const contextWidth = shellMode === 'VERTICAL' ? shellContentWidth : 256
+    const contentWidth = shellMode === 'VERTICAL'
+      ? shellContentWidth
+      : shellContentWidth - contextWidth - 16
+    const detailWidth = contentWidth - nestedPadding.left - nestedPadding.right
+    const contextHeight = secondaryStackHeight(copyContracts, 12, nestedPadding)
+    const detailHeight = secondaryStackHeight(instances, 12, nestedPadding)
+    const contentHeight = secondaryStackHeight([{ expectedHeight: detailHeight }], 16, nestedPadding)
+    const shellContentHeight = shellMode === 'VERTICAL'
+      ? contextHeight + contentHeight + 16
+      : Math.max(contextHeight, contentHeight)
+    const shellHeight = shellPadding.top + shellContentHeight + shellPadding.bottom
     return Object.freeze({
-      height: 1024,
+      height: shellHeight,
       regions: Object.freeze([
-        coreRegion('Layout / Shell', viewName, width, 960, shellMode, { itemSpacing: 16, padding }),
-        coreRegion('Layout / Context', 'Layout / Shell', width - contentWidth, 960, 'VERTICAL', { itemSpacing: 12, padding }),
-        coreRegion('Layout / Content', 'Layout / Shell', contentWidth, 960, 'VERTICAL', { itemSpacing: 16, padding }),
-        coreRegion('Layout / Detail', 'Layout / Content', contentWidth, 720, layoutMode === 'HORIZONTAL' ? 'HORIZONTAL' : 'VERTICAL', { itemSpacing: 12, padding }),
+        coreRegion('Layout / Shell', viewName, width, shellHeight, shellMode, { itemSpacing: 16, padding: shellPadding }),
+        coreRegion('Layout / Context', 'Layout / Shell', contextWidth, contextHeight, 'VERTICAL', { itemSpacing: 12, padding: nestedPadding }),
+        coreRegion('Layout / Content', 'Layout / Shell', contentWidth, contentHeight, 'VERTICAL', { itemSpacing: 16, padding: nestedPadding }),
+        coreRegion('Layout / Detail', 'Layout / Content', detailWidth, detailHeight, 'VERTICAL', { itemSpacing: 12, padding: nestedPadding }),
       ]),
     })
   }

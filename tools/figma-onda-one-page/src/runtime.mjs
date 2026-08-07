@@ -1757,6 +1757,31 @@ function indexSecondaryVariableCollections(collections) {
   }))
 }
 
+function secondaryRequiredTextTokens() {
+  return [...new Set([
+    'color/text',
+    'color/text-muted',
+    ...secondaryDefinitionsWithGroups().flatMap(({ definition }) => definition.instances.map(contract => {
+      const component = COMPONENT_DEFINITIONS.find(candidate => candidate.id === contract.setId)
+      return component?.variants.find(candidate => candidate.name === contract.variant)?.textToken || 'color/text'
+    })),
+  ])]
+}
+
+function secondaryRequiredSurfaceTokens() {
+  return [...new Set([
+    'color/surface',
+    ...secondaryDefinitionsWithGroups().flatMap(({ definition }) => definition.instances.map(contract => {
+      const component = COMPONENT_DEFINITIONS.find(candidate => candidate.id === contract.setId)
+      return component?.variants.find(candidate => candidate.name === contract.variant)?.surfaceToken || 'color/surface'
+    })),
+  ])]
+}
+
+function uniqueSecondaryVariableRecords(records) {
+  return [...new Map(records.map(record => [record.id, record])).values()]
+}
+
 function secondaryVariableContext() {
   return Promise.all([
     figma.variables.getLocalVariableCollectionsAsync(),
@@ -1770,11 +1795,11 @@ function secondaryVariableContext() {
       if (matches.length !== 1) throw new Error(`Secondary-Variable fehlt oder ist mehrdeutig: ${collectionName}/${name}`)
       return matches[0]
     }
+    const semanticTokens = [...new Set([...secondaryRequiredTextTokens(), ...secondaryRequiredSurfaceTokens()])]
     const semantic = collectionName => ({
       surface: exactVariable(collectionName, 'color/surface'),
       border: exactVariable(collectionName, 'color/border'),
-      text: exactVariable(collectionName, 'color/text'),
-      textMuted: exactVariable(collectionName, 'color/text-muted'),
+      semanticByToken: Object.fromEntries(semanticTokens.map(token => [token, exactVariable(collectionName, token)])),
     })
     const dimensionValues = [...new Set(SECONDARY_VIEW_DEFINITIONS.agentSources
       .concat(SECONDARY_VIEW_DEFINITIONS.secondary, SECONDARY_VIEW_DEFINITIONS.responsive)
@@ -1792,18 +1817,22 @@ function secondaryVariableContext() {
         Dark: semantic('Onda · Semantic · Dark'),
       },
       dimensionByValue: new Map(dimensionValues.map(value => [value, exactVariable('Onda · Dimension', `spacing/${value}`)])),
-      inventory: [
-        ...['Light', 'Dark'].flatMap(theme => Object.values(semantic(`Onda · Semantic · ${theme}`)).map(variable => ({
-          id: variable.id,
-          nodeId: variable.id,
-          name: variable.name,
-          collectionName: `Onda · Semantic · ${theme}`,
-        }))),
+      inventory: uniqueSecondaryVariableRecords([
+        ...['Light', 'Dark'].flatMap(theme => {
+          const collectionName = `Onda · Semantic · ${theme}`
+          const context = semantic(collectionName)
+          return [context.border, ...Object.values(context.semanticByToken)].map(variable => ({
+            id: variable.id,
+            nodeId: variable.id,
+            name: variable.name,
+            collectionName,
+          }))
+        }),
         ...dimensionValues.map(value => {
           const variable = exactVariable('Onda · Dimension', `spacing/${value}`)
           return { id: variable.id, nodeId: variable.id, name: variable.name, collectionName: 'Onda · Dimension' }
         }),
-      ],
+      ]),
     }
   })
 }
@@ -1812,26 +1841,33 @@ function secondaryBoundPaint(paint, variable) {
   return figma.variables.setBoundVariableForPaint(paint, 'color', variable)
 }
 
-function applySecondaryThemeBinding({ node, theme, variables, bindPaint }) {
+function applySecondaryThemeBinding({ node, theme, variables, bindPaint, textToken = 'color/text', surfaceToken = 'color/surface', recursive = true }) {
   const semantic = theme === 'Dark' ? variables.semanticByTheme.Dark : variables.semanticByTheme.Light
   if (Array.isArray(node.fills) && node.fills.length) {
-    const variable = node.type === 'TEXT' || node.type === 'ELLIPSE' ? semantic.text : semantic.surface
+    const token = node.type === 'TEXT' || node.type === 'ELLIPSE' ? textToken : surfaceToken
+    const variable = node.type === 'TEXT' || node.type === 'ELLIPSE'
+      ? semantic.semanticByToken[textToken]
+      : semantic.semanticByToken[surfaceToken]
+    if (!variable) throw new Error(`Secondary-Farbvariable fehlt: ${theme}/${token}`)
     node.fills = node.fills.map(paint => paint?.type === 'SOLID' ? bindPaint(paint, variable) : paint)
   }
   if (Array.isArray(node.strokes) && node.strokes.length) {
     node.strokes = node.strokes.map(paint => paint?.type === 'SOLID' ? bindPaint(paint, semantic.border) : paint)
   }
-  if (Array.isArray(node.children)) {
-    for (const child of node.children) applySecondaryThemeBinding({ node: child, theme, variables, bindPaint })
+  if (recursive && Array.isArray(node.children)) {
+    for (const child of node.children) applySecondaryThemeBinding({ node: child, theme, variables, bindPaint, textToken, surfaceToken, recursive })
   }
 }
 
-function bindSecondaryNodeTheme(node, theme, variables) {
+function bindSecondaryNodeTheme(node, theme, variables, textToken = 'color/text', surfaceToken = 'color/surface', recursive = true) {
   const semantic = theme === 'Dark' ? variables.semanticByTheme.Dark : variables.semanticByTheme.Light
   applySecondaryThemeBinding({
     node,
     theme,
     variables,
+    textToken,
+    surfaceToken,
+    recursive,
     bindPaint: (paint, variable) => figma.variables.setBoundVariableForPaint(paint, 'color', variable),
   })
   return semantic
@@ -2188,7 +2224,7 @@ function configureSecondaryCopy(frame, definition, decision, regions, variables)
     }).node
     copy.visible = true
     copy.setPluginData('role', contract.role)
-    bindSecondaryNodeTheme(copy, definition.theme, variables)
+    bindSecondaryNodeTheme(copy, definition.theme, variables, contract.kind === 'title' ? 'color/text' : 'color/text-muted')
     const index = copyByRegion.get(contract.region) || 0
     parent.insertChild(index, copy)
     copyByRegion.set(contract.region, index + 1)
@@ -2240,6 +2276,9 @@ async function applySecondaryInstanceContract({ parent, instance, variant, contr
 async function ensureSecondaryVariantInstance(parent, variant, contract, definition, decision, variables, root) {
   let instance = root.findOne(node => node.type === 'INSTANCE' && node.name === contract.name)
   if (!instance) instance = variant.createInstance()
+  const component = COMPONENT_DEFINITIONS.find(candidate => candidate.id === contract.setId)
+  const variantDefinition = component?.variants.find(candidate => candidate.name === contract.variant)
+  if (!variantDefinition) throw new Error(`Secondary Variantenvertrag fehlt: ${contract.setId}/${contract.variant}`)
   await applySecondaryInstanceContract({
     parent,
     instance,
@@ -2249,7 +2288,7 @@ async function ensureSecondaryVariantInstance(parent, variant, contract, definit
     readIdentity: readMainComponentIdentity,
     loadFonts: () => loadDecisionFonts(decision),
     resize: resizeNode,
-    bindTheme: node => bindSecondaryNodeTheme(node, definition.theme, variables),
+    bindTheme: node => bindSecondaryNodeTheme(node, definition.theme, variables, variantDefinition.textToken, variantDefinition.surfaceToken),
   })
   instance.visible = true
   instance.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN)
@@ -2348,7 +2387,7 @@ async function runSecondaryViews(page, ledger, writeBarrierInventory, resolved) 
       parent.insertChild((copyByRegion.get(contract.region) || 0) + localIndex, instance)
       instanceByRegion.set(contract.region, localIndex + 1)
     }
-    bindSecondaryNodeTheme(frame, definition.theme, variables)
+    bindSecondaryNodeTheme(frame, definition.theme, variables, 'color/text', 'color/surface', false)
   }
   for (const legacy of writeBarrierInventory.legacyViews || []) {
     const node = nodes.get(legacy.nodeId)
@@ -2879,6 +2918,98 @@ async function collectCoreViewEvidence(page) {
   }
 }
 
+async function collectSecondaryViewEvidence(page) {
+  const definitionEntries = secondaryDefinitionsWithGroups()
+  const modernNames = new Set(definitionEntries.map(({ definition }) => definition.name))
+  const hasModernEvidence = page.findAll(node => (
+    modernNames.has(node.name) || Boolean(node.getPluginData('secondaryView'))
+  )).length > 0
+  if (!hasModernEvidence) return undefined
+
+  const evidence = await collectSecondaryViewMutationInventory(page)
+  const records = [
+    evidence.targetPage,
+    ...evidence.sections,
+    ...evidence.views.flatMap(view => [
+      view,
+      ...(view.layoutRegions || []),
+      ...(view.copyNodes || []),
+      ...(view.instances || []).flatMap(instance => [
+        instance,
+        ...(instance.roleDescendants || []).flatMap(role => [role, ...(role.ancestorChain || [])]),
+      ]),
+      ...(view.standIns || []),
+    ]),
+  ]
+  const nodeById = new Map()
+  function indexNode(node) {
+    nodeById.set(node.id, node)
+    if ('children' in node) for (const child of node.children) indexNode(child)
+  }
+  indexNode(page)
+  const effectStyleIdByNodeId = new Map()
+  await Promise.all([...new Set(records.map(record => record?.nodeId).filter(Boolean))].map(async nodeId => {
+    const node = nodeById.get(nodeId)
+    effectStyleIdByNodeId.set(nodeId, node ? await readEffectStyleId(node) : null)
+  }))
+  for (const record of records) {
+    if (!record?.nodeId) continue
+    const node = nodeById.get(record.nodeId)
+    if (!node) continue
+    record.x = 'x' in node ? node.x : null
+    record.y = 'y' in node ? node.y : null
+    record.width = 'width' in node ? node.width : null
+    record.height = 'height' in node ? node.height : null
+    record.bounds = 'x' in node ? { x: node.x, y: node.y, width: node.width, height: node.height } : null
+    record.absoluteBounds = cloneSerializable(node.absoluteBoundingBox || node.absoluteRenderBounds || null)
+    record.childIds = 'children' in node ? node.children.map(child => child.id) : []
+    record.childCount = record.childIds.length
+    record.effectStyleId = effectStyleIdByNodeId.get(record.nodeId) || null
+  }
+
+  const requiredCollectionNames = new Set(['Onda · Semantic · Light', 'Onda · Semantic · Dark', 'Onda · Dimension'])
+  const requiredSemanticNames = new Set(['color/border', ...secondaryRequiredTextTokens(), ...secondaryRequiredSurfaceTokens()])
+  const requiredVariableNamesByCollection = new Map([
+    ['Onda · Semantic · Light', requiredSemanticNames],
+    ['Onda · Semantic · Dark', requiredSemanticNames],
+    ['Onda · Dimension', new Set(definitionEntries.flatMap(({ definition }) => definition.regions.flatMap(region => [
+      region.itemSpacing,
+      region.padding.top,
+      region.padding.right,
+      region.padding.bottom,
+      region.padding.left,
+    ])).filter(value => value > 0).map(value => `spacing/${value}`))],
+  ])
+  const localCollections = await figma.variables.getLocalVariableCollectionsAsync()
+  const collections = localCollections.filter(collection => requiredCollectionNames.has(collection.name)).map(collection => ({
+    id: collection.id,
+    name: collection.name,
+    owner: collection.getSharedPluginData('onda', 'owner'),
+  }))
+  const collectionById = new Map(collections.map(collection => [collection.id, collection]))
+  const variables = (await figma.variables.getLocalVariablesAsync()).flatMap(variable => {
+    const collection = collectionById.get(variable.variableCollectionId)
+    if (!collection || !requiredVariableNamesByCollection.get(collection.name)?.has(variable.name)) return []
+    return [{
+      id: variable.id,
+      nodeId: variable.id,
+      name: variable.name,
+      owner: variable.getSharedPluginData('onda', 'owner'),
+      collectionId: collection.id,
+      collectionName: collection.name,
+    }]
+  })
+  const effectStyles = (await figma.getLocalEffectStylesAsync())
+    .filter(style => style.getSharedPluginData('onda', 'owner') === PLUGIN_ORIGIN || style.name === 'Onda/Shadow/Overlay')
+    .map(style => ({
+      id: style.id,
+      name: style.name,
+      owner: style.getSharedPluginData('onda', 'owner'),
+      effects: cloneSerializable(style.effects),
+    }))
+  return { ...evidence, collections, variables, effectStyles }
+}
+
 async function runVerify() {
   const inspection = await inspectCurrentTarget()
   const page = figma.currentPage
@@ -2897,6 +3028,7 @@ async function runVerify() {
   })).filter(item => item.family && item.state)
   const componentEvidence = await collectComponentEvidence(page)
   const coreViewEvidence = await collectCoreViewEvidence(page)
+  const secondaryViewEvidence = await collectSecondaryViewEvidence(page)
   const componentSets = componentEvidence.componentSets
   const baseline = await currentBaselineEvidence(page, ledger)
   const geometry = geometryEvidence(page, sections, allNodes, ledger, baseline.baselineRecords)
@@ -2927,6 +3059,7 @@ async function runVerify() {
     componentTargetPage: componentEvidence.targetPage,
     componentContainers: componentEvidence.containers,
     coreViews: coreViewEvidence,
+    ...(secondaryViewEvidence === undefined ? {} : { secondaryViews: secondaryViewEvidence }),
     instanceCount: allNodes.filter(node => node.type === 'INSTANCE' && node.getPluginData('ondaDocumentationInstance') !== 'true').length,
     documentationInstanceCount: allNodes.filter(node => node.type === 'INSTANCE' && node.getPluginData('ondaDocumentationInstance') === 'true').length,
     repeatedScreenInstanceCount: allNodes.filter(node => node.type === 'INSTANCE' && node.getPluginData('ondaRepeatedScreenInstance') === 'true').length,

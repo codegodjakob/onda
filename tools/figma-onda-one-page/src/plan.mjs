@@ -1468,6 +1468,324 @@ function rectangleContains(outer, inner) {
     && inner.y + inner.height <= outer.y + outer.height
 }
 
+function secondaryContentBounds(record = {}) {
+  const bounds = record.absoluteBounds
+  if (!bounds) return null
+  const left = Number(record.paddingLeft || 0)
+  const right = Number(record.paddingRight || 0)
+  const top = Number(record.paddingTop || 0)
+  const bottom = Number(record.paddingBottom || 0)
+  return {
+    x: bounds.x + left,
+    y: bounds.y + top,
+    width: bounds.width - left - right,
+    height: bounds.height - top - bottom,
+  }
+}
+
+function secondaryGeometryIsActual(record) {
+  const local = record?.bounds
+  const absolute = record?.absoluteBounds
+  return Boolean(local && absolute
+    && [local.x, local.y, local.width, local.height, absolute.x, absolute.y, absolute.width, absolute.height].every(Number.isFinite)
+    && local.width > 0
+    && local.height > 0
+    && record.x === local.x
+    && record.y === local.y
+    && record.width === local.width
+    && record.height === local.height
+    && local.width === absolute.width
+    && local.height === absolute.height)
+}
+
+function secondaryExpectedChildIds(parent, view) {
+  if (parent === view) return (view.layoutRegions || []).filter(record => record.parentId === view.nodeId).map(record => record.nodeId)
+  if (parent.type === 'INSTANCE') return (parent.roleDescendants || []).map(record => record.nodeId)
+  return [
+    ...(view.layoutRegions || []).filter(record => record.parentId === parent.nodeId).map(record => record.nodeId),
+    ...(view.copyNodes || []).filter(record => record.parentId === parent.nodeId).map(record => record.nodeId),
+    ...(view.instances || []).filter(record => record.parentId === parent.nodeId).map(record => record.nodeId),
+  ]
+}
+
+function secondaryVisibleRecords(view) {
+  return [
+    view,
+    ...(view.layoutRegions || []),
+    ...(view.copyNodes || []),
+    ...(view.instances || []).flatMap(instance => [instance, ...(instance.roleDescendants || [])]),
+  ].filter(record => record.visible !== false)
+}
+
+function secondaryBindingMatches(record, field, expectedId) {
+  const paints = Array.isArray(record?.[field]) ? record[field] : []
+  const bindings = Array.isArray(record?.[`${field.slice(0, -1)}Bindings`]) ? record[`${field.slice(0, -1)}Bindings`] : []
+  const indexes = paints.map((paint, index) => ({ paint, index })).filter(({ paint }) => paint?.visible !== false && paint?.type === 'SOLID')
+  return bindings.length === indexes.length && indexes.every(({ index }) => {
+    const matching = bindings.filter(binding => binding.index === index)
+    return matching.length === 1 && matching[0].type === 'SOLID' && sameSecondaryValue(matching[0].variableIds, [expectedId])
+  })
+}
+
+function secondaryContractTextToken(contract = {}) {
+  const component = COMPONENT_DEFINITIONS.find(candidate => candidate.id === contract.setId)
+  return component?.variants.find(candidate => candidate.name === contract.variant)?.textToken || 'color/text'
+}
+
+function secondaryContractSurfaceToken(contract = {}) {
+  const component = COMPONENT_DEFINITIONS.find(candidate => candidate.id === contract.setId)
+  return component?.variants.find(candidate => candidate.name === contract.variant)?.surfaceToken || 'color/surface'
+}
+
+export function validateSecondaryViewEvidence(evidence = {}) {
+  const errors = []
+  const definitions = secondaryDefinitionsWithGroups()
+  const expectedByName = new Map(definitions.map(entry => [entry.definition.name, entry]))
+  const views = Array.isArray(evidence.views) ? evidence.views : []
+  const sections = Array.isArray(evidence.sections) ? evidence.sections : []
+  const counts = {
+    agentSources: views.filter(view => expectedByName.get(view.name)?.group === 'agentSources').length,
+    secondary: views.filter(view => expectedByName.get(view.name)?.group === 'secondary').length,
+    responsive: views.filter(view => expectedByName.get(view.name)?.group === 'responsive').length,
+  }
+  const mutation = validateSecondaryViewMutationInventory(evidence)
+  errors.push(...mutation.errors.map(error => `Strict Secondary foundation: ${error}`))
+
+  const expectedCounts = { agentSources: 15, secondary: 9, responsive: 16 }
+  for (const [group, expected] of Object.entries(expectedCounts)) if (counts[group] !== expected) {
+    errors.push(`Strict Secondary Cardinality ${group}: erwartet ${expected}, gefunden ${counts[group]}`)
+  }
+  if (views.length !== definitions.length) errors.push(`Strict Secondary Cardinality total: erwartet ${definitions.length}, gefunden ${views.length}`)
+  if (new Set(views.map(view => view.name)).size !== views.length) errors.push('Strict Secondary duplicate View names')
+  if (new Set(views.map(view => secondaryNodeId(view))).size !== views.length) errors.push('Strict Secondary duplicate View ids')
+
+  const sectionByName = new Map(sections.map(section => [section.name, section]))
+  if (sections.length !== SECONDARY_SECTION_NAMES.length
+    || !sameSecondaryValue(sections.map(section => section.name), SECONDARY_SECTION_NAMES)) errors.push('Strict Secondary Section cardinality/order')
+  for (const section of sections) {
+    if (section.type !== 'SECTION' || secondaryOwner(section) !== PLUGIN_ORIGIN) errors.push(`Strict Secondary Section invalid: ${section.name}`)
+    const expectedViewIds = definitions.filter(entry => entry.definition.sectionName === section.name)
+      .map(entry => views.find(view => view.name === entry.definition.name)?.nodeId)
+      .filter(Boolean)
+    if (!sameSecondaryValue(section.childIds, expectedViewIds) || section.childCount !== expectedViewIds.length) errors.push(`Strict Secondary Section child order: ${section.name}`)
+  }
+
+  const requiredCollections = ['Onda · Semantic · Light', 'Onda · Semantic · Dark', 'Onda · Dimension']
+  const collections = Array.isArray(evidence.collections) ? evidence.collections : []
+  const collectionByName = new Map()
+  for (const name of requiredCollections) {
+    const matching = collections.filter(collection => collection.name === name)
+    if (matching.length !== 1 || matching[0]?.owner !== PLUGIN_ORIGIN) errors.push(`Strict Secondary Collection identity: ${name}`)
+    else collectionByName.set(name, matching[0])
+  }
+  if (collections.length !== requiredCollections.length) errors.push('Strict Secondary Collection cardinality')
+  const variables = Array.isArray(evidence.variables) ? evidence.variables : []
+  const requiredSemanticNames = [...new Set([
+    'color/surface', 'color/border', 'color/text', 'color/text-muted',
+    ...definitions.flatMap(({ definition }) => definition.instances.map(secondaryContractTextToken)),
+    ...definitions.flatMap(({ definition }) => definition.instances.map(secondaryContractSurfaceToken)),
+  ])]
+  const requiredVariableKeys = [
+    ...['Light', 'Dark'].flatMap(theme => requiredSemanticNames.map(name => [`Onda · Semantic · ${theme}`, name])),
+    ...[...new Set(definitions.flatMap(({ definition }) => definition.regions.flatMap(region => [
+      region.itemSpacing, region.padding.top, region.padding.right, region.padding.bottom, region.padding.left,
+    ])).filter(value => value > 0))].map(value => ['Onda · Dimension', `spacing/${value}`]),
+  ]
+  const variableByKey = new Map()
+  for (const [collectionName, name] of requiredVariableKeys) {
+    const matching = variables.filter(variable => variable.collectionName === collectionName && variable.name === name)
+    const collection = collectionByName.get(collectionName)
+    if (matching.length !== 1
+      || matching[0]?.owner !== PLUGIN_ORIGIN
+      || matching[0]?.collectionId !== collection?.id) errors.push(`Strict Secondary Variable identity: ${collectionName}/${name}`)
+    else variableByKey.set(`${collectionName}\u0000${name}`, matching[0])
+  }
+  if (variables.length !== requiredVariableKeys.length) errors.push('Strict Secondary Variable cardinality')
+  const variableId = (collectionName, name) => variableByKey.get(`${collectionName}\u0000${name}`)?.id
+
+  const effectStyles = Array.isArray(evidence.effectStyles) ? evidence.effectStyles : []
+  const overlayMatches = effectStyles.filter(style => style.name === 'Onda/Shadow/Overlay')
+  const overlay = overlayMatches.length === 1 && overlayMatches[0].owner === PLUGIN_ORIGIN ? overlayMatches[0] : null
+  if (!overlay || effectStyles.length !== 1) errors.push('Strict Secondary Overlay style identity/cardinality')
+  if (overlay && (!Array.isArray(overlay.effects) || overlay.effects.length !== 1 || !overlay.effects.every(effect => !effect.color || isGrayColor(effect.color)))) {
+    errors.push('Strict Secondary Overlay effect cardinality/grayscale')
+  }
+
+  for (const { group, definition } of definitions) {
+    const matchingViews = views.filter(view => view.name === definition.name)
+    if (matchingViews.length !== 1) continue
+    const view = matchingViews[0]
+    const section = sectionByName.get(definition.sectionName)
+    const marker = secondaryMarker(view)
+    if (view.type !== 'FRAME'
+      || secondaryOwner(view) !== PLUGIN_ORIGIN
+      || view.parentId !== secondaryNodeId(section)
+      || view.parentType !== 'SECTION'
+      || view.parentName !== definition.sectionName) errors.push(`Strict Secondary View Section/parent/type: ${definition.name}`)
+    if (view.width !== definition.width || view.bounds?.width !== definition.width || view.absoluteBounds?.width !== definition.width) errors.push(`Strict Secondary View width/Breite: ${definition.name}`)
+    if (view.height !== definition.height || view.bounds?.height !== definition.height || view.absoluteBounds?.height !== definition.height) errors.push(`Strict Secondary View height/Höhe: ${definition.name}`)
+    if (view.theme !== definition.theme) errors.push(`Strict Secondary View theme/Theme: ${definition.name}`)
+    if (!sameSecondaryValue(marker, secondaryExpectedMarker(group, definition))) errors.push(`Strict Secondary View marker/Marker: ${definition.name}`)
+    if (view.layoutMode === 'NONE' || view.layoutMode !== definition.layoutMode) errors.push(`Strict Secondary View Auto Layout/layoutMode: ${definition.name}`)
+    if (!secondaryGeometryIsActual(view)) errors.push(`Strict Secondary View actual Bounds: ${definition.name}`)
+    if (definition.width === 320 && (view.layoutMode !== 'VERTICAL'
+      || ![view.paddingTop, view.paddingRight, view.paddingBottom, view.paddingLeft].every(value => value === 16))) {
+      errors.push(`Strict Secondary 320 vertical padding: ${definition.name}`)
+    }
+
+    const regions = Array.isArray(view.layoutRegions) ? view.layoutRegions : []
+    const copies = Array.isArray(view.copyNodes) ? view.copyNodes : []
+    const instances = Array.isArray(view.instances) ? view.instances : []
+    const regionByName = new Map(regions.map(region => [region.name, region]))
+    if (regions.length !== definition.regions.length || new Set(regions.map(region => region.name)).size !== regions.length) errors.push(`Strict Secondary Region cardinality: ${definition.name}`)
+    if (copies.length !== definition.copyContracts.length || new Set(copies.map(copy => copy.role)).size !== copies.length) errors.push(`Strict Secondary Copy cardinality: ${definition.name}`)
+    if (instances.length !== definition.instances.length || new Set(instances.map(instance => instance.name)).size !== instances.length) errors.push(`Strict Secondary Instance cardinality: ${definition.name}`)
+    if ((view.standIns || []).some(record => record.visible !== false)) errors.push(`Strict Secondary visible stand-in: ${definition.name}`)
+
+    const containers = [view, ...regions, ...instances]
+    for (const container of containers) {
+      const expectedChildIds = secondaryExpectedChildIds(container, view)
+      if (!sameSecondaryValue(container.childIds, expectedChildIds) || container.childCount !== expectedChildIds.length) errors.push(`Strict Secondary child order: ${definition.name}/${container.name}`)
+    }
+
+    for (const contract of definition.regions) {
+      const matching = regions.filter(region => region.name === contract.name)
+      if (matching.length !== 1) continue
+      const region = matching[0]
+      const parent = contract.parentName === definition.name ? view : regionByName.get(contract.parentName)
+      const parentContent = secondaryContentBounds(parent)
+      const expectedWidth = Math.min(contract.width, parentContent?.width || 0)
+      if (region.type !== 'FRAME'
+        || region.parentId !== parent?.nodeId
+        || region.parentType !== 'FRAME'
+        || region.parentName !== contract.parentName) errors.push(`Strict Secondary Region Ancestry/parent: ${definition.name}/${contract.name}`)
+      if (region.layoutMode === 'NONE' || region.layoutMode !== contract.layoutMode) errors.push(`Strict Secondary Region Auto Layout/layoutMode: ${definition.name}/${contract.name}`)
+      if (!secondaryGeometryIsActual(region) || region.width !== expectedWidth || region.height !== contract.height) errors.push(`Strict Secondary Region Bounds/height: ${definition.name}/${contract.name}`)
+      if (!rectangleContains(parentContent, region.absoluteBounds)) errors.push(`Strict Secondary Region overflow: ${definition.name}/${contract.name}`)
+      const expectedDimensionIds = {
+        itemSpacing: contract.itemSpacing, paddingTop: contract.padding.top, paddingRight: contract.padding.right,
+        paddingBottom: contract.padding.bottom, paddingLeft: contract.padding.left,
+      }
+      for (const [field, value] of Object.entries(expectedDimensionIds)) {
+        const expected = value === 0 ? [] : [variableId('Onda · Dimension', `spacing/${value}`)]
+        if (!sameSecondaryValue(region.fieldVariableIds?.[field] || [], expected)) errors.push(`Strict Secondary Dimension spacing binding: ${definition.name}/${contract.name}/${field}`)
+      }
+    }
+
+    for (const contract of definition.copyContracts) {
+      const matching = copies.filter(copy => copy.role === contract.role)
+      if (matching.length !== 1) continue
+      const copy = matching[0]
+      const parent = regionByName.get(contract.region)
+      if (copy.type !== 'TEXT' || copy.name !== `Copy / ${contract.role}` || copy.characters !== contract.characters
+        || copy.parentId !== parent?.nodeId || copy.parentName !== contract.region) errors.push(`Strict Secondary Copy Ancestry/copy: ${definition.name}/${contract.role}`)
+      if (!secondaryGeometryIsActual(copy) || copy.height !== contract.expectedHeight) errors.push(`Strict Secondary Copy Bounds/height: ${definition.name}/${contract.role}`)
+      if (!rectangleContains(secondaryContentBounds(parent), copy.absoluteBounds)) errors.push(`Strict Secondary Copy overflow: ${definition.name}/${contract.role}`)
+    }
+
+    for (const contract of definition.instances) {
+      const matching = instances.filter(instance => instance.name === contract.name)
+      if (matching.length !== 1) continue
+      const instance = matching[0]
+      const parent = regionByName.get(contract.region)
+      const component = COMPONENT_DEFINITIONS.find(candidate => candidate.id === contract.setId)
+      const variant = component?.variants.find(candidate => candidate.name === contract.variant)
+      const componentEvidence = (evidence.components || evidence.componentSets || []).filter(candidate => candidate.id === contract.setId)
+      const variantEvidence = componentEvidence.flatMap(candidate => candidate.variants || []).filter(candidate => candidate.name === contract.variant)
+      const expectedWidth = Math.min(contract.expectedWidth, secondaryContentBounds(parent)?.width || 0)
+      const expectedHeight = Math.max(definition.width === 320 ? 44 : 0, contract.expectedHeight)
+      if (instance.type !== 'INSTANCE' || instance.parentId !== parent?.nodeId || instance.parentName !== contract.region) errors.push(`Strict Secondary Instance Ancestry/parent: ${definition.name}/${contract.name}`)
+      if (componentEvidence.length !== 1
+        || variantEvidence.length !== 1
+        || instance.componentSetId !== secondaryNodeId(componentEvidence[0])
+        || instance.componentSetName !== component?.name) errors.push(`Strict Secondary Component Set identity: ${definition.name}/${contract.name}`)
+      if (!variant || instance.mainComponentId !== secondaryNodeId(variantEvidence[0]) || instance.variantName !== contract.variant) errors.push(`Strict Secondary Variant identity: ${definition.name}/${contract.name}`)
+      if (!secondaryGeometryIsActual(instance) || instance.width !== expectedWidth || instance.height !== expectedHeight) errors.push(`Strict Secondary Instance Bounds/height: ${definition.name}/${contract.name}`)
+      if (!rectangleContains(secondaryContentBounds(parent), instance.absoluteBounds)) errors.push(`Strict Secondary Instance overflow: ${definition.name}/${contract.name}`)
+      if (definition.width === 320 && instance.height < 44) errors.push(`Strict Secondary 320 target below 44: ${definition.name}/${contract.name}`)
+      if (definition.width === 320 && instance.width < contract.minimumWidth) errors.push(`Strict Secondary 320 minimum/Mindestbreite: ${definition.name}/${contract.name}`)
+
+      const labelProperty = Object.entries(instance.componentProperties || {}).filter(([key]) => key.split('#')[0] === 'Label')
+      const visibleLabelRole = contract.setId === 'select' ? 'Value' : component?.labelRole
+      if (labelProperty.length !== 1
+        || labelProperty[0][1]?.value !== contract.label
+        || instance.labelValue !== contract.label
+        || instance.roleCopy?.[visibleLabelRole] !== contract.label) errors.push(`Strict Secondary Label property/coherence: ${definition.name}/${contract.name}`)
+      if (!sameSecondaryValue(instance.roleCopy, contract.roleCopy)) errors.push(`Strict Secondary Role-Copy roleCopy mismatch: ${definition.name}/${contract.name}`)
+
+      const roles = Array.isArray(instance.roleDescendants) ? instance.roleDescendants : []
+      if (roles.length !== (component?.roles || []).length
+        || new Set(roles.map(role => role.nodeId)).size !== roles.length
+        || new Set(roles.map(role => role.role)).size !== roles.length) errors.push(`Strict Secondary Role Rollenanzahl/doppelt: ${definition.name}/${contract.name}`)
+      for (const expectedRole of component?.roles || []) {
+        const roleMatches = roles.filter(role => role.role === expectedRole.name)
+        if (roleMatches.length !== 1) continue
+        const role = roleMatches[0]
+        if (role.name !== `Role/${expectedRole.name}`) errors.push(`Strict Secondary Role name/Name: ${definition.name}/${contract.name}/${expectedRole.name}`)
+        if (role.type !== expectedRole.type) errors.push(`Strict Secondary Role type/Typ: ${definition.name}/${contract.name}/${expectedRole.name}`)
+        if (role.parentInstanceId !== instance.nodeId) errors.push(`Strict Secondary Role Ancestry: ${definition.name}/${contract.name}/${expectedRole.name}`)
+        if (expectedRole.type === 'TEXT') {
+          if (role.characters !== contract.roleCopy[expectedRole.name]) errors.push(`Strict Secondary Role copy/characters: ${definition.name}/${contract.name}/${expectedRole.name}`)
+        } else if (Object.hasOwn(instance.roleCopy || {}, expectedRole.name) || role.characters !== undefined) {
+          errors.push(`Strict Secondary non-TEXT Role-Copy: ${definition.name}/${contract.name}/${expectedRole.name}`)
+        }
+        if (!secondaryGeometryIsActual(role)) errors.push(`Strict Secondary Role actual Bounds: ${definition.name}/${contract.name}/${expectedRole.name}`)
+        if (!rectangleContains(secondaryContentBounds(instance), role.absoluteBounds)) errors.push(`Strict Secondary Role overflow: ${definition.name}/${contract.name}/${expectedRole.name}`)
+      }
+      for (let left = 0; left < roles.length; left += 1) for (let right = left + 1; right < roles.length; right += 1) {
+        if (rectanglesOverlap(roles[left].absoluteBounds, roles[right].absoluteBounds)) errors.push(`Strict Secondary Role overlap/überlappt: ${definition.name}/${contract.name}`)
+      }
+    }
+
+    for (const parent of [view, ...regions]) {
+      const children = [
+        ...regions.filter(record => record.parentId === parent.nodeId),
+        ...copies.filter(record => record.parentId === parent.nodeId),
+        ...instances.filter(record => record.parentId === parent.nodeId),
+      ]
+      for (let left = 0; left < children.length; left += 1) for (let right = left + 1; right < children.length; right += 1) {
+        if (rectanglesOverlap(children[left].absoluteBounds, children[right].absoluteBounds)) errors.push(`Strict Secondary sibling overlap/überlappt: ${definition.name}/${parent.name}`)
+      }
+    }
+
+    const copyContractByNodeId = new Map(copies.flatMap(copy => {
+      const contract = definition.copyContracts.find(candidate => candidate.role === copy.role)
+      return contract ? [[copy.nodeId, contract]] : []
+    }))
+    const roleTokenByNodeId = new Map(instances.flatMap(instance => {
+      const contract = definition.instances.find(candidate => candidate.name === instance.name)
+      const textToken = secondaryContractTextToken(contract)
+      return (instance.roleDescendants || []).map(role => [role.nodeId, textToken])
+    }))
+    const instanceSurfaceTokenByNodeId = new Map(instances.flatMap(instance => {
+      const contract = definition.instances.find(candidate => candidate.name === instance.name)
+      return contract ? [[instance.nodeId, secondaryContractSurfaceToken(contract)]] : []
+    }))
+    for (const record of secondaryVisibleRecords(view)) {
+      if (!visiblePaintsAreGray(record.fills) || !visiblePaintsAreGray(record.strokes)
+        || !(record.effects || []).every(effect => !effect.color || isGrayColor(effect.color))) errors.push(`Strict Secondary grayscale/Farbe: ${definition.name}/${record.name}`)
+      const semanticCollection = `Onda · Semantic · ${definition.theme}`
+      const copyContract = copyContractByNodeId.get(record.nodeId)
+      const roleTextToken = roleTokenByNodeId.get(record.nodeId)
+      const instanceSurfaceToken = instanceSurfaceTokenByNodeId.get(record.nodeId)
+      const fillToken = copyContract
+        ? copyContract.kind === 'title' ? 'color/text' : 'color/text-muted'
+        : roleTextToken || instanceSurfaceToken || (record.type === 'TEXT' || record.type === 'ELLIPSE' ? 'color/text' : 'color/surface')
+      const bindingContext = copyContract ? 'Copy semantic token' : roleTextToken ? 'Role semantic token' : instanceSurfaceToken ? 'Instance surface token' : 'fill semantic token'
+      if (!secondaryBindingMatches(record, 'fills', variableId(semanticCollection, fillToken))) errors.push(`Strict Secondary ${definition.theme} ${bindingContext} ${fillToken} binding/Bindung: ${definition.name}/${record.name}`)
+      if (!secondaryBindingMatches(record, 'strokes', variableId(semanticCollection, 'color/border'))) errors.push(`Strict Secondary ${definition.theme} stroke binding/Bindung: ${definition.name}/${record.name}`)
+      const instanceContract = record.type === 'INSTANCE' ? definition.instances.find(contract => contract.name === record.name) : null
+      const component = instanceContract ? COMPONENT_DEFINITIONS.find(candidate => candidate.id === instanceContract.setId) : null
+      const allowsOverlay = Boolean(component?.effectStyleName)
+      if (allowsOverlay) {
+        if (!overlay || record.effectStyleId !== overlay.id || !sameSecondaryValue(record.effects, overlay.effects)) errors.push(`Strict Secondary effect style/Effektstil: ${definition.name}/${record.name}`)
+      } else if ((record.effectStyleId || null) !== null || (record.effects || []).length !== 0) errors.push(`Strict Secondary unauthorized effect/Effekt: ${definition.name}/${record.name}`)
+    }
+  }
+
+  return { valid: errors.length === 0, errors, counts }
+}
+
 function expectedCoreRegionBounds(definition, region) {
   const parent = region.parentName === definition.name
     ? { layoutMode: definition.layoutMode, itemSpacing: 0 }
@@ -2316,6 +2634,8 @@ export function buildVerificationReport(snapshot) {
     : true
   const hasModernCoreEvidence = snapshot.coreViews !== undefined
   const coreStrict = hasModernCoreEvidence ? validateCoreViewEvidence(snapshot.coreViews) : null
+  const hasModernSecondaryEvidence = Object.hasOwn(snapshot, 'secondaryViews')
+  const secondaryStrict = hasModernSecondaryEvidence ? validateSecondaryViewEvidence(snapshot.secondaryViews) : null
   const report = {
     pageCount: Number(snapshot.pageCount || 0),
     sectionCount: sectionNames.length,
@@ -2363,6 +2683,13 @@ export function buildVerificationReport(snapshot) {
     report.coreViewStructureValid = coreStrict.valid
     report.coreViewErrors = coreStrict.errors
   }
+  if (hasModernSecondaryEvidence) {
+    report.agentSourceViewCount = secondaryStrict.counts.agentSources
+    report.secondaryViewCount = secondaryStrict.counts.secondary
+    report.responsiveViewCount = secondaryStrict.counts.responsive
+    report.secondaryViewStructureValid = secondaryStrict.valid
+    report.secondaryViewErrors = secondaryStrict.errors
+  }
   const modern = Boolean(snapshot.sections)
   report.hardPass = Boolean(snapshot.targetAuthorized)
     && report.pageCount === 1
@@ -2388,6 +2715,7 @@ export function buildVerificationReport(snapshot) {
     && report.pageInvariant
     && phasesComplete
     && (!hasModernCoreEvidence || coreStrict.valid)
+    && (!hasModernSecondaryEvidence || secondaryStrict.valid)
   if (!modern) delete report.hardPass
   return report
 }

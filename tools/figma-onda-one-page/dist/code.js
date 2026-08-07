@@ -1251,9 +1251,14 @@
     return coreRoleCopy(name, setId, variant, label, __spreadValues(__spreadValues({}, roleDefaults), overrides));
   }
   function secondaryInstance(name, setId, variant, label, region = "Layout / Content", roleCopy = {}) {
-    return coreInstance(name, setId, variant, label, {
+    var _a;
+    const completeRoleCopy = secondaryRoleCopy(name, setId, variant, label, roleCopy);
+    const component = COMPONENT_DEFINITIONS.find((item) => item.id === setId);
+    const visibleLabelRole = setId === "select" ? "Value" : component == null ? void 0 : component.labelRole;
+    const visibleLabel = (_a = completeRoleCopy[visibleLabelRole]) != null ? _a : label;
+    return coreInstance(name, setId, variant, visibleLabel, {
       region,
-      roleCopy: secondaryRoleCopy(name, setId, variant, label, roleCopy)
+      roleCopy: completeRoleCopy
     });
   }
   function secondaryStackHeight(items, itemSpacing, padding) {
@@ -1276,16 +1281,26 @@
   function secondaryRegions(viewName, width, layoutMode, instances, copyContracts) {
     const narrow = width === 320;
     const padding = narrow ? { top: 16, right: 16, bottom: 16, left: 16 } : { top: 24, right: 32, bottom: 24, left: 32 };
-    const shellMode = narrow ? "VERTICAL" : "HORIZONTAL";
+    const shellMode = narrow || width <= 720 ? "VERTICAL" : "HORIZONTAL";
     if (!narrow) {
-      const contentWidth2 = Math.max(480, width - 320);
+      const shellPadding = { top: 24, right: 24, bottom: 24, left: 24 };
+      const nestedPadding = { top: 16, right: 16, bottom: 16, left: 16 };
+      const shellContentWidth = width - shellPadding.left - shellPadding.right;
+      const contextWidth2 = shellMode === "VERTICAL" ? shellContentWidth : 256;
+      const contentWidth2 = shellMode === "VERTICAL" ? shellContentWidth : shellContentWidth - contextWidth2 - 16;
+      const detailWidth2 = contentWidth2 - nestedPadding.left - nestedPadding.right;
+      const contextHeight2 = secondaryStackHeight(copyContracts, 12, nestedPadding);
+      const detailHeight2 = secondaryStackHeight(instances, 12, nestedPadding);
+      const contentHeight2 = secondaryStackHeight([{ expectedHeight: detailHeight2 }], 16, nestedPadding);
+      const shellContentHeight = shellMode === "VERTICAL" ? contextHeight2 + contentHeight2 + 16 : Math.max(contextHeight2, contentHeight2);
+      const shellHeight2 = shellPadding.top + shellContentHeight + shellPadding.bottom;
       return Object.freeze({
-        height: 1024,
+        height: shellHeight2,
         regions: Object.freeze([
-          coreRegion("Layout / Shell", viewName, width, 960, shellMode, { itemSpacing: 16, padding }),
-          coreRegion("Layout / Context", "Layout / Shell", width - contentWidth2, 960, "VERTICAL", { itemSpacing: 12, padding }),
-          coreRegion("Layout / Content", "Layout / Shell", contentWidth2, 960, "VERTICAL", { itemSpacing: 16, padding }),
-          coreRegion("Layout / Detail", "Layout / Content", contentWidth2, 720, layoutMode === "HORIZONTAL" ? "HORIZONTAL" : "VERTICAL", { itemSpacing: 12, padding })
+          coreRegion("Layout / Shell", viewName, width, shellHeight2, shellMode, { itemSpacing: 16, padding: shellPadding }),
+          coreRegion("Layout / Context", "Layout / Shell", contextWidth2, contextHeight2, "VERTICAL", { itemSpacing: 12, padding: nestedPadding }),
+          coreRegion("Layout / Content", "Layout / Shell", contentWidth2, contentHeight2, "VERTICAL", { itemSpacing: 16, padding: nestedPadding }),
+          coreRegion("Layout / Detail", "Layout / Content", detailWidth2, detailHeight2, "VERTICAL", { itemSpacing: 12, padding: nestedPadding })
         ])
       });
     }
@@ -2837,6 +2852,295 @@ ${writeBarrierValidation.errors.join("\n")}`);
     if (!outer || !inner) return false;
     return inner.x >= outer.x && inner.y >= outer.y && inner.x + inner.width <= outer.x + outer.width && inner.y + inner.height <= outer.y + outer.height;
   }
+  function secondaryContentBounds(record = {}) {
+    const bounds = record.absoluteBounds;
+    if (!bounds) return null;
+    const left = Number(record.paddingLeft || 0);
+    const right = Number(record.paddingRight || 0);
+    const top = Number(record.paddingTop || 0);
+    const bottom = Number(record.paddingBottom || 0);
+    return {
+      x: bounds.x + left,
+      y: bounds.y + top,
+      width: bounds.width - left - right,
+      height: bounds.height - top - bottom
+    };
+  }
+  function secondaryGeometryIsActual(record) {
+    const local = record == null ? void 0 : record.bounds;
+    const absolute = record == null ? void 0 : record.absoluteBounds;
+    return Boolean(local && absolute && [local.x, local.y, local.width, local.height, absolute.x, absolute.y, absolute.width, absolute.height].every(Number.isFinite) && local.width > 0 && local.height > 0 && record.x === local.x && record.y === local.y && record.width === local.width && record.height === local.height && local.width === absolute.width && local.height === absolute.height);
+  }
+  function secondaryExpectedChildIds(parent, view) {
+    if (parent === view) return (view.layoutRegions || []).filter((record) => record.parentId === view.nodeId).map((record) => record.nodeId);
+    if (parent.type === "INSTANCE") return (parent.roleDescendants || []).map((record) => record.nodeId);
+    return [
+      ...(view.layoutRegions || []).filter((record) => record.parentId === parent.nodeId).map((record) => record.nodeId),
+      ...(view.copyNodes || []).filter((record) => record.parentId === parent.nodeId).map((record) => record.nodeId),
+      ...(view.instances || []).filter((record) => record.parentId === parent.nodeId).map((record) => record.nodeId)
+    ];
+  }
+  function secondaryVisibleRecords(view) {
+    return [
+      view,
+      ...view.layoutRegions || [],
+      ...view.copyNodes || [],
+      ...(view.instances || []).flatMap((instance) => [instance, ...instance.roleDescendants || []])
+    ].filter((record) => record.visible !== false);
+  }
+  function secondaryBindingMatches(record, field, expectedId) {
+    const paints = Array.isArray(record == null ? void 0 : record[field]) ? record[field] : [];
+    const bindings = Array.isArray(record == null ? void 0 : record[`${field.slice(0, -1)}Bindings`]) ? record[`${field.slice(0, -1)}Bindings`] : [];
+    const indexes = paints.map((paint, index) => ({ paint, index })).filter(({ paint }) => (paint == null ? void 0 : paint.visible) !== false && (paint == null ? void 0 : paint.type) === "SOLID");
+    return bindings.length === indexes.length && indexes.every(({ index }) => {
+      const matching = bindings.filter((binding) => binding.index === index);
+      return matching.length === 1 && matching[0].type === "SOLID" && sameSecondaryValue(matching[0].variableIds, [expectedId]);
+    });
+  }
+  function secondaryContractTextToken(contract = {}) {
+    var _a;
+    const component = COMPONENT_DEFINITIONS.find((candidate) => candidate.id === contract.setId);
+    return ((_a = component == null ? void 0 : component.variants.find((candidate) => candidate.name === contract.variant)) == null ? void 0 : _a.textToken) || "color/text";
+  }
+  function secondaryContractSurfaceToken(contract = {}) {
+    var _a;
+    const component = COMPONENT_DEFINITIONS.find((candidate) => candidate.id === contract.setId);
+    return ((_a = component == null ? void 0 : component.variants.find((candidate) => candidate.name === contract.variant)) == null ? void 0 : _a.surfaceToken) || "color/surface";
+  }
+  function validateSecondaryViewEvidence(evidence = {}) {
+    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k;
+    const errors = [];
+    const definitions = secondaryDefinitionsWithGroups();
+    const expectedByName = new Map(definitions.map((entry) => [entry.definition.name, entry]));
+    const views = Array.isArray(evidence.views) ? evidence.views : [];
+    const sections = Array.isArray(evidence.sections) ? evidence.sections : [];
+    const counts = {
+      agentSources: views.filter((view) => {
+        var _a2;
+        return ((_a2 = expectedByName.get(view.name)) == null ? void 0 : _a2.group) === "agentSources";
+      }).length,
+      secondary: views.filter((view) => {
+        var _a2;
+        return ((_a2 = expectedByName.get(view.name)) == null ? void 0 : _a2.group) === "secondary";
+      }).length,
+      responsive: views.filter((view) => {
+        var _a2;
+        return ((_a2 = expectedByName.get(view.name)) == null ? void 0 : _a2.group) === "responsive";
+      }).length
+    };
+    const mutation = validateSecondaryViewMutationInventory(evidence);
+    errors.push(...mutation.errors.map((error) => `Strict Secondary foundation: ${error}`));
+    const expectedCounts = { agentSources: 15, secondary: 9, responsive: 16 };
+    for (const [group, expected] of Object.entries(expectedCounts)) if (counts[group] !== expected) {
+      errors.push(`Strict Secondary Cardinality ${group}: erwartet ${expected}, gefunden ${counts[group]}`);
+    }
+    if (views.length !== definitions.length) errors.push(`Strict Secondary Cardinality total: erwartet ${definitions.length}, gefunden ${views.length}`);
+    if (new Set(views.map((view) => view.name)).size !== views.length) errors.push("Strict Secondary duplicate View names");
+    if (new Set(views.map((view) => secondaryNodeId(view))).size !== views.length) errors.push("Strict Secondary duplicate View ids");
+    const sectionByName = new Map(sections.map((section) => [section.name, section]));
+    if (sections.length !== SECONDARY_SECTION_NAMES.length || !sameSecondaryValue(sections.map((section) => section.name), SECONDARY_SECTION_NAMES)) errors.push("Strict Secondary Section cardinality/order");
+    for (const section of sections) {
+      if (section.type !== "SECTION" || secondaryOwner(section) !== PLUGIN_ORIGIN) errors.push(`Strict Secondary Section invalid: ${section.name}`);
+      const expectedViewIds = definitions.filter((entry) => entry.definition.sectionName === section.name).map((entry) => {
+        var _a2;
+        return (_a2 = views.find((view) => view.name === entry.definition.name)) == null ? void 0 : _a2.nodeId;
+      }).filter(Boolean);
+      if (!sameSecondaryValue(section.childIds, expectedViewIds) || section.childCount !== expectedViewIds.length) errors.push(`Strict Secondary Section child order: ${section.name}`);
+    }
+    const requiredCollections = ["Onda \xB7 Semantic \xB7 Light", "Onda \xB7 Semantic \xB7 Dark", "Onda \xB7 Dimension"];
+    const collections = Array.isArray(evidence.collections) ? evidence.collections : [];
+    const collectionByName = /* @__PURE__ */ new Map();
+    for (const name of requiredCollections) {
+      const matching = collections.filter((collection) => collection.name === name);
+      if (matching.length !== 1 || ((_a = matching[0]) == null ? void 0 : _a.owner) !== PLUGIN_ORIGIN) errors.push(`Strict Secondary Collection identity: ${name}`);
+      else collectionByName.set(name, matching[0]);
+    }
+    if (collections.length !== requiredCollections.length) errors.push("Strict Secondary Collection cardinality");
+    const variables = Array.isArray(evidence.variables) ? evidence.variables : [];
+    const requiredSemanticNames = [.../* @__PURE__ */ new Set([
+      "color/surface",
+      "color/border",
+      "color/text",
+      "color/text-muted",
+      ...definitions.flatMap(({ definition: definition2 }) => definition2.instances.map(secondaryContractTextToken)),
+      ...definitions.flatMap(({ definition: definition2 }) => definition2.instances.map(secondaryContractSurfaceToken))
+    ])];
+    const requiredVariableKeys = [
+      ...["Light", "Dark"].flatMap((theme) => requiredSemanticNames.map((name) => [`Onda \xB7 Semantic \xB7 ${theme}`, name])),
+      ...[...new Set(definitions.flatMap(({ definition: definition2 }) => definition2.regions.flatMap((region) => [
+        region.itemSpacing,
+        region.padding.top,
+        region.padding.right,
+        region.padding.bottom,
+        region.padding.left
+      ])).filter((value) => value > 0))].map((value) => ["Onda \xB7 Dimension", `spacing/${value}`])
+    ];
+    const variableByKey = /* @__PURE__ */ new Map();
+    for (const [collectionName, name] of requiredVariableKeys) {
+      const matching = variables.filter((variable) => variable.collectionName === collectionName && variable.name === name);
+      const collection = collectionByName.get(collectionName);
+      if (matching.length !== 1 || ((_b = matching[0]) == null ? void 0 : _b.owner) !== PLUGIN_ORIGIN || ((_c = matching[0]) == null ? void 0 : _c.collectionId) !== (collection == null ? void 0 : collection.id)) errors.push(`Strict Secondary Variable identity: ${collectionName}/${name}`);
+      else variableByKey.set(`${collectionName}\0${name}`, matching[0]);
+    }
+    if (variables.length !== requiredVariableKeys.length) errors.push("Strict Secondary Variable cardinality");
+    const variableId = (collectionName, name) => {
+      var _a2;
+      return (_a2 = variableByKey.get(`${collectionName}\0${name}`)) == null ? void 0 : _a2.id;
+    };
+    const effectStyles = Array.isArray(evidence.effectStyles) ? evidence.effectStyles : [];
+    const overlayMatches = effectStyles.filter((style) => style.name === "Onda/Shadow/Overlay");
+    const overlay = overlayMatches.length === 1 && overlayMatches[0].owner === PLUGIN_ORIGIN ? overlayMatches[0] : null;
+    if (!overlay || effectStyles.length !== 1) errors.push("Strict Secondary Overlay style identity/cardinality");
+    if (overlay && (!Array.isArray(overlay.effects) || overlay.effects.length !== 1 || !overlay.effects.every((effect) => !effect.color || isGrayColor(effect.color)))) {
+      errors.push("Strict Secondary Overlay effect cardinality/grayscale");
+    }
+    for (const { group, definition: definition2 } of definitions) {
+      const matchingViews = views.filter((view2) => view2.name === definition2.name);
+      if (matchingViews.length !== 1) continue;
+      const view = matchingViews[0];
+      const section = sectionByName.get(definition2.sectionName);
+      const marker = secondaryMarker(view);
+      if (view.type !== "FRAME" || secondaryOwner(view) !== PLUGIN_ORIGIN || view.parentId !== secondaryNodeId(section) || view.parentType !== "SECTION" || view.parentName !== definition2.sectionName) errors.push(`Strict Secondary View Section/parent/type: ${definition2.name}`);
+      if (view.width !== definition2.width || ((_d = view.bounds) == null ? void 0 : _d.width) !== definition2.width || ((_e = view.absoluteBounds) == null ? void 0 : _e.width) !== definition2.width) errors.push(`Strict Secondary View width/Breite: ${definition2.name}`);
+      if (view.height !== definition2.height || ((_f = view.bounds) == null ? void 0 : _f.height) !== definition2.height || ((_g = view.absoluteBounds) == null ? void 0 : _g.height) !== definition2.height) errors.push(`Strict Secondary View height/H\xF6he: ${definition2.name}`);
+      if (view.theme !== definition2.theme) errors.push(`Strict Secondary View theme/Theme: ${definition2.name}`);
+      if (!sameSecondaryValue(marker, secondaryExpectedMarker(group, definition2))) errors.push(`Strict Secondary View marker/Marker: ${definition2.name}`);
+      if (view.layoutMode === "NONE" || view.layoutMode !== definition2.layoutMode) errors.push(`Strict Secondary View Auto Layout/layoutMode: ${definition2.name}`);
+      if (!secondaryGeometryIsActual(view)) errors.push(`Strict Secondary View actual Bounds: ${definition2.name}`);
+      if (definition2.width === 320 && (view.layoutMode !== "VERTICAL" || ![view.paddingTop, view.paddingRight, view.paddingBottom, view.paddingLeft].every((value) => value === 16))) {
+        errors.push(`Strict Secondary 320 vertical padding: ${definition2.name}`);
+      }
+      const regions = Array.isArray(view.layoutRegions) ? view.layoutRegions : [];
+      const copies = Array.isArray(view.copyNodes) ? view.copyNodes : [];
+      const instances = Array.isArray(view.instances) ? view.instances : [];
+      const regionByName = new Map(regions.map((region) => [region.name, region]));
+      if (regions.length !== definition2.regions.length || new Set(regions.map((region) => region.name)).size !== regions.length) errors.push(`Strict Secondary Region cardinality: ${definition2.name}`);
+      if (copies.length !== definition2.copyContracts.length || new Set(copies.map((copy) => copy.role)).size !== copies.length) errors.push(`Strict Secondary Copy cardinality: ${definition2.name}`);
+      if (instances.length !== definition2.instances.length || new Set(instances.map((instance) => instance.name)).size !== instances.length) errors.push(`Strict Secondary Instance cardinality: ${definition2.name}`);
+      if ((view.standIns || []).some((record) => record.visible !== false)) errors.push(`Strict Secondary visible stand-in: ${definition2.name}`);
+      const containers = [view, ...regions, ...instances];
+      for (const container of containers) {
+        const expectedChildIds = secondaryExpectedChildIds(container, view);
+        if (!sameSecondaryValue(container.childIds, expectedChildIds) || container.childCount !== expectedChildIds.length) errors.push(`Strict Secondary child order: ${definition2.name}/${container.name}`);
+      }
+      for (const contract of definition2.regions) {
+        const matching = regions.filter((region2) => region2.name === contract.name);
+        if (matching.length !== 1) continue;
+        const region = matching[0];
+        const parent = contract.parentName === definition2.name ? view : regionByName.get(contract.parentName);
+        const parentContent = secondaryContentBounds(parent);
+        const expectedWidth = Math.min(contract.width, (parentContent == null ? void 0 : parentContent.width) || 0);
+        if (region.type !== "FRAME" || region.parentId !== (parent == null ? void 0 : parent.nodeId) || region.parentType !== "FRAME" || region.parentName !== contract.parentName) errors.push(`Strict Secondary Region Ancestry/parent: ${definition2.name}/${contract.name}`);
+        if (region.layoutMode === "NONE" || region.layoutMode !== contract.layoutMode) errors.push(`Strict Secondary Region Auto Layout/layoutMode: ${definition2.name}/${contract.name}`);
+        if (!secondaryGeometryIsActual(region) || region.width !== expectedWidth || region.height !== contract.height) errors.push(`Strict Secondary Region Bounds/height: ${definition2.name}/${contract.name}`);
+        if (!rectangleContains(parentContent, region.absoluteBounds)) errors.push(`Strict Secondary Region overflow: ${definition2.name}/${contract.name}`);
+        const expectedDimensionIds = {
+          itemSpacing: contract.itemSpacing,
+          paddingTop: contract.padding.top,
+          paddingRight: contract.padding.right,
+          paddingBottom: contract.padding.bottom,
+          paddingLeft: contract.padding.left
+        };
+        for (const [field, value] of Object.entries(expectedDimensionIds)) {
+          const expected = value === 0 ? [] : [variableId("Onda \xB7 Dimension", `spacing/${value}`)];
+          if (!sameSecondaryValue(((_h = region.fieldVariableIds) == null ? void 0 : _h[field]) || [], expected)) errors.push(`Strict Secondary Dimension spacing binding: ${definition2.name}/${contract.name}/${field}`);
+        }
+      }
+      for (const contract of definition2.copyContracts) {
+        const matching = copies.filter((copy2) => copy2.role === contract.role);
+        if (matching.length !== 1) continue;
+        const copy = matching[0];
+        const parent = regionByName.get(contract.region);
+        if (copy.type !== "TEXT" || copy.name !== `Copy / ${contract.role}` || copy.characters !== contract.characters || copy.parentId !== (parent == null ? void 0 : parent.nodeId) || copy.parentName !== contract.region) errors.push(`Strict Secondary Copy Ancestry/copy: ${definition2.name}/${contract.role}`);
+        if (!secondaryGeometryIsActual(copy) || copy.height !== contract.expectedHeight) errors.push(`Strict Secondary Copy Bounds/height: ${definition2.name}/${contract.role}`);
+        if (!rectangleContains(secondaryContentBounds(parent), copy.absoluteBounds)) errors.push(`Strict Secondary Copy overflow: ${definition2.name}/${contract.role}`);
+      }
+      for (const contract of definition2.instances) {
+        const matching = instances.filter((instance2) => instance2.name === contract.name);
+        if (matching.length !== 1) continue;
+        const instance = matching[0];
+        const parent = regionByName.get(contract.region);
+        const component = COMPONENT_DEFINITIONS.find((candidate) => candidate.id === contract.setId);
+        const variant = component == null ? void 0 : component.variants.find((candidate) => candidate.name === contract.variant);
+        const componentEvidence = (evidence.components || evidence.componentSets || []).filter((candidate) => candidate.id === contract.setId);
+        const variantEvidence = componentEvidence.flatMap((candidate) => candidate.variants || []).filter((candidate) => candidate.name === contract.variant);
+        const expectedWidth = Math.min(contract.expectedWidth, ((_i = secondaryContentBounds(parent)) == null ? void 0 : _i.width) || 0);
+        const expectedHeight = Math.max(definition2.width === 320 ? 44 : 0, contract.expectedHeight);
+        if (instance.type !== "INSTANCE" || instance.parentId !== (parent == null ? void 0 : parent.nodeId) || instance.parentName !== contract.region) errors.push(`Strict Secondary Instance Ancestry/parent: ${definition2.name}/${contract.name}`);
+        if (componentEvidence.length !== 1 || variantEvidence.length !== 1 || instance.componentSetId !== secondaryNodeId(componentEvidence[0]) || instance.componentSetName !== (component == null ? void 0 : component.name)) errors.push(`Strict Secondary Component Set identity: ${definition2.name}/${contract.name}`);
+        if (!variant || instance.mainComponentId !== secondaryNodeId(variantEvidence[0]) || instance.variantName !== contract.variant) errors.push(`Strict Secondary Variant identity: ${definition2.name}/${contract.name}`);
+        if (!secondaryGeometryIsActual(instance) || instance.width !== expectedWidth || instance.height !== expectedHeight) errors.push(`Strict Secondary Instance Bounds/height: ${definition2.name}/${contract.name}`);
+        if (!rectangleContains(secondaryContentBounds(parent), instance.absoluteBounds)) errors.push(`Strict Secondary Instance overflow: ${definition2.name}/${contract.name}`);
+        if (definition2.width === 320 && instance.height < 44) errors.push(`Strict Secondary 320 target below 44: ${definition2.name}/${contract.name}`);
+        if (definition2.width === 320 && instance.width < contract.minimumWidth) errors.push(`Strict Secondary 320 minimum/Mindestbreite: ${definition2.name}/${contract.name}`);
+        const labelProperty = Object.entries(instance.componentProperties || {}).filter(([key]) => key.split("#")[0] === "Label");
+        const visibleLabelRole = contract.setId === "select" ? "Value" : component == null ? void 0 : component.labelRole;
+        if (labelProperty.length !== 1 || ((_j = labelProperty[0][1]) == null ? void 0 : _j.value) !== contract.label || instance.labelValue !== contract.label || ((_k = instance.roleCopy) == null ? void 0 : _k[visibleLabelRole]) !== contract.label) errors.push(`Strict Secondary Label property/coherence: ${definition2.name}/${contract.name}`);
+        if (!sameSecondaryValue(instance.roleCopy, contract.roleCopy)) errors.push(`Strict Secondary Role-Copy roleCopy mismatch: ${definition2.name}/${contract.name}`);
+        const roles = Array.isArray(instance.roleDescendants) ? instance.roleDescendants : [];
+        if (roles.length !== ((component == null ? void 0 : component.roles) || []).length || new Set(roles.map((role) => role.nodeId)).size !== roles.length || new Set(roles.map((role) => role.role)).size !== roles.length) errors.push(`Strict Secondary Role Rollenanzahl/doppelt: ${definition2.name}/${contract.name}`);
+        for (const expectedRole of (component == null ? void 0 : component.roles) || []) {
+          const roleMatches = roles.filter((role2) => role2.role === expectedRole.name);
+          if (roleMatches.length !== 1) continue;
+          const role = roleMatches[0];
+          if (role.name !== `Role/${expectedRole.name}`) errors.push(`Strict Secondary Role name/Name: ${definition2.name}/${contract.name}/${expectedRole.name}`);
+          if (role.type !== expectedRole.type) errors.push(`Strict Secondary Role type/Typ: ${definition2.name}/${contract.name}/${expectedRole.name}`);
+          if (role.parentInstanceId !== instance.nodeId) errors.push(`Strict Secondary Role Ancestry: ${definition2.name}/${contract.name}/${expectedRole.name}`);
+          if (expectedRole.type === "TEXT") {
+            if (role.characters !== contract.roleCopy[expectedRole.name]) errors.push(`Strict Secondary Role copy/characters: ${definition2.name}/${contract.name}/${expectedRole.name}`);
+          } else if (Object.hasOwn(instance.roleCopy || {}, expectedRole.name) || role.characters !== void 0) {
+            errors.push(`Strict Secondary non-TEXT Role-Copy: ${definition2.name}/${contract.name}/${expectedRole.name}`);
+          }
+          if (!secondaryGeometryIsActual(role)) errors.push(`Strict Secondary Role actual Bounds: ${definition2.name}/${contract.name}/${expectedRole.name}`);
+          if (!rectangleContains(secondaryContentBounds(instance), role.absoluteBounds)) errors.push(`Strict Secondary Role overflow: ${definition2.name}/${contract.name}/${expectedRole.name}`);
+        }
+        for (let left = 0; left < roles.length; left += 1) for (let right = left + 1; right < roles.length; right += 1) {
+          if (rectanglesOverlap(roles[left].absoluteBounds, roles[right].absoluteBounds)) errors.push(`Strict Secondary Role overlap/\xFCberlappt: ${definition2.name}/${contract.name}`);
+        }
+      }
+      for (const parent of [view, ...regions]) {
+        const children = [
+          ...regions.filter((record) => record.parentId === parent.nodeId),
+          ...copies.filter((record) => record.parentId === parent.nodeId),
+          ...instances.filter((record) => record.parentId === parent.nodeId)
+        ];
+        for (let left = 0; left < children.length; left += 1) for (let right = left + 1; right < children.length; right += 1) {
+          if (rectanglesOverlap(children[left].absoluteBounds, children[right].absoluteBounds)) errors.push(`Strict Secondary sibling overlap/\xFCberlappt: ${definition2.name}/${parent.name}`);
+        }
+      }
+      const copyContractByNodeId = new Map(copies.flatMap((copy) => {
+        const contract = definition2.copyContracts.find((candidate) => candidate.role === copy.role);
+        return contract ? [[copy.nodeId, contract]] : [];
+      }));
+      const roleTokenByNodeId = new Map(instances.flatMap((instance) => {
+        const contract = definition2.instances.find((candidate) => candidate.name === instance.name);
+        const textToken = secondaryContractTextToken(contract);
+        return (instance.roleDescendants || []).map((role) => [role.nodeId, textToken]);
+      }));
+      const instanceSurfaceTokenByNodeId = new Map(instances.flatMap((instance) => {
+        const contract = definition2.instances.find((candidate) => candidate.name === instance.name);
+        return contract ? [[instance.nodeId, secondaryContractSurfaceToken(contract)]] : [];
+      }));
+      for (const record of secondaryVisibleRecords(view)) {
+        if (!visiblePaintsAreGray(record.fills) || !visiblePaintsAreGray(record.strokes) || !(record.effects || []).every((effect) => !effect.color || isGrayColor(effect.color))) errors.push(`Strict Secondary grayscale/Farbe: ${definition2.name}/${record.name}`);
+        const semanticCollection = `Onda \xB7 Semantic \xB7 ${definition2.theme}`;
+        const copyContract = copyContractByNodeId.get(record.nodeId);
+        const roleTextToken = roleTokenByNodeId.get(record.nodeId);
+        const instanceSurfaceToken = instanceSurfaceTokenByNodeId.get(record.nodeId);
+        const fillToken = copyContract ? copyContract.kind === "title" ? "color/text" : "color/text-muted" : roleTextToken || instanceSurfaceToken || (record.type === "TEXT" || record.type === "ELLIPSE" ? "color/text" : "color/surface");
+        const bindingContext = copyContract ? "Copy semantic token" : roleTextToken ? "Role semantic token" : instanceSurfaceToken ? "Instance surface token" : "fill semantic token";
+        if (!secondaryBindingMatches(record, "fills", variableId(semanticCollection, fillToken))) errors.push(`Strict Secondary ${definition2.theme} ${bindingContext} ${fillToken} binding/Bindung: ${definition2.name}/${record.name}`);
+        if (!secondaryBindingMatches(record, "strokes", variableId(semanticCollection, "color/border"))) errors.push(`Strict Secondary ${definition2.theme} stroke binding/Bindung: ${definition2.name}/${record.name}`);
+        const instanceContract = record.type === "INSTANCE" ? definition2.instances.find((contract) => contract.name === record.name) : null;
+        const component = instanceContract ? COMPONENT_DEFINITIONS.find((candidate) => candidate.id === instanceContract.setId) : null;
+        const allowsOverlay = Boolean(component == null ? void 0 : component.effectStyleName);
+        if (allowsOverlay) {
+          if (!overlay || record.effectStyleId !== overlay.id || !sameSecondaryValue(record.effects, overlay.effects)) errors.push(`Strict Secondary effect style/Effektstil: ${definition2.name}/${record.name}`);
+        } else if ((record.effectStyleId || null) !== null || (record.effects || []).length !== 0) errors.push(`Strict Secondary unauthorized effect/Effekt: ${definition2.name}/${record.name}`);
+      }
+    }
+    return { valid: errors.length === 0, errors, counts };
+  }
   function expectedCoreRegionBounds(definition2, region) {
     const parent = region.parentName === definition2.name ? { layoutMode: definition2.layoutMode, itemSpacing: 0 } : definition2.regions.find((item) => item.name === region.parentName);
     const siblings = definition2.regions.filter((item) => item.parentName === region.parentName);
@@ -3472,6 +3776,8 @@ ${writeBarrierValidation.errors.join("\n")}`);
     }) : true;
     const hasModernCoreEvidence = snapshot.coreViews !== void 0;
     const coreStrict = hasModernCoreEvidence ? validateCoreViewEvidence(snapshot.coreViews) : null;
+    const hasModernSecondaryEvidence = Object.hasOwn(snapshot, "secondaryViews");
+    const secondaryStrict = hasModernSecondaryEvidence ? validateSecondaryViewEvidence(snapshot.secondaryViews) : null;
     const report = {
       pageCount: Number(snapshot.pageCount || 0),
       sectionCount: sectionNames.length,
@@ -3517,8 +3823,15 @@ ${writeBarrierValidation.errors.join("\n")}`);
       report.coreViewStructureValid = coreStrict.valid;
       report.coreViewErrors = coreStrict.errors;
     }
+    if (hasModernSecondaryEvidence) {
+      report.agentSourceViewCount = secondaryStrict.counts.agentSources;
+      report.secondaryViewCount = secondaryStrict.counts.secondary;
+      report.responsiveViewCount = secondaryStrict.counts.responsive;
+      report.secondaryViewStructureValid = secondaryStrict.valid;
+      report.secondaryViewErrors = secondaryStrict.errors;
+    }
     const modern = Boolean(snapshot.sections);
-    report.hardPass = Boolean(snapshot.targetAuthorized) && report.pageCount === 1 && snapshot.pageName === TARGET_PAGE_NAME && report.sectionCount === SECTION_DEFINITIONS.length && report.missingSections.length === 0 && report.duplicateNames.length === 0 && sectionStructureValid && annotationViewsValid && dialogStatesValid && componentStructureValid && report.instanceCount >= COMPONENT_DEFINITIONS.length && report.documentationInstanceCount === COMPONENT_DEFINITIONS.length && report.repeatedScreenInstanceCount > 0 && foundationValid && report.intersections.length === 0 && report.clearance >= 2e3 && report.overflowNodes.length === 0 && report.undersizedHitTargets.length === 0 && report.requiredReactionCount > 0 && report.reactionCount >= report.requiredReactionCount && report.preservedBaselineHash && report.pageInvariant && phasesComplete && (!hasModernCoreEvidence || coreStrict.valid);
+    report.hardPass = Boolean(snapshot.targetAuthorized) && report.pageCount === 1 && snapshot.pageName === TARGET_PAGE_NAME && report.sectionCount === SECTION_DEFINITIONS.length && report.missingSections.length === 0 && report.duplicateNames.length === 0 && sectionStructureValid && annotationViewsValid && dialogStatesValid && componentStructureValid && report.instanceCount >= COMPONENT_DEFINITIONS.length && report.documentationInstanceCount === COMPONENT_DEFINITIONS.length && report.repeatedScreenInstanceCount > 0 && foundationValid && report.intersections.length === 0 && report.clearance >= 2e3 && report.overflowNodes.length === 0 && report.undersizedHitTargets.length === 0 && report.requiredReactionCount > 0 && report.reactionCount >= report.requiredReactionCount && report.preservedBaselineHash && report.pageInvariant && phasesComplete && (!hasModernCoreEvidence || coreStrict.valid) && (!hasModernSecondaryEvidence || secondaryStrict.valid);
     if (!modern) delete report.hardPass;
     return report;
   }
@@ -5195,6 +5508,30 @@ ${result.errors.join("\n")}`);
       return [name, matches[0]];
     }));
   }
+  function secondaryRequiredTextTokens() {
+    return [.../* @__PURE__ */ new Set([
+      "color/text",
+      "color/text-muted",
+      ...secondaryDefinitionsWithGroups2().flatMap(({ definition: definition2 }) => definition2.instances.map((contract) => {
+        var _a;
+        const component = COMPONENT_DEFINITIONS.find((candidate) => candidate.id === contract.setId);
+        return ((_a = component == null ? void 0 : component.variants.find((candidate) => candidate.name === contract.variant)) == null ? void 0 : _a.textToken) || "color/text";
+      }))
+    ])];
+  }
+  function secondaryRequiredSurfaceTokens() {
+    return [.../* @__PURE__ */ new Set([
+      "color/surface",
+      ...secondaryDefinitionsWithGroups2().flatMap(({ definition: definition2 }) => definition2.instances.map((contract) => {
+        var _a;
+        const component = COMPONENT_DEFINITIONS.find((candidate) => candidate.id === contract.setId);
+        return ((_a = component == null ? void 0 : component.variants.find((candidate) => candidate.name === contract.variant)) == null ? void 0 : _a.surfaceToken) || "color/surface";
+      }))
+    ])];
+  }
+  function uniqueSecondaryVariableRecords(records) {
+    return [...new Map(records.map((record) => [record.id, record])).values()];
+  }
   function secondaryVariableContext() {
     return Promise.all([
       figma.variables.getLocalVariableCollectionsAsync(),
@@ -5208,11 +5545,11 @@ ${result.errors.join("\n")}`);
         if (matches.length !== 1) throw new Error(`Secondary-Variable fehlt oder ist mehrdeutig: ${collectionName}/${name}`);
         return matches[0];
       };
+      const semanticTokens = [.../* @__PURE__ */ new Set([...secondaryRequiredTextTokens(), ...secondaryRequiredSurfaceTokens()])];
       const semantic = (collectionName) => ({
         surface: exactVariable(collectionName, "color/surface"),
         border: exactVariable(collectionName, "color/border"),
-        text: exactVariable(collectionName, "color/text"),
-        textMuted: exactVariable(collectionName, "color/text-muted")
+        semanticByToken: Object.fromEntries(semanticTokens.map((token) => [token, exactVariable(collectionName, token)]))
       });
       const dimensionValues = [...new Set(SECONDARY_VIEW_DEFINITIONS.agentSources.concat(SECONDARY_VIEW_DEFINITIONS.secondary, SECONDARY_VIEW_DEFINITIONS.responsive).flatMap((definition2) => definition2.regions.flatMap((region) => [
         region.itemSpacing,
@@ -5227,40 +5564,49 @@ ${result.errors.join("\n")}`);
           Dark: semantic("Onda \xB7 Semantic \xB7 Dark")
         },
         dimensionByValue: new Map(dimensionValues.map((value) => [value, exactVariable("Onda \xB7 Dimension", `spacing/${value}`)])),
-        inventory: [
-          ...["Light", "Dark"].flatMap((theme) => Object.values(semantic(`Onda \xB7 Semantic \xB7 ${theme}`)).map((variable) => ({
-            id: variable.id,
-            nodeId: variable.id,
-            name: variable.name,
-            collectionName: `Onda \xB7 Semantic \xB7 ${theme}`
-          }))),
+        inventory: uniqueSecondaryVariableRecords([
+          ...["Light", "Dark"].flatMap((theme) => {
+            const collectionName = `Onda \xB7 Semantic \xB7 ${theme}`;
+            const context = semantic(collectionName);
+            return [context.border, ...Object.values(context.semanticByToken)].map((variable) => ({
+              id: variable.id,
+              nodeId: variable.id,
+              name: variable.name,
+              collectionName
+            }));
+          }),
           ...dimensionValues.map((value) => {
             const variable = exactVariable("Onda \xB7 Dimension", `spacing/${value}`);
             return { id: variable.id, nodeId: variable.id, name: variable.name, collectionName: "Onda \xB7 Dimension" };
           })
-        ]
+        ])
       };
     });
   }
-  function applySecondaryThemeBinding({ node, theme, variables, bindPaint }) {
+  function applySecondaryThemeBinding({ node, theme, variables, bindPaint, textToken = "color/text", surfaceToken = "color/surface", recursive = true }) {
     const semantic = theme === "Dark" ? variables.semanticByTheme.Dark : variables.semanticByTheme.Light;
     if (Array.isArray(node.fills) && node.fills.length) {
-      const variable = node.type === "TEXT" || node.type === "ELLIPSE" ? semantic.text : semantic.surface;
+      const token = node.type === "TEXT" || node.type === "ELLIPSE" ? textToken : surfaceToken;
+      const variable = node.type === "TEXT" || node.type === "ELLIPSE" ? semantic.semanticByToken[textToken] : semantic.semanticByToken[surfaceToken];
+      if (!variable) throw new Error(`Secondary-Farbvariable fehlt: ${theme}/${token}`);
       node.fills = node.fills.map((paint) => (paint == null ? void 0 : paint.type) === "SOLID" ? bindPaint(paint, variable) : paint);
     }
     if (Array.isArray(node.strokes) && node.strokes.length) {
       node.strokes = node.strokes.map((paint) => (paint == null ? void 0 : paint.type) === "SOLID" ? bindPaint(paint, semantic.border) : paint);
     }
-    if (Array.isArray(node.children)) {
-      for (const child of node.children) applySecondaryThemeBinding({ node: child, theme, variables, bindPaint });
+    if (recursive && Array.isArray(node.children)) {
+      for (const child of node.children) applySecondaryThemeBinding({ node: child, theme, variables, bindPaint, textToken, surfaceToken, recursive });
     }
   }
-  function bindSecondaryNodeTheme(node, theme, variables) {
+  function bindSecondaryNodeTheme(node, theme, variables, textToken = "color/text", surfaceToken = "color/surface", recursive = true) {
     const semantic = theme === "Dark" ? variables.semanticByTheme.Dark : variables.semanticByTheme.Light;
     applySecondaryThemeBinding({
       node,
       theme,
       variables,
+      textToken,
+      surfaceToken,
+      recursive,
       bindPaint: (paint, variable) => figma.variables.setBoundVariableForPaint(paint, "color", variable)
     });
     return semantic;
@@ -5584,7 +5930,7 @@ ${result.errors.join("\n")}`);
       }).node;
       copy.visible = true;
       copy.setPluginData("role", contract.role);
-      bindSecondaryNodeTheme(copy, definition2.theme, variables);
+      bindSecondaryNodeTheme(copy, definition2.theme, variables, contract.kind === "title" ? "color/text" : "color/text-muted");
       const index = copyByRegion.get(contract.region) || 0;
       parent.insertChild(index, copy);
       copyByRegion.set(contract.region, index + 1);
@@ -5629,6 +5975,9 @@ ${result.errors.join("\n")}`);
   async function ensureSecondaryVariantInstance(parent, variant, contract, definition2, decision, variables, root) {
     let instance = root.findOne((node) => node.type === "INSTANCE" && node.name === contract.name);
     if (!instance) instance = variant.createInstance();
+    const component = COMPONENT_DEFINITIONS.find((candidate) => candidate.id === contract.setId);
+    const variantDefinition = component == null ? void 0 : component.variants.find((candidate) => candidate.name === contract.variant);
+    if (!variantDefinition) throw new Error(`Secondary Variantenvertrag fehlt: ${contract.setId}/${contract.variant}`);
     await applySecondaryInstanceContract({
       parent,
       instance,
@@ -5638,7 +5987,7 @@ ${result.errors.join("\n")}`);
       readIdentity: readMainComponentIdentity,
       loadFonts: () => loadDecisionFonts(decision),
       resize: resizeNode,
-      bindTheme: (node) => bindSecondaryNodeTheme(node, definition2.theme, variables)
+      bindTheme: (node) => bindSecondaryNodeTheme(node, definition2.theme, variables, variantDefinition.textToken, variantDefinition.surfaceToken)
     });
     instance.visible = true;
     instance.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN);
@@ -5731,7 +6080,7 @@ ${result.errors.join("\n")}`);
         parent.insertChild((copyByRegion.get(contract.region) || 0) + localIndex, instance);
         instanceByRegion.set(contract.region, localIndex + 1);
       }
-      bindSecondaryNodeTheme(frame, definition2.theme, variables);
+      bindSecondaryNodeTheme(frame, definition2.theme, variables, "color/text", "color/surface", false);
     }
     for (const legacy of writeBarrierInventory.legacyViews || []) {
       const node = nodes.get(legacy.nodeId);
@@ -6144,6 +6493,92 @@ ${result.errors.join("\n")}`);
       components
     };
   }
+  async function collectSecondaryViewEvidence(page) {
+    const definitionEntries = secondaryDefinitionsWithGroups2();
+    const modernNames = new Set(definitionEntries.map(({ definition: definition2 }) => definition2.name));
+    const hasModernEvidence = page.findAll((node) => modernNames.has(node.name) || Boolean(node.getPluginData("secondaryView"))).length > 0;
+    if (!hasModernEvidence) return void 0;
+    const evidence = await collectSecondaryViewMutationInventory(page);
+    const records = [
+      evidence.targetPage,
+      ...evidence.sections,
+      ...evidence.views.flatMap((view) => [
+        view,
+        ...view.layoutRegions || [],
+        ...view.copyNodes || [],
+        ...(view.instances || []).flatMap((instance) => [
+          instance,
+          ...(instance.roleDescendants || []).flatMap((role) => [role, ...role.ancestorChain || []])
+        ]),
+        ...view.standIns || []
+      ])
+    ];
+    const nodeById = /* @__PURE__ */ new Map();
+    function indexNode(node) {
+      nodeById.set(node.id, node);
+      if ("children" in node) for (const child of node.children) indexNode(child);
+    }
+    indexNode(page);
+    const effectStyleIdByNodeId = /* @__PURE__ */ new Map();
+    await Promise.all([...new Set(records.map((record) => record == null ? void 0 : record.nodeId).filter(Boolean))].map(async (nodeId) => {
+      const node = nodeById.get(nodeId);
+      effectStyleIdByNodeId.set(nodeId, node ? await readEffectStyleId(node) : null);
+    }));
+    for (const record of records) {
+      if (!(record == null ? void 0 : record.nodeId)) continue;
+      const node = nodeById.get(record.nodeId);
+      if (!node) continue;
+      record.x = "x" in node ? node.x : null;
+      record.y = "y" in node ? node.y : null;
+      record.width = "width" in node ? node.width : null;
+      record.height = "height" in node ? node.height : null;
+      record.bounds = "x" in node ? { x: node.x, y: node.y, width: node.width, height: node.height } : null;
+      record.absoluteBounds = cloneSerializable(node.absoluteBoundingBox || node.absoluteRenderBounds || null);
+      record.childIds = "children" in node ? node.children.map((child) => child.id) : [];
+      record.childCount = record.childIds.length;
+      record.effectStyleId = effectStyleIdByNodeId.get(record.nodeId) || null;
+    }
+    const requiredCollectionNames = /* @__PURE__ */ new Set(["Onda \xB7 Semantic \xB7 Light", "Onda \xB7 Semantic \xB7 Dark", "Onda \xB7 Dimension"]);
+    const requiredSemanticNames = /* @__PURE__ */ new Set(["color/border", ...secondaryRequiredTextTokens(), ...secondaryRequiredSurfaceTokens()]);
+    const requiredVariableNamesByCollection = /* @__PURE__ */ new Map([
+      ["Onda \xB7 Semantic \xB7 Light", requiredSemanticNames],
+      ["Onda \xB7 Semantic \xB7 Dark", requiredSemanticNames],
+      ["Onda \xB7 Dimension", new Set(definitionEntries.flatMap(({ definition: definition2 }) => definition2.regions.flatMap((region) => [
+        region.itemSpacing,
+        region.padding.top,
+        region.padding.right,
+        region.padding.bottom,
+        region.padding.left
+      ])).filter((value) => value > 0).map((value) => `spacing/${value}`))]
+    ]);
+    const localCollections = await figma.variables.getLocalVariableCollectionsAsync();
+    const collections = localCollections.filter((collection) => requiredCollectionNames.has(collection.name)).map((collection) => ({
+      id: collection.id,
+      name: collection.name,
+      owner: collection.getSharedPluginData("onda", "owner")
+    }));
+    const collectionById = new Map(collections.map((collection) => [collection.id, collection]));
+    const variables = (await figma.variables.getLocalVariablesAsync()).flatMap((variable) => {
+      var _a;
+      const collection = collectionById.get(variable.variableCollectionId);
+      if (!collection || !((_a = requiredVariableNamesByCollection.get(collection.name)) == null ? void 0 : _a.has(variable.name))) return [];
+      return [{
+        id: variable.id,
+        nodeId: variable.id,
+        name: variable.name,
+        owner: variable.getSharedPluginData("onda", "owner"),
+        collectionId: collection.id,
+        collectionName: collection.name
+      }];
+    });
+    const effectStyles = (await figma.getLocalEffectStylesAsync()).filter((style) => style.getSharedPluginData("onda", "owner") === PLUGIN_ORIGIN || style.name === "Onda/Shadow/Overlay").map((style) => ({
+      id: style.id,
+      name: style.name,
+      owner: style.getSharedPluginData("onda", "owner"),
+      effects: cloneSerializable(style.effects)
+    }));
+    return __spreadProps(__spreadValues({}, evidence), { collections, variables, effectStyles });
+  }
   async function runVerify() {
     const inspection = await inspectCurrentTarget();
     const page = figma.currentPage;
@@ -6170,6 +6605,7 @@ ${result.errors.join("\n")}`);
     }).filter((item) => item.family && item.state);
     const componentEvidence = await collectComponentEvidence(page);
     const coreViewEvidence = await collectCoreViewEvidence(page);
+    const secondaryViewEvidence = await collectSecondaryViewEvidence(page);
     const componentSets = componentEvidence.componentSets;
     const baseline = await currentBaselineEvidence(page, ledger);
     const geometry = geometryEvidence(page, sections, allNodes, ledger, baseline.baselineRecords);
@@ -6184,7 +6620,7 @@ ${result.errors.join("\n")}`);
       return (_b = (_a = ledger.fontDecision) == null ? void 0 : _a.styles) == null ? void 0 : _b[weight];
     });
     const reactionCount = (await Promise.all(allNodes.map(async (node) => typeof node.getReactionsAsync === "function" ? (await node.getReactionsAsync()).length : 0))).reduce((total, count) => total + count, 0);
-    const report = buildVerificationReport(__spreadProps(__spreadValues({
+    const report = buildVerificationReport(__spreadProps(__spreadValues(__spreadProps(__spreadValues({
       targetAuthorized: authorization.ok,
       pageCount: figma.root.children.length,
       pageName: page.name,
@@ -6203,7 +6639,8 @@ ${result.errors.join("\n")}`);
       componentSets,
       componentTargetPage: componentEvidence.targetPage,
       componentContainers: componentEvidence.containers,
-      coreViews: coreViewEvidence,
+      coreViews: coreViewEvidence
+    }, secondaryViewEvidence === void 0 ? {} : { secondaryViews: secondaryViewEvidence }), {
       instanceCount: allNodes.filter((node) => node.type === "INSTANCE" && node.getPluginData("ondaDocumentationInstance") !== "true").length,
       documentationInstanceCount: allNodes.filter((node) => node.type === "INSTANCE" && node.getPluginData("ondaDocumentationInstance") === "true").length,
       repeatedScreenInstanceCount: allNodes.filter((node) => node.type === "INSTANCE" && node.getPluginData("ondaRepeatedScreenInstance") === "true").length,
@@ -6214,7 +6651,7 @@ ${result.errors.join("\n")}`);
         fontsValid: fontStylesValid,
         docsBound: foundationNodes.length > 0 && foundationNodes.every((node) => node.getPluginData("ondaFoundationBound") === "true")
       }, foundationEvidence)
-    }, geometry), {
+    }), geometry), {
       reactionCount,
       requiredReactionCount: 4,
       phases: ledger.phases,
