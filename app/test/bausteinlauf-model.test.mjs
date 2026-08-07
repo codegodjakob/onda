@@ -161,3 +161,120 @@ test('Ueberschriften und leere Absaetze brauchen nie einen Namen', () => {
 test('die Funktionsschluessel bleiben genau die, die die Rechenlogik vergleicht', () => {
   assert.deepEqual([...FUNKTIONEN], ['claim', 'evidence', 'counterpoint', 'transition', 'question'])
 })
+
+import {
+  bausteinNamen,
+  bausteinRollen,
+  bestandAusAltenRollen,
+  normalisiereBausteinarten,
+} from '../src/bausteinlauf-model.mjs'
+import { ensureWorkspaceState } from '../src/workspace-model.mjs'
+
+test('Unfug wird zu null, nicht zu einer halben Ablage', () => {
+  assert.equal(normalisiereBausteinarten(null), null)
+  assert.equal(normalisiereBausteinarten('Befund'), null)
+  assert.equal(normalisiereBausteinarten({ arten: [] }), null)
+  assert.equal(normalisiereBausteinarten({ arten: [{ name: '   ' }] }), null)
+})
+
+test('eine gueltige Ablage bleibt erhalten und bekommt fehlende Felder', () => {
+  const bestand = normalisiereBausteinarten({
+    textsorte: 'Essay',
+    arten: [{ id: 'art-1', name: 'Wendung', funktion: 'transition' }],
+    zuordnung: { b1: { artId: 'art-1', zeichen: 42 } },
+  })
+  assert.equal(bestand.textsorte, 'Essay')
+  assert.deepEqual(bestand.arten, [{ id: 'art-1', name: 'Wendung', beschreibung: '', funktion: 'transition' }])
+  assert.deepEqual(bestand.zuordnung, { b1: { artId: 'art-1', zeichen: 42 } })
+  assert.equal(bestand.laufSignatur, '')
+  assert.equal(bestand.standAt, 0)
+})
+
+test('eine unbekannte Funktion wird zu null, die Art selbst bleibt', () => {
+  const bestand = normalisiereBausteinarten({
+    arten: [{ id: 'art-1', name: 'Pointe', funktion: 'zuspitzung' }],
+  })
+  assert.equal(bestand.arten[0].funktion, null)
+  assert.equal(bestand.arten[0].name, 'Pointe')
+})
+
+test('eine Zuordnung auf eine unbekannte Art faellt weg', () => {
+  const bestand = normalisiereBausteinarten({
+    arten: [{ id: 'art-1', name: 'Befund', funktion: null }],
+    zuordnung: { b1: { artId: 'art-1', zeichen: 5 }, b2: { artId: 'art-99', zeichen: 5 } },
+  })
+  assert.deepEqual(Object.keys(bestand.zuordnung), ['b1'])
+})
+
+test('doppelte Namen werden zusammengefasst, der erste gewinnt', () => {
+  const bestand = normalisiereBausteinarten({
+    arten: [
+      { id: 'art-1', name: 'Befund', funktion: 'evidence' },
+      { id: 'art-2', name: 'befund', funktion: 'claim' },
+    ],
+    zuordnung: { b1: { artId: 'art-2', zeichen: 5 } },
+  })
+  assert.equal(bestand.arten.length, 1)
+  assert.equal(bestand.arten[0].id, 'art-1')
+  assert.equal(bestand.zuordnung.b1.artId, 'art-1')
+})
+
+const ALT_JSON = {
+  content: [
+    { type: 'paragraph', attrs: { blockId: 'b1', semanticRole: 'claim' }, content: [{ type: 'text', text: 'Die tragende Aussage.' }] },
+    { type: 'paragraph', attrs: { blockId: 'b2', semanticRole: 'counterpoint' }, content: [{ type: 'text', text: 'Der Einwand.' }] },
+    { type: 'paragraph', attrs: { blockId: 'b3', semanticRole: 'paragraph' }, content: [{ type: 'text', text: 'Ein gewoehnlicher Absatz.' }] },
+    { type: 'heading', attrs: { blockId: 'h1', level: 2, semanticRole: 'heading' }, content: [{ type: 'text', text: 'Zwischentitel' }] },
+  ],
+}
+
+test('alte Sechser-Rollen ergeben einen Anfangsbestand mit den alten Woertern', () => {
+  const bestand = bestandAusAltenRollen(ALT_JSON, 1234)
+  assert.equal(bestand.textsorte, null)
+  assert.deepEqual(bestand.arten.map(art => art.name), ['Kernbehauptung', 'Gegenposition'])
+  assert.deepEqual(bestand.arten.map(art => art.funktion), ['claim', 'counterpoint'])
+  assert.deepEqual(Object.keys(bestand.zuordnung), ['b1', 'b2'])
+  assert.equal(bestand.zuordnung.b1.zeichen, 'Die tragende Aussage.'.length)
+  assert.equal(bestand.standAt, 1234)
+  assert.equal(bestand.laufSignatur, 'b1|b2|b3|h1')
+})
+
+test('die Uebernahme liest das ROHE Dokument, nicht die Bloecke', () => {
+  // Ab Task 7 traegt ein Block aus collectBlockSnapshots die alte Rolle nicht mehr.
+  // Wer diese Funktion mit Bloecken fuettert, bekaeme still null -- und alte Dokumente
+  // verloeren ihre Rollen unbemerkt. Diese Pruefung nagelt die Quelle fest.
+  const bloeckeStattJson = [{ id: 'b1', type: 'paragraph', role: 'claim', text: 'Die tragende Aussage.' }]
+  assert.equal(bestandAusAltenRollen(bloeckeStattJson, 1), null)
+  assert.ok(bestandAusAltenRollen(ALT_JSON, 1))
+})
+
+test('ohne alte Rollen entsteht kein Anfangsbestand', () => {
+  const ohne = { content: [{ type: 'paragraph', attrs: { blockId: 'b1' }, content: [{ type: 'text', text: 'Nur Text.' }] }] }
+  assert.equal(bestandAusAltenRollen(ohne, 1), null)
+})
+
+test('Nachschlagekarten trennen unsichtbare Funktion von sichtbarem Namen', () => {
+  const bestand = normalisiereBausteinarten({
+    arten: [
+      { id: 'art-1', name: 'Befund', funktion: 'evidence' },
+      { id: 'art-2', name: 'Einordnung', funktion: null },
+    ],
+    zuordnung: { b1: { artId: 'art-1', zeichen: 5 }, b2: { artId: 'art-2', zeichen: 5 } },
+  })
+  assert.deepEqual([...bausteinRollen(bestand)], [['b1', 'evidence']])
+  assert.deepEqual([...bausteinNamen(bestand)], [['b1', 'Befund'], ['b2', 'Einordnung']])
+})
+
+test('ensureWorkspaceState raeumt eine kaputte Ablage weg und laesst eine gute stehen', () => {
+  const kaputt = { workspace: { bausteinarten: { arten: 'nein' } } }
+  ensureWorkspaceState(kaputt)
+  assert.equal(kaputt.workspace.bausteinarten, null)
+
+  const gut = {
+    workspace: {
+      bausteinarten: { arten: [{ id: 'art-1', name: 'Befund', funktion: 'evidence' }], zuordnung: {} },
+    },
+  }
+  ensureWorkspaceState(gut)
+  assert.equal(gut.workspace.bausteinarten.arten[0].name, 'Befund')
+})

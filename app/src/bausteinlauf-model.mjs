@@ -73,3 +73,141 @@ export function pruefeBausteinBedarf({ blocks, bestand, grenze = UMSCHREIB_GRENZ
 
   return { noetig: true, grund: ohneNamen.length ? 'ohne-namen' : 'umgeschrieben', offene }
 }
+
+const ALTE_ROLLEN = Object.freeze({
+  claim: 'Kernbehauptung',
+  evidence: 'Beleg',
+  counterpoint: 'Gegenposition',
+  transition: 'Übergang',
+  question: 'Offene Frage',
+})
+
+function text(wert) {
+  return typeof wert === 'string' ? wert.trim() : ''
+}
+
+// Aus einer gespeicherten Datei kommt Verdachtsmaterial: aeltere Fassung, von Hand
+// bearbeitet, halb geschrieben. Entweder wird daraus eine vollstaendig gueltige Ablage
+// oder null — nie eine halbe, an der spaeter etwas stillschweigend fehlt.
+export function normalisiereBausteinarten(wert) {
+  if (!wert || typeof wert !== 'object' || Array.isArray(wert)) return null
+  if (!Array.isArray(wert.arten)) return null
+
+  const arten = []
+  const nachName = new Map()
+  const umleitung = new Map()
+  wert.arten.forEach((roh, index) => {
+    if (!roh || typeof roh !== 'object') return
+    const name = text(roh.name)
+    if (!name) return
+    const id = text(roh.id) || `art-${index + 1}`
+    const schluessel = name.toLocaleLowerCase('de')
+    const bekannt = nachName.get(schluessel)
+    if (bekannt) { umleitung.set(id, bekannt); return }
+    const art = {
+      id,
+      name,
+      beschreibung: text(roh.beschreibung),
+      funktion: FUNKTIONEN.includes(roh.funktion) ? roh.funktion : null,
+    }
+    arten.push(art)
+    nachName.set(schluessel, id)
+    umleitung.set(id, id)
+  })
+  if (!arten.length) return null
+
+  const zuordnung = {}
+  const roheZuordnung = wert.zuordnung && typeof wert.zuordnung === 'object' ? wert.zuordnung : {}
+  Object.entries(roheZuordnung).forEach(([blockId, eintrag]) => {
+    if (!text(blockId) || !eintrag || typeof eintrag !== 'object') return
+    const artId = umleitung.get(text(eintrag.artId))
+    if (!artId) return
+    zuordnung[blockId] = { artId, zeichen: Math.max(0, Number(eintrag.zeichen) || 0) }
+  })
+
+  return {
+    textsorte: text(wert.textsorte) || null,
+    arten,
+    zuordnung,
+    laufSignatur: typeof wert.laufSignatur === 'string' ? wert.laufSignatur : '',
+    standAt: Number(wert.standAt) || 0,
+  }
+}
+
+function knotenText(node) {
+  if (!node) return ''
+  if (node.type === 'text') return node.text || ''
+  return (Array.isArray(node.content) ? node.content : []).map(knotenText).join('')
+}
+
+// Ein Dokument aus der Sechser-Zeit verliert seine Rollen nicht: Sie werden mit ihren
+// alten deutschen Woertern zum Anfangsbestand. Der naechste Lauf ersetzt ihn.
+// 'paragraph' war die Voreinstellung, keine Entscheidung — daraus entsteht nichts.
+//
+// WICHTIG: Diese Funktion nimmt das ROHE Tiptap-JSON, nicht die Bloecke aus
+// collectBlockSnapshots. Seit dem 7. August 2026 liest collectBlockSnapshots das alte
+// Merkmal semanticRole nicht mehr (die Bausteinart liegt neben dem Text). Ueber Bloecke
+// gefuettert fände diese Funktion also NIE eine alte Rolle und waere ein stiller No-Op.
+// Sie ist die einzige Stelle im Programm, die das Alt-Merkmal noch kennt -- genau das
+// ist ihre Aufgabe.
+export function bestandAusAltenRollen(docJson, jetzt = Date.now()) {
+  const knoten = docJson && Array.isArray(docJson.content) ? docJson.content : []
+  const arten = []
+  const nachRolle = new Map()
+  const zuordnung = {}
+  const kennungen = []
+
+  knoten.forEach(node => {
+    const id = node?.attrs?.blockId
+    if (!id) return
+    kennungen.push(id)
+    if (node.type === 'heading') return
+    const rolle = node?.attrs?.semanticRole
+    const name = ALTE_ROLLEN[rolle]
+    if (!name) return
+    const inhalt = knotenText(node).trim()
+    if (!inhalt) return
+    if (!nachRolle.has(rolle)) {
+      const art = { id: `art-alt-${rolle}`, name, beschreibung: '', funktion: rolle }
+      arten.push(art)
+      nachRolle.set(rolle, art.id)
+    }
+    zuordnung[id] = { artId: nachRolle.get(rolle), zeichen: inhalt.length }
+  })
+
+  if (!arten.length) return null
+  return {
+    textsorte: null,
+    arten,
+    zuordnung,
+    laufSignatur: kennungen.join('|'),
+    standAt: Number(jetzt) || 0,
+  }
+}
+
+// Zwei getrennte Karten, weil zwei getrennte Zwecke: Die Funktion speist block.role und
+// damit die Rechenlogik; der Name steht in der Struktur-Spalte. Eine Art ohne Funktion
+// hat trotzdem einen Namen — sie taucht nur in der Rechenlogik nicht auf.
+export function bausteinRollen(bestand) {
+  const karte = new Map()
+  const gueltig = normalisiereBausteinarten(bestand)
+  if (!gueltig) return karte
+  const funktionen = new Map(gueltig.arten.map(art => [art.id, art.funktion]))
+  Object.entries(gueltig.zuordnung).forEach(([blockId, eintrag]) => {
+    const funktion = funktionen.get(eintrag.artId)
+    if (funktion) karte.set(blockId, funktion)
+  })
+  return karte
+}
+
+export function bausteinNamen(bestand) {
+  const karte = new Map()
+  const gueltig = normalisiereBausteinarten(bestand)
+  if (!gueltig) return karte
+  const namen = new Map(gueltig.arten.map(art => [art.id, art.name]))
+  Object.entries(gueltig.zuordnung).forEach(([blockId, eintrag]) => {
+    const name = namen.get(eintrag.artId)
+    if (name) karte.set(blockId, name)
+  })
+  return karte
+}
