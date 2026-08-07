@@ -96,15 +96,15 @@ export function normalisiereBausteinarten(wert) {
   const arten = []
   const nachName = new Map()
   const umleitung = new Map()
-  const benutztIds = new Set()
   wert.arten.forEach((roh, index) => {
     if (!roh || typeof roh !== 'object') return
     const name = text(roh.name)
     if (!name) return
     const id = text(roh.id) || `art-${index + 1}`
 
-    // Bei doppelten Ids gewinnt der erste Eintrag — die zweite Art faellt weg
-    if (benutztIds.has(id)) {
+    // Bei doppelten Ids gewinnt der erste Eintrag — die zweite Art faellt weg.
+    // umleitung ist die vollstaendige Liste aller verbrauchten Ids, ob direkt oder via Namensumleitung.
+    if (umleitung.has(id)) {
       return
     }
 
@@ -119,7 +119,6 @@ export function normalisiereBausteinarten(wert) {
     }
     arten.push(art)
     nachName.set(schluessel, id)
-    benutztIds.add(id)
     umleitung.set(id, id)
   })
   if (!arten.length) return null

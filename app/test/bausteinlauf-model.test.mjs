@@ -315,3 +315,24 @@ test('bei doppelten Ids gewinnt der erste Eintrag, der zweite faellt weg', () =>
   assert.equal(bestand.zuordnung.b1.artId, 'art-dup')
   assert.equal(bestand.zuordnung.b2.artId, 'art-dup')
 })
+
+test('eine Id, die via Namensumleitung verbraucht wurde, bleibt fuer spätere Eintraege gesperrt', () => {
+  const bestand = normalisiereBausteinarten({
+    arten: [
+      { id: 'a1', name: 'Befund', funktion: 'evidence' },
+      { id: 'x', name: 'Befund', funktion: 'claim' },  // Namensdup: umleitung.set('x', 'a1'), kein art
+      { id: 'x', name: 'Anderes', funktion: 'transition' },  // Geblockt: 'x' ist bereits in umleitung
+    ],
+    zuordnung: {
+      b1: { artId: 'x', zeichen: 5 },
+    },
+  })
+  // Nur der erste Eintrag bleibt; der dritte wurde abgelehnt weil seine Id schon verbraucht ist
+  assert.equal(bestand.arten.length, 1)
+  assert.equal(bestand.arten[0].name, 'Befund')
+  assert.equal(bestand.arten[0].id, 'a1')
+
+  // b1 mit artId 'x' loest zur ersten Art auf, nicht zu einer dritten
+  assert.equal(bestand.zuordnung.b1.artId, 'a1')
+  assert.equal(bestand.zuordnung.b1.artId, bestand.arten[0].id)
+})
