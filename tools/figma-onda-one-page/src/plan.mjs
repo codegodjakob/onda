@@ -10,6 +10,7 @@ import {
   PLUGIN_ORIGIN,
   RADIUS_TOKENS,
   SEMANTIC_COLOR_ROLES,
+  SECONDARY_VIEW_DEFINITIONS,
   SECTION_DEFINITIONS,
   SPACING_TOKENS,
   TARGET_DOCUMENT_NAME,
@@ -857,6 +858,549 @@ export async function executeGuardedCoreViewCommand({ command, phases, preflight
   const writeBarrierValidation = validateCoreViewMutationInventory(writeBarrierInventory)
   if (!writeBarrierValidation.valid) throw new Error(`TOCTOU: Core-View-Inventar an der Schreibbarriere ungültig.\n${writeBarrierValidation.errors.join('\n')}`)
   if (JSON.stringify(canonicalCoreViewMutationSnapshot(currentInventory)) !== JSON.stringify(canonicalCoreViewMutationSnapshot(writeBarrierInventory))) throw new Error('TOCTOU: Core-View-Inventar wurde vor dem ersten Schreibzugriff verändert.')
+  return mutate(context, writeBarrierInventory, resolvedInventoryNodes)
+}
+
+const SECONDARY_SECTION_NAMES = Object.freeze([
+  '07 · Agent & Quellen',
+  '09 · Menüs & Nebenansichten',
+  '10 · Responsive & Dark',
+])
+
+const SECONDARY_LEGACY_VIEW_SECTIONS = Object.freeze({
+  'Agent · Ruhe': '07 · Agent & Quellen',
+  'Agent · Gespräch': '07 · Agent & Quellen',
+  'Agent · Antwort mit Fundstelle': '07 · Agent & Quellen',
+  'Agent · Fehler und Rückkehr': '07 · Agent & Quellen',
+  'Dokumentmenü · geschlossen': '09 · Menüs & Nebenansichten',
+  'Dokumentmenü · offen': '09 · Menüs & Nebenansichten',
+  'Quellenleser · offen': '09 · Menüs & Nebenansichten',
+  'Recherchelauf · pausiert': '09 · Menüs & Nebenansichten',
+  'Entscheidungsverlauf · gefüllt': '09 · Menüs & Nebenansichten',
+  'Leerer Zustand · Recovery': '09 · Menüs & Nebenansichten',
+  'Editor / 1440px · Responsive': '10 · Responsive & Dark',
+  'Editor / 1024px · Responsive': '10 · Responsive & Dark',
+  'Editor / 720px · Responsive': '10 · Responsive & Dark',
+  'Editor / 320px · Kleinbreite': '10 · Responsive & Dark',
+  'Editor / 1440px · Dark': '10 · Responsive & Dark',
+})
+
+const SECONDARY_LEGACY_RESPONSIVE_WIDTHS = Object.freeze({
+  'Editor / 1440px · Responsive': '1440',
+  'Editor / 1024px · Responsive': '1024',
+  'Editor / 720px · Responsive': '720',
+  'Editor / 320px · Kleinbreite': '320',
+  'Editor / 1440px · Dark': '1440',
+})
+
+function secondaryDefinitionsWithGroups() {
+  return Object.entries(SECONDARY_VIEW_DEFINITIONS)
+    .flatMap(([group, definitions]) => definitions.map(definition => ({ group, definition })))
+}
+
+function secondaryNodeId(record) {
+  return record?.nodeId || record?.id || null
+}
+
+function secondaryOwner(record) {
+  return record?.owner ?? record?.pluginData?.owner ?? null
+}
+
+function secondaryMarker(record) {
+  if (record?.secondaryView && typeof record.secondaryView === 'object') return record.secondaryView
+  const raw = record?.pluginData?.secondaryView
+  if (!raw || typeof raw !== 'string') return null
+  try { return JSON.parse(raw) } catch (_error) { return { invalid: true } }
+}
+
+function secondaryUntouchedPageChildLooksTargeted(record, modernViewNames) {
+  const markerKeys = ['secondaryView', 'ondaSecondaryView', 'responsiveFrame', 'ondaResponsiveFrame', 'legacy']
+  const hasMarker = markerKeys.some(key => [record?.[key], record?.pluginData?.[key]]
+    .some(value => value !== undefined && value !== null && value !== ''))
+  const hasRole = [record?.role, record?.pluginData?.role]
+    .some(value => value !== undefined && value !== null && value !== '')
+  const hasOndaOwner = [record?.owner, record?.pluginData?.owner].includes(PLUGIN_ORIGIN)
+  return modernViewNames.has(record?.name)
+    || Object.hasOwn(SECONDARY_LEGACY_VIEW_SECTIONS, record?.name)
+    || hasMarker
+    || hasRole
+    || (hasOndaOwner && record?.type !== 'SECTION')
+}
+
+function secondaryExpectedMarker(group, definition) {
+  return {
+    group,
+    theme: definition.theme,
+    subject: definition.subject || null,
+    breakpoint: definition.breakpoint ?? null,
+  }
+}
+
+function secondaryLegacyChildren(view) {
+  return [
+    ...(Array.isArray(view?.standIns) ? view.standIns : []),
+    ...(Array.isArray(view?.legacyChildren) ? view.legacyChildren : []),
+    ...(Array.isArray(view?.children) ? view.children : []),
+  ]
+}
+
+function secondaryDuplicateNames(records, key, label, errors) {
+  const seen = new Set()
+  for (const record of records) {
+    const value = record?.[key]
+    if (seen.has(value)) errors.push(`Secondary-Views: doppelter ${label} ${record?.name || value || '<unbenannt>'}`)
+    else seen.add(value)
+  }
+}
+
+function secondaryRecordOwnedAndIdentified(record) {
+  return Boolean(secondaryNodeId(record)) && secondaryOwner(record) === PLUGIN_ORIGIN
+}
+
+function sameSecondaryIdentity(left, right) {
+  return ['nodeId', 'id', 'name', 'type', 'owner', 'parentId', 'parentType', 'parentName']
+    .every(key => (left?.[key] ?? null) === (right?.[key] ?? null))
+}
+
+function validateSecondaryRecordedAncestry(record, root, label, identify, errors) {
+  const rootId = secondaryNodeId(root)
+  const chain = Array.isArray(record?.ancestorChain) ? record.ancestorChain : []
+  if (record?.parentId === rootId) {
+    if (record.parentType !== root.type || record.parentName !== root.name || chain.length) {
+      errors.push(`Secondary-Views: falsche Ancestry ${label}`)
+      return false
+    }
+    if (Array.isArray(record.ancestorIds) && !sameSecondaryValue(record.ancestorIds, [rootId])) errors.push(`Secondary-Views: falsche Ancestor-IDs ${label}`)
+    return true
+  }
+  if (!chain.length) {
+    errors.push(`Secondary-Views: unvollständige Ancestry-Kette ${label}`)
+    return false
+  }
+  let valid = true
+  if (record.parentId !== secondaryNodeId(chain[0]) || record.parentType !== chain[0]?.type || record.parentName !== chain[0]?.name) valid = false
+  for (const [index, ancestor] of chain.entries()) {
+    identify(ancestor, `${label}/${ancestor?.name || 'Ancestor'}`, true)
+    if (!secondaryRecordOwnedAndIdentified(ancestor) || !['FRAME', 'GROUP', 'INSTANCE'].includes(ancestor.type)) valid = false
+    const parent = chain[index + 1] || root
+    if (ancestor.parentId !== secondaryNodeId(parent) || ancestor.parentType !== parent.type || ancestor.parentName !== parent.name) valid = false
+  }
+  const expectedAncestorIds = [...chain.map(secondaryNodeId), rootId]
+  if (!sameSecondaryValue(record.ancestorIds, expectedAncestorIds)) valid = false
+  if (!valid) errors.push(`Secondary-Views: falsche Ancestry-Kette ${label}`)
+  return valid
+}
+
+function reconcileSecondaryContainerChildren(records, errors, untouchedPageChildren = []) {
+  const recordById = new Map(records.map(record => [secondaryNodeId(record), record]))
+  const directChildren = new Map(records.map(record => [secondaryNodeId(record), []]))
+  for (const child of records) {
+    const parentId = child?.parentId
+    if (parentId && recordById.has(parentId)) directChildren.get(parentId).push(secondaryNodeId(child))
+  }
+  for (const child of untouchedPageChildren) if (directChildren.has(child?.parentId)) directChildren.get(child.parentId).push(secondaryNodeId(child))
+  for (const container of records.filter(record => ['PAGE', 'SECTION', 'FRAME', 'GROUP', 'INSTANCE'].includes(record?.type))) {
+    const containerId = secondaryNodeId(container)
+    const expectedIds = directChildren.get(containerId) || []
+    const actualIds = Array.isArray(container.childIds) ? container.childIds : null
+    if (!actualIds || !Number.isInteger(container.childCount)) {
+      errors.push(`Secondary-Views: Child-Inventar fehlt ${container.name || containerId}`)
+      continue
+    }
+    const duplicates = actualIds.filter((id, index) => actualIds.indexOf(id) !== index)
+    const expectedSet = new Set(expectedIds)
+    const actualSet = new Set(actualIds)
+    const unaccounted = actualIds.filter(id => !expectedSet.has(id))
+    const missing = expectedIds.filter(id => !actualSet.has(id))
+    if (container.childCount !== actualIds.length || actualIds.length !== expectedIds.length || duplicates.length || unaccounted.length || missing.length) {
+      const detail = [...new Set([...unaccounted, ...missing, ...duplicates])].join(', ') || `${container.childCount}/${actualIds.length}/${expectedIds.length}`
+      errors.push(`Secondary-Views: Child-Inventar ungültig ${container.name || containerId}: ${detail}`)
+    }
+  }
+}
+
+function secondaryExpectedComponentLink(inventory, contract) {
+  const components = Array.isArray(inventory.components) ? inventory.components : Array.isArray(inventory.componentSets) ? inventory.componentSets : []
+  const component = components.find(candidate => candidate.id === contract.setId || candidate.componentId === contract.setId)
+  const variant = (component?.variants || []).find(candidate => candidate.name === contract.variant)
+  if (component?.type !== 'COMPONENT_SET'
+    || secondaryOwner(component) !== PLUGIN_ORIGIN
+    || variant?.type !== 'COMPONENT'
+    || secondaryOwner(variant) !== PLUGIN_ORIGIN
+    || variant.parentId !== secondaryNodeId(component)
+    || variant.parentType !== 'COMPONENT_SET'
+    || variant.parentName !== component.name) return null
+  return { componentSetId: secondaryNodeId(component), mainComponentId: secondaryNodeId(variant) }
+}
+
+function secondaryVariableId(inventory, name) {
+  const matches = (inventory.variables || []).filter(variable => variable.name === name)
+  return matches.length === 1 ? matches[0].id || matches[0].nodeId || null : null
+}
+
+function expectedSecondaryRegionBindings(inventory, contract) {
+  const surfaceId = secondaryVariableId(inventory, 'color/surface')
+  const borderId = secondaryVariableId(inventory, 'color/border')
+  const spacingId = value => value === 0 ? [] : [secondaryVariableId(inventory, `spacing/${value}`)].filter(Boolean)
+  const requiredSpacingValues = [contract.itemSpacing, contract.padding.top, contract.padding.right, contract.padding.bottom, contract.padding.left].filter(value => value !== 0)
+  if (!surfaceId || !borderId || requiredSpacingValues.some(value => spacingId(value).length !== 1)) return null
+  return {
+    fillBindings: [{ index: 0, type: 'SOLID', variableIds: [surfaceId] }],
+    strokeBindings: [{ index: 0, type: 'SOLID', variableIds: [borderId] }],
+    fieldVariableIds: {
+      itemSpacing: spacingId(contract.itemSpacing),
+      paddingTop: spacingId(contract.padding.top),
+      paddingRight: spacingId(contract.padding.right),
+      paddingBottom: spacingId(contract.padding.bottom),
+      paddingLeft: spacingId(contract.padding.left),
+    },
+  }
+}
+
+function secondaryRegionBindingsMatch(region, expected) {
+  if (!expected) return false
+  if (!sameSecondaryValue(region.fillBindings, expected.fillBindings) || !sameSecondaryValue(region.strokeBindings, expected.strokeBindings)) return false
+  return Object.entries(expected.fieldVariableIds).every(([field, ids]) => sameSecondaryValue(region.fieldVariableIds?.[field] || [], ids))
+}
+
+export function validateSecondaryViewMutationInventory(inventory = {}) {
+  const errors = []
+  const targetPage = inventory.targetPage
+  const targetPageId = secondaryNodeId(targetPage)
+  const sections = Array.isArray(inventory.sections) ? inventory.sections : []
+  const views = Array.isArray(inventory.views) ? inventory.views : []
+  const legacyViews = Array.isArray(inventory.legacyViews) ? inventory.legacyViews : []
+  const untouchedPageChildren = Array.isArray(inventory.untouchedPageChildren) ? inventory.untouchedPageChildren : []
+  const sectionNames = new Set(SECONDARY_SECTION_NAMES)
+  const definitions = secondaryDefinitionsWithGroups()
+  const definitionByName = new Map(definitions.map(entry => [entry.definition.name, entry]))
+  const modernViewNames = new Set(definitionByName.keys())
+  const sectionByName = new Map(sections.map(section => [section.name, section]))
+  const seenNodeIds = new Map()
+  const categorizedRecords = []
+
+  function identify(record, context, repeatedAncestorReference = false) {
+    const id = secondaryNodeId(record)
+    if (!id) return
+    const seen = seenNodeIds.get(id)
+    if (seen) {
+      if (!repeatedAncestorReference || !seen.ancestor || !sameSecondaryIdentity(seen.record, record)) errors.push(`Secondary-Views: doppelte Node-ID ${id} bei ${record?.name || context}`)
+      return
+    }
+    seenNodeIds.set(id, { context, record, ancestor: repeatedAncestorReference })
+    categorizedRecords.push(record)
+  }
+
+  if (!targetPageId || targetPage?.type !== 'PAGE' || targetPage?.name !== TARGET_PAGE_NAME) errors.push('Secondary-Views: Zielseite Page 1 ungültig')
+  else identify(targetPage, TARGET_PAGE_NAME)
+
+  secondaryDuplicateNames(sections, 'name', 'Section', errors)
+  for (const section of sections) {
+    identify(section, section.name)
+    if (!sectionNames.has(section.name)
+      || section.type !== 'SECTION'
+      || !secondaryRecordOwnedAndIdentified(section)
+      || section.parentId !== targetPageId
+      || section.parentType !== 'PAGE'
+      || section.parentName !== TARGET_PAGE_NAME) errors.push(`Secondary-Views: ungültige Section ${section.name || '<unbenannt>'}`)
+  }
+
+  secondaryDuplicateNames(views, 'name', 'View', errors)
+  secondaryDuplicateNames(legacyViews, 'name', 'Legacy-View', errors)
+
+  for (const view of views) {
+    const entry = definitionByName.get(view.name)
+    identify(view, view.name)
+    if (!entry) {
+      errors.push(`Secondary-Views: unerwarteter oder unbekannt markierter View-Kandidat ${view.name || '<unbenannt>'}`)
+      continue
+    }
+    const { definition } = entry
+    const section = sectionByName.get(definition.sectionName)
+    if (!secondaryRecordOwnedAndIdentified(view)
+      || view.type !== 'FRAME'
+      || !section
+      || view.parentId !== secondaryNodeId(section)
+      || view.parentType !== 'SECTION'
+      || view.parentName !== definition.sectionName) errors.push(`Secondary-Views: ungültiger View ${view.name}`)
+
+    const layoutRegions = Array.isArray(view.layoutRegions) ? view.layoutRegions : []
+    const copyNodes = Array.isArray(view.copyNodes) ? view.copyNodes : []
+    const instances = Array.isArray(view.instances) ? view.instances : []
+    const standIns = Array.isArray(view.standIns) ? view.standIns : []
+    const expectedRegions = new Map(definition.regions.map(region => [region.name, region]))
+    const regionByName = new Map(layoutRegions.map(region => [region.name, region]))
+
+    secondaryDuplicateNames(layoutRegions, 'name', `Region in ${view.name}`, errors)
+    for (const region of layoutRegions) {
+      identify(region, `${view.name}/${region.name}`)
+      const contract = expectedRegions.get(region.name)
+      if (!contract) {
+        errors.push(`Secondary-Views: unerwartete Region ${view.name}/${region.name || '<unbenannt>'}`)
+        continue
+      }
+      const expectedParent = contract.parentName === definition.name ? view : regionByName.get(contract.parentName)
+      if (!secondaryRecordOwnedAndIdentified(region)
+        || region.type !== 'FRAME'
+        || !expectedParent
+        || region.parentId !== secondaryNodeId(expectedParent)
+        || region.parentType !== 'FRAME'
+        || region.parentName !== contract.parentName) errors.push(`Secondary-Views: falsche Region-Ancestry ${view.name}/${region.name}`)
+    }
+
+    secondaryDuplicateNames(copyNodes, 'role', `Copy in ${view.name}`, errors)
+    for (const copy of copyNodes) {
+      identify(copy, `${view.name}/${copy.name}`)
+      const contract = definition.copyContracts.find(candidate => candidate.role === copy.role)
+      const parent = regionByName.get(contract?.region)
+      if (!contract) errors.push(`Secondary-Views: unerwartete Copy ${view.name}/${copy.name || copy.role || '<unbenannt>'}`)
+      else if (!secondaryRecordOwnedAndIdentified(copy)
+        || copy.type !== 'TEXT'
+        || !parent
+        || copy.parentId !== secondaryNodeId(parent)
+        || copy.parentType !== 'FRAME'
+        || copy.parentName !== contract.region) errors.push(`Secondary-Views: falsche Copy-Ancestry ${view.name}/${copy.name || copy.role}`)
+    }
+
+    secondaryDuplicateNames(instances, 'name', `Instanz in ${view.name}`, errors)
+    for (const instance of instances) {
+      identify(instance, `${view.name}/${instance.name}`)
+      const contract = definition.instances.find(candidate => candidate.name === instance.name)
+      const parent = regionByName.get(contract?.region)
+      if (!contract) errors.push(`Secondary-Views: unerwartete Instanz ${view.name}/${instance.name || '<unbenannt>'}`)
+      else if (!secondaryRecordOwnedAndIdentified(instance)
+        || instance.type !== 'INSTANCE'
+        || !parent
+        || instance.parentId !== secondaryNodeId(parent)
+        || instance.parentType !== 'FRAME'
+        || instance.parentName !== contract.region) errors.push(`Secondary-Views: falsche Instanz-Ancestry ${view.name}/${instance.name}`)
+
+      const roleDescendants = Array.isArray(instance.roleDescendants) ? instance.roleDescendants : []
+      secondaryDuplicateNames(roleDescendants, 'role', `Role in ${view.name}/${instance.name}`, errors)
+      const roleIds = new Set()
+      for (const role of roleDescendants) {
+        identify(role, `${view.name}/${instance.name}/${role.name}`)
+        const roleId = secondaryNodeId(role)
+        if (roleIds.has(roleId)) errors.push(`Secondary-Views: doppelte Role-ID ${view.name}/${instance.name}/${role.name}`)
+        roleIds.add(roleId)
+        const expectedRole = contract && Object.hasOwn(contract.roleCopy, role.role)
+        const nestedUnderInstance = role.parentInstanceId === secondaryNodeId(instance)
+          && validateSecondaryRecordedAncestry(role, instance, `${view.name}/${instance.name}/${role.name || role.role || '<unbenannt>'}`, identify, errors)
+        if (!expectedRole
+          || !secondaryRecordOwnedAndIdentified(role)
+          || role.type !== 'TEXT'
+          || !nestedUnderInstance) {
+          errors.push(`Secondary-Views: ungeschützte oder verschobene Role ${view.name}/${instance.name}/${role.name || role.role || '<unbenannt>'}`)
+        }
+      }
+    }
+
+    for (const standIn of standIns) {
+      identify(standIn, `${view.name}/${standIn.name}`)
+      const belongsToView = validateSecondaryRecordedAncestry(standIn, view, `${view.name}/${standIn.name || '<unbenannt>'}`, identify, errors)
+      if (!secondaryRecordOwnedAndIdentified(standIn) || !belongsToView) errors.push(`Secondary-Views: ungeschützter oder verschobener Ersatzknoten ${view.name}/${standIn.name || '<unbenannt>'}`)
+      else if (standIn.visible !== false) errors.push(`Secondary-Views: sichtbarer Legacy-Rest ${view.name}/${standIn.name || '<unbenannt>'}`)
+    }
+  }
+
+  for (const view of legacyViews) {
+    identify(view, view.name)
+    const expectedSectionName = SECONDARY_LEGACY_VIEW_SECTIONS[view.name]
+    const section = sectionByName.get(expectedSectionName)
+    const expectedResponsiveWidth = SECONDARY_LEGACY_RESPONSIVE_WIDTHS[view.name]
+    const responsiveMarker = String(view.responsiveFrame
+      ?? view.ondaResponsiveFrame
+      ?? view.pluginData?.responsiveFrame
+      ?? view.pluginData?.ondaResponsiveFrame
+      ?? '')
+    if (!expectedSectionName
+      || !secondaryRecordOwnedAndIdentified(view)
+      || view.type !== 'FRAME'
+      || !section
+      || view.parentId !== secondaryNodeId(section)
+      || view.parentType !== 'SECTION'
+      || view.parentName !== expectedSectionName
+      || (expectedResponsiveWidth && responsiveMarker !== expectedResponsiveWidth)) {
+      errors.push(`Secondary-Views: ungültiger Legacy-View ${view.name || '<unbenannt>'}`)
+    }
+    const children = secondaryLegacyChildren(view)
+    for (const child of children) {
+      identify(child, `${view.name}/${child.name}`)
+      const belongsToView = validateSecondaryRecordedAncestry(child, view, `${view.name}/${child.name || '<unbenannt>'}`, identify, errors)
+      if (!secondaryRecordOwnedAndIdentified(child) || !belongsToView) errors.push(`Secondary-Views: ungeschütztes oder verschobenes Legacy-Kind ${view.name}/${child.name || '<unbenannt>'}`)
+    }
+  }
+
+  for (const child of untouchedPageChildren) {
+    const id = secondaryNodeId(child)
+    if (!id
+      || seenNodeIds.has(id)
+      || !child.name
+      || !child.type
+      || ['DOCUMENT', 'PAGE'].includes(child.type)
+      || sectionNames.has(child.name)
+      || secondaryUntouchedPageChildLooksTargeted(child, modernViewNames)
+      || child.parentId !== targetPageId
+      || child.parentType !== 'PAGE'
+      || child.parentName !== TARGET_PAGE_NAME) {
+      errors.push(`Secondary-Views: ungültiges unberührtes Page-Kind ${child.name || id || '<unbenannt>'}`)
+      continue
+    }
+    seenNodeIds.set(id, { context: child.name, record: child, untouchedPageChild: true })
+  }
+
+  reconcileSecondaryContainerChildren(categorizedRecords, errors, untouchedPageChildren)
+
+  return { valid: errors.length === 0, errors }
+}
+
+function sameSecondaryValue(left, right) {
+  return JSON.stringify(canonicalScalar(left)) === JSON.stringify(canonicalScalar(right))
+}
+
+export function buildSecondaryViewRecoveryActions(inventory = {}) {
+  const validation = validateSecondaryViewMutationInventory(inventory)
+  if (!validation.valid) throw new Error(validation.errors.join('\n'))
+  const actions = []
+  const sections = Array.isArray(inventory.sections) ? inventory.sections : []
+  const views = Array.isArray(inventory.views) ? inventory.views : []
+  for (const sectionName of SECONDARY_SECTION_NAMES) if (!sections.some(section => section.name === sectionName)) actions.push({ type: 'section', sectionName })
+  for (const { group, definition } of secondaryDefinitionsWithGroups()) {
+    const view = views.find(candidate => candidate.name === definition.name)
+    if (!view) {
+      actions.push({ type: 'view', viewName: definition.name })
+      continue
+    }
+    if (!sameSecondaryValue(secondaryMarker(view), secondaryExpectedMarker(group, definition))) actions.push({ type: 'mark-view', viewName: definition.name })
+    const layoutRegions = Array.isArray(view.layoutRegions) ? view.layoutRegions : []
+    for (const region of definition.regions) {
+      const candidate = layoutRegions.find(item => item.name === region.name)
+      if (!candidate) actions.push({ type: 'region', viewName: definition.name, regionName: region.name })
+      else if (!secondaryRegionBindingsMatch(candidate, expectedSecondaryRegionBindings(inventory, region))) actions.push({ type: 'bind-region', viewName: definition.name, regionName: region.name })
+    }
+    const copyNodes = Array.isArray(view.copyNodes) ? view.copyNodes : []
+    for (const contract of definition.copyContracts) {
+      const copy = copyNodes.find(candidate => candidate.role === contract.role)
+      if (!copy || copy.characters !== contract.characters) actions.push({ type: 'copy', viewName: definition.name, role: contract.role })
+    }
+    const instances = Array.isArray(view.instances) ? view.instances : []
+    for (const contract of definition.instances) {
+      const instance = instances.find(candidate => candidate.name === contract.name)
+      if (!instance) {
+        actions.push({ type: 'instance', viewName: definition.name, instanceName: contract.name })
+        continue
+      }
+      const component = COMPONENT_DEFINITIONS.find(candidate => candidate.id === contract.setId)
+      const expectedLink = secondaryExpectedComponentLink(inventory, contract)
+      if (!expectedLink
+        || instance.mainComponentId !== expectedLink.mainComponentId
+        || instance.componentSetId !== expectedLink.componentSetId
+        || instance.componentSetName !== component?.name
+        || instance.variantName !== contract.variant) actions.push({ type: 'relink-instance', viewName: definition.name, instanceName: contract.name })
+      const labelProperty = Object.entries(instance.componentProperties || {}).find(([key]) => key.split('#')[0] === 'Label')?.[1]?.value ?? null
+      if (instance.labelValue !== contract.label || labelProperty !== contract.label) actions.push({ type: 'label-instance', viewName: definition.name, instanceName: contract.name })
+      const roles = Array.isArray(instance.roleDescendants) ? instance.roleDescendants : []
+      const roleCharacters = Object.fromEntries(roles.filter(role => role.visible !== false).map(role => [role.role, role.characters]))
+      if (!sameSecondaryValue(instance.roleCopy || {}, contract.roleCopy) || !sameSecondaryValue(roleCharacters, contract.roleCopy)) actions.push({ type: 'copy-instance', viewName: definition.name, instanceName: contract.name })
+      if (instance.repeatedScreen !== true || instance.documentation === true) actions.push({ type: 'mark-instance', viewName: definition.name, instanceName: contract.name })
+    }
+  }
+  for (const legacy of inventory.legacyViews || []) {
+    if (legacy.visible !== false) actions.push({ type: 'hide-legacy-view', legacyName: legacy.name, nodeId: secondaryNodeId(legacy) })
+    for (const child of secondaryLegacyChildren(legacy)) if (child.visible !== false) actions.push({ type: 'hide-legacy-child', legacyName: legacy.name, childName: child.name, nodeId: secondaryNodeId(child) })
+  }
+  return actions
+}
+
+const SECONDARY_CANONICAL_RECORD_KEYS = Object.freeze([
+  'id', 'nodeId', 'name', 'type', 'owner', 'parentId', 'parentType', 'parentName', 'parentInstanceId', 'ancestorIds',
+  'childIds', 'childCount', 'x', 'y', 'width', 'height', 'bounds', 'absoluteBounds', 'relativeTransform', 'absoluteTransform',
+  'layoutMode', 'primaryAxisSizingMode', 'counterAxisSizingMode', 'primaryAxisAlignItems', 'counterAxisAlignItems',
+  'itemSpacing', 'counterAxisSpacing', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'layoutWrap',
+  'layoutSizingHorizontal', 'layoutSizingVertical', 'layoutPositioning', 'layoutAlign', 'layoutGrow', 'constraints',
+  'minWidth', 'maxWidth', 'minHeight', 'maxHeight', 'clipsContent',
+  'fills', 'strokes', 'strokeWeight', 'strokeAlign', 'dashPattern', 'fillStyleId', 'strokeStyleId',
+  'fillBindings', 'strokeBindings', 'fieldVariableIds', 'textRangeBindings', 'boundVariables',
+  'effects', 'effectStyleId', 'opacity', 'blendMode', 'visible', 'cornerRadius', 'topLeftRadius', 'topRightRadius', 'bottomLeftRadius', 'bottomRightRadius',
+  'pluginData', 'secondaryView', 'ondaSecondaryView', 'responsiveFrame', 'ondaResponsiveFrame', 'group', 'theme', 'subject', 'breakpoint', 'legacy',
+  'characters', 'role', 'region', 'repeatedScreen', 'documentation', 'mainComponentId', 'componentId', 'componentSetId', 'componentSetName',
+  'mainComponentName', 'variantId', 'variantName', 'labelValue', 'roleCopy', 'componentProperties',
+])
+
+function canonicalSecondaryRecord(record = {}) {
+  return Object.fromEntries(SECONDARY_CANONICAL_RECORD_KEYS.map(key => [key, canonicalScalar(record[key])]))
+}
+
+function sortSecondaryRecords(records) {
+  return [...records].sort((left, right) => {
+    const leftKey = `${left.name || left.role || ''}\u0000${secondaryNodeId(left) || ''}`
+    const rightKey = `${right.name || right.role || ''}\u0000${secondaryNodeId(right) || ''}`
+    return leftKey.localeCompare(rightKey)
+  })
+}
+
+export function canonicalSecondaryViewMutationSnapshot(inventory = {}) {
+  function descendant(record) {
+    return {
+      ...canonicalSecondaryRecord(record),
+      ancestorChain: (record.ancestorChain || []).map(canonicalSecondaryRecord),
+    }
+  }
+  function instance(record) {
+    return {
+      ...canonicalSecondaryRecord(record),
+      roleDescendants: sortSecondaryRecords((record.roleDescendants || []).map(descendant)),
+    }
+  }
+  function view(record) {
+    return {
+      ...canonicalSecondaryRecord(record),
+      layoutRegions: sortSecondaryRecords((record.layoutRegions || []).map(canonicalSecondaryRecord)),
+      copyNodes: sortSecondaryRecords((record.copyNodes || []).map(canonicalSecondaryRecord)),
+      instances: sortSecondaryRecords((record.instances || []).map(instance)),
+      standIns: sortSecondaryRecords((record.standIns || []).map(descendant)),
+      legacyChildren: sortSecondaryRecords((record.legacyChildren || []).map(descendant)),
+      children: sortSecondaryRecords((record.children || []).map(descendant)),
+    }
+  }
+  function component(record) {
+    return {
+      ...canonicalSecondaryRecord(record),
+      variants: sortSecondaryRecords((record.variants || []).map(canonicalSecondaryRecord)),
+    }
+  }
+  return {
+    targetPage: canonicalSecondaryRecord(inventory.targetPage || {}),
+    sections: sortSecondaryRecords((inventory.sections || []).map(canonicalSecondaryRecord)),
+    views: sortSecondaryRecords((inventory.views || []).map(view)),
+    legacyViews: sortSecondaryRecords((inventory.legacyViews || []).map(view)),
+    untouchedPageChildren: sortSecondaryRecords((inventory.untouchedPageChildren || []).map(canonicalSecondaryRecord)),
+    components: sortSecondaryRecords(((inventory.components || inventory.componentSets) || []).map(component)),
+    variables: sortSecondaryRecords((inventory.variables || []).map(canonicalSecondaryRecord)),
+  }
+}
+
+export async function executeGuardedSecondaryViewCommand({ command, phases, preflight, requireContext, collectCurrentInventory, resolveInventoryNodes = async () => null, mutate }) {
+  const transition = validatePhaseTransition(command, phases)
+  if (!transition.ok) throw new Error(transition.warning)
+  const preflightInventory = await preflight()
+  const preflightSnapshot = canonicalSecondaryViewMutationSnapshot(preflightInventory)
+  const context = await requireContext()
+  if (typeof collectCurrentInventory !== 'function') throw new Error('TOCTOU: zweite Secondary-View-Inventur fehlt.')
+  const currentInventory = await collectCurrentInventory(context)
+  const currentValidation = validateSecondaryViewMutationInventory(currentInventory)
+  if (!currentValidation.valid) throw new Error(`TOCTOU: aktuelles Secondary-View-Inventar ungültig.\n${currentValidation.errors.join('\n')}`)
+  const currentSnapshot = canonicalSecondaryViewMutationSnapshot(currentInventory)
+  if (!sameSecondaryValue(preflightSnapshot, currentSnapshot)) {
+    throw new Error('TOCTOU: Secondary-View-Inventar wurde nach Preflight verändert.')
+  }
+  const resolvedInventoryNodes = await resolveInventoryNodes(context, currentInventory)
+  const writeBarrierInventory = await collectCurrentInventory(context)
+  const writeBarrierValidation = validateSecondaryViewMutationInventory(writeBarrierInventory)
+  if (!writeBarrierValidation.valid) throw new Error(`TOCTOU: Secondary-View-Inventar an der Schreibbarriere ungültig.\n${writeBarrierValidation.errors.join('\n')}`)
+  if (!sameSecondaryValue(currentSnapshot, canonicalSecondaryViewMutationSnapshot(writeBarrierInventory))) {
+    throw new Error('TOCTOU: Secondary-View-Inventar wurde vor dem ersten Schreibzugriff verändert.')
+  }
   return mutate(context, writeBarrierInventory, resolvedInventoryNodes)
 }
 
