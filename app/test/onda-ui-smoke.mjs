@@ -225,6 +225,9 @@ async function runShell(browser) {
     await page.evaluate(() => { document.documentElement.dataset.theme = 'light' })
   }
 
+  await assertTextNeverShrinks(page)
+  await assertOrbStaysPut(page)
+
   await page.setViewportSize({ width: 320, height: 760 })
   await page.waitForTimeout(50)
   // Hier wurde geprüft, dass "vorherige" und "nächste Anmerkung" mobil ein Bedienpaar
@@ -241,6 +244,89 @@ async function runShell(browser) {
   assert.ok(overflow <= 1, `Die App laeuft mobil ${overflow}px horizontal ueber`)
   assert.equal(await page.locator('#editor .ProseMirror').isVisible(), true)
   await page.close()
+}
+
+// „Der Text behält seine Breite, jede Nebenfläche schwebt oder wartet."
+// Die Regel ist nicht verhandelbar, also wird sie gemessen und nicht behauptet.
+//
+// ACHTUNG bei der Wahl der Breiten: 1000px allein beweist NICHTS. Unter 1041px schaltet
+// eine Ausnahme den Anmerkungsrand komplett ab — dort war es auch vorher schon richtig.
+// Der Schaden lag zwischen 1041 und 1516px: bei 1100px war die Schreibspalte 400px
+// statt 680px, bei 1200px 500px. Genau diese Zone muss die Prüfung treffen.
+async function assertTextNeverShrinks(page) {
+  const lesebreite = await page.evaluate(() => parseFloat(
+    getComputedStyle(document.documentElement).getPropertyValue('--container-reading'),
+  ))
+  assert.ok(lesebreite >= 600, `--container-reading ist unerwartet klein: ${lesebreite}px`)
+
+  for (const agentOffen of [false, true]) {
+    await page.evaluate(offen => {
+      const auf = document.getElementById('editorView').classList.contains('is-agent-open')
+      if (auf !== offen) document.getElementById('ondaAura').click()
+    }, agentOffen)
+
+    for (const width of [1041, 1100, 1200, 1400, 1516, 1712, 1800]) {
+      await page.setViewportSize({ width, height: 900 })
+      await page.waitForTimeout(30)
+      const gemessen = await page.evaluate(() => {
+        const pm = document.querySelector('#editor .ProseMirror')
+        const page_ = document.getElementById('page')
+        return {
+          spalte: Math.round(pm.getBoundingClientRect().width),
+          rand: getComputedStyle(page_).paddingRight,
+          ueberlauf: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        }
+      })
+      const lage = `${width}px, Agentenfenster ${agentOffen ? 'offen' : 'zu'}`
+      assert.ok(
+        gemessen.spalte >= lesebreite,
+        `Der Text ist bei ${lage} auf ${gemessen.spalte}px zusammengedrückt (soll ${lesebreite}px, Anmerkungsrand ${gemessen.rand})`,
+      )
+      assert.ok(gemessen.ueberlauf <= 1, `Die App läuft bei ${lage} ${gemessen.ueberlauf}px horizontal über`)
+    }
+  }
+
+  await page.evaluate(() => {
+    if (document.getElementById('editorView').classList.contains('is-agent-open')) {
+      document.getElementById('ondaAura').click()
+    }
+  })
+}
+
+// „Der Orb bleibt oben rechts. Fest, nicht mitwandernd."
+// Er wanderte aus zwei Gründen: der Stift schob ihn beim Erscheinen um 44px, und ab
+// 1712px schob ihn das Agentenfenster über padding-right an .onda-editor-col um 420px.
+// Gemessen wird der Abstand zur RECHTEN Fensterkante — der darf sich unter keinem
+// Zustandswechsel ändern.
+async function assertOrbStaysPut(page) {
+  // Gemessen wird der Anker (.onda-topbar__aside), nicht der Orb selbst: der Orb trägt
+  // ein hover-scale(1.04), das seinen Kasten um ~1px verändert. Das ist eine Rückmeldung
+  // auf den Zeiger, kein Wandern. Die rechte Kante des Ankers IST die rechte Kante des
+  // Orbs — er ist das letzte Kind.
+  const abstand = () => page.evaluate(() => {
+    const kasten = document.querySelector('.onda-topbar__aside').getBoundingClientRect()
+    return { rechts: Math.round(window.innerWidth - kasten.right), oben: Math.round(kasten.top) }
+  })
+
+  for (const width of [1200, 1800]) {
+    await page.setViewportSize({ width, height: 900 })
+    await page.waitForTimeout(30)
+    const ruhe = await abstand()
+
+    // Der Stift kommt und geht
+    await page.evaluate(() => { document.getElementById('annotationPresence').hidden = true })
+    assert.deepEqual(await abstand(), ruhe, `Der Orb wandert bei ${width}px, wenn der Stift verschwindet`)
+    await page.evaluate(() => { document.getElementById('annotationPresence').hidden = false })
+    assert.deepEqual(await abstand(), ruhe, `Der Orb wandert bei ${width}px, wenn der Stift erscheint`)
+
+    // Das Agentenfenster geht auf und zu
+    await page.locator('#ondaAura').click()
+    await page.waitForTimeout(30)
+    assert.deepEqual(await abstand(), ruhe, `Der Orb wandert bei ${width}px, wenn das Agentenfenster aufgeht`)
+    await page.locator('#ondaAura').click()
+    await page.waitForTimeout(30)
+    assert.deepEqual(await abstand(), ruhe, `Der Orb wandert bei ${width}px, wenn das Agentenfenster zugeht`)
+  }
 }
 
 async function assertOndaSurface(locator, name, { radius = '0px' } = {}) {

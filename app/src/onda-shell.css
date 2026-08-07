@@ -308,13 +308,31 @@ body.view-editor #editorView {
   scroll-padding-block: var(--space-10);
 }
 
+/* DIE EINE massgebliche Regel fuer #page. Es gab zwei — hier und in style.css, gleiche
+   Spezifitaet, und diese hier gewann, weil sie spaeter geladen wird. Genau daran ist der
+   Text zusammengedrueckt worden: die Untergrenze drueben schuetzte den AUSSENkasten,
+   waehrend hier 388px Anmerkungsrand als Innenabstand von eben diesem Kasten abgingen.
+   Gemessen bei 1100px Fenster: Schreibspalte 400px statt 680px.
+
+   Der Grundsatz: der Text behaelt seine Breite, jede Nebenflaeche schwebt oder wartet.
+   Der Anmerkungsrand ist eine Nebenflaeche. Also bekommt er nur, was nach der
+   Lesespalte uebrig bleibt, und schrumpft auf null, bevor der Text ein einziges Pixel
+   abgibt. */
 #editorView #page {
   --onda-anmerkungsrand: 388px;
+
+  /* Harte Untergrenze fuer den Aussenkasten. Sie stand in style.css und ist mit
+     hierhergezogen, damit nicht wieder zwei Regeln um dasselbe Element streiten. */
+  min-width: min(100%, var(--container-reading));
   width: calc(var(--container-reading) + var(--onda-anmerkungsrand));
   max-width: 100%;
   min-height: 100%;
   margin: 0;
-  padding: var(--space-10) var(--onda-anmerkungsrand) 38vh 0;
+
+  /* Der Kern der Sache. 100% ist die verfuegbare Breite: was darueber hinaus nach der
+     Lesespalte frei ist, darf der Anmerkungsrand haben — hoechstens aber sein volles
+     Mass. Bleibt nichts uebrig, bleibt er weg. */
+  padding: var(--space-10) clamp(0px, calc(100% - var(--container-reading)), var(--onda-anmerkungsrand)) 38vh 0;
 }
 
 #editorView #title {
@@ -406,6 +424,9 @@ body.view-editor #editorView {
   #editorView { gap: 0; }
   #editorView .onda-editor-col { border-radius: var(--radius-none); }
   #editorView .onda-topbar { padding-inline: var(--space-3); }
+  /* Der Orb haengt am Fenster, nicht an der Topbar (style.css) — also muss sein
+     Abstand hier eigens mitwandern, sonst klebt er schmal am Rand. */
+  .onda-topbar__aside { right: var(--space-3); }
   #editorView #scroll { padding-inline: var(--space-5); }
   #editorView #page { padding-top: var(--space-8); }
   #editorView #title { font-size: var(--text-4xl); }

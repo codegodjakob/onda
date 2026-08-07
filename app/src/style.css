@@ -1192,11 +1192,25 @@ body.zen #title:focus { opacity: 1; }
   padding: 0 var(--space-4);
 }
 
-/* Die rechte Gruppe der Topbar. Das margin-left:auto sitzt am Behaelter, nicht an den
-   Knoepfen: haetten beide es, teilte der freie Platz sich zwischen ihnen auf und der
-   Stift triebe vom Orb weg. */
+/* DER ORB BLEIBT OBEN RECHTS. Fest, nicht mitwandernd.
+   Er wanderte aus zwei Gruenden, und beide verschwinden mit derselben Massnahme:
+     1. Der Stift erschien links von ihm und schob ihn um 44px + Abstand nach links.
+     2. Ab 1712px Fensterbreite bekommt .onda-editor-col beim Oeffnen des
+        Agentenfensters padding-right: 420px — die Topbar sitzt darin und rutschte
+        komplett mit.
+   Am Fenster verankert kann ihn beides nicht mehr bewegen. Rechtsbuendig heisst
+   ausserdem: der Stift waechst nach LINKS heraus, der Orb bleibt, wo er ist.
+
+   Das ist zugleich die Voraussetzung fuer die Sprechblase — der Chat waechst aus dem
+   Orb heraus, und ein Ankerpunkt, der springt, taugt dafuer nicht. */
 .onda-topbar__aside {
-  margin-left: auto;
+  position: fixed;
+  top: 0;
+  right: var(--space-5);
+  /* Ueber dem Agentenfenster (z-index 45), damit der Orb als Ursprung sichtbar bleibt,
+     waehrend die Blase aus ihm herauswaechst. Unter Menues und Overlays (55+). */
+  z-index: 46;
+  height: var(--topbar-height);
   display: flex;
   align-items: center;
   gap: var(--space-1);
@@ -1277,21 +1291,14 @@ body.zen #title:focus { opacity: 1; }
    Der Randraum wird deshalb reserviert statt aufgeteilt. Unterhalb von 1040px
    (Design System) gibt es ihn nicht mehr, und die Anmerkungen rutschen wieder
    unter den Text — so ist es dort auch vorgesehen. */
-#editorView #page {
-  /* Harte Untergrenze: was auch immer daneben aufgeht, die Lesespalte bleibt.
-     Ohne sie kann jede kuenftige Nebenflaeche den Text wieder zusammendruecken. */
-  min-width: min(100%, calc(var(--container-reading) + 48px));
-  --onda-anmerkungsrand: 300px;
-  width: min(calc(100% - 48px), calc(var(--container-reading) + 48px));
-  max-width: calc(var(--container-reading) + 48px);
-  min-height: 100%;
-  margin: 0 auto 0 max(0px, calc((100% - var(--container-reading) - 48px - var(--onda-anmerkungsrand)) / 2));
-  padding: 72px 24px 38vh;
-}
+/* Hier standen Breite, Untergrenze, Rand und Innenabstand von #page — ein zweites Mal.
+   onda-shell.css hat dieselbe Regel bei gleicher Spezifitaet und wird spaeter geladen,
+   also gewann sie ohnehin; was hier stand, war zur Haelfte wirkungslos und zur anderen
+   Haelfte irrefuehrend. Die Untergrenze griff, aber sie schuetzte den Aussenkasten,
+   waehrend drueben 388px Anmerkungsrand von innen abgingen.
 
-@media (max-width: 1040px) {
-  #editorView #page { --onda-anmerkungsrand: 0px; margin-inline: auto; }
-}
+   Es gibt jetzt genau eine Regel, in onda-shell.css. Zwei Regeln um dieselbe Breite
+   waren die eigentliche Ursache — nicht der eine oder andere Wert. */
 
 #editorView #title {
   font-family: var(--font-sans);
