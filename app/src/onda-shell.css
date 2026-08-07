@@ -353,7 +353,6 @@ body.view-editor #editorView {
   box-shadow: none;
 }
 
-#blockInsertLayer,
 #localAgentLayer { top: var(--topbar-height); }
 
 @media (max-width: 1040px) {

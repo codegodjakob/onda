@@ -849,7 +849,6 @@ body.zen #title:focus { opacity: 1; }
   box-shadow: var(--shadow-focus);
 }
 
-.block-insert-trigger:focus-visible,
 .semantic-insert-choice:focus-visible {
   outline: 2px solid transparent;
   box-shadow: var(--shadow-focus);
@@ -1335,11 +1334,29 @@ body.zen #title:focus { opacity: 1; }
   transition: background var(--dur-quick) var(--ease-out), box-shadow var(--dur-quick) var(--ease-out);
 }
 
-/* Der Absatz, in dem geschrieben wird: ein Hauch gesenkte Flaeche, mehr nicht.
-   --bg-active (Tinte auf 7 %) war ein Druck, kein Hinweis. */
-#editorView #editor .ProseMirror > [data-block-id].is-active-block {
-  background: var(--bg-sunken);
-  box-shadow: 0 0 0 8px var(--bg-sunken);
+/* BEIM SCHREIBEN WIRD NICHTS HERVORGEHOBEN.
+   Hier lag auf dem Absatz unter der Schreibmarke eine gesenkte Flaeche mit 8px
+   Streuung — eine dunkle Platte, die beim Tippen von Absatz zu Absatz sprang.
+   Jakob am 7. August 2026: "ich will nicht dass der block sooo deutlich
+   hervorgehoben wird waehrend ich schreibe."
+
+   Es folgt aus dem Grundsatz: Hervorhebung ist die Sprache der Anmerkung
+   (docs/PHILOSOPHIE.md §1). Wenn sie auch das eigene Schreiben markiert, heisst sie
+   nichts mehr. Wo die Schreibmarke steht, sagt die Schreibmarke.
+
+   .is-active-block bleibt als Klasse bestehen — die Anmerkung braucht sie, um sich
+   daneben zu setzen. Sie traegt nur keine Farbe mehr. */
+
+/* EIN ABSATZ WIRD ANGEDEUTET, wenn die Rueckmeldung IHM GILT und nicht einer Stelle
+   in ihm. Jakob: "blocks sollen nur angedeutet werden wenn ich gerade dabei bin die
+   struktur zu ueberdenken zum beispiel oder wenn ich feedback zu einem ganzen block
+   paragraphen bekomme."
+
+   Angedeutet heisst angedeutet: eine Kante am Rand, keine Platte. Die Platte war
+   lauter als die Anmerkung, die sie ankuendigte. */
+#editorView #editor .ProseMirror > [data-block-id].hat-absatzweite-anmerkung {
+  box-shadow: inset 2px 0 0 var(--border-strong);
+  transition: box-shadow var(--dur-ankunft) var(--ease-out);
 }
 
 /* Der Absatz mit einem Hinweis trug eine ganzflaechig blaue Fuellung. Das
@@ -1369,10 +1386,9 @@ body.zen #title:focus { opacity: 1; }
   from { opacity: 0; transform: scale(.3); }
 }
 
-#editorView #editor .ProseMirror > [data-block-id].has-local-finding.is-active-block {
-  background: var(--bg-sunken);
-  box-shadow: 0 0 0 8px var(--bg-sunken);
-}
+/* Hier bekam der Absatz mit Anmerkung dieselbe dunkle Platte, sobald die Schreibmarke
+   darin stand. Sie faellt aus demselben Grund weg: der Punkt am Rand sagt schon, dass
+   hier eine Anmerkung ist, und die Anmerkung daneben sagt es noch einmal. */
 
 /* Belegfragen sind keine Warnung: das System kennt keine Statusfarben. */
 #editorView #editor .ProseMirror > [data-block-id].has-local-finding.is-evidence::before {
@@ -1386,7 +1402,6 @@ body.zen #title:focus { opacity: 1; }
   border-bottom: 0;
 }
 
-#blockInsertLayer,
 #localAgentLayer {
   position: absolute;
   top: var(--onda-topbar-h, 52px);
@@ -1797,42 +1812,9 @@ body.zen #title:focus { opacity: 1; }
   background: var(--surface-2);
 }
 
-.block-insert-trigger {
-  position: absolute;
-  width: 26px; height: 26px;
-  display: flex; align-items: center; justify-content: center;
-  padding: 0;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-pill);
-  background: var(--surface);
-  color: var(--text-tertiary);
-  box-shadow: var(--shadow-sm);
-  font: 17px/1 var(--font-sans);
-  opacity: 0; pointer-events: none;
-  transition: opacity var(--dur-quick) var(--ease-out), color var(--dur-quick) var(--ease-out), background var(--dur-quick) var(--ease-out);
-}
 
-.block-insert-trigger.is-block-hovered,
-.block-insert-trigger:focus-visible {
-  opacity: 1;
-  pointer-events: auto;
-}
 
-.block-insert-trigger:hover { color: var(--text-primary); background: var(--bg-hover); }
 
-.block-insert-trigger.is-typing:not(:focus-visible) {
-  opacity: 0;
-  pointer-events: none;
-}
-
-@media (hover: none), (pointer: coarse) {
-  .block-insert-trigger,
-  .block-insert-trigger.is-typing:not(:focus-visible) {
-    opacity: 1;
-    border-color: var(--border-default);
-    pointer-events: auto;
-  }
-}
 
 .semantic-insert-menu {
   position: fixed;
@@ -2306,24 +2288,12 @@ body.zen #title:focus { opacity: 1; }
   .suggestion-version { grid-template-columns: 74px minmax(0, 1fr); gap: 8px; }
 
   .onda-icon-btn,
-  .block-insert-trigger,
   .suggestion-action,
   .agent-chat-send,
   .surface-close {
     width: 44px; min-width: 44px; height: 44px; min-height: 44px;
   }
   .agent-chat-form { grid-template-columns: minmax(0, 1fr) 44px; }
-  .block-insert-trigger,
-  .block-insert-trigger:hover {
-    border-color: transparent; background: transparent; box-shadow: none;
-    opacity: 1; pointer-events: auto;
-  }
-  .block-insert-trigger.is-typing:not(:focus-visible) { opacity: 1; pointer-events: auto; }
-  .block-insert-trigger::before {
-    content: ''; position: absolute; width: 26px; height: 26px;
-    border: 1px solid var(--border-default); border-radius: 50%;
-    background: var(--bg-surface); box-shadow: var(--shadow-sm);
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -2355,7 +2325,6 @@ body.zen #title:focus { opacity: 1; }
   .onda-topbar,
   #agentWidget,
   #evidenceWindow,
-  #blockInsertLayer,
   #localAgentLayer,
   .semantic-insert-menu,
   #pvModal,
@@ -2628,16 +2597,20 @@ button.onda-aura:focus-visible {
   text-transform: uppercase;
 }
 
+/* Der Weg zurueck steht jetzt in der Fusszeile, neben Erscheinung und Einstellungen.
+   Deshalb `flex: 1` mit `min-width: 0` statt `width: fit-content`: der Projektname darf
+   den Platz nehmen, der da ist, muss aber weichen, bevor er die beiden Knoepfe rechts
+   aus der Leiste draengt. Ohne min-width:0 weigert sich ein Flex-Kind zu schrumpfen,
+   auch wenn text-overflow gesetzt ist — genau daran fehlte das Zahnrad. */
 .onda-side-back {
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
-  flex: none;
+  flex: 1;
+  min-width: 0;
   min-height: 44px;
-  margin: var(--space-3) 0 0;
+  margin: 0;
   padding: var(--space-1) var(--space-2);
-  width: fit-content;
-  max-width: calc(100% - var(--space-8));
   border: 0;
   border-radius: var(--radius-control);
   background: transparent;
@@ -2652,6 +2625,24 @@ button.onda-aura:focus-visible {
 }
 .onda-side-back:hover { color: var(--text-primary); background: var(--bg-hover); }
 .onda-side-back:focus-visible { outline: 2px solid transparent; box-shadow: var(--shadow-focus); }
+/* Der Pfeil bleibt immer sichtbar, der Name kuerzt sich. Andersherum waere der Weg
+   zurueck bei langen Projektnamen unauffindbar. */
+.onda-side-back-chevron { flex: none; display: inline-flex; }
+.onda-side-back-label { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+
+/* Der Name oben links ist ein Knopf, sieht aber aus wie der Schriftzug, der er ist. */
+.onda-wordmark-btn {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+  transition: color var(--dur-quick) var(--ease-out);
+}
+.onda-wordmark-btn:hover { color: var(--text-secondary); }
+.onda-wordmark-btn:focus-visible { outline: 2px solid transparent; box-shadow: var(--shadow-focus); border-radius: var(--radius-control); }
 
 /* Projektverständnis-Kachel */
 #pvCard {

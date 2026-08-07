@@ -69,16 +69,13 @@
     <section id="editorView">
       <aside id="ondaSidebar" class="onda-sidebar">
         <div class="onda-brand">
-          <span class="onda-wordmark">Onda</span>
+          <!-- Der Name ist der Weg nach Hause. Wer oben links auf das Logo klickt,
+               erwartet die Übersicht — das ist in jedem Programm so. -->
+          <button id="ondaHome" class="onda-wordmark onda-wordmark-btn" type="button" title="Zur Übersicht" aria-label="Zur Projekt- und Dokumentübersicht">Onda</button>
           <button id="sidebarCollapse" class="onda-icon-btn" title="Seitenleiste einklappen" aria-label="Seitenleiste einklappen" aria-controls="ondaSidebar" aria-expanded="true"></button>
         </div>
 
         <nav class="onda-project-nav" aria-label="Projekt">
-          <button id="sidebarBack" class="onda-side-back" title="Zur Projektübersicht" aria-label="Zur Projektübersicht">
-            <span class="onda-side-back-chevron" aria-hidden="true"></span>
-            <span class="onda-side-back-label">Projekt</span>
-          </button>
-
           <section class="onda-side-section">
             <span class="onda-eyebrow">Projektverständnis</span>
             <button id="pvCard" class="onda-pv-card" aria-haspopup="dialog" aria-controls="pvModal">
@@ -110,9 +107,14 @@
           </section>
         </nav>
 
+        <!-- Unten links stand der eigene Name mit Bildzeichen. Wer allein an seinem
+             Rechner schreibt, muss nicht daran erinnert werden, wer er ist. An seiner
+             Stelle steht jetzt der Weg zurück zur Übersicht. -->
         <div class="onda-side-footer">
-          <span class="onda-avatar" aria-hidden="true">J</span>
-          <span class="onda-side-user">Jakob</span>
+          <button id="sidebarBack" class="onda-side-back" type="button" title="Zur Übersicht" aria-label="Zur Projekt- und Dokumentübersicht">
+            <span class="onda-side-back-chevron" aria-hidden="true"></span>
+            <span class="onda-side-back-label">Projekt</span>
+          </button>
           <button id="themeToggle" class="onda-icon-btn" title="Erscheinung wechseln" aria-label="Erscheinung wechseln"></button>
           <button id="kiSettings" class="onda-icon-btn" title="KI-Anschluss" aria-label="KI-Anschluss einrichten" aria-haspopup="dialog" aria-controls="kiModal"></button>
         </div>
@@ -135,7 +137,6 @@
             <div id="editor"></div>
           </div>
         </div>
-        <div id="blockInsertLayer"></div>
         <aside id="localAgentLayer"></aside>
       </div>
 

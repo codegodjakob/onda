@@ -100,7 +100,7 @@ import {
   createSuppressionStore,
 } from './annotation-controller.mjs'
 import { renderAnnotation } from './annotation-components.mjs'
-import { resolveAnnotationPresentation } from './annotation-contract.mjs'
+import { ANNOTATION_DEFINITIONS, resolveAnnotationPresentation } from './annotation-contract.mjs'
 import {
   invertAnnotationOperation,
   planAnnotationOperation,
@@ -130,12 +130,8 @@ let lastContext = null
 let renderedDocId = null
 let decoratedDocId = null
 let decoratedBlockId = null
-let insertTrigger = null
 let insertMenu = null
-let hoveredBlockId = null
-let hoverTimer = null
 let typingTimer = null
-let triggerFrame = null
 let isTyping = false
 let isComposing = false
 let structureNavState = null
@@ -143,6 +139,7 @@ let localDecoratedDocId = null
 let localDecoratedFindingId = null
 let localDecoratedBlockId = null
 let localDecoratedSpacing = 0
+let localDecoratedAbsatzweit = false
 let localFeedbackError = null
 let localPositionFrame = null
 let localSummaryFocusRequest = null
@@ -247,7 +244,13 @@ function localFindingPlugin() {
         const local = []
         transaction.doc.forEach((node, offset) => {
           if (node.attrs.blockId === findingState.blockId) {
-            local.push(Decoration.node(offset, offset + node.nodeSize, { class: 'has-local-finding' }))
+            // Gilt die Anmerkung dem ganzen Absatz oder einer Stelle in ihm? Nur im
+            // ersten Fall wird der Absatz selbst angedeutet — sonst zeigt der Punkt am
+            // Rand auf ihn, obwohl nur ein Wort gemeint ist.
+            const klassen = findingState.absatzweit
+              ? 'has-local-finding hat-absatzweite-anmerkung'
+              : 'has-local-finding'
+            local.push(Decoration.node(offset, offset + node.nodeSize, { class: klassen }))
             if (findingState.spacing > 0) {
               local.push(Decoration.widget(offset + node.nodeSize, () => {
                 const spacer = document.createElement('div')
@@ -273,14 +276,36 @@ function localFindingPlugin() {
   })
 }
 
+// Welche Anmerkungsarten gelten dem ganzen Absatz? Die Antwort steht schon im Vertrag:
+// ANNOTATION_DEFINITIONS gibt jeder Art einen scope — Wort, Satz, Absatz, Abschnitt.
+// Nur die letzten beiden meinen den Absatz als Ganzes und duerfen ihn andeuten.
+const ABSATZWEITE_REICHWEITEN = new Set(['Absatz', 'Abschnitt'])
+
+function istAbsatzweit(finding) {
+  if (!finding) return false
+  const art = ANNOTATION_DEFINITIONS[finding.anmerkungsart]
+  return ABSATZWEITE_REICHWEITEN.has(art?.scope)
+}
+
+// Die Reichweite gehoert zur gerade gezeigten Anmerkung, nicht zum Aufruf. Sie hier zu
+// merken statt sie durch vier Aufrufstellen zu reichen, haelt die Aufrufe schlank —
+// und keine von ihnen kennt die Anmerkung ueberhaupt.
+let aktuelleAnmerkungIstAbsatzweit = false
+
 function setLocalFindingDecoration(blockId, spacing = 0, force = false) {
+  const absatzweit = Boolean(blockId) && aktuelleAnmerkungIstAbsatzweit
   const nextSpacing = blockId ? Math.max(0, Math.ceil(spacing)) : 0
-  if (!force && localDecoratedBlockId === blockId && localDecoratedSpacing === nextSpacing) return false
+  if (!force
+    && localDecoratedBlockId === blockId
+    && localDecoratedSpacing === nextSpacing
+    && localDecoratedAbsatzweit === absatzweit) return false
   localDecoratedBlockId = blockId
   localDecoratedSpacing = nextSpacing
+  localDecoratedAbsatzweit = absatzweit
   ctx.editor.view.dispatch(ctx.editor.state.tr.setMeta(localFindingKey, {
     blockId,
     spacing: nextSpacing,
+    absatzweit,
   }))
   return true
 }
@@ -294,7 +319,6 @@ function elements() {
     reopen: document.getElementById('sidebarReopen'),
     structureNav: document.getElementById('structureNav'),
     scroll: document.getElementById('scroll'),
-    insertLayer: document.getElementById('blockInsertLayer'),
     localLayer: document.getElementById('localAgentLayer'),
     agentPresence: document.getElementById('ondaAura'),
     agentWidget: document.getElementById('agentWidget'),
@@ -1968,81 +1992,26 @@ async function sendeInterviewAntwort(message, text) {
   }
 }
 
-function scheduleTriggerRender() {
-  if (triggerFrame) cancelAnimationFrame(triggerFrame)
-  triggerFrame = requestAnimationFrame(() => {
-    triggerFrame = null
-    renderInsertTrigger()
-  })
-}
-
-function renderInsertTrigger() {
-  const ui = elements()
-  const workspace = activeWorkspace()
-  if (!ui.insertLayer || !workspace) return
-
-  if (!insertTrigger) {
-    insertTrigger = createNode('button', 'block-insert-trigger')
-    insertTrigger.append(ondaIcon('plus', { size: 18 }))
-    insertTrigger.id = 'blockInsertTrigger'
-    insertTrigger.type = 'button'
-    insertTrigger.title = 'Textbaustein einfügen'
-    insertTrigger.setAttribute('aria-label', 'Textbaustein nach dem aktiven Abschnitt einfügen')
-    insertTrigger.addEventListener('click', () => {
-      const activeBlockId = activeWorkspace()?.activeBlockId
-      if (activeBlockId) openInsertMenu(activeBlockId, insertTrigger)
-    })
-    insertTrigger.addEventListener('pointerenter', () => {
-      clearTimeout(hoverTimer)
-      hoveredBlockId = activeWorkspace()?.activeBlockId || null
-      renderInsertTrigger()
-    })
-    insertTrigger.addEventListener('pointerleave', () => scheduleHoverClear())
-    ui.insertLayer.append(insertTrigger)
-  }
-
-  const activeBlock = blockElement(workspace.activeBlockId)
-  if (!activeBlock || document.body.classList.contains('view-home')) {
-    insertTrigger.hidden = true
-    return
-  }
-
-  insertTrigger.hidden = false
-  insertTrigger.classList.toggle('is-block-hovered', hoveredBlockId === workspace.activeBlockId)
-  insertTrigger.classList.toggle('is-typing', isTyping)
-  insertTrigger.dataset.afterBlockId = workspace.activeBlockId
-
-  const layerRect = ui.insertLayer.getBoundingClientRect()
-  const blockRect = activeBlock.getBoundingClientRect()
-  const activeSelectorId = escapedSelectorValue(workspace.activeBlockId)
-  const feedbackSurfaces = [...(ui.localLayer?.querySelectorAll(`[data-block-id="${activeSelectorId}"]`) || [])]
-    .filter(node => !node.hidden && getComputedStyle(node).visibility !== 'hidden')
-    .map(node => node.getBoundingClientRect())
-  const boundaryBottom = feedbackSurfaces.reduce(
-    (bottom, rect) => Math.max(bottom, rect.bottom),
-    blockRect.bottom,
-  )
-  insertTrigger.style.left = `${Math.max(6, blockRect.left - layerRect.left - 34)}px`
-  insertTrigger.style.top = `${boundaryBottom - layerRect.top + 8}px`
-}
-
-function scheduleHoverClear() {
-  clearTimeout(hoverTimer)
-  hoverTimer = setTimeout(() => {
-    if (insertTrigger?.matches(':hover') || insertTrigger === document.activeElement) return
-    hoveredBlockId = null
-    renderInsertTrigger()
-  }, 120)
-}
+// Hier schwebte ein Plus am linken Rand des Absatzes, in dem gerade geschrieben wurde.
+// Es oeffnete das Menue "Art des Textbausteins". Jakob am 7. August 2026: "das plus
+// ergibt zudem ueberhaupt keinen sinn fuer mich. ich verstehe nicht was es
+// symbolisieren soll und was der nutzen ist."
+//
+// Er hat recht: ein Plus verspricht "hier kommt etwas dazu", sagt aber nicht was, und
+// es schwebte auch dann, wenn niemand etwas einfuegen wollte. Fuer die haeufigen Faelle
+// gibt es ohnehin den kuerzeren Weg — Tiptaps StarterKit macht aus "## " eine
+// Ueberschrift und aus "> " ein Zitat, ohne dass man ein Menue oeffnet.
+//
+// Das Menue selbst (openInsertMenu/insertBlock) BLEIBT. Es bekommt seinen Platz dort,
+// wo Bausteine hingehoeren: in der Struktur-Ansicht, wo Jakob "auch neue Bausteine
+// hinzufuegen" koennen will. Nur der schwebende Knopf ist fort.
 
 function markTyping() {
   isTyping = true
   clearTimeout(typingTimer)
-  renderInsertTrigger()
   if (isComposing) return
   typingTimer = setTimeout(() => {
     isTyping = false
-    renderInsertTrigger()
   }, 520)
 }
 
@@ -3138,7 +3107,10 @@ function positionLocalSurface(blockId) {
   const localRect = local.getBoundingClientRect()
   const feedbackBottom = below ? localRect.bottom : blockRect.bottom
 
-  const touchTriggerClearance = Math.max(46, (insertTrigger?.getBoundingClientRect().height || 26) + 8)
+  // Luft unter der Anmerkung, damit sie den naechsten Absatz nicht beruehrt. Frueher
+  // war das die Hoehe des Plus-Knopfes plus Abstand; ohne ihn ein fester Wert in
+  // derselben Groessenordnung (44px Trefferflaeche + 2px).
+  const touchTriggerClearance = 46
   const spacing = feedbackBottom > blockRect.bottom
     ? feedbackBottom - blockRect.bottom + (below ? touchTriggerClearance : 14)
     : 0
@@ -3166,6 +3138,9 @@ function renderLocalFinding() {
   }
 
   if (localFeedbackError && localFeedbackError.findingId !== finding?.id) localFeedbackError = null
+
+  // Vor jeder Entscheidung ueber die Verzierung: gilt die Anmerkung dem ganzen Absatz?
+  aktuelleAnmerkungIstAbsatzweit = istAbsatzweit(finding)
 
   if (
     localDecoratedDocId !== doc.id
@@ -4407,7 +4382,6 @@ export function refreshWorkspace({ reconcileEditing = false } = {}) {
   renderLocalFinding()
   renderAgentWidget()
   renderEvidenceWindow()
-  scheduleTriggerRender()
   scheduleAgentInitiative()
 }
 
@@ -4552,23 +4526,10 @@ export function initWorkspace(context) {
   document.querySelector('.onda-side-back-chevron')?.replaceChildren(ondaIcon('arrow-left', { size: 16 }))
   document.getElementById('kiSettings')?.replaceChildren(ondaIcon('settings', { size: 18 }))
 
-  const onPointerOver = event => {
-    const block = event.target.closest('[data-block-id]')
-    const activeBlockId = activeWorkspace()?.activeBlockId
-    if (!block || block.dataset.blockId !== activeBlockId) return
-    clearTimeout(hoverTimer)
-    hoveredBlockId = activeBlockId
-    renderInsertTrigger()
-  }
-  const onPointerOut = event => {
-    const block = event.target.closest('[data-block-id]')
-    if (!block || block.dataset.blockId !== hoveredBlockId) return
-    if (block.contains(event.relatedTarget) || insertTrigger?.contains(event.relatedTarget)) return
-    scheduleHoverClear()
-  }
+  // Die beiden Zeigerhorcher am Absatz gab es nur, damit das Plus beim Ueberfahren
+  // auftauchte. Ohne Plus horcht hier niemand mehr mit.
   const onEditorScroll = () => {
     closeInsertMenu({ restoreFocus: false })
-    scheduleTriggerRender()
     if (localDecoratedBlockId) scheduleLocalPosition(localDecoratedBlockId)
   }
   const onShelfScroll = () => {
@@ -4576,7 +4537,6 @@ export function initWorkspace(context) {
   }
   const onResize = () => {
     closeInsertMenu({ restoreFocus: false })
-    scheduleTriggerRender()
     if (localDecoratedBlockId) scheduleLocalPosition(localDecoratedBlockId)
   }
   const onViewChange = event => {
@@ -4604,7 +4564,6 @@ export function initWorkspace(context) {
       return
     }
     workspace.activeBlockId = activeBlockId
-    hoveredBlockId = null
     refreshWorkspace()
     persistWorkspace()
   }
@@ -4615,11 +4574,12 @@ export function initWorkspace(context) {
   }
 
   listen(ui.back, 'click', onBack)
+  // Zwei Wege zur Übersicht, weil beide erwartbar sind: der Pfeil unten links und der
+  // Name oben links. Derselbe Weg, nicht zwei verschiedene.
+  listen(document.getElementById('ondaHome'), 'click', onBack)
   listen(ui.agentPresence, 'click', onAgentPresence)
   listen(ui.collapse, 'click', onSidebarCollapse)
   listen(ui.reopen, 'click', onSidebarReopen)
-  listen(ctx.editor.view.dom, 'pointerover', onPointerOver)
-  listen(ctx.editor.view.dom, 'pointerout', onPointerOut)
   listen(ctx.editor.view.dom, 'keydown', handleEditorKeyDown, true)
   listen(ctx.editor.view.dom, 'beforeinput', handleBeforeInput)
   listen(ctx.editor.view.dom, 'compositionstart', startComposition)
@@ -4660,17 +4620,14 @@ export function initWorkspace(context) {
     closeOndaDialog({ restoreFocus: false })
     cleanups.splice(0).reverse().forEach(cleanup => cleanup())
 
-    clearTimeout(hoverTimer)
     clearTimeout(typingTimer)
     if (laufenderChatLauf?.flushTimer) clearTimeout(laufenderChatLauf.flushTimer)
     laufenderChatLauf = null
-    if (triggerFrame) cancelAnimationFrame(triggerFrame)
     if (localPositionFrame) cancelAnimationFrame(localPositionFrame)
     if (agentLiveFrame) cancelAnimationFrame(agentLiveFrame)
 
     context.editor.unregisterPlugin(activeBlockKey)
     context.editor.unregisterPlugin(localFindingKey)
-    insertTrigger?.remove()
     elements().localLayer?.replaceChildren()
     elements().agentWidget?.replaceChildren()
     elements().evidenceWindow?.replaceChildren()
@@ -4683,11 +4640,7 @@ export function initWorkspace(context) {
     renderedDocId = null
     decoratedDocId = null
     decoratedBlockId = null
-    insertTrigger = null
-    hoveredBlockId = null
-    hoverTimer = null
     typingTimer = null
-    triggerFrame = null
     isTyping = false
     isComposing = false
     structureNavState = null
@@ -4695,6 +4648,7 @@ export function initWorkspace(context) {
     localDecoratedFindingId = null
     localDecoratedBlockId = null
     localDecoratedSpacing = 0
+    localDecoratedAbsatzweit = false
     localFeedbackError = null
     localPositionFrame = null
     localSummaryFocusRequest = null
