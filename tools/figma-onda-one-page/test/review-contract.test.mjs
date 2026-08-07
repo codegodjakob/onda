@@ -169,7 +169,7 @@ test('foundation and component regeneration are update-or-create, never uncondit
   const runtime = readFileSync(resolve(ROOT, 'src/runtime.mjs'), 'utf8')
   assert.match(runtime, /ensureRadiusSample/)
   assert.match(runtime, /preflightComponentMutation/)
-  assert.match(runtime, /page\.findOne\(node => node\.type === 'COMPONENT_SET'/)
+  assert.match(runtime, /directChild\(section, definition\.name, \['COMPONENT_SET'\]\)/)
   assert.match(runtime, /if \(!sample\) \{/)
   assert.doesNotMatch(runtime, /function componentVariant\(/)
   assert.doesNotMatch(runtime, /for \(const token of RADIUS_TOKENS\) \{\s*const sample = token\.geometry/s)

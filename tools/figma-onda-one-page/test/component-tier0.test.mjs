@@ -208,14 +208,11 @@ test('component preflight accepts fresh and exact owned rerun inventory but reje
     value => { value.sets[0].owner = '' },
     value => { value.sets.push(structuredClone(value.sets[0])) },
     value => { value.sets[0].type = 'FRAME' },
-    value => { value.sets[0].variants.pop() },
     value => { value.sets[0].variants.push(structuredClone(value.sets[0].variants[0])) },
     value => { value.sets[0].variants[0].owner = '' },
     value => { value.sets[0].variants[0].type = 'FRAME' },
-    value => { value.sets[0].variants[0].roles.pop() },
     value => { value.sets[0].variants[0].roles[0].owner = '' },
     value => { value.sets[0].componentProperties[0].defaultValue = 'Falsch' },
-    value => { value.samples.pop() },
     value => { value.samples[0].owner = '' },
     value => { value.samples.push(structuredClone(value.samples[0])) },
     value => { value.samples[0].type = 'FRAME' },
@@ -225,6 +222,18 @@ test('component preflight accepts fresh and exact owned rerun inventory but reje
     const inventory = { sets: [set], samples: [set.sample] }
     mutate(inventory)
     assert.equal(plan.validateComponentMutationInventory(inventory, 'button').valid, false)
+  }
+  const recoverable = [
+    value => { value.sets[0].variants.pop() },
+    value => { value.sets[0].variants[0].roles.pop() },
+    value => { value.sets[0].componentProperties = [] },
+    value => { value.samples = [] },
+  ]
+  for (const mutate of recoverable) {
+    const set = componentEvidenceFixture().componentSets[0]
+    const inventory = { sets: [set], samples: [set.sample] }
+    mutate(inventory)
+    assert.equal(plan.validateComponentMutationInventory(inventory, 'button').valid, true)
   }
 })
 

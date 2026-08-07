@@ -20,12 +20,14 @@ import {
 import {
   authorizeMutation,
   buildBaselineShards,
+  buildComponentRecoveryActions,
   buildVerificationReport,
   canReuseOwnedNode,
   collectFieldVariableIds,
   collectTextRangeBindings,
   collectVisibleFillBindings,
   computeOndaOrigin,
+  collectComponentCandidateLocations,
   executeComponentMutation,
   executeGuardedComponentCommand,
   executeFoundationMutation,
@@ -863,10 +865,7 @@ function componentRoleInventory(component) {
 }
 
 function collectComponentSectionCandidates(page) {
-  const componentSections = page.children.filter(node => node.name === '02 · Komponenten')
-  return componentSections.flatMap(section => !('children' in section) ? [] : section.children
-    .filter(node => node.name.startsWith('Onda/'))
-    .map(node => ({ node, section })))
+  return collectComponentCandidateLocations(page)
 }
 
 async function collectComponentMutationInventory(componentId) {
@@ -877,30 +876,30 @@ async function collectComponentMutationInventory(componentId) {
   const setNodes = candidates.filter(({ node }) => !sampleNames.has(node.name))
   const sampleNodes = candidates.filter(({ node }) => sampleNames.has(node.name))
   const samples = []
-  for (const { node: sample, section } of sampleNodes) {
+  for (const { node: sample, parentId, parentType, parentName } of sampleNodes) {
     const identity = sample.type === 'INSTANCE' ? await readMainComponentIdentity(sample) : { id: null }
     samples.push({
       nodeId: sample.id,
       name: sample.name,
       type: sample.type,
       owner: sample.getPluginData(CREATED_MARKER_KEY),
-      parentId: section.id,
-      parentType: section.type,
-      parentName: section.name,
+      parentId,
+      parentType,
+      parentName,
       documentation: sample.getPluginData('ondaDocumentationInstance') === 'true',
       repeatedScreen: sample.getPluginData('ondaRepeatedScreenInstance') === 'true',
       mainComponentId: identity.id,
     })
   }
   return {
-    sets: setNodes.map(({ node: set, section }) => ({
+    sets: setNodes.map(({ node: set, parentId, parentType, parentName }) => ({
       nodeId: set.id,
       name: set.name,
       type: set.type,
       owner: set.getPluginData(CREATED_MARKER_KEY),
-      parentId: section.id,
-      parentType: section.type,
-      parentName: section.name,
+      parentId,
+      parentType,
+      parentName,
       componentProperties: componentPropertyInventory(set),
       variants: 'children' in set ? set.children.map(variant => ({
         nodeId: variant.id,
@@ -1008,15 +1007,20 @@ function configureComponentVariant(component, definition, variantDefinition, dec
   }
 }
 
-function createComponentVariantNode(section, definition, variantDefinition) {
+function createComponentRoleNode(component, roleDefinition) {
+  const role = roleDefinition.type === 'TEXT' ? figma.createText() : figma.createEllipse()
+  role.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN)
+  role.name = `Role/${roleDefinition.name}`
+  component.appendChild(role)
+  return role
+}
+
+function createComponentVariantNode(parent, definition, variantDefinition) {
   const component = figma.createComponent()
+  component.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN)
   component.name = variantDefinition.name
-  section.appendChild(component)
-  for (const roleDefinition of definition.roles) {
-    const role = roleDefinition.type === 'TEXT' ? figma.createText() : figma.createEllipse()
-    role.name = `Role/${roleDefinition.name}`
-    component.appendChild(role)
-  }
+  parent.appendChild(component)
+  for (const roleDefinition of definition.roles) createComponentRoleNode(component, roleDefinition)
   return component
 }
 
@@ -1033,12 +1037,30 @@ async function runComponent(page, ledger, componentId) {
   await loadDecisionFonts(ledger.fontDecision)
   const definition = componentDefinition(componentId)
   const variables = await componentVariables()
-  const section = ensureSection(page, ledger, '02 · Komponenten', 4000).node
-  let set = page.findOne(node => node.type === 'COMPONENT_SET' && node.name === definition.name)
+  ensureSection(page, ledger, '02 · Komponenten', 4000)
+  const section = directChild(page, '02 · Komponenten', ['SECTION'])
+  if (!section || section.getPluginData(CREATED_MARKER_KEY) !== PLUGIN_ORIGIN) throw new Error('Direkte, Onda-eigene Komponenten-Section fehlt.')
+  let set = directChild(section, definition.name, ['COMPONENT_SET'])
   const created = !set
   if (!set) {
     const components = definition.variants.map(variant => createComponentVariantNode(section, definition, variant))
     set = figma.combineAsVariants(components, section)
+    set.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN)
+    set.name = definition.name
+  } else {
+    const recoveryInventory = await collectComponentMutationInventory(componentId)
+    const recoveryActions = buildComponentRecoveryActions(recoveryInventory, componentId)
+    for (const action of recoveryActions) {
+      if (action.type === 'variant') {
+        const variantDefinition = definition.variants.find(variant => variant.name === action.variantName)
+        createComponentVariantNode(set, definition, variantDefinition)
+      }
+      if (action.type === 'role') {
+        const component = directChild(set, action.variantName, ['COMPONENT'])
+        const roleDefinition = definition.roles.find(role => `Role/${role.name}` === action.roleName)
+        createComponentRoleNode(component, roleDefinition)
+      }
+    }
   }
   set.name = definition.name
   set.description = `${definition.label}: monochrome Tier-0-Komponente mit Auto Layout, semantischen Variablen und expliziten Zuständen.`
@@ -1075,9 +1097,10 @@ async function runComponent(page, ledger, componentId) {
   set.x = 80 + index % 2 * 980
   set.y = 120 + Math.floor(index / 2) * 900
   const sampleName = `${definition.name} / Dokumentationsinstanz`
-  let sample = page.findOne(node => node.type === 'INSTANCE' && node.name === sampleName)
+  let sample = directChild(section, sampleName, ['INSTANCE'])
   if (!sample) {
     sample = set.children.find(node => node.type === 'COMPONENT' && node.name === definition.variants[0].name).createInstance()
+    sample.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN)
     section.appendChild(sample)
   }
   sample.name = sampleName
@@ -1585,7 +1608,7 @@ async function collectComponentEvidence(page) {
   const sampleNames = new Set(COMPONENT_DEFINITIONS.map(definition => `${definition.name} / Dokumentationsinstanz`))
   const setCandidates = candidates.filter(({ node }) => !sampleNames.has(node.name))
   const evidence = []
-  for (const { node: set, section } of setCandidates) {
+  for (const { node: set, parentId, parentType, parentName } of setCandidates) {
     const definition = definitionsByName.get(set.name)
     const variants = !('children' in set) ? [] : set.children.map(component => ({
       nodeId: component.id,
@@ -1645,9 +1668,9 @@ async function collectComponentEvidence(page) {
       name: set.name,
       owner: set.getPluginData(CREATED_MARKER_KEY),
       type: set.type,
-      parentId: section.id,
-      parentType: section.type,
-      parentName: section.name,
+      parentId,
+      parentType,
+      parentName,
       layoutMode: set.layoutMode,
       effects: cloneSerializable(set.effects),
       componentProperties: componentPropertyInventory(set),
@@ -1658,9 +1681,9 @@ async function collectComponentEvidence(page) {
         name: sampleCandidate.node.name,
         owner: sampleCandidate.node.getPluginData(CREATED_MARKER_KEY),
         type: sampleCandidate.node.type,
-        parentId: sampleCandidate.section.id,
-        parentType: sampleCandidate.section.type,
-        parentName: sampleCandidate.section.name,
+        parentId: sampleCandidate.parentId,
+        parentType: sampleCandidate.parentType,
+        parentName: sampleCandidate.parentName,
         mainComponentId: identity.id,
         documentation: sampleCandidate.node.getPluginData('ondaDocumentationInstance') === 'true',
         repeatedScreen: sampleCandidate.node.getPluginData('ondaRepeatedScreenInstance') === 'true',
