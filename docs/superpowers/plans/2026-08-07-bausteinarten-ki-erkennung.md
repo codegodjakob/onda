@@ -68,6 +68,8 @@ Der Auslöser. Er entscheidet, **ob** ein Lauf nötig ist und **welche Absätze*
   - `UMSCHREIB_GRENZE: number` — `0.5`
   - `strukturSignatur(blocks): string`
   - `pruefeBausteinBedarf({ blocks, bestand, grenze }): { noetig: boolean, grund: string, offene: string[] }`
+    - `grund` ist eines von: `kein-bestand`, `umsortiert`, `ohne-namen`, `umgeschrieben`, `aktuell`
+    - `offene` sind die Absatz-Kennungen, die das Modell benennen soll — Task 5 reicht sie in den Auftrag
 
 - [ ] **Step 1: Write the failing test**
 
@@ -127,7 +129,7 @@ test('ein vollstaendig benannter, unveraenderter Text braucht keinen Lauf', () =
   assert.deepEqual(ergebnis.offene, [])
 })
 
-test('ein neuer Absatz macht einen Lauf noetig und ist allein offen', () => {
+test('ein neuer Absatz macht einen Lauf noetig und ist ALLEIN offen', () => {
   const alt = [absatz('b1', 'Ein Befund.')]
   const bestand = {
     textsorte: 'Essay',
@@ -139,8 +141,46 @@ test('ein neuer Absatz macht einen Lauf noetig und ist allein offen', () => {
   const blocks = [...alt, absatz('b2', 'Ein zweiter Gedanke.')]
   const ergebnis = pruefeBausteinBedarf({ blocks, bestand })
   assert.equal(ergebnis.noetig, true)
-  assert.equal(ergebnis.grund, 'struktur')
+  assert.equal(ergebnis.grund, 'ohne-namen')
+  // Entscheidend: NICHT ['b1','b2']. Sonst benennt jede Eingabetaste den ganzen Text neu.
   assert.deepEqual(ergebnis.offene, ['b2'])
+})
+
+test('ein entfernter Absatz allein loest nichts aus', () => {
+  const alt = [absatz('b1', 'Ein Befund.'), absatz('b2', 'Eine Einordnung.')]
+  const bestand = {
+    textsorte: 'Essay',
+    arten: [{ id: 'art-1', name: 'Befund', beschreibung: '', funktion: 'evidence' }],
+    zuordnung: {
+      b1: { artId: 'art-1', zeichen: 'Ein Befund.'.length },
+      b2: { artId: 'art-1', zeichen: 'Eine Einordnung.'.length },
+    },
+    laufSignatur: strukturSignatur(alt),
+    standAt: 1,
+  }
+  const ergebnis = pruefeBausteinBedarf({ blocks: [absatz('b1', 'Ein Befund.')], bestand })
+  assert.equal(ergebnis.noetig, false)
+  assert.equal(ergebnis.grund, 'aktuell')
+})
+
+test('reines Umsortieren macht ALLE Absaetze offen — die Stelle traegt Bedeutung', () => {
+  const alt = [absatz('b1', 'Die These.'), absatz('b2', 'Der Beleg.'), absatz('b3', 'Der Schluss.')]
+  const bestand = {
+    textsorte: 'Essay',
+    arten: [{ id: 'art-1', name: 'Befund', beschreibung: '', funktion: 'evidence' }],
+    zuordnung: {
+      b1: { artId: 'art-1', zeichen: 'Die These.'.length },
+      b2: { artId: 'art-1', zeichen: 'Der Beleg.'.length },
+      b3: { artId: 'art-1', zeichen: 'Der Schluss.'.length },
+    },
+    laufSignatur: strukturSignatur(alt),
+    standAt: 1,
+  }
+  const blocks = [alt[2], alt[0], alt[1]]
+  const ergebnis = pruefeBausteinBedarf({ blocks, bestand })
+  assert.equal(ergebnis.noetig, true)
+  assert.equal(ergebnis.grund, 'umsortiert')
+  assert.deepEqual(ergebnis.offene.sort(), ['b1', 'b2', 'b3'])
 })
 
 test('Weiterschreiben in einem benannten Absatz loest nichts aus', () => {
@@ -244,10 +284,31 @@ export function strukturSignatur(blocks) {
     .join('|')
 }
 
+// Wurde nur umsortiert? Gleiche Absaetze, andere Reihenfolge. Das ist der eine Fall, in
+// dem ALLE Absaetze neu zu benennen sind, obwohl sich kein einziger Wortlaut geaendert
+// hat: Was ein Absatz tut, haengt an seiner Stelle im Text. Derselbe Satz ist am Anfang
+// eine These und am Schluss eine Zusammenfassung.
+//
+// Ein hinzugekommener oder entfernter Absatz aendert die Reihenfolge ebenfalls, ist aber
+// NICHT dieser Fall -- sonst loeste jede Eingabetaste eine vollstaendige Neubenennung des
+// ganzen Textes aus. Dort reicht, was ohnehin offen ist.
+function nurUmsortiert(idsJetzt, idsVorher) {
+  if (idsJetzt.length !== idsVorher.length) return false
+  const gleich = new Set(idsVorher)
+  if (idsJetzt.some(id => !gleich.has(id))) return false
+  return idsJetzt.some((id, index) => idsVorher[index] !== id)
+}
+
 export function pruefeBausteinBedarf({ blocks, bestand, grenze = UMSCHREIB_GRENZE } = {}) {
   const liste = (Array.isArray(blocks) ? blocks : []).filter(benennbar)
   if (!bestand || !Array.isArray(bestand.arten) || !bestand.arten.length) {
     return { noetig: liste.length > 0, grund: 'kein-bestand', offene: liste.map(block => block.id) }
+  }
+
+  const idsJetzt = strukturSignatur(blocks).split('|').filter(Boolean)
+  const idsVorher = String(bestand.laufSignatur || '').split('|').filter(Boolean)
+  if (nurUmsortiert(idsJetzt, idsVorher)) {
+    return { noetig: liste.length > 0, grund: 'umsortiert', offene: liste.map(block => block.id) }
   }
 
   const zuordnung = bestand.zuordnung && typeof bestand.zuordnung === 'object' ? bestand.zuordnung : {}
@@ -261,19 +322,19 @@ export function pruefeBausteinBedarf({ blocks, bestand, grenze = UMSCHREIB_GRENZ
     if (Math.abs(neu - alt) / Math.max(1, alt) > grenze) umgeschrieben.push(block.id)
   })
 
-  const strukturGeaendert = strukturSignatur(blocks) !== bestand.laufSignatur
+  // Ein entfernter Absatz allein loest nichts aus: Er aendert die Reihenfolge, aber kein
+  // uebriger Absatz braucht deshalb einen neuen Namen.
   const offene = [...new Set([...ohneNamen, ...umgeschrieben])]
-  // Eine geaenderte Struktur ALLEIN loest nichts aus: Wer einen Absatz loescht, aendert
-  // die Signatur, aber kein uebriger Absatz braucht deshalb einen neuen Namen. Ausgeloest
-  // wird nur, wenn tatsaechlich jemand ohne Namen dasteht.
   if (!offene.length) return { noetig: false, grund: 'aktuell', offene: [] }
 
-  const grund = strukturGeaendert && ohneNamen.length
-    ? 'struktur'
-    : ohneNamen.length ? 'ohne-namen' : 'umgeschrieben'
-  return { noetig: true, grund, offene }
+  return { noetig: true, grund: ohneNamen.length ? 'ohne-namen' : 'umgeschrieben', offene }
 }
 ```
+
+**`offene` ist tragend, nicht schmückend.** Die Liste wird in Task 5 an den Kontextbau
+weitergereicht und bestimmt, welche Absätze das Modell überhaupt benennen soll. Beim
+ersten Lauf sind das alle; danach nur die neuen. Ein Rückgabewert, den niemand liest, wäre
+hier ein Fehler und kein Detail.
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -281,7 +342,7 @@ export function pruefeBausteinBedarf({ blocks, bestand, grenze = UMSCHREIB_GRENZ
 cd app && node --test test/bausteinlauf-model.test.mjs
 ```
 
-Erwartet: PASS, 9 Tests.
+Erwartet: PASS, 11 Tests.
 
 - [ ] **Step 5: Commit**
 
@@ -828,7 +889,7 @@ export function verarbeiteBausteinantwort({ antwort, blocks, bestand = null, jet
 cd app && node --test test/bausteinlauf-model.test.mjs
 ```
 
-Erwartet: PASS, 26 Tests insgesamt.
+Erwartet: PASS, 29 Tests insgesamt in dieser Datei.
 
 - [ ] **Step 5: Commit**
 
@@ -1041,8 +1102,12 @@ git add app/src/agent-prompts.mjs app/src/agent-tasks.mjs app/test/agent-tasks.t
 - Test: `app/test/bausteinarten-kontext.test.mjs`
 
 **Interfaces:**
-- Consumes: `BAUSTEINARTEN_ANWEISUNG` (Task 4)
-- Produces: `baueBausteinKontext({ verstaendnis, docText, blocks, bestand }): { verstaendnis, docText, volatiles }`
+- Consumes: `BAUSTEINARTEN_ANWEISUNG` (Task 4), `offene` aus `pruefeBausteinBedarf` (Task 1)
+- Produces: `baueBausteinKontext({ verstaendnis, docText, blocks, bestand, offene }): { verstaendnis, docText, volatiles }`
+
+`offene` ist die Liste der Absätze, die einen Namen brauchen. Das Absatzverzeichnis nennt
+**nur diese** — die übrigen behalten ihren Namen und müssen das Modell nicht beschäftigen.
+Fehlt `offene`, werden alle benennbaren Absätze aufgeführt (der Fall des ersten Laufs).
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1095,6 +1160,23 @@ test('ohne Bestand entsteht kein Stand-Block', () => {
   assert.equal(kontext.volatiles.some(block => block.startsWith('Bisher erkannt:')), false)
 })
 
+test('das Verzeichnis nennt NUR die offenen Absaetze', () => {
+  const blocks = [
+    { id: 'b1', type: 'paragraph', role: 'paragraph', text: 'Schon benannt.' },
+    { id: 'b2', type: 'paragraph', role: 'paragraph', text: 'Frisch dazugekommen.' },
+  ]
+  const kontext = baueBausteinKontext({ docText: 'Text', blocks, offene: ['b2'] })
+  const verzeichnis = kontext.volatiles.find(block => block.startsWith('Absätze:'))
+  assert.match(verzeichnis, /b2/)
+  assert.doesNotMatch(verzeichnis, /b1/, 'ein bereits benannter Absatz beschäftigt das Modell erneut')
+})
+
+test('ohne offene-Liste stehen alle benennbaren Absaetze drin', () => {
+  const kontext = baueBausteinKontext({ docText: 'Text', blocks: BLOCKS, offene: null })
+  const verzeichnis = kontext.volatiles.find(block => block.startsWith('Absätze:'))
+  assert.match(verzeichnis, /b1/)
+})
+
 test('baueAnfrage nimmt diesen Kontext ohne Verlust an', () => {
   const kontext = baueBausteinKontext({ verstaendnis: { thema: 'x' }, docText: 'Text', blocks: BLOCKS })
   const anfrage = baueAnfrage('bausteinarten', kontext)
@@ -1137,11 +1219,20 @@ function benennbar(block) {
 // Der Anriss statt des vollen Absatzes: Der ganze Wortlaut steht bereits im <dokument>.
 // Das Verzeichnis hat nur die Aufgabe, Kennung und Absatz zusammenzubringen -- dafür
 // reichen die ersten Zeichen, und der Auftrag bleibt kurz genug, um im Blick zu bleiben.
-function absatzVerzeichnis(blocks) {
-  const eintraege = (Array.isArray(blocks) ? blocks : []).filter(benennbar).map(block => ({
-    blockId: block.id,
-    anriss: String(block.text || '').trim().slice(0, ANRISS_ZEICHEN),
-  }))
+//
+// Aufgeführt werden NUR die offenen Absätze (pruefeBausteinBedarf). Die übrigen behalten
+// ihren Namen; sie hier zu nennen hieße, das Modell für nichts arbeiten zu lassen und die
+// Antwort um Zeilen zu verlängern, die ohnehin verworfen würden. Ohne offene-Liste stehen
+// alle benennbaren Absätze drin — der Fall des ersten Laufs.
+function absatzVerzeichnis(blocks, offene) {
+  const nurDiese = Array.isArray(offene) && offene.length ? new Set(offene) : null
+  const eintraege = (Array.isArray(blocks) ? blocks : [])
+    .filter(benennbar)
+    .filter(block => !nurDiese || nurDiese.has(block.id))
+    .map(block => ({
+      blockId: block.id,
+      anriss: String(block.text || '').trim().slice(0, ANRISS_ZEICHEN),
+    }))
   return eintraege.length ? `Absätze: ${JSON.stringify(eintraege)}` : null
 }
 
@@ -1161,11 +1252,12 @@ export function baueBausteinKontext({
   docText = '',
   blocks = [],
   bestand = null,
+  offene = null,
 } = {}) {
   const volatiles = [BAUSTEINARTEN_ANWEISUNG]
   const stand = bisherigerStand(bestand)
   if (stand) volatiles.push(stand)
-  const verzeichnis = absatzVerzeichnis(blocks)
+  const verzeichnis = absatzVerzeichnis(blocks, offene)
   if (verzeichnis) volatiles.push(verzeichnis)
   return { verstaendnis, docText, volatiles }
 }
@@ -1177,7 +1269,7 @@ export function baueBausteinKontext({
 cd app && node --test test/bausteinarten-kontext.test.mjs
 ```
 
-Erwartet: PASS, 5 Tests.
+Erwartet: PASS, 7 Tests.
 
 - [ ] **Step 5: Commit**
 
@@ -1368,7 +1460,8 @@ export async function versucheBausteinlauf({
       return { gestartet: false, grund: kostenfreigabe?.grund || 'kostenfreigabe-fehlt' }
     }
 
-    const kontext = baueBausteinKontext({ verstaendnis, docText, blocks, bestand })
+    // bedarf.offene bestimmt, welche Absätze das Modell überhaupt benennen soll.
+    const kontext = baueBausteinKontext({ verstaendnis, docText, blocks, bestand, offene: bedarf.offene })
     setzeAgentStatus({ zustand: 'laeuft' })
     const { daten } = await runTask('bausteinarten', kontext)
     setzeAgentStatus({ zustand: 'bereit' })
@@ -1391,7 +1484,7 @@ export async function versucheBausteinlauf({
 cd app && node --test test/bausteinlauf-model.test.mjs
 ```
 
-Erwartet: PASS, 33 Tests.
+Erwartet: PASS, 36 Tests in dieser Datei.
 
 - [ ] **Step 5: Commit**
 
