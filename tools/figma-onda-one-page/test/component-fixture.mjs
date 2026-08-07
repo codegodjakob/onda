@@ -30,6 +30,7 @@ function variantProperties(definition) {
 export function createValidComponentEvidence(foundation, definitions = COMPONENT_DEFINITIONS) {
   const semantic = name => variableId(foundation, 'Onda · Semantic · Light', name)
   const dimension = name => variableId(foundation, 'Onda · Dimension', name)
+  const overlayStyle = foundation.effectStyles?.find(style => style.name === 'Onda/Shadow/Overlay' && style.owner === PLUGIN_ORIGIN) || null
   const section = { nodeId: 'section:components', name: '02 · Komponenten', type: 'SECTION', owner: PLUGIN_ORIGIN, parentId: 'page:1', parentType: 'PAGE', parentName: 'Page 1' }
   const ancestry = {
     containerId: section.nodeId, containerType: section.type, containerName: section.name, containerOwner: section.owner,
@@ -56,7 +57,10 @@ export function createValidComponentEvidence(foundation, definitions = COMPONENT
         opacity: variantDefinition.opacity,
         fills: boundPaint(semantic(variantDefinition.surfaceToken), inverted ? 0.08 : 1),
         strokes: boundPaint(semantic('color/border'), 0.82),
-        effects: [],
+        effects: definition.effectStyleName ? structuredClone(overlayStyle?.effects || []) : [],
+        effectStyleId: definition.effectStyleName ? overlayStyle?.id || null : null,
+        effectStyleName: definition.effectStyleName || null,
+        effectStyleOwner: definition.effectStyleName ? overlayStyle?.owner || null : null,
         fieldVariableIds: {
           itemSpacing: [dimension(definition.gapToken)],
           paddingTop: [dimension(definition.paddingTokens.top)],

@@ -314,7 +314,8 @@
     gapToken = "spacing/8",
     padding = { top: 12, right: 16, bottom: 12, left: 16 },
     paddingTokens = { top: "spacing/12", right: "spacing/16", bottom: "spacing/12", left: "spacing/16" },
-    direction = "HORIZONTAL"
+    direction = "HORIZONTAL",
+    effectStyleName = null
   }) {
     return Object.freeze({
       id,
@@ -331,6 +332,7 @@
       padding: Object.freeze(__spreadValues({}, padding)),
       paddingTokens: Object.freeze(__spreadValues({}, paddingTokens)),
       direction,
+      effectStyleName,
       variants: Object.freeze(variants)
     });
   }
@@ -559,6 +561,106 @@
         componentVariant("Context=Library", { Symbol: "+", Title: "Noch keine Projekte", Description: "Erstelle ein Projekt, um Dokumente zu organisieren.", Action: "Projekt erstellen" }),
         componentVariant("Context=No Active Annotation", { Symbol: "\u25CB", Title: "Keine aktive Anmerkung", Description: "W\xE4hle eine Anmerkung im Text aus, um sie zu pr\xFCfen.", Action: "Anmerkungen anzeigen" }, { opacity: 0.8, textToken: "color/text-muted" }),
         componentVariant("Context=Recoverable Error", { Symbol: "!", Title: "Inhalt konnte nicht geladen werden", Description: "Deine Eingabe bleibt erhalten. Versuche es erneut.", Action: "Erneut versuchen" }, { inverted: true, strokeWeight: 2 })
+      ]
+    }),
+    componentDefinition({
+      id: "annotation-anchor",
+      name: "Onda/Annotation Anchor",
+      label: "Annotation Anchor",
+      labelRole: "Label",
+      tier: 2,
+      roles: [componentRole("Symbol", "TEXT"), componentRole("Label", "TEXT"), componentRole("Count", "TEXT")],
+      variants: [
+        componentVariant("Kind=Text, State=Idle", { Symbol: "\xB6", Label: "Textanmerkungen", Count: "3 offen" }),
+        componentVariant("Kind=Text, State=Active", { Symbol: "\u25CF", Label: "Textanmerkungen", Count: "3 aktiv" }, { inverted: true, strokeWeight: 2 }),
+        componentVariant("Kind=Note, State=Idle", { Symbol: "\u25C7", Label: "Notizen", Count: "2 offen" }),
+        componentVariant("Kind=Note, State=Active", { Symbol: "\u25CF", Label: "Notizen", Count: "2 aktiv" }, { inverted: true, strokeWeight: 2 })
+      ]
+    }),
+    componentDefinition({
+      id: "annotation-form",
+      name: "Onda/Annotation Form",
+      label: "Annotation Form",
+      labelRole: "Label",
+      tier: 2,
+      direction: "VERTICAL",
+      targetHeight: 180,
+      gap: 12,
+      gapToken: "spacing/12",
+      padding: { top: 24, right: 24, bottom: 24, left: 24 },
+      paddingTokens: { top: "spacing/24", right: "spacing/24", bottom: "spacing/24", left: "spacing/24" },
+      roles: [componentRole("Label", "TEXT"), componentRole("Input", "TEXT"), componentRole("Preview", "TEXT"), componentRole("Primary Action", "TEXT"), componentRole("Secondary Action", "TEXT"), componentRole("Help", "TEXT")],
+      variants: [
+        componentVariant("Form=Correction", { Label: "Korrektur", Input: "Originaltext ersetzen", Preview: "Vorschau der Korrektur", "Primary Action": "Korrektur \xFCbernehmen", "Secondary Action": "Verwerfen", Help: "Ersetzt nur die markierte Stelle." }),
+        componentVariant("Form=Rewrite", { Label: "Neu formulieren", Input: "Alternative Formulierung", Preview: "Vorschau der Neufassung", "Primary Action": "Neufassung \xFCbernehmen", "Secondary Action": "Original behalten", Help: "Ersetzt den markierten Textabschnitt." }),
+        componentVariant("Form=Insertion", { Label: "Einf\xFCgung", Input: "Erg\xE4nzenden Text eingeben", Preview: "Einf\xFCgung an der markierten Stelle", "Primary Action": "Einf\xFCgen", "Secondary Action": "Abbrechen", Help: "F\xFCgt Text ein, ohne vorhandenen Text zu l\xF6schen." }),
+        componentVariant("Form=Slot", { Label: "Position", Input: "Zielposition w\xE4hlen", Preview: "Vorschau der neuen Reihenfolge", "Primary Action": "Verschieben", "Secondary Action": "Position behalten", Help: "Verschiebt einen bestehenden Block." }),
+        componentVariant("Form=Region", { Label: "Mehrere Stellen", Input: "Betroffene Fundstellen pr\xFCfen", Preview: "Vorschau aller \xC4nderungen", "Primary Action": "Alle \xC4nderungen \xFCbernehmen", "Secondary Action": "Einzeln pr\xFCfen", Help: "\xC4ndert mehrere markierte Stellen." }),
+        componentVariant("Form=Source", { Label: "Quelle", Input: "Fundstelle oder Quelle pr\xFCfen", Preview: "Quelle wird am Hinweis verkn\xFCpft", "Primary Action": "Quelle verkn\xFCpfen", "Secondary Action": "Quelle \xF6ffnen", Help: "Fundstelle erst nach Pr\xFCfung am Original \xFCbernehmen." }),
+        componentVariant("Form=Compare", { Label: "Vergleich", Input: "Varianten gegen\xFCberstellen", Preview: "Unterschiede pr\xFCfen", "Primary Action": "Variante \xFCbernehmen", "Secondary Action": "Zur\xFCck", Help: "\xDCbernimmt nur die ausgew\xE4hlte Variante." }),
+        componentVariant("Form=Dialogue", { Label: "R\xFCckfrage", Input: "Antwort eingeben", Preview: "Antwort bleibt als Dialognotiz", "Primary Action": "Antwort senden", "Secondary Action": "Sp\xE4ter", Help: "Keine automatische Text\xE4nderung verf\xFCgbar." }),
+        componentVariant("Form=Title", { Label: "\xDCberschrift", Input: "Neue \xDCberschrift eingeben", Preview: "Vorschau der \xDCberschrift", "Primary Action": "\xDCberschrift \xFCbernehmen", "Secondary Action": "Zur\xFCcksetzen", Help: "Ersetzt ausschlie\xDFlich den Titel." })
+      ]
+    }),
+    componentDefinition({
+      id: "annotation-card",
+      name: "Onda/Annotation Card",
+      label: "Annotation Card",
+      labelRole: "Title",
+      tier: 2,
+      direction: "VERTICAL",
+      targetHeight: 220,
+      radius: 8,
+      radiusToken: "radius/overlay",
+      gap: 12,
+      gapToken: "spacing/12",
+      padding: { top: 24, right: 24, bottom: 24, left: 24 },
+      paddingTokens: { top: "spacing/24", right: "spacing/24", bottom: "spacing/24", left: "spacing/24" },
+      effectStyleName: "Onda/Shadow/Overlay",
+      roles: [componentRole("Type", "TEXT"), componentRole("Title", "TEXT"), componentRole("Body", "TEXT"), componentRole("Scope", "TEXT"), componentRole("Primary Action", "TEXT"), componentRole("Secondary Action", "TEXT"), componentRole("Status", "TEXT")],
+      variants: [
+        componentVariant("State=Open", { Type: "Empfehlung", Title: "Beleg fehlt", Body: "Diese Aussage braucht eine \xFCberpr\xFCfbare Quelle.", Scope: "Nur diesmal", "Primary Action": "\xDCbernehmen", "Secondary Action": "Ablehnen", Status: "Offen" }),
+        componentVariant("State=Accepted", { Type: "Korrektur", Title: "\xC4nderung \xFCbernommen", Body: "Die \xC4nderung wurde in den Text eingesetzt.", Scope: "Nur diesmal", "Primary Action": "R\xFCckg\xE4ngig", "Secondary Action": "Schlie\xDFen", Status: "\xDCbernommen" }, { inverted: true, strokeWeight: 2 }),
+        componentVariant("State=Rejected", { Type: "Hinweis", Title: "Vorschlag abgelehnt", Body: "Diese Regel gilt f\xFCr den aktuellen Text nicht mehr.", Scope: "Nicht mehr in diesem Text", "Primary Action": "R\xFCckg\xE4ngig", "Secondary Action": "Schlie\xDFen", Status: "Abgelehnt" }, { opacity: 0.7, textToken: "color/text-muted" }),
+        componentVariant("State=Error", { Type: "Fehler", Title: "Anmerkung konnte nicht aktualisiert werden", Body: "Deine Eingabe bleibt erhalten.", Scope: "Nie vorschlagen", "Primary Action": "Erneut versuchen", "Secondary Action": "Abbrechen", Status: "Fehler" }, { inverted: true, strokeWeight: 2 })
+      ]
+    }),
+    componentDefinition({
+      id: "dialog-action",
+      name: "Onda/Dialog Action",
+      label: "Dialog Action",
+      labelRole: "Label",
+      tier: 2,
+      roles: [componentRole("Symbol", "TEXT"), componentRole("Label", "TEXT"), componentRole("Hint", "TEXT")],
+      variants: [
+        componentVariant("Kind=Primary", { Symbol: "\u2192", Label: "Weiter", Hint: "Prim\xE4re Aktion" }, { inverted: true }),
+        componentVariant("Kind=Secondary", { Symbol: "\u2190", Label: "Zur\xFCck", Hint: "Sekund\xE4re Aktion" }),
+        componentVariant("Kind=Destructive", { Symbol: "!", Label: "L\xF6schen", Hint: "Kann nicht r\xFCckg\xE4ngig gemacht werden" }, { inverted: true, strokeWeight: 2 }),
+        componentVariant("Kind=Disabled", { Symbol: "\xD7", Label: "Weiter", Hint: "Nicht verf\xFCgbar" }, { opacity: 0.45, textToken: "color/text-muted" })
+      ]
+    }),
+    componentDefinition({
+      id: "dialog",
+      name: "Onda/Dialog",
+      label: "Dialog",
+      labelRole: "Title",
+      tier: 2,
+      direction: "VERTICAL",
+      targetHeight: 280,
+      radius: 8,
+      radiusToken: "radius/overlay",
+      gap: 16,
+      gapToken: "spacing/16",
+      padding: { top: 24, right: 24, bottom: 24, left: 24 },
+      paddingTokens: { top: "spacing/24", right: "spacing/24", bottom: "spacing/24", left: "spacing/24" },
+      effectStyleName: "Onda/Shadow/Overlay",
+      roles: [componentRole("Eyebrow", "TEXT"), componentRole("Title", "TEXT"), componentRole("Body", "TEXT"), componentRole("Status", "TEXT"), componentRole("Primary Action", "TEXT"), componentRole("Secondary Action", "TEXT")],
+      variants: [
+        componentVariant("Kind=Standard", { Eyebrow: "Dialog", Title: "Einstellungen", Body: "Passe die Ansicht f\xFCr dieses Dokument an.", Status: "Bereit", "Primary Action": "Speichern", "Secondary Action": "Abbrechen" }),
+        componentVariant("Kind=Confirmation", { Eyebrow: "Best\xE4tigung", Title: "\xC4nderungen \xFCbernehmen?", Body: "Die \xC4nderungen werden lokal gespeichert.", Status: "Best\xE4tigung erforderlich", "Primary Action": "\xDCbernehmen", "Secondary Action": "Zur\xFCck" }, { strokeWeight: 2 }),
+        componentVariant("Kind=Destructive", { Eyebrow: "Achtung", Title: "Dokument l\xF6schen?", Body: "Das Dokument wird dauerhaft aus der Bibliothek entfernt.", Status: "Nicht r\xFCckg\xE4ngig zu machen", "Primary Action": "Endg\xFCltig l\xF6schen", "Secondary Action": "Abbrechen" }, { inverted: true, strokeWeight: 2 }),
+        componentVariant("State=Error", { Eyebrow: "Fehler", Title: "Speichern fehlgeschlagen", Body: "Deine Eingabe bleibt erhalten.", Status: "Erneut versuchen m\xF6glich", "Primary Action": "Erneut versuchen", "Secondary Action": "Abbrechen" }, { inverted: true, strokeWeight: 2 }),
+        componentVariant("Size=Long", { Eyebrow: "Information", Title: "Datenkontrolle und Export", Body: "Pr\xFCfe offene Hinweise, Datenumfang und Exportziel, bevor du fortf\xE4hrst.", Status: "Bitte vollst\xE4ndig lesen", "Primary Action": "Fortfahren", "Secondary Action": "Zur\xFCck" })
       ]
     })
   ]);
@@ -886,6 +988,12 @@
           const variantName = variant.name;
           if (variant.type !== "COMPONENT" || variant.owner !== PLUGIN_ORIGIN) errors.push(`Ungesch\xFCtzte oder falsche Variante: ${definition2.name}/${variantName}`);
           if (!variant.nodeId || variant.parentId !== set.nodeId || variant.parentType !== "COMPONENT_SET" || variant.parentName !== set.name) errors.push(`Falscher Varianten-Parent: ${definition2.name}/${variantName}`);
+          const effectStyleId = variant.effectStyleId || null;
+          const effectStyleName = variant.effectStyleName || null;
+          const effectStyleOwner = variant.effectStyleOwner || null;
+          if (definition2.effectStyleName) {
+            if (effectStyleId && (effectStyleName !== definition2.effectStyleName || effectStyleOwner !== PLUGIN_ORIGIN)) errors.push(`Ung\xFCltiger Varianten-Effektstil: ${definition2.name}/${variantName}`);
+          } else if (effectStyleId || effectStyleName || effectStyleOwner) errors.push(`Unerlaubter Varianten-Effektstil: ${definition2.name}/${variantName}`);
           const roles = Array.isArray(variant.roles) ? variant.roles : [];
           const expectedRoles = new Map(definition2.roles.map((role) => [`Role/${role.name}`, role]));
           if (new Set(roles.map((role) => role.name)).size !== roles.length || roles.some((role) => !expectedRoles.has(role.name))) errors.push(`Ung\xFCltiges Rolleninventar: ${definition2.name}/${variantName}`);
@@ -935,6 +1043,10 @@
     const mainComponent = await instance.getMainComponentAsync();
     return { id: (mainComponent == null ? void 0 : mainComponent.id) || null, key: (mainComponent == null ? void 0 : mainComponent.key) || null };
   }
+  async function readEffectStyleId(node) {
+    if (!node || typeof node.getEffectStyleIdAsync !== "function") return null;
+    return await node.getEffectStyleIdAsync() || null;
+  }
   function canonicalScalar(value) {
     if (Array.isArray(value)) return value.map(canonicalScalar);
     if (value && typeof value === "object") return Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonicalScalar(value[key])]));
@@ -973,7 +1085,7 @@
       return canonicalComponentRecord(record, ["characterPropertyKey"]);
     }
     function component(record) {
-      return __spreadProps(__spreadValues({}, canonicalComponentRecord(record)), {
+      return __spreadProps(__spreadValues({}, canonicalComponentRecord(record, ["effectStyleId", "effectStyleName", "effectStyleOwner"])), {
         roles: sortComponentRecords((record.roles || []).map(role))
       });
     }
@@ -987,7 +1099,7 @@
       });
     }
     function staging(record) {
-      return __spreadProps(__spreadValues({}, canonicalComponentRecord(record, ["stagingComponent", "stagingVariant"])), {
+      return __spreadProps(__spreadValues({}, canonicalComponentRecord(record, ["stagingComponent", "stagingVariant", "effectStyleId", "effectStyleName", "effectStyleOwner"])), {
         roles: sortComponentRecords((record.roles || []).map(role))
       });
     }
@@ -1156,7 +1268,7 @@ ${currentValidation.errors.join("\n")}`);
     return Array.isArray(actual) && actual.length === 1 && ((_a = actual[0]) == null ? void 0 : _a.index) === 0 && ((_b = actual[0]) == null ? void 0 : _b.type) === "SOLID" && sameArray((_c = actual[0]) == null ? void 0 : _c.variableIds, [variableId]) && isGrayColor((_d = actual[0]) == null ? void 0 : _d.color);
   }
   function validateComponentEvidence(evidence = {}) {
-    var _a, _b, _c, _d;
+    var _a, _b, _c, _d, _e;
     const errors = [];
     const componentSets = Array.isArray(evidence.componentSets) ? evidence.componentSets : [];
     const targetPage = evidence.targetPage;
@@ -1166,6 +1278,7 @@ ${currentValidation.errors.join("\n")}`);
     const container = containers.length === 1 ? containers[0] : null;
     if (container && (container.name !== "02 \xB7 Komponenten" || container.type !== "SECTION" || container.owner !== PLUGIN_ORIGIN || container.parentId !== (targetPage == null ? void 0 : targetPage.id) || container.parentType !== "PAGE" || container.parentName !== TARGET_PAGE_NAME)) errors.push("Komponenten-Evidence: Section-Ancestry ung\xFCltig");
     const foundationVariables = Array.isArray((_a = evidence.foundation) == null ? void 0 : _a.variables) ? evidence.foundation.variables : [];
+    const foundationEffectStyles = Array.isArray((_b = evidence.foundation) == null ? void 0 : _b.effectStyles) ? evidence.foundation.effectStyles : [];
     function variableId(collectionName, name) {
       const matching = foundationVariables.filter((variable) => variable.collectionName === collectionName && variable.name === name);
       if (matching.length !== 1) errors.push(`Komponentenvariable fehlt oder doppelt: ${collectionName}/${name}`);
@@ -1173,6 +1286,12 @@ ${currentValidation.errors.join("\n")}`);
     }
     const semantic = (name) => variableId("Onda \xB7 Semantic \xB7 Light", name);
     const dimension = (name) => variableId("Onda \xB7 Dimension", name);
+    const effectStyleIds = /* @__PURE__ */ new Map();
+    for (const name of new Set(COMPONENT_DEFINITIONS.map((definition2) => definition2.effectStyleName).filter(Boolean))) {
+      const matching = foundationEffectStyles.filter((style) => style.name === name);
+      if (matching.length !== 1 || matching[0].owner !== PLUGIN_ORIGIN) errors.push(`Komponenten-Effektstil fehlt, doppelt oder ungesch\xFCtzt: ${name}`);
+      effectStyleIds.set(name, matching.length === 1 && matching[0].owner === PLUGIN_ORIGIN ? matching[0].id : null);
+    }
     const expectedIds = new Set(COMPONENT_DEFINITIONS.map((definition2) => definition2.id));
     if (componentSets.length !== COMPONENT_DEFINITIONS.length) errors.push(`ComponentSets: erwartet ${COMPONENT_DEFINITIONS.length}, gefunden ${componentSets.length}`);
     if (new Set(componentSets.map((set) => set.nodeId)).size !== componentSets.length) errors.push("ComponentSets: doppelte NodeIds");
@@ -1207,10 +1326,15 @@ ${currentValidation.errors.join("\n")}`);
           continue;
         }
         const variant = matchingVariants[0];
+        const expectedEffectStyleId = definition2.effectStyleName ? effectStyleIds.get(definition2.effectStyleName) : null;
         if (variant.type !== "COMPONENT" || variant.owner !== PLUGIN_ORIGIN || variant.layoutMode !== definition2.direction) errors.push(`Variante strukturell ung\xFCltig: ${definition2.name}/${variantDefinition.name}`);
         if (!variant.parentId || variant.parentId !== set.nodeId || variant.parentType !== "COMPONENT_SET" || variant.parentName !== set.name) errors.push(`Varianten-Parent ung\xFCltig: ${definition2.name}/${variantDefinition.name}`);
         if (variant.height < definition2.targetHeight || variant.cornerRadius !== definition2.radius || variant.strokeWeight !== variantDefinition.strokeWeight || variant.opacity !== variantDefinition.opacity) errors.push(`Variante geometrisch ung\xFCltig: ${definition2.name}/${variantDefinition.name}`);
-        if ((variant.effects || []).length !== 0) errors.push(`Variante hat Effekte: ${definition2.name}/${variantDefinition.name}`);
+        const variantEffects = Array.isArray(variant.effects) ? variant.effects : [];
+        if (definition2.effectStyleName) {
+          const effect = variantEffects.length === 1 ? variantEffects[0] : null;
+          if (!expectedEffectStyleId || variant.effectStyleId !== expectedEffectStyleId || !effect || effect.type !== "DROP_SHADOW" || !isGrayColor(effect.color)) errors.push(`Varianten-Effektstil ung\xFCltig: ${definition2.name}/${variantDefinition.name}`);
+        } else if ((variant.effectStyleId || null) !== null || variantEffects.length !== 0) errors.push(`Variante hat unerlaubte Effekte: ${definition2.name}/${variantDefinition.name}`);
         if (!exactComponentPaint(variant.fills, semantic(variantDefinition.surfaceToken)) || !exactComponentPaint(variant.strokes, semantic("color/border"))) errors.push(`Varianten-Paints ung\xFCltig: ${definition2.name}/${variantDefinition.name}`);
         const fields = variant.fieldVariableIds || {};
         if (!sameArray(fields.itemSpacing, [dimension(definition2.gapToken)]) || !sameArray(fields.paddingTop, [dimension(definition2.paddingTokens.top)]) || !sameArray(fields.paddingLeft, [dimension(definition2.paddingTokens.left)]) || !sameArray(fields.paddingRight, [dimension(definition2.paddingTokens.right)]) || !sameArray(fields.paddingBottom, [dimension(definition2.paddingTokens.bottom)]) || !["topLeftRadius", "topRightRadius", "bottomLeftRadius", "bottomRightRadius"].every((field) => sameArray(fields[field], [dimension(definition2.radiusToken)]))) errors.push(`Variantenbindungen ung\xFCltig: ${definition2.name}/${variantDefinition.name}`);
@@ -1234,12 +1358,12 @@ ${currentValidation.errors.join("\n")}`);
             const expectedProperty = roleDefinition.name === definition2.labelRole ? labelProperty == null ? void 0 : labelProperty.key : null;
             if ((role.characterPropertyKey || null) !== (expectedProperty || null)) errors.push(`Rollen-Property ung\xFCltig: ${definition2.name}/${variantDefinition.name}/${roleName}`);
           } else if (roleDefinition.type === "ELLIPSE") {
-            if (role.width !== 16 || role.height !== 16 || !sameArray((_b = role.fieldVariableIds) == null ? void 0 : _b.maxWidth, [dimension("radius/circle")]) || !sameArray((_c = role.fieldVariableIds) == null ? void 0 : _c.maxHeight, [dimension("radius/circle")])) errors.push(`Status-Kreis ung\xFCltig: ${definition2.name}/${variantDefinition.name}`);
+            if (role.width !== 16 || role.height !== 16 || !sameArray((_c = role.fieldVariableIds) == null ? void 0 : _c.maxWidth, [dimension("radius/circle")]) || !sameArray((_d = role.fieldVariableIds) == null ? void 0 : _d.maxHeight, [dimension("radius/circle")])) errors.push(`Status-Kreis ung\xFCltig: ${definition2.name}/${variantDefinition.name}`);
           }
         }
       }
       const sample = set.sample;
-      const expectedMain = (_d = variants.find((variant) => variant.name === definition2.variants[0].name)) == null ? void 0 : _d.nodeId;
+      const expectedMain = (_e = variants.find((variant) => variant.name === definition2.variants[0].name)) == null ? void 0 : _e.nodeId;
       if (set.sampleCount !== void 0 && set.sampleCount !== 1 || !sample || sample.name !== `${definition2.name} / Dokumentationsinstanz` || sample.type !== "INSTANCE" || sample.owner !== PLUGIN_ORIGIN || sample.mainComponentId !== expectedMain || sample.documentation !== true || sample.repeatedScreen !== false || sample.parentId !== set.parentId || sample.parentType !== "SECTION" || sample.parentName !== "02 \xB7 Komponenten" || sample.containerId !== set.containerId || sample.containerParentId !== set.containerParentId || (sample.effects || []).length !== 0) errors.push(`Dokumentationsinstanz ung\xFCltig: ${definition2.name}`);
     }
     return { valid: errors.length === 0, errors };
@@ -1418,9 +1542,16 @@ ${currentValidation.errors.join("\n")}`);
       const effect = Array.isArray(overlay.effects) && overlay.effects.length === 1 ? overlay.effects[0] : null;
       if (!effect || effect.type !== "DROP_SHADOW" || !sameObject(effect.color, { r: 0, g: 0, b: 0, a: 0.16 }) || !sameObject(effect.offset, { x: 0, y: 8 }) || effect.radius !== 24 || effect.spread !== 0 || effect.visible !== true || effect.blendMode !== "NORMAL") errors.push("Overlay effect style: properties");
       if (!effect || !isGrayColor(effect.color)) errors.push("Overlay effect style: monochrome");
-      if (effectConsumers.length !== 1) errors.push(`Overlay consumers: erwartet 1, gefunden ${effectConsumers.length}`);
-      const consumer = strictSingle(effectConsumers, (item) => item.name === "Effect / Onda/Shadow/Overlay", errors, "Overlay consumer");
-      if (consumer && (consumer.type !== "FRAME" || consumer.parentName !== "Foundations / Effects" || consumer.effectStyleId !== overlay.id || !sameArray(consumer.fields, ["effectStyleId"]) || !exactFillBindings(consumer.fills, [variableId("Onda \xB7 Semantic \xB7 Light", "color/surface")]))) errors.push("Overlay consumer: invalid");
+      const overlayComponents = COMPONENT_DEFINITIONS.filter((definition2) => definition2.effectStyleName === overlay.name).flatMap((definition2) => definition2.variants.map((variant) => ({ definition: definition2, variant })));
+      const expectedConsumerCount = 1 + overlayComponents.length;
+      if (effectConsumers.length !== expectedConsumerCount) errors.push(`Overlay consumers: erwartet ${expectedConsumerCount}, gefunden ${effectConsumers.length}`);
+      if (new Set(effectConsumers.map((consumer) => consumer.nodeId)).size !== effectConsumers.length) errors.push("Overlay consumers: doppelte NodeIds");
+      const documentationConsumer = strictSingle(effectConsumers, (item) => item.name === "Effect / Onda/Shadow/Overlay" && !item.componentId, errors, "Overlay documentation consumer");
+      if (documentationConsumer && (documentationConsumer.type !== "FRAME" || documentationConsumer.owner !== PLUGIN_ORIGIN || documentationConsumer.parentName !== "Foundations / Effects" || documentationConsumer.cornerRadius !== 8 || documentationConsumer.effectStyleId !== overlay.id || !sameArray(documentationConsumer.fields, ["effectStyleId"]) || !exactFillBindings(documentationConsumer.fills, [variableId("Onda \xB7 Semantic \xB7 Light", "color/surface")]))) errors.push("Overlay documentation consumer: invalid");
+      for (const { definition: definition2, variant } of overlayComponents) {
+        const consumer = strictSingle(effectConsumers, (item) => item.componentId === definition2.id && item.name === variant.name, errors, `Overlay component consumer ${definition2.id}/${variant.name}`);
+        if (consumer && (consumer.type !== "COMPONENT" || consumer.owner !== PLUGIN_ORIGIN || consumer.parentName !== definition2.name || consumer.cornerRadius !== 8 || consumer.effectStyleId !== overlay.id || !sameArray(consumer.fields, ["effectStyleId"]) || !exactFillBindings(consumer.fills, [variableId("Onda \xB7 Semantic \xB7 Light", variant.surfaceToken)]))) errors.push(`Overlay component consumer invalid: ${definition2.id}/${variant.name}`);
+      }
     }
     return { valid: errors.length === 0, errors };
   }
@@ -2354,7 +2485,7 @@ ${result.errors.join("\n")}`);
     return { node: sample, created: !existing };
   }
   async function ensureEffectStyleCard(parent, style, decision) {
-    const card = autoFrame(parent, `Effect / ${style.name}`, { width: 780, height: 150, padding: 24, gap: 8, radius: 6 }).node;
+    const card = autoFrame(parent, `Effect / ${style.name}`, { width: 780, height: 150, padding: 24, gap: 8, radius: 8 }).node;
     await card.setEffectStyleIdAsync(style.id);
     card.setPluginData("ondaFoundationArtifact", "effect-style");
     card.setPluginData("ondaEffectStyleName", style.name);
@@ -2507,6 +2638,13 @@ ${result.errors.join("\n")}`);
     const stagingNodes = candidates.filter((candidate) => candidate.stagingComponent || candidate.stagingVariant);
     const setNodes = candidates.filter((candidate) => !sampleNames.has(candidate.node.name) && !candidate.stagingComponent && !candidate.stagingVariant);
     const sampleNodes = candidates.filter(({ node }) => sampleNames.has(node.name));
+    const effectStyleRecords = (await figma.getLocalEffectStylesAsync()).map(foundationEntityRecord);
+    const effectStyleById = new Map(effectStyleRecords.map((record) => [record.id, record]));
+    async function effectStyleInventory(node) {
+      const effectStyleId = await readEffectStyleId(node);
+      const style = effectStyleId ? effectStyleById.get(effectStyleId) : null;
+      return { effectStyleId, effectStyleName: (style == null ? void 0 : style.name) || null, effectStyleOwner: (style == null ? void 0 : style.owner) || null };
+    }
     function ancestry(location) {
       return {
         parentId: location.parentId,
@@ -2536,47 +2674,50 @@ ${result.errors.join("\n")}`);
         mainComponentId: identity.id
       }));
     }
+    const sets = await Promise.all(setNodes.map(async (location) => {
+      const set = location.node;
+      return __spreadProps(__spreadValues({
+        nodeId: set.id,
+        name: set.name,
+        type: set.type,
+        owner: set.getPluginData(CREATED_MARKER_KEY)
+      }, ancestry(location)), {
+        componentProperties: componentPropertyInventory(set),
+        variants: "children" in set ? await Promise.all(set.children.map(async (variant) => __spreadProps(__spreadValues({
+          nodeId: variant.id,
+          name: variant.name,
+          type: variant.type,
+          owner: variant.getPluginData(CREATED_MARKER_KEY),
+          parentId: set.id,
+          parentType: set.type,
+          parentName: set.name
+        }, await effectStyleInventory(variant)), {
+          roles: componentRoleInventory(variant)
+        }))) : []
+      });
+    }));
+    const staging = await Promise.all(stagingNodes.map(async (location) => {
+      const component = location.node;
+      return __spreadProps(__spreadValues(__spreadValues({
+        nodeId: component.id,
+        name: component.name,
+        type: component.type,
+        owner: component.getPluginData(CREATED_MARKER_KEY),
+        stagingComponent: location.stagingComponent,
+        stagingVariant: location.stagingVariant
+      }, ancestry(location)), await effectStyleInventory(component)), {
+        roles: componentRoleInventory(component)
+      });
+    }));
     return {
       targetPage: locations.targetPage,
       containers: locations.containers.map((_a) => {
         var _b = _a, { node: _node } = _b, container = __objRest(_b, ["node"]);
         return container;
       }),
-      sets: setNodes.map((location) => {
-        const set = location.node;
-        return __spreadProps(__spreadValues({
-          nodeId: set.id,
-          name: set.name,
-          type: set.type,
-          owner: set.getPluginData(CREATED_MARKER_KEY)
-        }, ancestry(location)), {
-          componentProperties: componentPropertyInventory(set),
-          variants: "children" in set ? set.children.map((variant) => ({
-            nodeId: variant.id,
-            name: variant.name,
-            type: variant.type,
-            owner: variant.getPluginData(CREATED_MARKER_KEY),
-            parentId: set.id,
-            parentType: set.type,
-            parentName: set.name,
-            roles: componentRoleInventory(variant)
-          })) : []
-        });
-      }),
+      sets,
       samples,
-      staging: stagingNodes.map((location) => {
-        const component = location.node;
-        return __spreadProps(__spreadValues({
-          nodeId: component.id,
-          name: component.name,
-          type: component.type,
-          owner: component.getPluginData(CREATED_MARKER_KEY),
-          stagingComponent: location.stagingComponent,
-          stagingVariant: location.stagingVariant
-        }, ancestry(location)), {
-          roles: componentRoleInventory(component)
-        });
-      })
+      staging
     };
   }
   async function preflightComponentMutation(componentId) {
@@ -2586,6 +2727,7 @@ ${result.errors.join("\n")}`);
     return inventory;
   }
   async function componentVariables() {
+    var _a;
     const requests = [
       ["surface", "color/surface", "Onda \xB7 Semantic \xB7 Light"],
       ["inverted", "color/inverted", "Onda \xB7 Semantic \xB7 Light"],
@@ -2596,17 +2738,27 @@ ${result.errors.join("\n")}`);
       ["spacing8", "spacing/8", "Onda \xB7 Dimension"],
       ["spacing12", "spacing/12", "Onda \xB7 Dimension"],
       ["spacing16", "spacing/16", "Onda \xB7 Dimension"],
+      ["spacing24", "spacing/24", "Onda \xB7 Dimension"],
       ["spacing32", "spacing/32", "Onda \xB7 Dimension"],
       ["radiusNone", "radius/none", "Onda \xB7 Dimension"],
       ["radiusControl", "radius/control", "Onda \xB7 Dimension"],
       ["radiusStatic", "radius/static", "Onda \xB7 Dimension"],
+      ["radiusOverlay", "radius/overlay", "Onda \xB7 Dimension"],
       ["radiusCircle", "radius/circle", "Onda \xB7 Dimension"]
     ];
     const entries = await Promise.all(requests.map(async ([key, name, collection]) => [key, await localVariable(name, collection)]));
     const variables = Object.fromEntries(entries);
     const missing = requests.filter(([key]) => !variables[key]).map(([, name, collection]) => `${collection}/${name}`);
     if (missing.length) throw new Error(`Komponentenvariablen fehlen: ${missing.join(", ")}`);
+    const effectStyleRecords = (await figma.getLocalEffectStylesAsync()).map(foundationEntityRecord);
+    const effectStyleByName = {};
+    for (const name of new Set(COMPONENT_DEFINITIONS.map((definition2) => definition2.effectStyleName).filter(Boolean))) {
+      const effectStyle = (_a = selectOwnedEntity(effectStyleRecords, name, "EffectStyle")) == null ? void 0 : _a.entity;
+      if (!effectStyle) throw new Error(`Komponenten-Effektstil fehlt: ${name}`);
+      effectStyleByName[name] = effectStyle;
+    }
     return __spreadProps(__spreadValues({}, variables), {
+      effectStyleByName,
       semanticByToken: {
         "color/surface": variables.surface,
         "color/inverted": variables.inverted,
@@ -2619,10 +2771,12 @@ ${result.errors.join("\n")}`);
         "spacing/8": variables.spacing8,
         "spacing/12": variables.spacing12,
         "spacing/16": variables.spacing16,
+        "spacing/24": variables.spacing24,
         "spacing/32": variables.spacing32,
         "radius/none": variables.radiusNone,
         "radius/control": variables.radiusControl,
         "radius/static": variables.radiusStatic,
+        "radius/overlay": variables.radiusOverlay,
         "radius/circle": variables.radiusCircle
       }
     });
@@ -2654,7 +2808,7 @@ ${result.errors.join("\n")}`);
       role.setBoundVariable("maxHeight", variables.radiusCircle);
     }
   }
-  function configureComponentVariant(component, definition2, variantDefinition, decision, variables) {
+  async function configureComponentVariant(component, definition2, variantDefinition, decision, variables) {
     component.name = variantDefinition.name;
     component.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN);
     component.layoutMode = definition2.direction;
@@ -2674,6 +2828,11 @@ ${result.errors.join("\n")}`);
     component.strokes = boundComponentPaint("color/border", variables.border);
     component.strokeWeight = variantDefinition.strokeWeight;
     component.effects = [];
+    if (definition2.effectStyleName) {
+      const effectStyle = variables.effectStyleByName[definition2.effectStyleName];
+      if (!effectStyle) throw new Error(`Komponenten-Effektstil fehlt: ${definition2.effectStyleName}`);
+      await component.setEffectStyleIdAsync(effectStyle.id);
+    }
     component.setBoundVariable("itemSpacing", variables.dimensionByToken[definition2.gapToken]);
     component.setBoundVariable("paddingTop", variables.dimensionByToken[definition2.paddingTokens.top]);
     component.setBoundVariable("paddingLeft", variables.dimensionByToken[definition2.paddingTokens.left]);
@@ -2793,7 +2952,7 @@ ${result.errors.join("\n")}`);
     for (const variantDefinition of definition2.variants) {
       const component = set.children.find((node) => node.type === "COMPONENT" && node.name === variantDefinition.name);
       if (!component) throw new Error(`Variante fehlt: ${definition2.name}/${variantDefinition.name}`);
-      configureComponentVariant(component, definition2, variantDefinition, ledger.fontDecision, variables);
+      await configureComponentVariant(component, definition2, variantDefinition, ledger.fontDecision, variables);
     }
     const labelKey = componentLabelProperty(set, definition2);
     for (const component of set.children) {
@@ -3134,7 +3293,7 @@ ${result.errors.join("\n")}`);
     return { intersections, clearance, overflowNodes: [...new Set(overflowNodes)], undersizedHitTargets };
   }
   async function collectFoundationEvidence(foundationSection, fontDecision) {
-    var _a, _b;
+    var _a, _b, _c;
     function childFrame(name) {
       return foundationSection ? directChild(foundationSection, name, ["FRAME"]) : null;
     }
@@ -3255,7 +3414,10 @@ ${result.errors.join("\n")}`);
           name: consumer.node.name,
           parentName: ((_b = consumer.node.parent) == null ? void 0 : _b.name) || "",
           type: consumer.node.type,
-          effectStyleId: consumer.node.effectStyleId,
+          owner: consumer.node.getPluginData(CREATED_MARKER_KEY),
+          componentId: ((_c = consumer.node.parent) == null ? void 0 : _c.type) === "COMPONENT_SET" ? consumer.node.parent.getPluginData("ondaComponentId") : "",
+          cornerRadius: typeof consumer.node.cornerRadius === "number" ? consumer.node.cornerRadius : null,
+          effectStyleId: await readEffectStyleId(consumer.node),
           fields: [...consumer.fields].sort(),
           fills: collectVisibleFillBindings(consumer.node.fills)
         });
@@ -3292,7 +3454,7 @@ ${result.errors.join("\n")}`);
     for (const location of setCandidates) {
       const { node: set, parentId, parentType, parentName } = location;
       const definition2 = definitionsByName.get(set.name);
-      const variants = !("children" in set) ? [] : set.children.map((component) => ({
+      const variants = !("children" in set) ? [] : await Promise.all(set.children.map(async (component) => ({
         nodeId: component.id,
         name: component.name,
         owner: component.getPluginData(CREATED_MARKER_KEY),
@@ -3309,6 +3471,7 @@ ${result.errors.join("\n")}`);
         fills: componentPaintEvidence(component.fills),
         strokes: componentPaintEvidence(component.strokes),
         effects: cloneSerializable(component.effects),
+        effectStyleId: await readEffectStyleId(component),
         fieldVariableIds: collectFieldVariableIds(component, [
           "itemSpacing",
           "paddingTop",
@@ -3347,7 +3510,7 @@ ${result.errors.join("\n")}`);
             characterPropertyKey: role.type === "TEXT" ? ((_a = role.componentPropertyReferences) == null ? void 0 : _a.characters) || null : null
           };
         })
-      }));
+      })));
       const sampleName = `${set.name} / Dokumentationsinstanz`;
       const samples = candidates.filter(({ node }) => node.name === sampleName);
       const sampleCandidate = samples.length === 1 ? samples[0] : null;

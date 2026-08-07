@@ -183,6 +183,7 @@ function componentDefinition({
   padding = { top: 12, right: 16, bottom: 12, left: 16 },
   paddingTokens = { top: 'spacing/12', right: 'spacing/16', bottom: 'spacing/12', left: 'spacing/16' },
   direction = 'HORIZONTAL',
+  effectStyleName = null,
 }) {
   return Object.freeze({
     id,
@@ -199,6 +200,7 @@ function componentDefinition({
     padding: Object.freeze({ ...padding }),
     paddingTokens: Object.freeze({ ...paddingTokens }),
     direction,
+    effectStyleName,
     variants: Object.freeze(variants),
   })
 }
@@ -354,6 +356,73 @@ export const COMPONENT_DEFINITIONS = Object.freeze([
       componentVariant('Context=Library', { Symbol: '+', Title: 'Noch keine Projekte', Description: 'Erstelle ein Projekt, um Dokumente zu organisieren.', Action: 'Projekt erstellen' }),
       componentVariant('Context=No Active Annotation', { Symbol: '○', Title: 'Keine aktive Anmerkung', Description: 'Wähle eine Anmerkung im Text aus, um sie zu prüfen.', Action: 'Anmerkungen anzeigen' }, { opacity: 0.8, textToken: 'color/text-muted' }),
       componentVariant('Context=Recoverable Error', { Symbol: '!', Title: 'Inhalt konnte nicht geladen werden', Description: 'Deine Eingabe bleibt erhalten. Versuche es erneut.', Action: 'Erneut versuchen' }, { inverted: true, strokeWeight: 2 }),
+    ],
+  }),
+  componentDefinition({
+    id: 'annotation-anchor', name: 'Onda/Annotation Anchor', label: 'Annotation Anchor', labelRole: 'Label', tier: 2,
+    roles: [componentRole('Symbol', 'TEXT'), componentRole('Label', 'TEXT'), componentRole('Count', 'TEXT')],
+    variants: [
+      componentVariant('Kind=Text, State=Idle', { Symbol: '¶', Label: 'Textanmerkungen', Count: '3 offen' }),
+      componentVariant('Kind=Text, State=Active', { Symbol: '●', Label: 'Textanmerkungen', Count: '3 aktiv' }, { inverted: true, strokeWeight: 2 }),
+      componentVariant('Kind=Note, State=Idle', { Symbol: '◇', Label: 'Notizen', Count: '2 offen' }),
+      componentVariant('Kind=Note, State=Active', { Symbol: '●', Label: 'Notizen', Count: '2 aktiv' }, { inverted: true, strokeWeight: 2 }),
+    ],
+  }),
+  componentDefinition({
+    id: 'annotation-form', name: 'Onda/Annotation Form', label: 'Annotation Form', labelRole: 'Label', tier: 2,
+    direction: 'VERTICAL', targetHeight: 180, gap: 12, gapToken: 'spacing/12',
+    padding: { top: 24, right: 24, bottom: 24, left: 24 },
+    paddingTokens: { top: 'spacing/24', right: 'spacing/24', bottom: 'spacing/24', left: 'spacing/24' },
+    roles: [componentRole('Label', 'TEXT'), componentRole('Input', 'TEXT'), componentRole('Preview', 'TEXT'), componentRole('Primary Action', 'TEXT'), componentRole('Secondary Action', 'TEXT'), componentRole('Help', 'TEXT')],
+    variants: [
+      componentVariant('Form=Correction', { Label: 'Korrektur', Input: 'Originaltext ersetzen', Preview: 'Vorschau der Korrektur', 'Primary Action': 'Korrektur übernehmen', 'Secondary Action': 'Verwerfen', Help: 'Ersetzt nur die markierte Stelle.' }),
+      componentVariant('Form=Rewrite', { Label: 'Neu formulieren', Input: 'Alternative Formulierung', Preview: 'Vorschau der Neufassung', 'Primary Action': 'Neufassung übernehmen', 'Secondary Action': 'Original behalten', Help: 'Ersetzt den markierten Textabschnitt.' }),
+      componentVariant('Form=Insertion', { Label: 'Einfügung', Input: 'Ergänzenden Text eingeben', Preview: 'Einfügung an der markierten Stelle', 'Primary Action': 'Einfügen', 'Secondary Action': 'Abbrechen', Help: 'Fügt Text ein, ohne vorhandenen Text zu löschen.' }),
+      componentVariant('Form=Slot', { Label: 'Position', Input: 'Zielposition wählen', Preview: 'Vorschau der neuen Reihenfolge', 'Primary Action': 'Verschieben', 'Secondary Action': 'Position behalten', Help: 'Verschiebt einen bestehenden Block.' }),
+      componentVariant('Form=Region', { Label: 'Mehrere Stellen', Input: 'Betroffene Fundstellen prüfen', Preview: 'Vorschau aller Änderungen', 'Primary Action': 'Alle Änderungen übernehmen', 'Secondary Action': 'Einzeln prüfen', Help: 'Ändert mehrere markierte Stellen.' }),
+      componentVariant('Form=Source', { Label: 'Quelle', Input: 'Fundstelle oder Quelle prüfen', Preview: 'Quelle wird am Hinweis verknüpft', 'Primary Action': 'Quelle verknüpfen', 'Secondary Action': 'Quelle öffnen', Help: 'Fundstelle erst nach Prüfung am Original übernehmen.' }),
+      componentVariant('Form=Compare', { Label: 'Vergleich', Input: 'Varianten gegenüberstellen', Preview: 'Unterschiede prüfen', 'Primary Action': 'Variante übernehmen', 'Secondary Action': 'Zurück', Help: 'Übernimmt nur die ausgewählte Variante.' }),
+      componentVariant('Form=Dialogue', { Label: 'Rückfrage', Input: 'Antwort eingeben', Preview: 'Antwort bleibt als Dialognotiz', 'Primary Action': 'Antwort senden', 'Secondary Action': 'Später', Help: 'Keine automatische Textänderung verfügbar.' }),
+      componentVariant('Form=Title', { Label: 'Überschrift', Input: 'Neue Überschrift eingeben', Preview: 'Vorschau der Überschrift', 'Primary Action': 'Überschrift übernehmen', 'Secondary Action': 'Zurücksetzen', Help: 'Ersetzt ausschließlich den Titel.' }),
+    ],
+  }),
+  componentDefinition({
+    id: 'annotation-card', name: 'Onda/Annotation Card', label: 'Annotation Card', labelRole: 'Title', tier: 2,
+    direction: 'VERTICAL', targetHeight: 220, radius: 8, radiusToken: 'radius/overlay', gap: 12, gapToken: 'spacing/12',
+    padding: { top: 24, right: 24, bottom: 24, left: 24 },
+    paddingTokens: { top: 'spacing/24', right: 'spacing/24', bottom: 'spacing/24', left: 'spacing/24' },
+    effectStyleName: 'Onda/Shadow/Overlay',
+    roles: [componentRole('Type', 'TEXT'), componentRole('Title', 'TEXT'), componentRole('Body', 'TEXT'), componentRole('Scope', 'TEXT'), componentRole('Primary Action', 'TEXT'), componentRole('Secondary Action', 'TEXT'), componentRole('Status', 'TEXT')],
+    variants: [
+      componentVariant('State=Open', { Type: 'Empfehlung', Title: 'Beleg fehlt', Body: 'Diese Aussage braucht eine überprüfbare Quelle.', Scope: 'Nur diesmal', 'Primary Action': 'Übernehmen', 'Secondary Action': 'Ablehnen', Status: 'Offen' }),
+      componentVariant('State=Accepted', { Type: 'Korrektur', Title: 'Änderung übernommen', Body: 'Die Änderung wurde in den Text eingesetzt.', Scope: 'Nur diesmal', 'Primary Action': 'Rückgängig', 'Secondary Action': 'Schließen', Status: 'Übernommen' }, { inverted: true, strokeWeight: 2 }),
+      componentVariant('State=Rejected', { Type: 'Hinweis', Title: 'Vorschlag abgelehnt', Body: 'Diese Regel gilt für den aktuellen Text nicht mehr.', Scope: 'Nicht mehr in diesem Text', 'Primary Action': 'Rückgängig', 'Secondary Action': 'Schließen', Status: 'Abgelehnt' }, { opacity: 0.7, textToken: 'color/text-muted' }),
+      componentVariant('State=Error', { Type: 'Fehler', Title: 'Anmerkung konnte nicht aktualisiert werden', Body: 'Deine Eingabe bleibt erhalten.', Scope: 'Nie vorschlagen', 'Primary Action': 'Erneut versuchen', 'Secondary Action': 'Abbrechen', Status: 'Fehler' }, { inverted: true, strokeWeight: 2 }),
+    ],
+  }),
+  componentDefinition({
+    id: 'dialog-action', name: 'Onda/Dialog Action', label: 'Dialog Action', labelRole: 'Label', tier: 2,
+    roles: [componentRole('Symbol', 'TEXT'), componentRole('Label', 'TEXT'), componentRole('Hint', 'TEXT')],
+    variants: [
+      componentVariant('Kind=Primary', { Symbol: '→', Label: 'Weiter', Hint: 'Primäre Aktion' }, { inverted: true }),
+      componentVariant('Kind=Secondary', { Symbol: '←', Label: 'Zurück', Hint: 'Sekundäre Aktion' }),
+      componentVariant('Kind=Destructive', { Symbol: '!', Label: 'Löschen', Hint: 'Kann nicht rückgängig gemacht werden' }, { inverted: true, strokeWeight: 2 }),
+      componentVariant('Kind=Disabled', { Symbol: '×', Label: 'Weiter', Hint: 'Nicht verfügbar' }, { opacity: 0.45, textToken: 'color/text-muted' }),
+    ],
+  }),
+  componentDefinition({
+    id: 'dialog', name: 'Onda/Dialog', label: 'Dialog', labelRole: 'Title', tier: 2,
+    direction: 'VERTICAL', targetHeight: 280, radius: 8, radiusToken: 'radius/overlay', gap: 16, gapToken: 'spacing/16',
+    padding: { top: 24, right: 24, bottom: 24, left: 24 },
+    paddingTokens: { top: 'spacing/24', right: 'spacing/24', bottom: 'spacing/24', left: 'spacing/24' },
+    effectStyleName: 'Onda/Shadow/Overlay',
+    roles: [componentRole('Eyebrow', 'TEXT'), componentRole('Title', 'TEXT'), componentRole('Body', 'TEXT'), componentRole('Status', 'TEXT'), componentRole('Primary Action', 'TEXT'), componentRole('Secondary Action', 'TEXT')],
+    variants: [
+      componentVariant('Kind=Standard', { Eyebrow: 'Dialog', Title: 'Einstellungen', Body: 'Passe die Ansicht für dieses Dokument an.', Status: 'Bereit', 'Primary Action': 'Speichern', 'Secondary Action': 'Abbrechen' }),
+      componentVariant('Kind=Confirmation', { Eyebrow: 'Bestätigung', Title: 'Änderungen übernehmen?', Body: 'Die Änderungen werden lokal gespeichert.', Status: 'Bestätigung erforderlich', 'Primary Action': 'Übernehmen', 'Secondary Action': 'Zurück' }, { strokeWeight: 2 }),
+      componentVariant('Kind=Destructive', { Eyebrow: 'Achtung', Title: 'Dokument löschen?', Body: 'Das Dokument wird dauerhaft aus der Bibliothek entfernt.', Status: 'Nicht rückgängig zu machen', 'Primary Action': 'Endgültig löschen', 'Secondary Action': 'Abbrechen' }, { inverted: true, strokeWeight: 2 }),
+      componentVariant('State=Error', { Eyebrow: 'Fehler', Title: 'Speichern fehlgeschlagen', Body: 'Deine Eingabe bleibt erhalten.', Status: 'Erneut versuchen möglich', 'Primary Action': 'Erneut versuchen', 'Secondary Action': 'Abbrechen' }, { inverted: true, strokeWeight: 2 }),
+      componentVariant('Size=Long', { Eyebrow: 'Information', Title: 'Datenkontrolle und Export', Body: 'Prüfe offene Hinweise, Datenumfang und Exportziel, bevor du fortfährst.', Status: 'Bitte vollständig lesen', 'Primary Action': 'Fortfahren', 'Secondary Action': 'Zurück' }),
     ],
   }),
 ])

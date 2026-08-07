@@ -1,3 +1,5 @@
+import { COMPONENT_DEFINITIONS, PLUGIN_ORIGIN } from '../src/definitions.mjs'
+
 export const TEST_PALETTE = {
   'gray/000': { r: 1, g: 1, b: 1 },
   'gray/025': { r: 0.98, g: 0.98, b: 0.98 },
@@ -258,10 +260,26 @@ export function createValidFoundationEvidence() {
     name: 'Effect / Onda/Shadow/Overlay',
     parentName: 'Foundations / Effects',
     type: 'FRAME',
+    owner: PLUGIN_ORIGIN,
+    componentId: '',
+    cornerRadius: 8,
     effectStyleId: 'effect-style:overlay',
     fields: ['effectStyleId'],
     fills: fillBindings(variableId('Onda · Semantic · Light', 'color/surface')),
-  }]
+  }, ...COMPONENT_DEFINITIONS.filter(definition => definition.effectStyleName === 'Onda/Shadow/Overlay').flatMap(definition => (
+    definition.variants.map((variant, index) => ({
+      nodeId: `component:${definition.id}:${index}`,
+      name: variant.name,
+      parentName: definition.name,
+      type: 'COMPONENT',
+      owner: PLUGIN_ORIGIN,
+      componentId: definition.id,
+      cornerRadius: definition.radius,
+      effectStyleId: 'effect-style:overlay',
+      fields: ['effectStyleId'],
+      fills: fillBindings(variableId('Onda · Semantic · Light', variant.surfaceToken)),
+    }))
+  ))]
   return {
     paintsValid: true,
     radiiValid: true,

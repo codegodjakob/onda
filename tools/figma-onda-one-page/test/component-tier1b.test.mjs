@@ -114,9 +114,10 @@ function expectedAxes(definition) {
   return axes
 }
 
-test('frozen contract and workflow append exactly five Tier1b foundation sets and expose fourteen ordered component commands', () => {
-  assert.deepEqual(COMPONENT_DEFINITIONS.map(item => item.id), ALL_IDS)
-  const actual = COMPONENT_DEFINITIONS.slice(-5).map(definition => ({
+test('frozen contract and workflow preserve five Tier1b foundation sets as the first fourteen ordered component commands', () => {
+  assert.deepEqual(COMPONENT_DEFINITIONS.slice(0, ALL_IDS.length).map(item => item.id), ALL_IDS)
+  const tier1bDefinitions = COMPONENT_DEFINITIONS.filter(definition => TIER1B_IDS.includes(definition.id))
+  const actual = tier1bDefinitions.map(definition => ({
     id: definition.id,
     name: definition.name,
     label: definition.label,
@@ -134,7 +135,7 @@ test('frozen contract and workflow append exactly five Tier1b foundation sets an
     variants: definition.variants.map(variant => [variant.name, variant.copy, variant.strokeWeight, variant.opacity, variant.surfaceToken, variant.textToken]),
   }))
   assert.deepEqual(actual, EXPECTED)
-  for (const definition of COMPONENT_DEFINITIONS.slice(-5)) {
+  for (const definition of tier1bDefinitions) {
     assert.equal(Object.isFrozen(definition), true)
     assert.ok(definition.roles.every(role => role.type === 'TEXT'))
     assert.ok(definition.variants.every(variant => Object.isFrozen(variant) && Object.isFrozen(variant.copy) && variant.surfaceToken.startsWith('color/') && variant.textToken.startsWith('color/')))
@@ -143,15 +144,15 @@ test('frozen contract and workflow append exactly five Tier1b foundation sets an
   const buttons = [...ui.matchAll(/data-command="component-([^"]+)"/g)].map(match => match[1])
   const phase = PHASE_DEFINITIONS.find(item => item.id === 'components')
   const orderedCommands = ui.slice(ui.indexOf('const orderedCommands'), ui.indexOf('const completed'))
-  assert.deepEqual(buttons, ALL_IDS)
-  assert.deepEqual(phase.commands.map(command => command.componentId), ALL_IDS)
+  assert.deepEqual(buttons.slice(0, ALL_IDS.length), ALL_IDS)
+  assert.deepEqual(phase.commands.slice(0, ALL_IDS.length).map(command => command.componentId), ALL_IDS)
   assert.ok(orderedCommands.indexOf("'component-empty-state'") < orderedCommands.indexOf("'core-views'"))
-  for (const forbidden of ['annotation-card', 'agent-panel', 'dialog', 'modal', 'screen']) assert.doesNotMatch(ui, new RegExp(`component-${forbidden}`))
+  for (const forbidden of ['agent-panel', 'modal', 'screen']) assert.doesNotMatch(ui, new RegExp(`component-${forbidden}`))
 })
 
-test('fourteen-set strict evidence enforces exact properties, bindings, samples, and independent corruption rejection for every Tier1b set', () => {
+test('nineteen-set strict evidence preserves exact properties, bindings, samples, and independent corruption rejection for every Tier1b set', () => {
   const actual = evidence()
-  assert.equal(actual.componentSets.length, 14)
+  assert.equal(actual.componentSets.filter(set => ALL_IDS.includes(set.id)).length, 14)
   assert.deepEqual(plan.validateComponentEvidence(actual), { valid: true, errors: [] })
   for (const id of TIER1B_IDS) {
     const definition = COMPONENT_DEFINITIONS.find(item => item.id === id)

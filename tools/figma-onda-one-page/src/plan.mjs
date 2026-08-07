@@ -334,6 +334,12 @@ export function validateComponentMutationInventory(inventory = {}, componentId) 
       const variantName = variant.name
       if (variant.type !== 'COMPONENT' || variant.owner !== PLUGIN_ORIGIN) errors.push(`Ungeschützte oder falsche Variante: ${definition.name}/${variantName}`)
       if (!variant.nodeId || variant.parentId !== set.nodeId || variant.parentType !== 'COMPONENT_SET' || variant.parentName !== set.name) errors.push(`Falscher Varianten-Parent: ${definition.name}/${variantName}`)
+      const effectStyleId = variant.effectStyleId || null
+      const effectStyleName = variant.effectStyleName || null
+      const effectStyleOwner = variant.effectStyleOwner || null
+      if (definition.effectStyleName) {
+        if (effectStyleId && (effectStyleName !== definition.effectStyleName || effectStyleOwner !== PLUGIN_ORIGIN)) errors.push(`Ungültiger Varianten-Effektstil: ${definition.name}/${variantName}`)
+      } else if (effectStyleId || effectStyleName || effectStyleOwner) errors.push(`Unerlaubter Varianten-Effektstil: ${definition.name}/${variantName}`)
       const roles = Array.isArray(variant.roles) ? variant.roles : []
       const expectedRoles = new Map(definition.roles.map(role => [`Role/${role.name}`, role]))
       if (new Set(roles.map(role => role.name)).size !== roles.length || roles.some(role => !expectedRoles.has(role.name))) errors.push(`Ungültiges Rolleninventar: ${definition.name}/${variantName}`)
@@ -408,6 +414,11 @@ export async function readMainComponentIdentity(instance) {
   return { id: mainComponent?.id || null, key: mainComponent?.key || null }
 }
 
+export async function readEffectStyleId(node) {
+  if (!node || typeof node.getEffectStyleIdAsync !== 'function') return null
+  return await node.getEffectStyleIdAsync() || null
+}
+
 function canonicalScalar(value) {
   if (Array.isArray(value)) return value.map(canonicalScalar)
   if (value && typeof value === 'object') return Object.fromEntries(Object.keys(value).sort().map(key => [key, canonicalScalar(value[key])]))
@@ -439,7 +450,7 @@ export function canonicalComponentMutationSnapshot(inventory = {}) {
   }
   function component(record) {
     return {
-      ...canonicalComponentRecord(record),
+      ...canonicalComponentRecord(record, ['effectStyleId', 'effectStyleName', 'effectStyleOwner']),
       roles: sortComponentRecords((record.roles || []).map(role)),
     }
   }
@@ -455,7 +466,7 @@ export function canonicalComponentMutationSnapshot(inventory = {}) {
   }
   function staging(record) {
     return {
-      ...canonicalComponentRecord(record, ['stagingComponent', 'stagingVariant']),
+      ...canonicalComponentRecord(record, ['stagingComponent', 'stagingVariant', 'effectStyleId', 'effectStyleName', 'effectStyleOwner']),
       roles: sortComponentRecords((record.roles || []).map(role)),
     }
   }
@@ -649,6 +660,7 @@ export function validateComponentEvidence(evidence = {}) {
     || container.parentType !== 'PAGE'
     || container.parentName !== TARGET_PAGE_NAME)) errors.push('Komponenten-Evidence: Section-Ancestry ungültig')
   const foundationVariables = Array.isArray(evidence.foundation?.variables) ? evidence.foundation.variables : []
+  const foundationEffectStyles = Array.isArray(evidence.foundation?.effectStyles) ? evidence.foundation.effectStyles : []
   function variableId(collectionName, name) {
     const matching = foundationVariables.filter(variable => variable.collectionName === collectionName && variable.name === name)
     if (matching.length !== 1) errors.push(`Komponentenvariable fehlt oder doppelt: ${collectionName}/${name}`)
@@ -656,6 +668,12 @@ export function validateComponentEvidence(evidence = {}) {
   }
   const semantic = name => variableId('Onda · Semantic · Light', name)
   const dimension = name => variableId('Onda · Dimension', name)
+  const effectStyleIds = new Map()
+  for (const name of new Set(COMPONENT_DEFINITIONS.map(definition => definition.effectStyleName).filter(Boolean))) {
+    const matching = foundationEffectStyles.filter(style => style.name === name)
+    if (matching.length !== 1 || matching[0].owner !== PLUGIN_ORIGIN) errors.push(`Komponenten-Effektstil fehlt, doppelt oder ungeschützt: ${name}`)
+    effectStyleIds.set(name, matching.length === 1 && matching[0].owner === PLUGIN_ORIGIN ? matching[0].id : null)
+  }
   const expectedIds = new Set(COMPONENT_DEFINITIONS.map(definition => definition.id))
   if (componentSets.length !== COMPONENT_DEFINITIONS.length) errors.push(`ComponentSets: erwartet ${COMPONENT_DEFINITIONS.length}, gefunden ${componentSets.length}`)
   if (new Set(componentSets.map(set => set.nodeId)).size !== componentSets.length) errors.push('ComponentSets: doppelte NodeIds')
@@ -699,10 +717,19 @@ export function validateComponentEvidence(evidence = {}) {
       const matchingVariants = variants.filter(variant => variant.name === variantDefinition.name)
       if (matchingVariants.length !== 1) { errors.push(`Variante fehlt oder doppelt: ${definition.name}/${variantDefinition.name}`); continue }
       const variant = matchingVariants[0]
+      const expectedEffectStyleId = definition.effectStyleName ? effectStyleIds.get(definition.effectStyleName) : null
       if (variant.type !== 'COMPONENT' || variant.owner !== PLUGIN_ORIGIN || variant.layoutMode !== definition.direction) errors.push(`Variante strukturell ungültig: ${definition.name}/${variantDefinition.name}`)
       if (!variant.parentId || variant.parentId !== set.nodeId || variant.parentType !== 'COMPONENT_SET' || variant.parentName !== set.name) errors.push(`Varianten-Parent ungültig: ${definition.name}/${variantDefinition.name}`)
       if (variant.height < definition.targetHeight || variant.cornerRadius !== definition.radius || variant.strokeWeight !== variantDefinition.strokeWeight || variant.opacity !== variantDefinition.opacity) errors.push(`Variante geometrisch ungültig: ${definition.name}/${variantDefinition.name}`)
-      if ((variant.effects || []).length !== 0) errors.push(`Variante hat Effekte: ${definition.name}/${variantDefinition.name}`)
+      const variantEffects = Array.isArray(variant.effects) ? variant.effects : []
+      if (definition.effectStyleName) {
+        const effect = variantEffects.length === 1 ? variantEffects[0] : null
+        if (!expectedEffectStyleId
+          || variant.effectStyleId !== expectedEffectStyleId
+          || !effect
+          || effect.type !== 'DROP_SHADOW'
+          || !isGrayColor(effect.color)) errors.push(`Varianten-Effektstil ungültig: ${definition.name}/${variantDefinition.name}`)
+      } else if ((variant.effectStyleId || null) !== null || variantEffects.length !== 0) errors.push(`Variante hat unerlaubte Effekte: ${definition.name}/${variantDefinition.name}`)
       if (!exactComponentPaint(variant.fills, semantic(variantDefinition.surfaceToken)) || !exactComponentPaint(variant.strokes, semantic('color/border'))) errors.push(`Varianten-Paints ungültig: ${definition.name}/${variantDefinition.name}`)
       const fields = variant.fieldVariableIds || {}
       if (!sameArray(fields.itemSpacing, [dimension(definition.gapToken)])
@@ -950,13 +977,29 @@ export function validateFoundationEvidence(evidence = {}) {
     const effect = Array.isArray(overlay.effects) && overlay.effects.length === 1 ? overlay.effects[0] : null
     if (!effect || effect.type !== 'DROP_SHADOW' || !sameObject(effect.color, { r: 0, g: 0, b: 0, a: 0.16 }) || !sameObject(effect.offset, { x: 0, y: 8 }) || effect.radius !== 24 || effect.spread !== 0 || effect.visible !== true || effect.blendMode !== 'NORMAL') errors.push('Overlay effect style: properties')
     if (!effect || !isGrayColor(effect.color)) errors.push('Overlay effect style: monochrome')
-    if (effectConsumers.length !== 1) errors.push(`Overlay consumers: erwartet 1, gefunden ${effectConsumers.length}`)
-    const consumer = strictSingle(effectConsumers, item => item.name === 'Effect / Onda/Shadow/Overlay', errors, 'Overlay consumer')
-    if (consumer && (consumer.type !== 'FRAME'
-      || consumer.parentName !== 'Foundations / Effects'
-      || consumer.effectStyleId !== overlay.id
-      || !sameArray(consumer.fields, ['effectStyleId'])
-      || !exactFillBindings(consumer.fills, [variableId('Onda · Semantic · Light', 'color/surface')]))) errors.push('Overlay consumer: invalid')
+    const overlayComponents = COMPONENT_DEFINITIONS.filter(definition => definition.effectStyleName === overlay.name)
+      .flatMap(definition => definition.variants.map(variant => ({ definition, variant })))
+    const expectedConsumerCount = 1 + overlayComponents.length
+    if (effectConsumers.length !== expectedConsumerCount) errors.push(`Overlay consumers: erwartet ${expectedConsumerCount}, gefunden ${effectConsumers.length}`)
+    if (new Set(effectConsumers.map(consumer => consumer.nodeId)).size !== effectConsumers.length) errors.push('Overlay consumers: doppelte NodeIds')
+    const documentationConsumer = strictSingle(effectConsumers, item => item.name === 'Effect / Onda/Shadow/Overlay' && !item.componentId, errors, 'Overlay documentation consumer')
+    if (documentationConsumer && (documentationConsumer.type !== 'FRAME'
+      || documentationConsumer.owner !== PLUGIN_ORIGIN
+      || documentationConsumer.parentName !== 'Foundations / Effects'
+      || documentationConsumer.cornerRadius !== 8
+      || documentationConsumer.effectStyleId !== overlay.id
+      || !sameArray(documentationConsumer.fields, ['effectStyleId'])
+      || !exactFillBindings(documentationConsumer.fills, [variableId('Onda · Semantic · Light', 'color/surface')]))) errors.push('Overlay documentation consumer: invalid')
+    for (const { definition, variant } of overlayComponents) {
+      const consumer = strictSingle(effectConsumers, item => item.componentId === definition.id && item.name === variant.name, errors, `Overlay component consumer ${definition.id}/${variant.name}`)
+      if (consumer && (consumer.type !== 'COMPONENT'
+        || consumer.owner !== PLUGIN_ORIGIN
+        || consumer.parentName !== definition.name
+        || consumer.cornerRadius !== 8
+        || consumer.effectStyleId !== overlay.id
+        || !sameArray(consumer.fields, ['effectStyleId'])
+        || !exactFillBindings(consumer.fills, [variableId('Onda · Semantic · Light', variant.surfaceToken)]))) errors.push(`Overlay component consumer invalid: ${definition.id}/${variant.name}`)
+    }
   }
   return { valid: errors.length === 0, errors }
 }

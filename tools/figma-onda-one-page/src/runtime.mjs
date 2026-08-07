@@ -39,6 +39,7 @@ import {
   isValidRadius,
   orderRecordsByBaselineIds,
   protectedChildIds,
+  readEffectStyleId,
   readMainComponentIdentity,
   revalidateComponentNodeRecords,
   restoreBaselineShards,
@@ -720,7 +721,7 @@ function ensureRadiusSample(parent, token, variable) {
 }
 
 async function ensureEffectStyleCard(parent, style, decision) {
-  const card = autoFrame(parent, `Effect / ${style.name}`, { width: 780, height: 150, padding: 24, gap: 8, radius: 6 }).node
+  const card = autoFrame(parent, `Effect / ${style.name}`, { width: 780, height: 150, padding: 24, gap: 8, radius: 8 }).node
   await card.setEffectStyleIdAsync(style.id)
   card.setPluginData('ondaFoundationArtifact', 'effect-style')
   card.setPluginData('ondaEffectStyleName', style.name)
@@ -875,6 +876,13 @@ async function collectComponentMutationInventory(componentId) {
   const stagingNodes = candidates.filter(candidate => candidate.stagingComponent || candidate.stagingVariant)
   const setNodes = candidates.filter(candidate => !sampleNames.has(candidate.node.name) && !candidate.stagingComponent && !candidate.stagingVariant)
   const sampleNodes = candidates.filter(({ node }) => sampleNames.has(node.name))
+  const effectStyleRecords = (await figma.getLocalEffectStylesAsync()).map(foundationEntityRecord)
+  const effectStyleById = new Map(effectStyleRecords.map(record => [record.id, record]))
+  async function effectStyleInventory(node) {
+    const effectStyleId = await readEffectStyleId(node)
+    const style = effectStyleId ? effectStyleById.get(effectStyleId) : null
+    return { effectStyleId, effectStyleName: style?.name || null, effectStyleOwner: style?.owner || null }
+  }
   function ancestry(location) {
     return {
       parentId: location.parentId, parentType: location.parentType, parentName: location.parentName,
@@ -898,19 +906,16 @@ async function collectComponentMutationInventory(componentId) {
       mainComponentId: identity.id,
     })
   }
-  return {
-    targetPage: locations.targetPage,
-    containers: locations.containers.map(({ node: _node, ...container }) => container),
-    sets: setNodes.map(location => {
-      const set = location.node
-      return {
+  const sets = await Promise.all(setNodes.map(async location => {
+    const set = location.node
+    return {
       nodeId: set.id,
       name: set.name,
       type: set.type,
       owner: set.getPluginData(CREATED_MARKER_KEY),
       ...ancestry(location),
       componentProperties: componentPropertyInventory(set),
-      variants: 'children' in set ? set.children.map(variant => ({
+      variants: 'children' in set ? await Promise.all(set.children.map(async variant => ({
         nodeId: variant.id,
         name: variant.name,
         type: variant.type,
@@ -918,24 +923,31 @@ async function collectComponentMutationInventory(componentId) {
         parentId: set.id,
         parentType: set.type,
         parentName: set.name,
+        ...await effectStyleInventory(variant),
         roles: componentRoleInventory(variant),
-      })) : [],
-      }
-    }),
+      }))) : [],
+    }
+  }))
+  const staging = await Promise.all(stagingNodes.map(async location => {
+    const component = location.node
+    return {
+      nodeId: component.id,
+      name: component.name,
+      type: component.type,
+      owner: component.getPluginData(CREATED_MARKER_KEY),
+      stagingComponent: location.stagingComponent,
+      stagingVariant: location.stagingVariant,
+      ...ancestry(location),
+      ...await effectStyleInventory(component),
+      roles: componentRoleInventory(component),
+    }
+  }))
+  return {
+    targetPage: locations.targetPage,
+    containers: locations.containers.map(({ node: _node, ...container }) => container),
+    sets,
     samples,
-    staging: stagingNodes.map(location => {
-      const component = location.node
-      return {
-        nodeId: component.id,
-        name: component.name,
-        type: component.type,
-        owner: component.getPluginData(CREATED_MARKER_KEY),
-        stagingComponent: location.stagingComponent,
-        stagingVariant: location.stagingVariant,
-        ...ancestry(location),
-        roles: componentRoleInventory(component),
-      }
-    }),
+    staging,
   }
 }
 
@@ -957,18 +969,28 @@ async function componentVariables() {
     ['spacing8', 'spacing/8', 'Onda · Dimension'],
     ['spacing12', 'spacing/12', 'Onda · Dimension'],
     ['spacing16', 'spacing/16', 'Onda · Dimension'],
+    ['spacing24', 'spacing/24', 'Onda · Dimension'],
     ['spacing32', 'spacing/32', 'Onda · Dimension'],
     ['radiusNone', 'radius/none', 'Onda · Dimension'],
     ['radiusControl', 'radius/control', 'Onda · Dimension'],
     ['radiusStatic', 'radius/static', 'Onda · Dimension'],
+    ['radiusOverlay', 'radius/overlay', 'Onda · Dimension'],
     ['radiusCircle', 'radius/circle', 'Onda · Dimension'],
   ]
   const entries = await Promise.all(requests.map(async ([key, name, collection]) => [key, await localVariable(name, collection)]))
   const variables = Object.fromEntries(entries)
   const missing = requests.filter(([key]) => !variables[key]).map(([, name, collection]) => `${collection}/${name}`)
   if (missing.length) throw new Error(`Komponentenvariablen fehlen: ${missing.join(', ')}`)
+  const effectStyleRecords = (await figma.getLocalEffectStylesAsync()).map(foundationEntityRecord)
+  const effectStyleByName = {}
+  for (const name of new Set(COMPONENT_DEFINITIONS.map(definition => definition.effectStyleName).filter(Boolean))) {
+    const effectStyle = selectOwnedEntity(effectStyleRecords, name, 'EffectStyle')?.entity
+    if (!effectStyle) throw new Error(`Komponenten-Effektstil fehlt: ${name}`)
+    effectStyleByName[name] = effectStyle
+  }
   return {
     ...variables,
+    effectStyleByName,
     semanticByToken: {
       'color/surface': variables.surface,
       'color/inverted': variables.inverted,
@@ -981,10 +1003,12 @@ async function componentVariables() {
       'spacing/8': variables.spacing8,
       'spacing/12': variables.spacing12,
       'spacing/16': variables.spacing16,
+      'spacing/24': variables.spacing24,
       'spacing/32': variables.spacing32,
       'radius/none': variables.radiusNone,
       'radius/control': variables.radiusControl,
       'radius/static': variables.radiusStatic,
+      'radius/overlay': variables.radiusOverlay,
       'radius/circle': variables.radiusCircle,
     },
   }
@@ -1019,7 +1043,7 @@ function configureComponentRole(role, roleDefinition, copy, decision, textVariab
   }
 }
 
-function configureComponentVariant(component, definition, variantDefinition, decision, variables) {
+async function configureComponentVariant(component, definition, variantDefinition, decision, variables) {
   component.name = variantDefinition.name
   component.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN)
   component.layoutMode = definition.direction
@@ -1039,6 +1063,11 @@ function configureComponentVariant(component, definition, variantDefinition, dec
   component.strokes = boundComponentPaint('color/border', variables.border)
   component.strokeWeight = variantDefinition.strokeWeight
   component.effects = []
+  if (definition.effectStyleName) {
+    const effectStyle = variables.effectStyleByName[definition.effectStyleName]
+    if (!effectStyle) throw new Error(`Komponenten-Effektstil fehlt: ${definition.effectStyleName}`)
+    await component.setEffectStyleIdAsync(effectStyle.id)
+  }
   component.setBoundVariable('itemSpacing', variables.dimensionByToken[definition.gapToken])
   component.setBoundVariable('paddingTop', variables.dimensionByToken[definition.paddingTokens.top])
   component.setBoundVariable('paddingLeft', variables.dimensionByToken[definition.paddingTokens.left])
@@ -1163,7 +1192,7 @@ async function runComponent(page, ledger, componentId, validatedInventory) {
   for (const variantDefinition of definition.variants) {
     const component = set.children.find(node => node.type === 'COMPONENT' && node.name === variantDefinition.name)
     if (!component) throw new Error(`Variante fehlt: ${definition.name}/${variantDefinition.name}`)
-    configureComponentVariant(component, definition, variantDefinition, ledger.fontDecision, variables)
+    await configureComponentVariant(component, definition, variantDefinition, ledger.fontDecision, variables)
   }
   const labelKey = componentLabelProperty(set, definition)
   for (const component of set.children) {
@@ -1658,7 +1687,10 @@ async function collectFoundationEvidence(foundationSection, fontDecision) {
         name: consumer.node.name,
         parentName: consumer.node.parent?.name || '',
         type: consumer.node.type,
-        effectStyleId: consumer.node.effectStyleId,
+        owner: consumer.node.getPluginData(CREATED_MARKER_KEY),
+        componentId: consumer.node.parent?.type === 'COMPONENT_SET' ? consumer.node.parent.getPluginData('ondaComponentId') : '',
+        cornerRadius: typeof consumer.node.cornerRadius === 'number' ? consumer.node.cornerRadius : null,
+        effectStyleId: await readEffectStyleId(consumer.node),
         fields: [...consumer.fields].sort(),
         fills: collectVisibleFillBindings(consumer.node.fills),
       })
@@ -1696,7 +1728,7 @@ async function collectComponentEvidence(page) {
   for (const location of setCandidates) {
     const { node: set, parentId, parentType, parentName } = location
     const definition = definitionsByName.get(set.name)
-    const variants = !('children' in set) ? [] : set.children.map(component => ({
+    const variants = !('children' in set) ? [] : await Promise.all(set.children.map(async component => ({
       nodeId: component.id,
       name: component.name,
       owner: component.getPluginData(CREATED_MARKER_KEY),
@@ -1713,6 +1745,7 @@ async function collectComponentEvidence(page) {
       fills: componentPaintEvidence(component.fills),
       strokes: componentPaintEvidence(component.strokes),
       effects: cloneSerializable(component.effects),
+      effectStyleId: await readEffectStyleId(component),
       fieldVariableIds: collectFieldVariableIds(component, [
         'itemSpacing', 'paddingTop', 'paddingLeft', 'paddingRight', 'paddingBottom',
         'topLeftRadius', 'topRightRadius', 'bottomLeftRadius', 'bottomRightRadius',
@@ -1741,7 +1774,7 @@ async function collectComponentEvidence(page) {
         fieldVariableIds: collectFieldVariableIds(role, ['maxWidth', 'maxHeight']),
         characterPropertyKey: role.type === 'TEXT' ? role.componentPropertyReferences?.characters || null : null,
       })),
-    }))
+    })))
     const sampleName = `${set.name} / Dokumentationsinstanz`
     const samples = candidates.filter(({ node }) => node.name === sampleName)
     const sampleCandidate = samples.length === 1 ? samples[0] : null
