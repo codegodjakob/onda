@@ -173,11 +173,6 @@ export const VERSTAENDNIS_SCHEMA = Object.freeze({
   additionalProperties: false,
 })
 
-// Fix-Runde 2, Finding 5 (Important): auf claude-opus-5 ist adaptives Denken standardmaessig AN,
-// und max_tokens deckelt DENKEN + ANTWORT zusammen (kein separates Denk-Budget wie bei
-// extended thinking mit explizitem budget_tokens). Bei 16000 lief das regelmaessig auf
-// stop_reason:'max_tokens', bevor die eigentliche Antwort fertig war -- das Gateway verwirft
-// den Lauf dann komplett (agent-gateway.mjs), bezahlt und ohne Ergebnis. verstaendnis/hinweise
 // Der dritte Kanal (Bausteinarten). Die Zuordnung nennt die Art bei ihrem NAMEN, nicht
 // bei einer Kennung: Das Modell soll keine IDs erfinden, die dann irgendwo aufgelöst
 // werden müssten. Die IDs vergibt bausteinlauf-model.mjs beim Verarbeiten.
@@ -228,6 +223,11 @@ export const BAUSTEINARTEN_SCHEMA = Object.freeze({
   additionalProperties: false,
 })
 
+// Fix-Runde 2, Finding 5 (Important): auf claude-opus-5 ist adaptives Denken standardmaessig AN,
+// und max_tokens deckelt DENKEN + ANTWORT zusammen (kein separates Denk-Budget wie bei
+// extended thinking mit explizitem budget_tokens). Bei 16000 lief das regelmaessig auf
+// stop_reason:'max_tokens', bevor die eigentliche Antwort fertig war -- das Gateway verwirft
+// den Lauf dann komplett (agent-gateway.mjs), bezahlt und ohne Ergebnis. verstaendnis/hinweise
 // bekommen deshalb deutlich mehr Luft (32000); chat streamt ohnehin sichtbar fuer die Autorin
 // oder den Autor, ein hoher Wert ist dort unkritisch (64000). titel/zusammenfassung laufen auf
 // dem Routine-Modell mit knapper, klar begrenzter Ausgabe und bleiben unveraendert.
