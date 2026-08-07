@@ -2,6 +2,7 @@
 // workspace.js (fuehreBausteinlaufAus) orchestriert nur: Dokument/Editor lesen, diese
 // Funktionen aufrufen, runTask + Persistenz ausloesen. Vorbild: hinweislauf-model.mjs.
 import { FUNKTIONEN, UMSCHREIB_GRENZE, benennbar } from './bausteinarten-vertrag.mjs'
+import { baueBausteinKontext } from './bausteinarten-kontext.mjs'
 
 // Bestand und Reihenfolge der Absaetze — bewusst OHNE Wortlaut. Wer in einem Absatz
 // weiterschreibt, aendert die Signatur nicht; wer einen anlegt, entfernt oder verschiebt,
@@ -252,5 +253,64 @@ export function verarbeiteBausteinantwort({ antwort, blocks, bestand = null, jet
       standAt: Number(jetzt) || 0,
     },
     verworfen,
+  }
+}
+
+// Ein vollstaendiger Versuch. sperreSetzen(true) laeuft SYNCHRON, sofort nach der reinen
+// Bedarfspruefung und VOR dem ersten await -- sonst lesen zwei kurz aufeinanderfolgende
+// Ausloeser beide `false`, haengen beide im selben await und starten beide einen teuren
+// runTask-Aufruf (dieselbe Lehre wie in versucheHinweislauf, hinweislauf-model.mjs:146).
+//
+// istNochDasselbeDokument() prueft NACH dem await: Wer waehrend des Schluessel-Checks das
+// Dokument wechselt, bekaeme sonst die Bausteinarten des einen Textes in die Ablage des
+// anderen geschrieben.
+export async function versucheBausteinlauf({
+  hatDokument,
+  istBeispielprojekt,
+  laeuftBereits,
+  blocks,
+  bestand = null,
+  docText = '',
+  verstaendnis = null,
+  grenze = UMSCHREIB_GRENZE,
+  sperreSetzen,
+  hatSchluessel,
+  istNochDasselbeDokument,
+  beansprucheKostenfreigabe,
+  runTask,
+  setzeAgentStatus,
+  jetzt = Date.now,
+}) {
+  if (!hatDokument) return { gestartet: false, grund: 'kein-dokument' }
+  if (istBeispielprojekt) return { gestartet: false, grund: 'beispielprojekt' }
+  if (laeuftBereits) return { gestartet: false, grund: 'lauf-aktiv' }
+  const bedarf = pruefeBausteinBedarf({ blocks, bestand, grenze })
+  if (!bedarf.noetig) return { gestartet: false, grund: bedarf.grund }
+
+  sperreSetzen(true)
+  try {
+    if (!(await hatSchluessel())) return { gestartet: false, grund: 'kein-schluessel' }
+    if (!istNochDasselbeDokument()) return { gestartet: false, grund: 'dokument-gewechselt' }
+    const kostenfreigabe = typeof beansprucheKostenfreigabe === 'function'
+      ? beansprucheKostenfreigabe()
+      : { erlaubt: true }
+    if (!kostenfreigabe?.erlaubt) {
+      return { gestartet: false, grund: kostenfreigabe?.grund || 'kostenfreigabe-fehlt' }
+    }
+
+    // bedarf.offene bestimmt, welche Absätze das Modell überhaupt benennen soll.
+    const kontext = baueBausteinKontext({ verstaendnis, docText, blocks, bestand, offene: bedarf.offene })
+    setzeAgentStatus({ zustand: 'laeuft' })
+    const { daten } = await runTask('bausteinarten', kontext)
+    setzeAgentStatus({ zustand: 'bereit' })
+    const zeit = jetzt()
+    const ergebnis = verarbeiteBausteinantwort({ antwort: daten, blocks, bestand, jetzt: zeit })
+    return { gestartet: true, erfolg: true, bestand: ergebnis.bestand, verworfen: ergebnis.verworfen, zeit }
+  } catch (fehler) {
+    // Sichtbarer, unaufgeregter Fehlerhinweis statt eines stillen Leerzustands (Spec §7).
+    setzeAgentStatus({ zustand: 'fehler', fehlerTyp: fehler?.typ })
+    return { gestartet: true, erfolg: false, fehler: fehler?.typ || 'unbekannt' }
+  } finally {
+    sperreSetzen(false)
   }
 }

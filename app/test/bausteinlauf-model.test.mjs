@@ -453,3 +453,102 @@ test('die Namensbruecke haelt, wenn Runde 2 die Arten umsortiert und eine weglae
   // b2 war Befund; Runde 2 nennt diese Art nicht mehr -- ein Waisenkind, verworfen.
   assert.equal(bestand.zuordnung.b2, undefined)
 })
+
+import { versucheBausteinlauf } from '../src/bausteinlauf-model.mjs'
+
+function laufAufbau(ueberschreibung = {}) {
+  let gesperrt = false
+  const aufrufe = []
+  return {
+    aufrufe,
+    liestSperre: () => gesperrt,
+    optionen: {
+      hatDokument: true,
+      istBeispielprojekt: false,
+      laeuftBereits: false,
+      blocks: DREI,
+      bestand: null,
+      docText: 'Ein Text.',
+      verstaendnis: null,
+      sperreSetzen: wert => { gesperrt = wert },
+      hatSchluessel: async () => true,
+      istNochDasselbeDokument: () => true,
+      beansprucheKostenfreigabe: () => ({ erlaubt: true }),
+      runTask: async (task, kontext) => { aufrufe.push({ task, kontext }); return { daten: ANTWORT } },
+      setzeAgentStatus: () => {},
+      jetzt: () => 9,
+      ...ueberschreibung,
+    },
+  }
+}
+
+test('ein sauberer Lauf liefert einen Bestand und ruft genau einmal an', async () => {
+  const aufbau = laufAufbau()
+  const ergebnis = await versucheBausteinlauf(aufbau.optionen)
+  assert.equal(ergebnis.gestartet, true)
+  assert.equal(ergebnis.erfolg, true)
+  assert.equal(aufbau.aufrufe.length, 1)
+  assert.equal(aufbau.aufrufe[0].task, 'bausteinarten')
+  assert.equal(bausteinNamen(ergebnis.bestand).get('b1'), 'Kernaussage')
+  assert.equal(aufbau.liestSperre(), false, 'die Sperre wurde nicht wieder gelöst')
+})
+
+test('ohne Bedarf laeuft nichts', async () => {
+  const erst = verarbeiteBausteinantwort({ antwort: ANTWORT, blocks: DREI, jetzt: 1 }).bestand
+  const aufbau = laufAufbau({ bestand: erst })
+  const ergebnis = await versucheBausteinlauf(aufbau.optionen)
+  assert.deepEqual(ergebnis, { gestartet: false, grund: 'aktuell' })
+  assert.equal(aufbau.aufrufe.length, 0)
+})
+
+test('das Beispielprojekt loest nie einen Aufruf aus', async () => {
+  const aufbau = laufAufbau({ istBeispielprojekt: true })
+  const ergebnis = await versucheBausteinlauf(aufbau.optionen)
+  assert.equal(ergebnis.grund, 'beispielprojekt')
+  assert.equal(aufbau.aufrufe.length, 0)
+})
+
+test('die Sperre steht VOR dem ersten await — zwei Ausloeser ergeben einen Aufruf', async () => {
+  let gesperrt = false
+  const aufrufe = []
+  let loeseSchluessel
+  const optionen = {
+    ...laufAufbau().optionen,
+    sperreSetzen: wert => { gesperrt = wert },
+    hatSchluessel: () => new Promise(resolve => { loeseSchluessel = () => resolve(true) }),
+    runTask: async () => { aufrufe.push(1); return { daten: ANTWORT } },
+  }
+  const erster = versucheBausteinlauf({ ...optionen, laeuftBereits: false })
+  const zweiter = versucheBausteinlauf({ ...optionen, get laeuftBereits() { return gesperrt } })
+  loeseSchluessel()
+  const [a, b] = await Promise.all([erster, zweiter])
+  assert.equal(aufrufe.length, 1)
+  assert.equal(a.gestartet !== b.gestartet, true, 'genau einer der beiden darf starten')
+})
+
+test('ein Dokumentwechsel waehrend des Schluessel-Checks bricht ab, bevor etwas kostet', async () => {
+  const aufbau = laufAufbau({ istNochDasselbeDokument: () => false })
+  const ergebnis = await versucheBausteinlauf(aufbau.optionen)
+  assert.equal(ergebnis.grund, 'dokument-gewechselt')
+  assert.equal(aufbau.aufrufe.length, 0)
+})
+
+test('eine verweigerte Kostenfreigabe haelt den Lauf an', async () => {
+  const aufbau = laufAufbau({ beansprucheKostenfreigabe: () => ({ erlaubt: false, grund: 'monatsbudget-erreicht' }) })
+  const ergebnis = await versucheBausteinlauf(aufbau.optionen)
+  assert.equal(ergebnis.grund, 'monatsbudget-erreicht')
+  assert.equal(aufbau.aufrufe.length, 0)
+})
+
+test('ein Fehler wird gemeldet, nicht verschluckt — und die Sperre faellt', async () => {
+  const status = []
+  const aufbau = laufAufbau({
+    runTask: async () => { const fehler = new Error('kaputt'); fehler.typ = 'schema'; throw fehler },
+    setzeAgentStatus: zustand => status.push(zustand),
+  })
+  const ergebnis = await versucheBausteinlauf(aufbau.optionen)
+  assert.equal(ergebnis.erfolg, false)
+  assert.equal(ergebnis.fehler, 'schema')
+  assert.equal(aufbau.liestSperre(), false)
+  assert.equal(status.at(-1).zustand, 'fehler')
+})
