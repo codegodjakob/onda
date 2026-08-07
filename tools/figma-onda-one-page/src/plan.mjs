@@ -408,12 +408,80 @@ export async function readMainComponentIdentity(instance) {
   return { id: mainComponent?.id || null, key: mainComponent?.key || null }
 }
 
-export async function executeGuardedComponentCommand({ command, phases, preflight, requireContext, mutate }) {
+function canonicalScalar(value) {
+  if (Array.isArray(value)) return value.map(canonicalScalar)
+  if (value && typeof value === 'object') return Object.fromEntries(Object.keys(value).sort().map(key => [key, canonicalScalar(value[key])]))
+  return value ?? null
+}
+
+function canonicalComponentRecord(record = {}, extraKeys = []) {
+  const keys = [
+    'id', 'nodeId', 'name', 'type', 'owner',
+    'parentId', 'parentType', 'parentName',
+    'containerId', 'containerType', 'containerName', 'containerOwner',
+    'containerParentId', 'containerParentType', 'containerParentName',
+    ...extraKeys,
+  ]
+  return Object.fromEntries(keys.map(key => [key, canonicalScalar(record[key])]))
+}
+
+function sortComponentRecords(records) {
+  return [...records].sort((left, right) => {
+    const leftKey = JSON.stringify(left)
+    const rightKey = JSON.stringify(right)
+    return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0
+  })
+}
+
+export function canonicalComponentMutationSnapshot(inventory = {}) {
+  function role(record) {
+    return canonicalComponentRecord(record, ['characterPropertyKey'])
+  }
+  function component(record) {
+    return {
+      ...canonicalComponentRecord(record),
+      roles: sortComponentRecords((record.roles || []).map(role)),
+    }
+  }
+  function property(record) {
+    return canonicalComponentRecord(record, ['key', 'defaultValue', 'variantOptions'])
+  }
+  function set(record) {
+    return {
+      ...canonicalComponentRecord(record),
+      componentProperties: sortComponentRecords((record.componentProperties || []).map(property)),
+      variants: sortComponentRecords((record.variants || []).map(component)),
+    }
+  }
+  function staging(record) {
+    return {
+      ...canonicalComponentRecord(record, ['stagingComponent', 'stagingVariant']),
+      roles: sortComponentRecords((record.roles || []).map(role)),
+    }
+  }
+  return {
+    targetPage: canonicalComponentRecord(inventory.targetPage || {}, []),
+    containers: sortComponentRecords((inventory.containers || []).map(record => canonicalComponentRecord(record))),
+    sets: sortComponentRecords((inventory.sets || []).map(set)),
+    samples: sortComponentRecords((inventory.samples || []).map(record => canonicalComponentRecord(record, ['mainComponentId', 'documentation', 'repeatedScreen']))),
+    staging: sortComponentRecords((inventory.staging || []).map(staging)),
+  }
+}
+
+export async function executeGuardedComponentCommand({ command, phases, preflight, requireContext, collectCurrentInventory, mutate }) {
   const transition = validatePhaseTransition(command, phases)
   if (!transition.ok) throw new Error(transition.warning)
-  const validatedInventory = await preflight()
+  const componentId = command.startsWith('component-') ? command.slice('component-'.length) : ''
+  const preflightInventory = await preflight()
   const context = await requireContext()
-  return mutate(context, validatedInventory)
+  if (typeof collectCurrentInventory !== 'function') throw new Error('TOCTOU: zweite Komponenten-Inventur fehlt.')
+  const currentInventory = await collectCurrentInventory(context, componentId)
+  const currentValidation = validateComponentMutationInventory(currentInventory, componentId)
+  if (!currentValidation.valid) throw new Error(`TOCTOU: aktuelles Komponenten-Inventar ungültig.\n${currentValidation.errors.join('\n')}`)
+  const before = canonicalComponentMutationSnapshot(preflightInventory)
+  const current = canonicalComponentMutationSnapshot(currentInventory)
+  if (JSON.stringify(before) !== JSON.stringify(current)) throw new Error('TOCTOU: Komponenten-Inventar wurde nach Preflight verändert.')
+  return mutate(context, currentInventory)
 }
 
 export function collectComponentInventoryLocations(page) {

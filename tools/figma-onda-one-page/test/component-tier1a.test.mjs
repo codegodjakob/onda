@@ -237,6 +237,7 @@ test('Tier1a staging retry and sample relink are idempotent, and ID replacement 
     phases: priorPhases,
     preflight: async () => { preflights += 1; return inventory },
     requireContext: async () => ({ page: actual.targetPage }),
+    collectCurrentInventory: async () => inventory,
     mutate: async (_context, validatedInventory) => {
       await plan.revalidateComponentNodeRecords({
         inventory: validatedInventory,

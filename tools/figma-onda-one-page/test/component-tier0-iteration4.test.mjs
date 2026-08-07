@@ -146,6 +146,7 @@ test('validated preflight inventory is passed to mutation and ID revalidation bl
     phases: { inspect: { status: 'success' }, foundations: { status: 'success' } },
     preflight: async () => inventory,
     requireContext: async () => ({ page: { id: 'page:1', name: 'Page 1', type: 'PAGE' } }),
+    collectCurrentInventory: async () => inventory,
     mutate: async (context, validatedInventory) => {
       assert.equal(validatedInventory, inventory)
       await plan.revalidateComponentNodeRecords({

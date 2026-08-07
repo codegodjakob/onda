@@ -858,6 +858,7 @@ function componentRoleInventory(component) {
     parentId: component.id,
     parentType: component.type,
     parentName: component.name,
+    characterPropertyKey: role.type === 'TEXT' ? role.componentPropertyReferences?.characters || null : null,
   }))
 }
 
@@ -1940,6 +1941,7 @@ async function handleCommand(command) {
       phases,
       preflight: () => preflightComponentMutation(componentId),
       requireContext: requireMutationContext,
+      collectCurrentInventory: () => collectComponentMutationInventory(componentId),
       mutate: runMutation,
     })
     return
