@@ -270,13 +270,38 @@ export function validateComponentMutationInventory(inventory = {}, componentId) 
   if (!COMPONENT_DEFINITIONS.some(component => component.id === componentId)) return { valid: false, errors: [`Unbekannte Komponente: ${componentId}`] }
   const allSets = Array.isArray(inventory.sets) ? inventory.sets : []
   const allSamples = Array.isArray(inventory.samples) ? inventory.samples : []
+  const allStaging = Array.isArray(inventory.staging) ? inventory.staging : []
+  const containers = Array.isArray(inventory.containers) ? inventory.containers : []
+  const targetPage = inventory.targetPage
+  if (targetPage && (targetPage.type !== 'PAGE' || targetPage.name !== TARGET_PAGE_NAME || !targetPage.id)) errors.push('Ungültige Komponenten-Zielseite.')
+  if (containers.length > 1) errors.push('Komponenten-Section fehlt oder ist nicht eindeutig.')
+  const container = containers.length === 1 ? containers[0] : null
+  if (container && (container.name !== '02 · Komponenten'
+    || container.type !== 'SECTION'
+    || container.owner !== PLUGIN_ORIGIN
+    || container.parentId !== targetPage?.id
+    || container.parentType !== 'PAGE'
+    || container.parentName !== TARGET_PAGE_NAME)) errors.push('Komponenten-Section ist nicht direkt und Onda-eigen.')
+  if ((allSets.length || allSamples.length || allStaging.length) && !container && containers.length === 0 && inventory.containers !== undefined) errors.push('Komponenten-Inventar hat keine Ziel-Section.')
+  function validContainerAncestry(record) {
+    if (!container) return inventory.containers === undefined
+    return record.containerId === container.nodeId
+      && record.containerType === container.type
+      && record.containerName === container.name
+      && record.containerOwner === container.owner
+      && record.containerParentId === container.parentId
+      && record.containerParentType === container.parentType
+      && record.containerParentName === container.parentName
+  }
   const expectedSetNames = new Set(COMPONENT_DEFINITIONS.map(definition => definition.name))
   const expectedSampleNames = new Set(COMPONENT_DEFINITIONS.map(definition => `${definition.name} / Dokumentationsinstanz`))
   for (const set of allSets) if (!expectedSetNames.has(set.name)) errors.push(`Unerwarteter Onda-Komponentenkandidat: ${set.name}`)
   for (const sample of allSamples) if (!expectedSampleNames.has(sample.name)) errors.push(`Unerwarteter Onda-Instanzkandidat: ${sample.name}`)
+  for (const staging of allStaging) if (!COMPONENT_DEFINITIONS.some(definition => definition.id === staging.stagingComponent)) errors.push(`Unerwartetes Komponenten-Staging: ${staging.name}`)
   for (const definition of COMPONENT_DEFINITIONS) {
     const sets = allSets.filter(set => set.name === definition.name)
     const samples = allSamples.filter(sample => sample.name === `${definition.name} / Dokumentationsinstanz`)
+    const stagingNodes = allStaging.filter(item => item.stagingComponent === definition.id)
     if (sets.length > 1) errors.push(`Doppeltes ComponentSet: ${definition.name}`)
     if (samples.length > 1) errors.push(`Doppelte Dokumentationsinstanz: ${definition.name}`)
     const set = sets.length === 1 ? sets[0] : null
@@ -284,6 +309,7 @@ export function validateComponentMutationInventory(inventory = {}, componentId) 
     if (!set && sample) errors.push(`Verwaiste Dokumentationsinstanz: ${definition.name}`)
     if (set) {
     if (!set.nodeId || set.parentType !== 'SECTION' || set.parentName !== '02 · Komponenten' || !set.parentId) errors.push(`Falscher Set-Parent: ${definition.name}`)
+    if (!validContainerAncestry(set)) errors.push(`Falsche Set-Ancestry: ${definition.name}`)
     if (set.type !== 'COMPONENT_SET') errors.push(`Falscher Set-Typ: ${definition.name}`)
     if (set.owner !== PLUGIN_ORIGIN) errors.push(`Ungeschütztes ComponentSet: ${definition.name}`)
     const variants = Array.isArray(set.variants) ? set.variants : []
@@ -303,18 +329,44 @@ export function validateComponentMutationInventory(inventory = {}, componentId) 
       }
     }
     const properties = Array.isArray(set.componentProperties) ? set.componentProperties : []
-    if (properties.length > 1
-      || (properties.length === 1 && (properties[0].name !== 'Label'
-        || properties[0].type !== 'TEXT'
-        || properties[0].defaultValue !== definition.variants[0].copy[definition.labelRole]))) errors.push(`Ungültige Label-Property: ${definition.name}`)
+    const variantPropertyNames = new Set(definition.variants.flatMap(variant => variant.name.split(', ').map(part => part.split('=')[0])))
+    const labels = properties.filter(property => property.name === 'Label')
+    if (labels.length > 1
+      || (labels.length === 1 && (labels[0].type !== 'TEXT' || labels[0].defaultValue !== definition.variants[0].copy[definition.labelRole]))
+      || properties.some(property => (property.type === 'TEXT' && property.name !== 'Label')
+        || (property.type === 'VARIANT' && !variantPropertyNames.has(property.name))
+        || !['TEXT', 'VARIANT'].includes(property.type))) errors.push(`Ungültige Label-Property: ${definition.name}`)
     }
     if (sample) {
       if (!set) errors.push(`Verwaiste Dokumentationsinstanz: ${definition.name}`)
       if (!sample.nodeId || sample.parentId !== set?.parentId || sample.parentType !== 'SECTION' || sample.parentName !== '02 · Komponenten') errors.push(`Falscher Instanz-Parent: ${definition.name}`)
+      if (!validContainerAncestry(sample)) errors.push(`Falsche Instanz-Ancestry: ${definition.name}`)
       if (sample.type !== 'INSTANCE' || sample.owner !== PLUGIN_ORIGIN || sample.documentation !== true || sample.repeatedScreen !== false) errors.push(`Ungültige Dokumentationsinstanz: ${definition.name}`)
       const firstVariant = set?.variants?.find(variant => variant.name === definition.variants[0].name)
       const ownedVariantIds = new Set((set?.variants || []).map(variant => variant.nodeId))
       if (set && (firstVariant ? sample.mainComponentId !== firstVariant.nodeId : !ownedVariantIds.has(sample.mainComponentId))) errors.push(`Falsch verknüpfte Dokumentationsinstanz: ${definition.name}`)
+    }
+    if (set && stagingNodes.length) errors.push(`Staging neben ComponentSet: ${definition.name}`)
+    const stagingNames = stagingNodes.map(item => item.stagingVariant)
+    if (new Set(stagingNames).size !== stagingNames.length) errors.push(`Doppeltes Komponenten-Staging: ${definition.name}`)
+    const expectedVariantNames = new Set(definition.variants.map(variant => variant.name))
+    for (const staging of stagingNodes) {
+      if (staging.type !== 'COMPONENT'
+        || staging.owner !== PLUGIN_ORIGIN
+        || staging.name !== staging.stagingVariant
+        || !expectedVariantNames.has(staging.stagingVariant)
+        || staging.parentId !== container?.nodeId
+        || staging.parentType !== 'SECTION'
+        || staging.parentName !== '02 · Komponenten'
+        || !validContainerAncestry(staging)) errors.push(`Ungültiges Komponenten-Staging: ${definition.name}/${staging.stagingVariant}`)
+      const variantDefinition = definition.variants.find(variant => variant.name === staging.stagingVariant)
+      const expectedRoles = new Map(definition.roles.map(role => [`Role/${role.name}`, role]))
+      const roles = Array.isArray(staging.roles) ? staging.roles : []
+      if (new Set(roles.map(role => role.name)).size !== roles.length || roles.some(role => !expectedRoles.has(role.name))) errors.push(`Ungültige Staging-Rollen: ${definition.name}/${staging.stagingVariant}`)
+      for (const role of roles) {
+        const roleDefinition = expectedRoles.get(role.name)
+        if (!variantDefinition || !roleDefinition || role.type !== roleDefinition.type || role.owner !== PLUGIN_ORIGIN || role.parentId !== staging.nodeId || role.parentType !== 'COMPONENT' || role.parentName !== staging.name) errors.push(`Ungültige Staging-Rolle: ${definition.name}/${staging.stagingVariant}/${role.name}`)
+      }
     }
   }
   return { valid: errors.length === 0, errors }
@@ -334,18 +386,30 @@ export async function readMainComponentIdentity(instance) {
 export async function executeGuardedComponentCommand({ command, phases, preflight, requireContext, mutate }) {
   const transition = validatePhaseTransition(command, phases)
   if (!transition.ok) throw new Error(transition.warning)
-  await preflight()
+  const validatedInventory = await preflight()
   const context = await requireContext()
-  return mutate(context)
+  return mutate(context, validatedInventory)
 }
 
-export function collectComponentCandidateLocations(page) {
+export function collectComponentInventoryLocations(page) {
   const exactNames = new Set(COMPONENT_DEFINITIONS.flatMap(definition => [definition.name, `${definition.name} / Dokumentationsinstanz`]))
   const candidates = []
-  function visit(parent) {
+  const containers = []
+  function owner(node) { return typeof node?.getPluginData === 'function' ? node.getPluginData('ondaOrigin') : '' }
+  function visit(parent, currentContainer = null) {
     if (!parent || !Array.isArray(parent.children)) return
     for (const node of parent.children) {
-      if (exactNames.has(node.name) || node.name?.startsWith('Onda/')) {
+      let container = currentContainer
+      if (node.name === '02 · Komponenten') {
+        container = {
+          node, nodeId: node.id, name: node.name, type: node.type, owner: owner(node),
+          parentId: parent.id, parentType: parent.type, parentName: parent.name,
+        }
+        containers.push(container)
+      }
+      const stagingComponent = typeof node.getPluginData === 'function' ? node.getPluginData('ondaStagingComponent') : ''
+      const stagingVariant = typeof node.getPluginData === 'function' ? node.getPluginData('ondaStagingVariant') : ''
+      if (exactNames.has(node.name) || node.name?.startsWith('Onda/') || stagingComponent || stagingVariant) {
         candidates.push({
           node,
           nodeId: node.id,
@@ -354,13 +418,92 @@ export function collectComponentCandidateLocations(page) {
           parentId: parent.id,
           parentType: parent.type,
           parentName: parent.name,
+          owner: owner(node),
+          containerId: container?.nodeId || null,
+          containerType: container?.type || null,
+          containerName: container?.name || null,
+          containerOwner: container?.owner || '',
+          containerParentId: container?.parentId || null,
+          containerParentType: container?.parentType || null,
+          containerParentName: container?.parentName || null,
+          stagingComponent,
+          stagingVariant,
         })
       }
-      visit(node)
+      visit(node, container)
     }
   }
   visit(page)
-  return candidates
+  return {
+    targetPage: { id: page.id, name: page.name, type: page.type },
+    containers,
+    candidates,
+  }
+}
+
+export function collectComponentCandidateLocations(page) {
+  return collectComponentInventoryLocations(page).candidates
+}
+
+export function collectComponentPropertyInventory(definitions = {}) {
+  return Object.entries(definitions).map(([key, property]) => ({
+    key,
+    name: key.split('#')[0],
+    type: property.type,
+    defaultValue: property.defaultValue,
+    variantOptions: Array.isArray(property.variantOptions) ? [...property.variantOptions] : undefined,
+  }))
+}
+
+export async function executeStagingAssembly({ staging, expectedVariantNames, createVariant, combine, clearStaging }) {
+  const names = staging.map(entry => entry.variantName)
+  if (new Set(names).size !== names.length || names.some(name => !expectedVariantNames.includes(name))) throw new Error('Ungültiges Staging-Inventar.')
+  for (const variantName of expectedVariantNames) {
+    if (!staging.some(entry => entry.variantName === variantName)) staging.push(await createVariant(variantName))
+  }
+  const ordered = expectedVariantNames.map(name => staging.find(entry => entry.variantName === name))
+  const set = await combine(ordered)
+  for (const entry of ordered) await clearStaging(entry)
+  return set
+}
+
+export async function revalidateComponentNodeRecords({ inventory = {}, targetPage, getNodeById }) {
+  if (!targetPage || targetPage.type !== 'PAGE' || targetPage.name !== TARGET_PAGE_NAME) throw new Error('TOCTOU: falsche Zielseite.')
+  if (inventory.targetPage && (inventory.targetPage.id !== targetPage.id || inventory.targetPage.name !== targetPage.name || inventory.targetPage.type !== targetPage.type)) throw new Error('TOCTOU: Zielseite wurde ausgetauscht.')
+  const records = []
+  function add(record) {
+    if (!record?.nodeId || records.some(item => item.nodeId === record.nodeId)) return
+    records.push(record)
+  }
+  for (const container of inventory.containers || []) add(container)
+  for (const set of inventory.sets || []) {
+    add(set)
+    for (const variant of set.variants || []) {
+      add(variant)
+      for (const role of variant.roles || []) add(role)
+    }
+  }
+  for (const staging of inventory.staging || []) {
+    add(staging)
+    for (const role of staging.roles || []) add(role)
+  }
+  for (const sample of inventory.samples || []) add(sample)
+  const resolved = new Map()
+  for (const record of records) {
+    const node = await getNodeById(record.nodeId)
+    if (!node
+      || node.id !== record.nodeId
+      || node.name !== record.name
+      || node.type !== record.type
+      || node.parent?.id !== record.parentId
+      || node.parent?.type !== record.parentType
+      || node.parent?.name !== record.parentName
+      || (record.owner !== undefined && node.getPluginData('ondaOrigin') !== record.owner)
+      || (record.stagingComponent !== undefined && node.getPluginData('ondaStagingComponent') !== record.stagingComponent)
+      || (record.stagingVariant !== undefined && node.getPluginData('ondaStagingVariant') !== record.stagingVariant)) throw new Error(`TOCTOU: Knoten verändert oder ersetzt: ${record.nodeId}`)
+    resolved.set(record.nodeId, node)
+  }
+  return resolved
 }
 
 export function buildComponentRecoveryActions(inventory = {}, componentId) {
@@ -379,7 +522,13 @@ export function buildComponentRecoveryActions(inventory = {}, componentId) {
     }
   }
   if (!(set.componentProperties || []).some(property => property.name === 'Label' && property.type === 'TEXT')) actions.push({ type: 'property' })
-  if (!(inventory.samples || []).some(sample => sample.name === `${definition.name} / Dokumentationsinstanz`)) actions.push({ type: 'sample' })
+  const sample = (inventory.samples || []).find(item => item.name === `${definition.name} / Dokumentationsinstanz`)
+  if (!sample) actions.push({ type: 'sample' })
+  else {
+    const defaultVariantName = definition.variants[0].name
+    const defaultVariant = (set.variants || []).find(variant => variant.name === defaultVariantName)
+    if (!defaultVariant || sample.mainComponentId !== defaultVariant.nodeId) actions.push({ type: 'relink-sample', variantName: defaultVariantName })
+  }
   return actions
 }
 
@@ -395,6 +544,17 @@ function exactComponentPaint(actual, variableId) {
 export function validateComponentEvidence(evidence = {}) {
   const errors = []
   const componentSets = Array.isArray(evidence.componentSets) ? evidence.componentSets : []
+  const targetPage = evidence.targetPage
+  const containers = Array.isArray(evidence.containers) ? evidence.containers : []
+  if (!targetPage || targetPage.type !== 'PAGE' || targetPage.name !== TARGET_PAGE_NAME || !targetPage.id) errors.push('Komponenten-Evidence: Zielseite ungültig')
+  if (containers.length !== 1) errors.push(`Komponenten-Evidence: erwartet 1 Section, gefunden ${containers.length}`)
+  const container = containers.length === 1 ? containers[0] : null
+  if (container && (container.name !== '02 · Komponenten'
+    || container.type !== 'SECTION'
+    || container.owner !== PLUGIN_ORIGIN
+    || container.parentId !== targetPage?.id
+    || container.parentType !== 'PAGE'
+    || container.parentName !== TARGET_PAGE_NAME)) errors.push('Komponenten-Evidence: Section-Ancestry ungültig')
   const foundationVariables = Array.isArray(evidence.foundation?.variables) ? evidence.foundation.variables : []
   function variableId(collectionName, name) {
     const matching = foundationVariables.filter(variable => variable.collectionName === collectionName && variable.name === name)
@@ -414,8 +574,21 @@ export function validateComponentEvidence(evidence = {}) {
     const set = matchingSets[0]
     if (set.type !== 'COMPONENT_SET' || set.owner !== PLUGIN_ORIGIN || set.layoutMode === 'NONE' || (set.effects || []).length !== 0) errors.push(`ComponentSet ungültig: ${definition.name}`)
     if (!set.parentId || set.parentType !== 'SECTION' || set.parentName !== '02 · Komponenten') errors.push(`ComponentSet-Parent ungültig: ${definition.name}`)
+    if (!container
+      || set.containerId !== container.nodeId
+      || set.containerType !== container.type
+      || set.containerName !== container.name
+      || set.containerOwner !== container.owner
+      || set.containerParentId !== container.parentId
+      || set.containerParentType !== container.parentType
+      || set.containerParentName !== container.parentName) errors.push(`ComponentSet-Ancestry ungültig: ${definition.name}`)
     const properties = Array.isArray(set.componentProperties) ? set.componentProperties : []
-    const labelProperty = properties.length === 1 && properties[0].name === 'Label' && properties[0].type === 'TEXT' ? properties[0] : null
+    const variantPropertyNames = new Set(definition.variants.flatMap(variant => variant.name.split(', ').map(part => part.split('=')[0])))
+    const labelProperties = properties.filter(property => property.name === 'Label')
+    const labelProperty = labelProperties.length === 1 && labelProperties[0].type === 'TEXT' ? labelProperties[0] : null
+    if (properties.some(property => (property.type === 'TEXT' && property.name !== 'Label')
+      || (property.type === 'VARIANT' && !variantPropertyNames.has(property.name))
+      || !['TEXT', 'VARIANT'].includes(property.type))) errors.push(`Component-Property ungültig: ${definition.name}`)
     if (!labelProperty || labelProperty.defaultValue !== definition.variants[0].copy[definition.labelRole]) errors.push(`Label-Property ungültig: ${definition.name}`)
     const variants = Array.isArray(set.variants) ? set.variants : []
     if (variants.length !== definition.variants.length || new Set(variants.map(variant => variant.nodeId)).size !== variants.length) errors.push(`Variantenanzahl ungültig: ${definition.name}`)
@@ -476,6 +649,8 @@ export function validateComponentEvidence(evidence = {}) {
       || sample.parentId !== set.parentId
       || sample.parentType !== 'SECTION'
       || sample.parentName !== '02 · Komponenten'
+      || sample.containerId !== set.containerId
+      || sample.containerParentId !== set.containerParentId
       || (sample.effects || []).length !== 0) errors.push(`Dokumentationsinstanz ungültig: ${definition.name}`)
   }
   return { valid: errors.length === 0, errors }
@@ -919,7 +1094,12 @@ export function buildVerificationReport(snapshot) {
     ))
   const componentSets = snapshot.componentSets || []
   const foundation = snapshot.foundation || {}
-  const componentStrict = validateComponentEvidence({ componentSets, foundation })
+  const componentStrict = validateComponentEvidence({
+    componentSets,
+    foundation,
+    targetPage: snapshot.componentTargetPage,
+    containers: snapshot.componentContainers,
+  })
   const componentStructureValid = componentStrict.valid
   const foundationStrict = validateFoundationEvidence(foundation)
   const foundationInventoryValid = foundationStrict.valid

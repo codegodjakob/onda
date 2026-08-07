@@ -104,6 +104,16 @@ test('phase order permits only the next command including component tier order a
 
 function validSnapshot() {
   const foundation = createValidFoundationEvidence()
+  const componentTargetPage = { id: 'page:1', name: 'Page 1', type: 'PAGE' }
+  const componentContainers = [{
+    nodeId: 'section:components',
+    name: '02 · Komponenten',
+    type: 'SECTION',
+    owner: 'onda-one-page',
+    parentId: componentTargetPage.id,
+    parentType: componentTargetPage.type,
+    parentName: componentTargetPage.name,
+  }]
   return {
     targetAuthorized: true,
     pageCount: 1,
@@ -112,6 +122,8 @@ function validSnapshot() {
     annotationViews: ANNOTATION_SECTIONS.flatMap(annotation => annotation.views.map(view => ({ kind: annotation.kind, view: view.name }))),
     dialogStates: DIALOG_FAMILIES.flatMap(family => family.states.map(state => ({ family: family.name, state }))),
     componentSets: createValidComponentEvidence(foundation),
+    componentTargetPage,
+    componentContainers,
     instanceCount: 20,
     documentationInstanceCount: COMPONENT_DEFINITIONS.length,
     repeatedScreenInstanceCount: 8,
@@ -169,7 +181,9 @@ test('foundation and component regeneration are update-or-create, never uncondit
   const runtime = readFileSync(resolve(ROOT, 'src/runtime.mjs'), 'utf8')
   assert.match(runtime, /ensureRadiusSample/)
   assert.match(runtime, /preflightComponentMutation/)
-  assert.match(runtime, /directChild\(section, definition\.name, \['COMPONENT_SET'\]\)/)
+  assert.match(runtime, /setRecord \? resolved\.get\(setRecord\.nodeId\)/)
+  assert.match(runtime, /sampleRecord \? resolved\.get\(sampleRecord\.nodeId\)/)
+  assert.match(runtime, /revalidateComponentNodeRecords/)
   assert.match(runtime, /if \(!sample\) \{/)
   assert.doesNotMatch(runtime, /function componentVariant\(/)
   assert.doesNotMatch(runtime, /for \(const token of RADIUS_TOKENS\) \{\s*const sample = token\.geometry/s)

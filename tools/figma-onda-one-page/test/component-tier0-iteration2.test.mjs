@@ -12,7 +12,16 @@ const ROOT = resolve(import.meta.dirname, '..')
 function structuredComponentEvidence() {
   const foundation = createValidFoundationEvidence()
   const componentSets = createValidComponentEvidence(foundation)
-  const section = { nodeId: 'section:components', name: '02 · Komponenten', type: 'SECTION' }
+  const targetPage = { id: 'page:1', name: 'Page 1', type: 'PAGE' }
+  const section = {
+    nodeId: 'section:components',
+    name: '02 · Komponenten',
+    type: 'SECTION',
+    owner: PLUGIN_ORIGIN,
+    parentId: targetPage.id,
+    parentType: targetPage.type,
+    parentName: targetPage.name,
+  }
   for (const set of componentSets) {
     Object.assign(set, { parentId: section.nodeId, parentType: section.type, parentName: section.name })
     for (const variant of set.variants) {
@@ -33,7 +42,7 @@ function structuredComponentEvidence() {
     }
     Object.assign(set.sample, { parentId: section.nodeId, parentType: section.type, parentName: section.name })
   }
-  return { componentSets, foundation, section }
+  return { componentSets, foundation, section, targetPage, containers: [section] }
 }
 
 test('main-component identity uses only the dynamic-page async API, including mocks that throw on synchronous access', async () => {

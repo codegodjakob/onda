@@ -24,12 +24,15 @@ import {
   buildVerificationReport,
   canReuseOwnedNode,
   collectFieldVariableIds,
+  collectComponentInventoryLocations,
+  collectComponentPropertyInventory,
   collectTextRangeBindings,
   collectVisibleFillBindings,
   computeOndaOrigin,
   collectComponentCandidateLocations,
   executeComponentMutation,
   executeGuardedComponentCommand,
+  executeStagingAssembly,
   executeFoundationMutation,
   hashBaselineRecords,
   isGrayColor,
@@ -37,6 +40,7 @@ import {
   orderRecordsByBaselineIds,
   protectedChildIds,
   readMainComponentIdentity,
+  revalidateComponentNodeRecords,
   restoreBaselineShards,
   selectOwnedEntity,
   selectFontDecision,
@@ -841,14 +845,7 @@ function componentDefinition(componentId) {
 
 function componentPropertyInventory(set) {
   if (!set || set.type !== 'COMPONENT_SET') return []
-  return Object.entries(set.componentPropertyDefinitions || {})
-    .filter(([, property]) => property.type === 'TEXT')
-    .map(([key, property]) => ({
-      key,
-      name: key.split('#')[0],
-      type: property.type,
-      defaultValue: property.defaultValue,
-    }))
+  return collectComponentPropertyInventory(set.componentPropertyDefinitions || {})
 }
 
 function componentRoleInventory(component) {
@@ -865,41 +862,52 @@ function componentRoleInventory(component) {
 }
 
 function collectComponentSectionCandidates(page) {
-  return collectComponentCandidateLocations(page)
+  return collectComponentInventoryLocations(page)
 }
 
 async function collectComponentMutationInventory(componentId) {
   await figma.loadAllPagesAsync()
   componentDefinition(componentId)
-  const candidates = collectComponentSectionCandidates(figma.currentPage)
+  const locations = collectComponentSectionCandidates(figma.currentPage)
+  const candidates = locations.candidates
   const sampleNames = new Set(COMPONENT_DEFINITIONS.map(definition => `${definition.name} / Dokumentationsinstanz`))
-  const setNodes = candidates.filter(({ node }) => !sampleNames.has(node.name))
+  const stagingNodes = candidates.filter(candidate => candidate.stagingComponent || candidate.stagingVariant)
+  const setNodes = candidates.filter(candidate => !sampleNames.has(candidate.node.name) && !candidate.stagingComponent && !candidate.stagingVariant)
   const sampleNodes = candidates.filter(({ node }) => sampleNames.has(node.name))
+  function ancestry(location) {
+    return {
+      parentId: location.parentId, parentType: location.parentType, parentName: location.parentName,
+      containerId: location.containerId, containerType: location.containerType, containerName: location.containerName,
+      containerOwner: location.containerOwner, containerParentId: location.containerParentId,
+      containerParentType: location.containerParentType, containerParentName: location.containerParentName,
+    }
+  }
   const samples = []
-  for (const { node: sample, parentId, parentType, parentName } of sampleNodes) {
+  for (const location of sampleNodes) {
+    const sample = location.node
     const identity = sample.type === 'INSTANCE' ? await readMainComponentIdentity(sample) : { id: null }
     samples.push({
       nodeId: sample.id,
       name: sample.name,
       type: sample.type,
       owner: sample.getPluginData(CREATED_MARKER_KEY),
-      parentId,
-      parentType,
-      parentName,
+      ...ancestry(location),
       documentation: sample.getPluginData('ondaDocumentationInstance') === 'true',
       repeatedScreen: sample.getPluginData('ondaRepeatedScreenInstance') === 'true',
       mainComponentId: identity.id,
     })
   }
   return {
-    sets: setNodes.map(({ node: set, parentId, parentType, parentName }) => ({
+    targetPage: locations.targetPage,
+    containers: locations.containers.map(({ node: _node, ...container }) => container),
+    sets: setNodes.map(location => {
+      const set = location.node
+      return {
       nodeId: set.id,
       name: set.name,
       type: set.type,
       owner: set.getPluginData(CREATED_MARKER_KEY),
-      parentId,
-      parentType,
-      parentName,
+      ...ancestry(location),
       componentProperties: componentPropertyInventory(set),
       variants: 'children' in set ? set.children.map(variant => ({
         nodeId: variant.id,
@@ -911,8 +919,22 @@ async function collectComponentMutationInventory(componentId) {
         parentName: set.name,
         roles: componentRoleInventory(variant),
       })) : [],
-    })),
+      }
+    }),
     samples,
+    staging: stagingNodes.map(location => {
+      const component = location.node
+      return {
+        nodeId: component.id,
+        name: component.name,
+        type: component.type,
+        owner: component.getPluginData(CREATED_MARKER_KEY),
+        stagingComponent: location.stagingComponent,
+        stagingVariant: location.stagingVariant,
+        ...ancestry(location),
+        roles: componentRoleInventory(component),
+      }
+    }),
   }
 }
 
@@ -1015,9 +1037,13 @@ function createComponentRoleNode(component, roleDefinition) {
   return role
 }
 
-function createComponentVariantNode(parent, definition, variantDefinition) {
+function createComponentVariantNode(parent, definition, variantDefinition, staging = false) {
   const component = figma.createComponent()
   component.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN)
+  if (staging) {
+    component.setPluginData('ondaStagingComponent', definition.id)
+    component.setPluginData('ondaStagingVariant', variantDefinition.name)
+  }
   component.name = variantDefinition.name
   parent.appendChild(component)
   for (const roleDefinition of definition.roles) createComponentRoleNode(component, roleDefinition)
@@ -1033,23 +1059,53 @@ function componentLabelProperty(set, definition) {
   return set.addComponentProperty('Label', 'TEXT', definition.variants[0].copy[definition.labelRole])
 }
 
-async function runComponent(page, ledger, componentId) {
+async function runComponent(page, ledger, componentId, validatedInventory) {
   await loadDecisionFonts(ledger.fontDecision)
   const definition = componentDefinition(componentId)
   const variables = await componentVariables()
-  ensureSection(page, ledger, '02 · Komponenten', 4000)
-  const section = directChild(page, '02 · Komponenten', ['SECTION'])
+  const resolved = await revalidateComponentNodeRecords({
+    inventory: validatedInventory,
+    targetPage: page,
+    getNodeById: id => figma.getNodeByIdAsync(id),
+  })
+  const validatedContainer = (validatedInventory.containers || [])[0]
+  if (!validatedContainer && directChild(page, '02 · Komponenten')) throw new Error('TOCTOU: Komponenten-Section erschien nach Preflight.')
+  if (!validatedContainer) ensureSection(page, ledger, '02 · Komponenten', 4000)
+  const section = validatedContainer ? resolved.get(validatedContainer.nodeId) : directChild(page, '02 · Komponenten', ['SECTION'])
   if (!section || section.getPluginData(CREATED_MARKER_KEY) !== PLUGIN_ORIGIN) throw new Error('Direkte, Onda-eigene Komponenten-Section fehlt.')
-  let set = directChild(section, definition.name, ['COMPONENT_SET'])
+  if (section.parent?.id !== page.id || section.parent?.type !== 'PAGE' || section.name !== '02 · Komponenten') throw new Error('TOCTOU: Komponenten-Section ist nicht mehr direkt.')
+  const setRecord = (validatedInventory.sets || []).find(item => item.name === definition.name)
+  let set = setRecord ? resolved.get(setRecord.nodeId) : null
   const created = !set
   if (!set) {
-    const components = definition.variants.map(variant => createComponentVariantNode(section, definition, variant))
-    set = figma.combineAsVariants(components, section)
-    set.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN)
-    set.name = definition.name
+    const staging = (validatedInventory.staging || [])
+      .filter(item => item.stagingComponent === componentId)
+      .map(item => ({ variantName: item.stagingVariant, node: resolved.get(item.nodeId) }))
+    for (const entry of staging) {
+      for (const roleDefinition of definition.roles) {
+        if (!directChild(entry.node, `Role/${roleDefinition.name}`, [roleDefinition.type])) createComponentRoleNode(entry.node, roleDefinition)
+      }
+    }
+    set = await executeStagingAssembly({
+      staging,
+      expectedVariantNames: definition.variants.map(variant => variant.name),
+      createVariant: async variantName => {
+        const variantDefinition = definition.variants.find(variant => variant.name === variantName)
+        return { variantName, node: createComponentVariantNode(section, definition, variantDefinition, true) }
+      },
+      combine: async entries => {
+        const combined = figma.combineAsVariants(entries.map(entry => entry.node), section)
+        combined.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN)
+        combined.name = definition.name
+        return combined
+      },
+      clearStaging: async entry => {
+        entry.node.setPluginData('ondaStagingComponent', '')
+        entry.node.setPluginData('ondaStagingVariant', '')
+      },
+    })
   } else {
-    const recoveryInventory = await collectComponentMutationInventory(componentId)
-    const recoveryActions = buildComponentRecoveryActions(recoveryInventory, componentId)
+    const recoveryActions = buildComponentRecoveryActions(validatedInventory, componentId)
     for (const action of recoveryActions) {
       if (action.type === 'variant') {
         const variantDefinition = definition.variants.find(variant => variant.name === action.variantName)
@@ -1097,12 +1153,16 @@ async function runComponent(page, ledger, componentId) {
   set.x = 80 + index % 2 * 980
   set.y = 120 + Math.floor(index / 2) * 900
   const sampleName = `${definition.name} / Dokumentationsinstanz`
-  let sample = directChild(section, sampleName, ['INSTANCE'])
+  const sampleRecord = (validatedInventory.samples || []).find(item => item.name === sampleName)
+  let sample = sampleRecord ? resolved.get(sampleRecord.nodeId) : null
   if (!sample) {
     sample = set.children.find(node => node.type === 'COMPONENT' && node.name === definition.variants[0].name).createInstance()
     sample.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN)
     section.appendChild(sample)
   }
+  const defaultComponent = directChild(set, definition.variants[0].name, ['COMPONENT'])
+  const sampleIdentity = await readMainComponentIdentity(sample)
+  if (sampleIdentity.id !== defaultComponent.id) sample.swapComponent(defaultComponent)
   sample.name = sampleName
   sample.x = set.x
   sample.y = set.y + set.height + 40
@@ -1604,11 +1664,13 @@ function componentPaintEvidence(paints) {
 
 async function collectComponentEvidence(page) {
   const definitionsByName = new Map(COMPONENT_DEFINITIONS.map(definition => [definition.name, definition]))
-  const candidates = collectComponentSectionCandidates(page)
+  const locations = collectComponentSectionCandidates(page)
+  const candidates = locations.candidates
   const sampleNames = new Set(COMPONENT_DEFINITIONS.map(definition => `${definition.name} / Dokumentationsinstanz`))
   const setCandidates = candidates.filter(({ node }) => !sampleNames.has(node.name))
   const evidence = []
-  for (const { node: set, parentId, parentType, parentName } of setCandidates) {
+  for (const location of setCandidates) {
+    const { node: set, parentId, parentType, parentName } = location
     const definition = definitionsByName.get(set.name)
     const variants = !('children' in set) ? [] : set.children.map(component => ({
       nodeId: component.id,
@@ -1671,6 +1733,13 @@ async function collectComponentEvidence(page) {
       parentId,
       parentType,
       parentName,
+      containerId: location.containerId,
+      containerType: location.containerType,
+      containerName: location.containerName,
+      containerOwner: location.containerOwner,
+      containerParentId: location.containerParentId,
+      containerParentType: location.containerParentType,
+      containerParentName: location.containerParentName,
       layoutMode: set.layoutMode,
       effects: cloneSerializable(set.effects),
       componentProperties: componentPropertyInventory(set),
@@ -1684,6 +1753,13 @@ async function collectComponentEvidence(page) {
         parentId: sampleCandidate.parentId,
         parentType: sampleCandidate.parentType,
         parentName: sampleCandidate.parentName,
+        containerId: sampleCandidate.containerId,
+        containerType: sampleCandidate.containerType,
+        containerName: sampleCandidate.containerName,
+        containerOwner: sampleCandidate.containerOwner,
+        containerParentId: sampleCandidate.containerParentId,
+        containerParentType: sampleCandidate.containerParentType,
+        containerParentName: sampleCandidate.containerParentName,
         mainComponentId: identity.id,
         documentation: sampleCandidate.node.getPluginData('ondaDocumentationInstance') === 'true',
         repeatedScreen: sampleCandidate.node.getPluginData('ondaRepeatedScreenInstance') === 'true',
@@ -1691,7 +1767,11 @@ async function collectComponentEvidence(page) {
       } : null,
     })
   }
-  return evidence
+  return {
+    componentSets: evidence,
+    targetPage: locations.targetPage,
+    containers: locations.containers.map(({ node: _node, ...container }) => container),
+  }
 }
 
 async function runVerify() {
@@ -1710,7 +1790,8 @@ async function runVerify() {
   const dialogStates = allNodes.map(node => ({
     family: node.getPluginData?.('ondaDialogFamily'), state: node.getPluginData?.('ondaDialogState'),
   })).filter(item => item.family && item.state)
-  const componentSets = await collectComponentEvidence(page)
+  const componentEvidence = await collectComponentEvidence(page)
+  const componentSets = componentEvidence.componentSets
   const baseline = await currentBaselineEvidence(page, ledger)
   const geometry = geometryEvidence(page, sections, allNodes, ledger, baseline.baselineRecords)
   const paints = paintsFromNodes(allNodes)
@@ -1737,6 +1818,8 @@ async function runVerify() {
     annotationViews,
     dialogStates,
     componentSets,
+    componentTargetPage: componentEvidence.targetPage,
+    componentContainers: componentEvidence.containers,
     instanceCount: allNodes.filter(node => node.type === 'INSTANCE' && node.getPluginData('ondaDocumentationInstance') !== 'true').length,
     documentationInstanceCount: allNodes.filter(node => node.type === 'INSTANCE' && node.getPluginData('ondaDocumentationInstance') === 'true').length,
     repeatedScreenInstanceCount: allNodes.filter(node => node.type === 'INSTANCE' && node.getPluginData('ondaRepeatedScreenInstance') === 'true').length,
@@ -1809,14 +1892,14 @@ async function handleCommand(command) {
     postResult(command, hardPass, hardPass ? 'Alle strukturellen Hard Gates bestanden.' : 'Verify hat offene Hard Gates gefunden.', report, true)
     return
   }
-  async function runMutation({ page, ledger }) {
+  async function runMutation({ page, ledger }, validatedInventory = null) {
     const transition = validatePhaseTransition(command, ledger.phases)
     if (!transition.ok) throw new Error(transition.warning)
     let counts
     if (command === 'foundations') counts = await runFoundations(page, ledger)
     else if (command === 'core-views') counts = await runCoreViews(page, ledger)
     else if (command === 'dialogs-and-secondary') counts = await runDialogsAndSecondary(page, ledger)
-    else if (command.startsWith('component-')) counts = await runComponent(page, ledger, command.slice('component-'.length))
+    else if (command.startsWith('component-')) counts = await runComponent(page, ledger, command.slice('component-'.length), validatedInventory)
     else if (command.startsWith('annotations-')) counts = await runAnnotationBatch(page, ledger, Number(command.slice('annotations-'.length)) - 1)
     else throw new Error(`Unbekannter Befehl: ${command}`)
     markPhase(page, ledger, command, counts)

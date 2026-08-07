@@ -79,6 +79,25 @@ function isInverted(definition, variantName) {
 }
 
 function componentEvidenceFixture() {
+  const targetPage = { id: 'page:1', name: 'Page 1', type: 'PAGE' }
+  const container = {
+    nodeId: 'section:components',
+    name: '02 · Komponenten',
+    owner: OWNER,
+    type: 'SECTION',
+    parentId: targetPage.id,
+    parentType: targetPage.type,
+    parentName: targetPage.name,
+  }
+  const ancestry = {
+    containerId: container.nodeId,
+    containerType: container.type,
+    containerName: container.name,
+    containerOwner: container.owner,
+    containerParentId: container.parentId,
+    containerParentType: container.parentType,
+    containerParentName: container.parentName,
+  }
   const componentSets = EXPECTED.map((definition, setIndex) => {
     const variants = definition.variants.map(([name, copy], variantIndex) => {
       const inverted = isInverted(definition, name)
@@ -139,6 +158,7 @@ function componentEvidenceFixture() {
       parentId: 'section:components',
       parentType: 'SECTION',
       parentName: '02 · Komponenten',
+      ...ancestry,
       layoutMode: 'HORIZONTAL',
       effects: [],
       componentProperties: [{ key: 'Label#property', name: 'Label', type: 'TEXT', defaultValue: definition.variants[0][1][definition.labelRole] }],
@@ -151,6 +171,7 @@ function componentEvidenceFixture() {
         parentId: 'section:components',
         parentType: 'SECTION',
         parentName: '02 · Komponenten',
+        ...ancestry,
         mainComponentId: variants[0].nodeId,
         documentation: true,
         repeatedScreen: false,
@@ -159,7 +180,7 @@ function componentEvidenceFixture() {
       setIndex,
     }
   })
-  return { componentSets, foundation: foundationEvidence() }
+  return { componentSets, foundation: foundationEvidence(), targetPage, containers: [container] }
 }
 
 test('Tier0 component contract is deeply frozen with exact sets, variants, roles, and meaningful state copy', () => {

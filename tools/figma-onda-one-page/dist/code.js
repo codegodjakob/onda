@@ -18,6 +18,18 @@
     return a;
   };
   var __spreadProps = (a, b) => __defProps(a, __getOwnPropDescs(b));
+  var __objRest = (source, exclude) => {
+    var target = {};
+    for (var prop in source)
+      if (__hasOwnProp.call(source, prop) && exclude.indexOf(prop) < 0)
+        target[prop] = source[prop];
+    if (source != null && __getOwnPropSymbols)
+      for (var prop of __getOwnPropSymbols(source)) {
+        if (exclude.indexOf(prop) < 0 && __propIsEnum.call(source, prop))
+          target[prop] = source[prop];
+      }
+    return target;
+  };
 
   // ../../app/src/annotation-contract.mjs
   var TEXT_ANNOTATION_KINDS = Object.freeze([
@@ -628,13 +640,27 @@
     if (!COMPONENT_DEFINITIONS.some((component) => component.id === componentId)) return { valid: false, errors: [`Unbekannte Komponente: ${componentId}`] };
     const allSets = Array.isArray(inventory.sets) ? inventory.sets : [];
     const allSamples = Array.isArray(inventory.samples) ? inventory.samples : [];
+    const allStaging = Array.isArray(inventory.staging) ? inventory.staging : [];
+    const containers = Array.isArray(inventory.containers) ? inventory.containers : [];
+    const targetPage = inventory.targetPage;
+    if (targetPage && (targetPage.type !== "PAGE" || targetPage.name !== TARGET_PAGE_NAME || !targetPage.id)) errors.push("Ung\xFCltige Komponenten-Zielseite.");
+    if (containers.length > 1) errors.push("Komponenten-Section fehlt oder ist nicht eindeutig.");
+    const container = containers.length === 1 ? containers[0] : null;
+    if (container && (container.name !== "02 \xB7 Komponenten" || container.type !== "SECTION" || container.owner !== PLUGIN_ORIGIN || container.parentId !== (targetPage == null ? void 0 : targetPage.id) || container.parentType !== "PAGE" || container.parentName !== TARGET_PAGE_NAME)) errors.push("Komponenten-Section ist nicht direkt und Onda-eigen.");
+    if ((allSets.length || allSamples.length || allStaging.length) && !container && containers.length === 0 && inventory.containers !== void 0) errors.push("Komponenten-Inventar hat keine Ziel-Section.");
+    function validContainerAncestry(record) {
+      if (!container) return inventory.containers === void 0;
+      return record.containerId === container.nodeId && record.containerType === container.type && record.containerName === container.name && record.containerOwner === container.owner && record.containerParentId === container.parentId && record.containerParentType === container.parentType && record.containerParentName === container.parentName;
+    }
     const expectedSetNames = new Set(COMPONENT_DEFINITIONS.map((definition2) => definition2.name));
     const expectedSampleNames = new Set(COMPONENT_DEFINITIONS.map((definition2) => `${definition2.name} / Dokumentationsinstanz`));
     for (const set of allSets) if (!expectedSetNames.has(set.name)) errors.push(`Unerwarteter Onda-Komponentenkandidat: ${set.name}`);
     for (const sample of allSamples) if (!expectedSampleNames.has(sample.name)) errors.push(`Unerwarteter Onda-Instanzkandidat: ${sample.name}`);
+    for (const staging of allStaging) if (!COMPONENT_DEFINITIONS.some((definition2) => definition2.id === staging.stagingComponent)) errors.push(`Unerwartetes Komponenten-Staging: ${staging.name}`);
     for (const definition2 of COMPONENT_DEFINITIONS) {
       const sets = allSets.filter((set2) => set2.name === definition2.name);
       const samples = allSamples.filter((sample2) => sample2.name === `${definition2.name} / Dokumentationsinstanz`);
+      const stagingNodes = allStaging.filter((item) => item.stagingComponent === definition2.id);
       if (sets.length > 1) errors.push(`Doppeltes ComponentSet: ${definition2.name}`);
       if (samples.length > 1) errors.push(`Doppelte Dokumentationsinstanz: ${definition2.name}`);
       const set = sets.length === 1 ? sets[0] : null;
@@ -642,6 +668,7 @@
       if (!set && sample) errors.push(`Verwaiste Dokumentationsinstanz: ${definition2.name}`);
       if (set) {
         if (!set.nodeId || set.parentType !== "SECTION" || set.parentName !== "02 \xB7 Komponenten" || !set.parentId) errors.push(`Falscher Set-Parent: ${definition2.name}`);
+        if (!validContainerAncestry(set)) errors.push(`Falsche Set-Ancestry: ${definition2.name}`);
         if (set.type !== "COMPONENT_SET") errors.push(`Falscher Set-Typ: ${definition2.name}`);
         if (set.owner !== PLUGIN_ORIGIN) errors.push(`Ungesch\xFCtztes ComponentSet: ${definition2.name}`);
         const variants = Array.isArray(set.variants) ? set.variants : [];
@@ -661,15 +688,33 @@
           }
         }
         const properties = Array.isArray(set.componentProperties) ? set.componentProperties : [];
-        if (properties.length > 1 || properties.length === 1 && (properties[0].name !== "Label" || properties[0].type !== "TEXT" || properties[0].defaultValue !== definition2.variants[0].copy[definition2.labelRole])) errors.push(`Ung\xFCltige Label-Property: ${definition2.name}`);
+        const variantPropertyNames = new Set(definition2.variants.flatMap((variant) => variant.name.split(", ").map((part) => part.split("=")[0])));
+        const labels = properties.filter((property) => property.name === "Label");
+        if (labels.length > 1 || labels.length === 1 && (labels[0].type !== "TEXT" || labels[0].defaultValue !== definition2.variants[0].copy[definition2.labelRole]) || properties.some((property) => property.type === "TEXT" && property.name !== "Label" || property.type === "VARIANT" && !variantPropertyNames.has(property.name) || !["TEXT", "VARIANT"].includes(property.type))) errors.push(`Ung\xFCltige Label-Property: ${definition2.name}`);
       }
       if (sample) {
         if (!set) errors.push(`Verwaiste Dokumentationsinstanz: ${definition2.name}`);
         if (!sample.nodeId || sample.parentId !== (set == null ? void 0 : set.parentId) || sample.parentType !== "SECTION" || sample.parentName !== "02 \xB7 Komponenten") errors.push(`Falscher Instanz-Parent: ${definition2.name}`);
+        if (!validContainerAncestry(sample)) errors.push(`Falsche Instanz-Ancestry: ${definition2.name}`);
         if (sample.type !== "INSTANCE" || sample.owner !== PLUGIN_ORIGIN || sample.documentation !== true || sample.repeatedScreen !== false) errors.push(`Ung\xFCltige Dokumentationsinstanz: ${definition2.name}`);
         const firstVariant = (_a = set == null ? void 0 : set.variants) == null ? void 0 : _a.find((variant) => variant.name === definition2.variants[0].name);
         const ownedVariantIds = new Set(((set == null ? void 0 : set.variants) || []).map((variant) => variant.nodeId));
         if (set && (firstVariant ? sample.mainComponentId !== firstVariant.nodeId : !ownedVariantIds.has(sample.mainComponentId))) errors.push(`Falsch verkn\xFCpfte Dokumentationsinstanz: ${definition2.name}`);
+      }
+      if (set && stagingNodes.length) errors.push(`Staging neben ComponentSet: ${definition2.name}`);
+      const stagingNames = stagingNodes.map((item) => item.stagingVariant);
+      if (new Set(stagingNames).size !== stagingNames.length) errors.push(`Doppeltes Komponenten-Staging: ${definition2.name}`);
+      const expectedVariantNames = new Set(definition2.variants.map((variant) => variant.name));
+      for (const staging of stagingNodes) {
+        if (staging.type !== "COMPONENT" || staging.owner !== PLUGIN_ORIGIN || staging.name !== staging.stagingVariant || !expectedVariantNames.has(staging.stagingVariant) || staging.parentId !== (container == null ? void 0 : container.nodeId) || staging.parentType !== "SECTION" || staging.parentName !== "02 \xB7 Komponenten" || !validContainerAncestry(staging)) errors.push(`Ung\xFCltiges Komponenten-Staging: ${definition2.name}/${staging.stagingVariant}`);
+        const variantDefinition = definition2.variants.find((variant) => variant.name === staging.stagingVariant);
+        const expectedRoles = new Map(definition2.roles.map((role) => [`Role/${role.name}`, role]));
+        const roles = Array.isArray(staging.roles) ? staging.roles : [];
+        if (new Set(roles.map((role) => role.name)).size !== roles.length || roles.some((role) => !expectedRoles.has(role.name))) errors.push(`Ung\xFCltige Staging-Rollen: ${definition2.name}/${staging.stagingVariant}`);
+        for (const role of roles) {
+          const roleDefinition = expectedRoles.get(role.name);
+          if (!variantDefinition || !roleDefinition || role.type !== roleDefinition.type || role.owner !== PLUGIN_ORIGIN || role.parentId !== staging.nodeId || role.parentType !== "COMPONENT" || role.parentName !== staging.name) errors.push(`Ung\xFCltige Staging-Rolle: ${definition2.name}/${staging.stagingVariant}/${role.name}`);
+        }
       }
     }
     return { valid: errors.length === 0, errors };
@@ -681,18 +726,38 @@
   async function executeGuardedComponentCommand({ command, phases, preflight, requireContext, mutate }) {
     const transition = validatePhaseTransition(command, phases);
     if (!transition.ok) throw new Error(transition.warning);
-    await preflight();
+    const validatedInventory = await preflight();
     const context = await requireContext();
-    return mutate(context);
+    return mutate(context, validatedInventory);
   }
-  function collectComponentCandidateLocations(page) {
+  function collectComponentInventoryLocations(page) {
     const exactNames = new Set(COMPONENT_DEFINITIONS.flatMap((definition2) => [definition2.name, `${definition2.name} / Dokumentationsinstanz`]));
     const candidates = [];
-    function visit(parent) {
+    const containers = [];
+    function owner(node) {
+      return typeof (node == null ? void 0 : node.getPluginData) === "function" ? node.getPluginData("ondaOrigin") : "";
+    }
+    function visit(parent, currentContainer = null) {
       var _a;
       if (!parent || !Array.isArray(parent.children)) return;
       for (const node of parent.children) {
-        if (exactNames.has(node.name) || ((_a = node.name) == null ? void 0 : _a.startsWith("Onda/"))) {
+        let container = currentContainer;
+        if (node.name === "02 \xB7 Komponenten") {
+          container = {
+            node,
+            nodeId: node.id,
+            name: node.name,
+            type: node.type,
+            owner: owner(node),
+            parentId: parent.id,
+            parentType: parent.type,
+            parentName: parent.name
+          };
+          containers.push(container);
+        }
+        const stagingComponent = typeof node.getPluginData === "function" ? node.getPluginData("ondaStagingComponent") : "";
+        const stagingVariant = typeof node.getPluginData === "function" ? node.getPluginData("ondaStagingVariant") : "";
+        if (exactNames.has(node.name) || ((_a = node.name) == null ? void 0 : _a.startsWith("Onda/")) || stagingComponent || stagingVariant) {
           candidates.push({
             node,
             nodeId: node.id,
@@ -700,14 +765,78 @@
             type: node.type,
             parentId: parent.id,
             parentType: parent.type,
-            parentName: parent.name
+            parentName: parent.name,
+            owner: owner(node),
+            containerId: (container == null ? void 0 : container.nodeId) || null,
+            containerType: (container == null ? void 0 : container.type) || null,
+            containerName: (container == null ? void 0 : container.name) || null,
+            containerOwner: (container == null ? void 0 : container.owner) || "",
+            containerParentId: (container == null ? void 0 : container.parentId) || null,
+            containerParentType: (container == null ? void 0 : container.parentType) || null,
+            containerParentName: (container == null ? void 0 : container.parentName) || null,
+            stagingComponent,
+            stagingVariant
           });
         }
-        visit(node);
+        visit(node, container);
       }
     }
     visit(page);
-    return candidates;
+    return {
+      targetPage: { id: page.id, name: page.name, type: page.type },
+      containers,
+      candidates
+    };
+  }
+  function collectComponentPropertyInventory(definitions = {}) {
+    return Object.entries(definitions).map(([key, property]) => ({
+      key,
+      name: key.split("#")[0],
+      type: property.type,
+      defaultValue: property.defaultValue,
+      variantOptions: Array.isArray(property.variantOptions) ? [...property.variantOptions] : void 0
+    }));
+  }
+  async function executeStagingAssembly({ staging, expectedVariantNames, createVariant, combine, clearStaging }) {
+    const names = staging.map((entry) => entry.variantName);
+    if (new Set(names).size !== names.length || names.some((name) => !expectedVariantNames.includes(name))) throw new Error("Ung\xFCltiges Staging-Inventar.");
+    for (const variantName of expectedVariantNames) {
+      if (!staging.some((entry) => entry.variantName === variantName)) staging.push(await createVariant(variantName));
+    }
+    const ordered = expectedVariantNames.map((name) => staging.find((entry) => entry.variantName === name));
+    const set = await combine(ordered);
+    for (const entry of ordered) await clearStaging(entry);
+    return set;
+  }
+  async function revalidateComponentNodeRecords({ inventory = {}, targetPage, getNodeById }) {
+    var _a, _b, _c;
+    if (!targetPage || targetPage.type !== "PAGE" || targetPage.name !== TARGET_PAGE_NAME) throw new Error("TOCTOU: falsche Zielseite.");
+    if (inventory.targetPage && (inventory.targetPage.id !== targetPage.id || inventory.targetPage.name !== targetPage.name || inventory.targetPage.type !== targetPage.type)) throw new Error("TOCTOU: Zielseite wurde ausgetauscht.");
+    const records = [];
+    function add(record) {
+      if (!(record == null ? void 0 : record.nodeId) || records.some((item) => item.nodeId === record.nodeId)) return;
+      records.push(record);
+    }
+    for (const container of inventory.containers || []) add(container);
+    for (const set of inventory.sets || []) {
+      add(set);
+      for (const variant of set.variants || []) {
+        add(variant);
+        for (const role of variant.roles || []) add(role);
+      }
+    }
+    for (const staging of inventory.staging || []) {
+      add(staging);
+      for (const role of staging.roles || []) add(role);
+    }
+    for (const sample of inventory.samples || []) add(sample);
+    const resolved = /* @__PURE__ */ new Map();
+    for (const record of records) {
+      const node = await getNodeById(record.nodeId);
+      if (!node || node.id !== record.nodeId || node.name !== record.name || node.type !== record.type || ((_a = node.parent) == null ? void 0 : _a.id) !== record.parentId || ((_b = node.parent) == null ? void 0 : _b.type) !== record.parentType || ((_c = node.parent) == null ? void 0 : _c.name) !== record.parentName || record.owner !== void 0 && node.getPluginData("ondaOrigin") !== record.owner || record.stagingComponent !== void 0 && node.getPluginData("ondaStagingComponent") !== record.stagingComponent || record.stagingVariant !== void 0 && node.getPluginData("ondaStagingVariant") !== record.stagingVariant) throw new Error(`TOCTOU: Knoten ver\xE4ndert oder ersetzt: ${record.nodeId}`);
+      resolved.set(record.nodeId, node);
+    }
+    return resolved;
   }
   function buildComponentRecoveryActions(inventory = {}, componentId) {
     const validation = validateComponentMutationInventory(inventory, componentId);
@@ -728,7 +857,13 @@
       }
     }
     if (!(set.componentProperties || []).some((property) => property.name === "Label" && property.type === "TEXT")) actions.push({ type: "property" });
-    if (!(inventory.samples || []).some((sample) => sample.name === `${definition2.name} / Dokumentationsinstanz`)) actions.push({ type: "sample" });
+    const sample = (inventory.samples || []).find((item) => item.name === `${definition2.name} / Dokumentationsinstanz`);
+    if (!sample) actions.push({ type: "sample" });
+    else {
+      const defaultVariantName = definition2.variants[0].name;
+      const defaultVariant = (set.variants || []).find((variant) => variant.name === defaultVariantName);
+      if (!defaultVariant || sample.mainComponentId !== defaultVariant.nodeId) actions.push({ type: "relink-sample", variantName: defaultVariantName });
+    }
     return actions;
   }
   function exactComponentPaint(actual, variableId) {
@@ -739,6 +874,12 @@
     var _a, _b, _c, _d;
     const errors = [];
     const componentSets = Array.isArray(evidence.componentSets) ? evidence.componentSets : [];
+    const targetPage = evidence.targetPage;
+    const containers = Array.isArray(evidence.containers) ? evidence.containers : [];
+    if (!targetPage || targetPage.type !== "PAGE" || targetPage.name !== TARGET_PAGE_NAME || !targetPage.id) errors.push("Komponenten-Evidence: Zielseite ung\xFCltig");
+    if (containers.length !== 1) errors.push(`Komponenten-Evidence: erwartet 1 Section, gefunden ${containers.length}`);
+    const container = containers.length === 1 ? containers[0] : null;
+    if (container && (container.name !== "02 \xB7 Komponenten" || container.type !== "SECTION" || container.owner !== PLUGIN_ORIGIN || container.parentId !== (targetPage == null ? void 0 : targetPage.id) || container.parentType !== "PAGE" || container.parentName !== TARGET_PAGE_NAME)) errors.push("Komponenten-Evidence: Section-Ancestry ung\xFCltig");
     const foundationVariables = Array.isArray((_a = evidence.foundation) == null ? void 0 : _a.variables) ? evidence.foundation.variables : [];
     function variableId(collectionName, name) {
       const matching = foundationVariables.filter((variable) => variable.collectionName === collectionName && variable.name === name);
@@ -760,8 +901,12 @@
       const set = matchingSets[0];
       if (set.type !== "COMPONENT_SET" || set.owner !== PLUGIN_ORIGIN || set.layoutMode === "NONE" || (set.effects || []).length !== 0) errors.push(`ComponentSet ung\xFCltig: ${definition2.name}`);
       if (!set.parentId || set.parentType !== "SECTION" || set.parentName !== "02 \xB7 Komponenten") errors.push(`ComponentSet-Parent ung\xFCltig: ${definition2.name}`);
+      if (!container || set.containerId !== container.nodeId || set.containerType !== container.type || set.containerName !== container.name || set.containerOwner !== container.owner || set.containerParentId !== container.parentId || set.containerParentType !== container.parentType || set.containerParentName !== container.parentName) errors.push(`ComponentSet-Ancestry ung\xFCltig: ${definition2.name}`);
       const properties = Array.isArray(set.componentProperties) ? set.componentProperties : [];
-      const labelProperty = properties.length === 1 && properties[0].name === "Label" && properties[0].type === "TEXT" ? properties[0] : null;
+      const variantPropertyNames = new Set(definition2.variants.flatMap((variant) => variant.name.split(", ").map((part) => part.split("=")[0])));
+      const labelProperties = properties.filter((property) => property.name === "Label");
+      const labelProperty = labelProperties.length === 1 && labelProperties[0].type === "TEXT" ? labelProperties[0] : null;
+      if (properties.some((property) => property.type === "TEXT" && property.name !== "Label" || property.type === "VARIANT" && !variantPropertyNames.has(property.name) || !["TEXT", "VARIANT"].includes(property.type))) errors.push(`Component-Property ung\xFCltig: ${definition2.name}`);
       if (!labelProperty || labelProperty.defaultValue !== definition2.variants[0].copy[definition2.labelRole]) errors.push(`Label-Property ung\xFCltig: ${definition2.name}`);
       const variants = Array.isArray(set.variants) ? set.variants : [];
       if (variants.length !== definition2.variants.length || new Set(variants.map((variant) => variant.nodeId)).size !== variants.length) errors.push(`Variantenanzahl ung\xFCltig: ${definition2.name}`);
@@ -807,7 +952,7 @@
       }
       const sample = set.sample;
       const expectedMain = (_d = variants.find((variant) => variant.name === definition2.variants[0].name)) == null ? void 0 : _d.nodeId;
-      if (set.sampleCount !== void 0 && set.sampleCount !== 1 || !sample || sample.name !== `${definition2.name} / Dokumentationsinstanz` || sample.type !== "INSTANCE" || sample.owner !== PLUGIN_ORIGIN || sample.mainComponentId !== expectedMain || sample.documentation !== true || sample.repeatedScreen !== false || sample.parentId !== set.parentId || sample.parentType !== "SECTION" || sample.parentName !== "02 \xB7 Komponenten" || (sample.effects || []).length !== 0) errors.push(`Dokumentationsinstanz ung\xFCltig: ${definition2.name}`);
+      if (set.sampleCount !== void 0 && set.sampleCount !== 1 || !sample || sample.name !== `${definition2.name} / Dokumentationsinstanz` || sample.type !== "INSTANCE" || sample.owner !== PLUGIN_ORIGIN || sample.mainComponentId !== expectedMain || sample.documentation !== true || sample.repeatedScreen !== false || sample.parentId !== set.parentId || sample.parentType !== "SECTION" || sample.parentName !== "02 \xB7 Komponenten" || sample.containerId !== set.containerId || sample.containerParentId !== set.containerParentId || (sample.effects || []).length !== 0) errors.push(`Dokumentationsinstanz ung\xFCltig: ${definition2.name}`);
     }
     return { valid: errors.length === 0, errors };
   }
@@ -1192,7 +1337,12 @@
     const sectionStructureValid = sections.length === SECTION_DEFINITIONS.length && sections.every((section) => section.type === void 0 || section.type === "SECTION" && section.parentType === "PAGE" && section.parentName === TARGET_PAGE_NAME && section.owner === PLUGIN_ORIGIN);
     const componentSets = snapshot.componentSets || [];
     const foundation = snapshot.foundation || {};
-    const componentStrict = validateComponentEvidence({ componentSets, foundation });
+    const componentStrict = validateComponentEvidence({
+      componentSets,
+      foundation,
+      targetPage: snapshot.componentTargetPage,
+      containers: snapshot.componentContainers
+    });
     const componentStructureValid = componentStrict.valid;
     const foundationStrict = validateFoundationEvidence(foundation);
     const foundationInventoryValid = foundationStrict.valid;
@@ -2039,12 +2189,7 @@ ${result.errors.join("\n")}`);
   }
   function componentPropertyInventory(set) {
     if (!set || set.type !== "COMPONENT_SET") return [];
-    return Object.entries(set.componentPropertyDefinitions || {}).filter(([, property]) => property.type === "TEXT").map(([key, property]) => ({
-      key,
-      name: key.split("#")[0],
-      type: property.type,
-      defaultValue: property.defaultValue
-    }));
+    return collectComponentPropertyInventory(set.componentPropertyDefinitions || {});
   }
   function componentRoleInventory(component) {
     if (!component || !("children" in component)) return [];
@@ -2059,53 +2204,87 @@ ${result.errors.join("\n")}`);
     }));
   }
   function collectComponentSectionCandidates(page) {
-    return collectComponentCandidateLocations(page);
+    return collectComponentInventoryLocations(page);
   }
   async function collectComponentMutationInventory(componentId) {
     await figma.loadAllPagesAsync();
     componentDefinition2(componentId);
-    const candidates = collectComponentSectionCandidates(figma.currentPage);
+    const locations = collectComponentSectionCandidates(figma.currentPage);
+    const candidates = locations.candidates;
     const sampleNames = new Set(COMPONENT_DEFINITIONS.map((definition2) => `${definition2.name} / Dokumentationsinstanz`));
-    const setNodes = candidates.filter(({ node }) => !sampleNames.has(node.name));
+    const stagingNodes = candidates.filter((candidate) => candidate.stagingComponent || candidate.stagingVariant);
+    const setNodes = candidates.filter((candidate) => !sampleNames.has(candidate.node.name) && !candidate.stagingComponent && !candidate.stagingVariant);
     const sampleNodes = candidates.filter(({ node }) => sampleNames.has(node.name));
+    function ancestry(location) {
+      return {
+        parentId: location.parentId,
+        parentType: location.parentType,
+        parentName: location.parentName,
+        containerId: location.containerId,
+        containerType: location.containerType,
+        containerName: location.containerName,
+        containerOwner: location.containerOwner,
+        containerParentId: location.containerParentId,
+        containerParentType: location.containerParentType,
+        containerParentName: location.containerParentName
+      };
+    }
     const samples = [];
-    for (const { node: sample, parentId, parentType, parentName } of sampleNodes) {
+    for (const location of sampleNodes) {
+      const sample = location.node;
       const identity = sample.type === "INSTANCE" ? await readMainComponentIdentity(sample) : { id: null };
-      samples.push({
+      samples.push(__spreadProps(__spreadValues({
         nodeId: sample.id,
         name: sample.name,
         type: sample.type,
-        owner: sample.getPluginData(CREATED_MARKER_KEY),
-        parentId,
-        parentType,
-        parentName,
+        owner: sample.getPluginData(CREATED_MARKER_KEY)
+      }, ancestry(location)), {
         documentation: sample.getPluginData("ondaDocumentationInstance") === "true",
         repeatedScreen: sample.getPluginData("ondaRepeatedScreenInstance") === "true",
         mainComponentId: identity.id
-      });
+      }));
     }
     return {
-      sets: setNodes.map(({ node: set, parentId, parentType, parentName }) => ({
-        nodeId: set.id,
-        name: set.name,
-        type: set.type,
-        owner: set.getPluginData(CREATED_MARKER_KEY),
-        parentId,
-        parentType,
-        parentName,
-        componentProperties: componentPropertyInventory(set),
-        variants: "children" in set ? set.children.map((variant) => ({
-          nodeId: variant.id,
-          name: variant.name,
-          type: variant.type,
-          owner: variant.getPluginData(CREATED_MARKER_KEY),
-          parentId: set.id,
-          parentType: set.type,
-          parentName: set.name,
-          roles: componentRoleInventory(variant)
-        })) : []
-      })),
-      samples
+      targetPage: locations.targetPage,
+      containers: locations.containers.map((_a) => {
+        var _b = _a, { node: _node } = _b, container = __objRest(_b, ["node"]);
+        return container;
+      }),
+      sets: setNodes.map((location) => {
+        const set = location.node;
+        return __spreadProps(__spreadValues({
+          nodeId: set.id,
+          name: set.name,
+          type: set.type,
+          owner: set.getPluginData(CREATED_MARKER_KEY)
+        }, ancestry(location)), {
+          componentProperties: componentPropertyInventory(set),
+          variants: "children" in set ? set.children.map((variant) => ({
+            nodeId: variant.id,
+            name: variant.name,
+            type: variant.type,
+            owner: variant.getPluginData(CREATED_MARKER_KEY),
+            parentId: set.id,
+            parentType: set.type,
+            parentName: set.name,
+            roles: componentRoleInventory(variant)
+          })) : []
+        });
+      }),
+      samples,
+      staging: stagingNodes.map((location) => {
+        const component = location.node;
+        return __spreadProps(__spreadValues({
+          nodeId: component.id,
+          name: component.name,
+          type: component.type,
+          owner: component.getPluginData(CREATED_MARKER_KEY),
+          stagingComponent: location.stagingComponent,
+          stagingVariant: location.stagingVariant
+        }, ancestry(location)), {
+          roles: componentRoleInventory(component)
+        });
+      })
     };
   }
   async function preflightComponentMutation(componentId) {
@@ -2199,9 +2378,13 @@ ${result.errors.join("\n")}`);
     component.appendChild(role);
     return role;
   }
-  function createComponentVariantNode(parent, definition2, variantDefinition) {
+  function createComponentVariantNode(parent, definition2, variantDefinition, staging = false) {
     const component = figma.createComponent();
     component.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN);
+    if (staging) {
+      component.setPluginData("ondaStagingComponent", definition2.id);
+      component.setPluginData("ondaStagingVariant", variantDefinition.name);
+    }
     component.name = variantDefinition.name;
     parent.appendChild(component);
     for (const roleDefinition of definition2.roles) createComponentRoleNode(component, roleDefinition);
@@ -2215,23 +2398,52 @@ ${result.errors.join("\n")}`);
     }
     return set.addComponentProperty("Label", "TEXT", definition2.variants[0].copy[definition2.labelRole]);
   }
-  async function runComponent(page, ledger, componentId) {
+  async function runComponent(page, ledger, componentId, validatedInventory) {
+    var _a, _b;
     await loadDecisionFonts(ledger.fontDecision);
     const definition2 = componentDefinition2(componentId);
     const variables = await componentVariables();
-    ensureSection(page, ledger, "02 \xB7 Komponenten", 4e3);
-    const section = directChild(page, "02 \xB7 Komponenten", ["SECTION"]);
+    const resolved = await revalidateComponentNodeRecords({
+      inventory: validatedInventory,
+      targetPage: page,
+      getNodeById: (id) => figma.getNodeByIdAsync(id)
+    });
+    const validatedContainer = (validatedInventory.containers || [])[0];
+    if (!validatedContainer && directChild(page, "02 \xB7 Komponenten")) throw new Error("TOCTOU: Komponenten-Section erschien nach Preflight.");
+    if (!validatedContainer) ensureSection(page, ledger, "02 \xB7 Komponenten", 4e3);
+    const section = validatedContainer ? resolved.get(validatedContainer.nodeId) : directChild(page, "02 \xB7 Komponenten", ["SECTION"]);
     if (!section || section.getPluginData(CREATED_MARKER_KEY) !== PLUGIN_ORIGIN) throw new Error("Direkte, Onda-eigene Komponenten-Section fehlt.");
-    let set = directChild(section, definition2.name, ["COMPONENT_SET"]);
+    if (((_a = section.parent) == null ? void 0 : _a.id) !== page.id || ((_b = section.parent) == null ? void 0 : _b.type) !== "PAGE" || section.name !== "02 \xB7 Komponenten") throw new Error("TOCTOU: Komponenten-Section ist nicht mehr direkt.");
+    const setRecord = (validatedInventory.sets || []).find((item) => item.name === definition2.name);
+    let set = setRecord ? resolved.get(setRecord.nodeId) : null;
     const created = !set;
     if (!set) {
-      const components = definition2.variants.map((variant) => createComponentVariantNode(section, definition2, variant));
-      set = figma.combineAsVariants(components, section);
-      set.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN);
-      set.name = definition2.name;
+      const staging = (validatedInventory.staging || []).filter((item) => item.stagingComponent === componentId).map((item) => ({ variantName: item.stagingVariant, node: resolved.get(item.nodeId) }));
+      for (const entry of staging) {
+        for (const roleDefinition of definition2.roles) {
+          if (!directChild(entry.node, `Role/${roleDefinition.name}`, [roleDefinition.type])) createComponentRoleNode(entry.node, roleDefinition);
+        }
+      }
+      set = await executeStagingAssembly({
+        staging,
+        expectedVariantNames: definition2.variants.map((variant) => variant.name),
+        createVariant: async (variantName) => {
+          const variantDefinition = definition2.variants.find((variant) => variant.name === variantName);
+          return { variantName, node: createComponentVariantNode(section, definition2, variantDefinition, true) };
+        },
+        combine: async (entries) => {
+          const combined = figma.combineAsVariants(entries.map((entry) => entry.node), section);
+          combined.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN);
+          combined.name = definition2.name;
+          return combined;
+        },
+        clearStaging: async (entry) => {
+          entry.node.setPluginData("ondaStagingComponent", "");
+          entry.node.setPluginData("ondaStagingVariant", "");
+        }
+      });
     } else {
-      const recoveryInventory = await collectComponentMutationInventory(componentId);
-      const recoveryActions = buildComponentRecoveryActions(recoveryInventory, componentId);
+      const recoveryActions = buildComponentRecoveryActions(validatedInventory, componentId);
       for (const action of recoveryActions) {
         if (action.type === "variant") {
           const variantDefinition = definition2.variants.find((variant) => variant.name === action.variantName);
@@ -2279,12 +2491,16 @@ ${result.errors.join("\n")}`);
     set.x = 80 + index % 2 * 980;
     set.y = 120 + Math.floor(index / 2) * 900;
     const sampleName = `${definition2.name} / Dokumentationsinstanz`;
-    let sample = directChild(section, sampleName, ["INSTANCE"]);
+    const sampleRecord = (validatedInventory.samples || []).find((item) => item.name === sampleName);
+    let sample = sampleRecord ? resolved.get(sampleRecord.nodeId) : null;
     if (!sample) {
       sample = set.children.find((node) => node.type === "COMPONENT" && node.name === definition2.variants[0].name).createInstance();
       sample.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN);
       section.appendChild(sample);
     }
+    const defaultComponent = directChild(set, definition2.variants[0].name, ["COMPONENT"]);
+    const sampleIdentity = await readMainComponentIdentity(sample);
+    if (sampleIdentity.id !== defaultComponent.id) sample.swapComponent(defaultComponent);
     sample.name = sampleName;
     sample.x = set.x;
     sample.y = set.y + set.height + 40;
@@ -2752,11 +2968,13 @@ ${result.errors.join("\n")}`);
   }
   async function collectComponentEvidence(page) {
     const definitionsByName = new Map(COMPONENT_DEFINITIONS.map((definition2) => [definition2.name, definition2]));
-    const candidates = collectComponentSectionCandidates(page);
+    const locations = collectComponentSectionCandidates(page);
+    const candidates = locations.candidates;
     const sampleNames = new Set(COMPONENT_DEFINITIONS.map((definition2) => `${definition2.name} / Dokumentationsinstanz`));
     const setCandidates = candidates.filter(({ node }) => !sampleNames.has(node.name));
     const evidence = [];
-    for (const { node: set, parentId, parentType, parentName } of setCandidates) {
+    for (const location of setCandidates) {
+      const { node: set, parentId, parentType, parentName } = location;
       const definition2 = definitionsByName.get(set.name);
       const variants = !("children" in set) ? [] : set.children.map((component) => ({
         nodeId: component.id,
@@ -2827,6 +3045,13 @@ ${result.errors.join("\n")}`);
         parentId,
         parentType,
         parentName,
+        containerId: location.containerId,
+        containerType: location.containerType,
+        containerName: location.containerName,
+        containerOwner: location.containerOwner,
+        containerParentId: location.containerParentId,
+        containerParentType: location.containerParentType,
+        containerParentName: location.containerParentName,
         layoutMode: set.layoutMode,
         effects: cloneSerializable(set.effects),
         componentProperties: componentPropertyInventory(set),
@@ -2840,6 +3065,13 @@ ${result.errors.join("\n")}`);
           parentId: sampleCandidate.parentId,
           parentType: sampleCandidate.parentType,
           parentName: sampleCandidate.parentName,
+          containerId: sampleCandidate.containerId,
+          containerType: sampleCandidate.containerType,
+          containerName: sampleCandidate.containerName,
+          containerOwner: sampleCandidate.containerOwner,
+          containerParentId: sampleCandidate.containerParentId,
+          containerParentType: sampleCandidate.containerParentType,
+          containerParentName: sampleCandidate.containerParentName,
           mainComponentId: identity.id,
           documentation: sampleCandidate.node.getPluginData("ondaDocumentationInstance") === "true",
           repeatedScreen: sampleCandidate.node.getPluginData("ondaRepeatedScreenInstance") === "true",
@@ -2847,7 +3079,14 @@ ${result.errors.join("\n")}`);
         } : null
       });
     }
-    return evidence;
+    return {
+      componentSets: evidence,
+      targetPage: locations.targetPage,
+      containers: locations.containers.map((_a) => {
+        var _b = _a, { node: _node } = _b, container = __objRest(_b, ["node"]);
+        return container;
+      })
+    };
   }
   async function runVerify() {
     const inspection = await inspectCurrentTarget();
@@ -2873,7 +3112,8 @@ ${result.errors.join("\n")}`);
         state: (_b = node.getPluginData) == null ? void 0 : _b.call(node, "ondaDialogState")
       };
     }).filter((item) => item.family && item.state);
-    const componentSets = await collectComponentEvidence(page);
+    const componentEvidence = await collectComponentEvidence(page);
+    const componentSets = componentEvidence.componentSets;
     const baseline = await currentBaselineEvidence(page, ledger);
     const geometry = geometryEvidence(page, sections, allNodes, ledger, baseline.baselineRecords);
     const paints = paintsFromNodes(allNodes);
@@ -2904,6 +3144,8 @@ ${result.errors.join("\n")}`);
       annotationViews: annotationViews2,
       dialogStates,
       componentSets,
+      componentTargetPage: componentEvidence.targetPage,
+      componentContainers: componentEvidence.containers,
       instanceCount: allNodes.filter((node) => node.type === "INSTANCE" && node.getPluginData("ondaDocumentationInstance") !== "true").length,
       documentationInstanceCount: allNodes.filter((node) => node.type === "INSTANCE" && node.getPluginData("ondaDocumentationInstance") === "true").length,
       repeatedScreenInstanceCount: allNodes.filter((node) => node.type === "INSTANCE" && node.getPluginData("ondaRepeatedScreenInstance") === "true").length,
@@ -2974,14 +3216,14 @@ ${result.errors.join("\n")}`);
       postResult(command, hardPass, hardPass ? "Alle strukturellen Hard Gates bestanden." : "Verify hat offene Hard Gates gefunden.", report, true);
       return;
     }
-    async function runMutation({ page, ledger }) {
+    async function runMutation({ page, ledger }, validatedInventory = null) {
       const transition = validatePhaseTransition(command, ledger.phases);
       if (!transition.ok) throw new Error(transition.warning);
       let counts;
       if (command === "foundations") counts = await runFoundations(page, ledger);
       else if (command === "core-views") counts = await runCoreViews(page, ledger);
       else if (command === "dialogs-and-secondary") counts = await runDialogsAndSecondary(page, ledger);
-      else if (command.startsWith("component-")) counts = await runComponent(page, ledger, command.slice("component-".length));
+      else if (command.startsWith("component-")) counts = await runComponent(page, ledger, command.slice("component-".length), validatedInventory);
       else if (command.startsWith("annotations-")) counts = await runAnnotationBatch(page, ledger, Number(command.slice("annotations-".length)) - 1);
       else throw new Error(`Unbekannter Befehl: ${command}`);
       markPhase(page, ledger, command, counts);

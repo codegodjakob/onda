@@ -18,7 +18,11 @@ function boundPaint(variableIdValue, value) {
 export function createValidComponentEvidence(foundation) {
   const semantic = name => variableId(foundation, 'Onda · Semantic · Light', name)
   const dimension = name => variableId(foundation, 'Onda · Dimension', name)
-  const section = { nodeId: 'section:components', name: '02 · Komponenten', type: 'SECTION' }
+  const section = { nodeId: 'section:components', name: '02 · Komponenten', type: 'SECTION', owner: PLUGIN_ORIGIN, parentId: 'page:1', parentType: 'PAGE', parentName: 'Page 1' }
+  const ancestry = {
+    containerId: section.nodeId, containerType: section.type, containerName: section.name, containerOwner: section.owner,
+    containerParentId: section.parentId, containerParentType: section.parentType, containerParentName: section.parentName,
+  }
   return COMPONENT_DEFINITIONS.map(definition => {
     const labelKey = 'Label#property'
     const variants = definition.variants.map((variantDefinition, variantIndex) => {
@@ -82,6 +86,7 @@ export function createValidComponentEvidence(foundation) {
       parentId: section.nodeId,
       parentType: section.type,
       parentName: section.name,
+      ...ancestry,
       layoutMode: 'HORIZONTAL',
       effects: [],
       componentProperties: [{
@@ -100,6 +105,7 @@ export function createValidComponentEvidence(foundation) {
         parentId: section.nodeId,
         parentType: section.type,
         parentName: section.name,
+        ...ancestry,
         mainComponentId: variants[0].nodeId,
         documentation: true,
         repeatedScreen: false,
