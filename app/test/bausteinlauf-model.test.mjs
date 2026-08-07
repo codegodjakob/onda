@@ -429,3 +429,35 @@ test('ohne bisherigen Bestand ergibt eine leere Antwort null', () => {
   const { bestand } = verarbeiteBausteinantwort({ antwort: null, blocks: DREI, jetzt: 1 })
   assert.equal(bestand, null)
 })
+
+// Diese Pruefung darf sich NICHT durch Zufall der Positionen decken lassen: Runde 2 nennt
+// dieselben Arten in anderer Reihenfolge und laesst eine weg, darum verschieben sich die
+// erzeugten Ids (art-1/art-2/...) gegenueber Runde 1. Nur die Namensbruecke
+// (alteNamen.get(eintrag.artId) -> Name -> nachName.get(Name)) loest das richtig auf; eine
+// positionsbasierte Abkuerzung (die alte artId einfach weiterreichen) wuerde JEDEN anderen
+// Test in dieser Datei bestehen und hier trotzdem falsch benennen oder ein Waisenkind
+// uebernehmen.
+test('die Namensbruecke haelt, wenn Runde 2 die Arten umsortiert und eine weglaesst', () => {
+  const erst = verarbeiteBausteinantwort({ antwort: ANTWORT, blocks: DREI, jetzt: 1 }).bestand
+  const zweiteRunde = {
+    textsorte: 'Wissenschaftliche Arbeit',
+    arten: [
+      { name: 'Einordnung', beschreibung: 'Ordnet ein Ergebnis ein.', funktion: null },
+      { name: 'Kernaussage', beschreibung: 'Die These des Textes.', funktion: 'claim' },
+    ],
+    zuordnung: [],
+  }
+  const { bestand } = verarbeiteBausteinantwort({ antwort: zweiteRunde, blocks: DREI, bestand: erst, jetzt: 2 })
+  const idVon = name => bestand.arten.find(art => art.name === name).id
+
+  // b1 war Kernaussage und bleibt es -- ueber den Namen, nicht ueber die (jetzt andere) Id.
+  assert.equal(bausteinNamen(bestand).get('b1'), 'Kernaussage')
+  assert.equal(bestand.zuordnung.b1.artId, idVon('Kernaussage'))
+
+  // b3 war Einordnung und bleibt es -- ebenfalls ueber den Namen.
+  assert.equal(bausteinNamen(bestand).get('b3'), 'Einordnung')
+  assert.equal(bestand.zuordnung.b3.artId, idVon('Einordnung'))
+
+  // b2 war Befund; Runde 2 nennt diese Art nicht mehr -- ein Waisenkind, verworfen.
+  assert.equal(bestand.zuordnung.b2, undefined)
+})
