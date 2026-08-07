@@ -950,11 +950,13 @@ async function componentVariables() {
     ['surface', 'color/surface', 'Onda · Semantic · Light'],
     ['inverted', 'color/inverted', 'Onda · Semantic · Light'],
     ['text', 'color/text', 'Onda · Semantic · Light'],
+    ['textMuted', 'color/text-muted', 'Onda · Semantic · Light'],
     ['onInverted', 'color/on-inverted', 'Onda · Semantic · Light'],
     ['border', 'color/border', 'Onda · Semantic · Light'],
     ['spacing8', 'spacing/8', 'Onda · Dimension'],
     ['spacing12', 'spacing/12', 'Onda · Dimension'],
     ['spacing16', 'spacing/16', 'Onda · Dimension'],
+    ['radiusNone', 'radius/none', 'Onda · Dimension'],
     ['radiusControl', 'radius/control', 'Onda · Dimension'],
     ['radiusCircle', 'radius/circle', 'Onda · Dimension'],
   ]
@@ -962,7 +964,25 @@ async function componentVariables() {
   const variables = Object.fromEntries(entries)
   const missing = requests.filter(([key]) => !variables[key]).map(([, name, collection]) => `${collection}/${name}`)
   if (missing.length) throw new Error(`Komponentenvariablen fehlen: ${missing.join(', ')}`)
-  return variables
+  return {
+    ...variables,
+    semanticByToken: {
+      'color/surface': variables.surface,
+      'color/inverted': variables.inverted,
+      'color/text': variables.text,
+      'color/text-muted': variables.textMuted,
+      'color/on-inverted': variables.onInverted,
+      'color/border': variables.border,
+    },
+    dimensionByToken: {
+      'spacing/8': variables.spacing8,
+      'spacing/12': variables.spacing12,
+      'spacing/16': variables.spacing16,
+      'radius/none': variables.radiusNone,
+      'radius/control': variables.radiusControl,
+      'radius/circle': variables.radiusCircle,
+    },
+  }
 }
 
 function boundComponentPaint(token, variable) {
@@ -970,6 +990,7 @@ function boundComponentPaint(token, variable) {
     'color/surface': 'gray/000',
     'color/inverted': 'gray/900',
     'color/text': 'gray/900',
+    'color/text-muted': 'gray/500',
     'color/on-inverted': 'gray/000',
     'color/border': 'gray/300',
   }
@@ -996,32 +1017,30 @@ function configureComponentRole(role, roleDefinition, copy, decision, textVariab
 function configureComponentVariant(component, definition, variantDefinition, decision, variables) {
   component.name = variantDefinition.name
   component.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN)
-  component.layoutMode = 'HORIZONTAL'
+  component.layoutMode = definition.direction
   component.primaryAxisSizingMode = 'AUTO'
   component.counterAxisSizingMode = 'AUTO'
   component.primaryAxisAlignItems = 'CENTER'
   component.counterAxisAlignItems = 'CENTER'
-  component.itemSpacing = 8
-  component.paddingTop = 12
-  component.paddingRight = 16
-  component.paddingBottom = 12
-  component.paddingLeft = 16
-  component.cornerRadius = 4
+  component.itemSpacing = definition.gap
+  component.paddingTop = definition.padding.top
+  component.paddingRight = definition.padding.right
+  component.paddingBottom = definition.padding.bottom
+  component.paddingLeft = definition.padding.left
+  component.cornerRadius = definition.radius
   component.minHeight = definition.targetHeight
-  component.opacity = variantDefinition.name.includes('Disabled') ? 0.45 : 1
-  component.fills = boundComponentPaint(variantDefinition.surfaceToken, variantDefinition.surfaceToken === 'color/inverted' ? variables.inverted : variables.surface)
+  component.opacity = variantDefinition.opacity
+  component.fills = boundComponentPaint(variantDefinition.surfaceToken, variables.semanticByToken[variantDefinition.surfaceToken])
   component.strokes = boundComponentPaint('color/border', variables.border)
-  component.strokeWeight = variantDefinition.name.includes('Focus') ? 2 : 1
+  component.strokeWeight = variantDefinition.strokeWeight
   component.effects = []
-  component.setBoundVariable('itemSpacing', variables.spacing8)
-  component.setBoundVariable('paddingTop', variables.spacing12)
-  component.setBoundVariable('paddingLeft', variables.spacing16)
-  component.setBoundVariable('paddingRight', variables.spacing16)
-  component.setBoundVariable('paddingBottom', variables.spacing12)
-  for (const field of ['topLeftRadius', 'topRightRadius', 'bottomLeftRadius', 'bottomRightRadius']) component.setBoundVariable(field, variables.radiusControl)
-  const textVariable = variantDefinition.textToken === 'color/on-inverted'
-    ? { name: 'color/on-inverted', variable: variables.onInverted }
-    : { name: 'color/text', variable: variables.text }
+  component.setBoundVariable('itemSpacing', variables.dimensionByToken[definition.gapToken])
+  component.setBoundVariable('paddingTop', variables.dimensionByToken[definition.paddingTokens.top])
+  component.setBoundVariable('paddingLeft', variables.dimensionByToken[definition.paddingTokens.left])
+  component.setBoundVariable('paddingRight', variables.dimensionByToken[definition.paddingTokens.right])
+  component.setBoundVariable('paddingBottom', variables.dimensionByToken[definition.paddingTokens.bottom])
+  for (const field of ['topLeftRadius', 'topRightRadius', 'bottomLeftRadius', 'bottomRightRadius']) component.setBoundVariable(field, variables.dimensionByToken[definition.radiusToken])
+  const textVariable = { name: variantDefinition.textToken, variable: variables.semanticByToken[variantDefinition.textToken] }
   for (const roleDefinition of definition.roles) {
     const role = component.children.find(node => node.name === `Role/${roleDefinition.name}`)
     if (!role || role.type !== roleDefinition.type) throw new Error(`Rolle fehlt: ${definition.name}/${variantDefinition.name}/${roleDefinition.name}`)
@@ -1119,7 +1138,7 @@ async function runComponent(page, ledger, componentId, validatedInventory) {
     }
   }
   set.name = definition.name
-  set.description = `${definition.label}: monochrome Tier-0-Komponente mit Auto Layout, semantischen Variablen und expliziten Zuständen.`
+  set.description = `${definition.label}: monochrome Tier-${definition.tier}-Komponente mit Auto Layout, semantischen Variablen und expliziten Zuständen.`
   set.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN)
   set.setPluginData('ondaComponentId', definition.id)
   set.layoutMode = 'HORIZONTAL'

@@ -286,25 +286,51 @@
   function componentRole(name, type) {
     return Object.freeze({ name, type });
   }
-  function componentVariant(name, copy, inverted = false) {
+  function componentVariant(name, copy, options = {}) {
+    var _a, _b;
+    const settings = typeof options === "boolean" ? { inverted: options } : options;
+    const inverted = settings.inverted === true;
     return Object.freeze({
       name,
       copy: Object.freeze(__spreadValues({}, copy)),
-      surfaceToken: inverted ? "color/inverted" : "color/surface",
-      textToken: inverted ? "color/on-inverted" : "color/text"
+      surfaceToken: settings.surfaceToken || (inverted ? "color/inverted" : "color/surface"),
+      textToken: settings.textToken || (inverted ? "color/on-inverted" : "color/text"),
+      strokeWeight: (_a = settings.strokeWeight) != null ? _a : name.includes("Focus") ? 2 : 1,
+      opacity: (_b = settings.opacity) != null ? _b : name.includes("Disabled") ? 0.45 : 1
     });
   }
-  function componentDefinition({ id, name, label, roles, labelRole, variants }) {
+  function componentDefinition({
+    id,
+    name,
+    label,
+    roles,
+    labelRole,
+    variants,
+    tier = 0,
+    radius = 4,
+    radiusToken = "radius/control",
+    targetHeight = 44,
+    gap = 8,
+    gapToken = "spacing/8",
+    padding = { top: 12, right: 16, bottom: 12, left: 16 },
+    paddingTokens = { top: "spacing/12", right: "spacing/16", bottom: "spacing/12", left: "spacing/16" },
+    direction = "HORIZONTAL"
+  }) {
     return Object.freeze({
       id,
       name,
       label,
-      tier: 0,
+      tier,
       roles: Object.freeze(roles),
       labelRole,
-      radius: 4,
-      radiusToken: "radius/control",
-      targetHeight: 44,
+      radius,
+      radiusToken,
+      targetHeight,
+      gap,
+      gapToken,
+      padding: Object.freeze(__spreadValues({}, padding)),
+      paddingTokens: Object.freeze(__spreadValues({}, paddingTokens)),
+      direction,
       variants: Object.freeze(variants)
     });
   }
@@ -364,6 +390,81 @@
         componentVariant("Kind=Selected", { Icon: "\u2713", Label: "Ausgew\xE4hlt" }, true),
         componentVariant("Kind=Source", { Icon: "\xA7", Label: "Quelle" }),
         componentVariant("Kind=Warning", { Icon: "!", Label: "Pr\xFCfen" })
+      ]
+    }),
+    componentDefinition({
+      id: "field",
+      name: "Onda/Field",
+      label: "Field",
+      labelRole: "Label",
+      tier: 1,
+      direction: "VERTICAL",
+      roles: [componentRole("Label", "TEXT"), componentRole("Input", "TEXT"), componentRole("Hint", "TEXT"), componentRole("Status", "TEXT")],
+      variants: [
+        componentVariant("State=Empty", { Label: "Arbeitstitel", Input: "Arbeitstitel eingeben", Hint: "Pflichtfeld", Status: "\u25CB Leer" }),
+        componentVariant("State=Filled", { Label: "Arbeitstitel", Input: "Die leise Architektur", Hint: "Kann sp\xE4ter ge\xE4ndert werden", Status: "\u2713 Ausgef\xFCllt" }),
+        componentVariant("State=Focus", { Label: "Arbeitstitel", Input: "Die leise Architektur bearbeiten", Hint: "Eingabe aktiv", Status: "\u25CE Fokus" }, { strokeWeight: 2 }),
+        componentVariant("State=Error", { Label: "Arbeitstitel", Input: "Kein Arbeitstitel", Hint: "Arbeitstitel ist erforderlich", Status: "! Fehler" }, { strokeWeight: 2 })
+      ]
+    }),
+    componentDefinition({
+      id: "search",
+      name: "Onda/Search",
+      label: "Search",
+      labelRole: "Input",
+      tier: 1,
+      roles: [componentRole("Icon", "TEXT"), componentRole("Input", "TEXT"), componentRole("Clear", "TEXT"), componentRole("Count", "TEXT")],
+      variants: [
+        componentVariant("State=Empty", { Icon: "\u2315", Input: "Suche starten", Clear: "\u2014", Count: "0 Treffer" }),
+        componentVariant("State=Typing", { Icon: "\u2315", Input: "Argumentation", Clear: "\xD7 L\xF6schen", Count: "Suche l\xE4uft" }, { strokeWeight: 2 }),
+        componentVariant("State=Results", { Icon: "\u2315", Input: "Argumentation", Clear: "\xD7 L\xF6schen", Count: "12 Treffer" }),
+        componentVariant("State=No Results", { Icon: "\u2315", Input: "Argumentation", Clear: "\xD7 L\xF6schen", Count: "0 Treffer \xB7 Suchbegriff \xE4ndern" }, { strokeWeight: 2, textToken: "color/text-muted" })
+      ]
+    }),
+    componentDefinition({
+      id: "select",
+      name: "Onda/Select",
+      label: "Select",
+      labelRole: "Label",
+      tier: 1,
+      direction: "VERTICAL",
+      roles: [componentRole("Label", "TEXT"), componentRole("Value", "TEXT"), componentRole("Chevron", "TEXT"), componentRole("Status", "TEXT")],
+      variants: [
+        componentVariant("State=Closed", { Label: "Dokumenttyp", Value: "Typ ausw\xE4hlen", Chevron: "\u2304", Status: "\u25CB Geschlossen" }),
+        componentVariant("State=Open", { Label: "Dokumenttyp", Value: "Essay \xB7 Bericht \xB7 Notiz", Chevron: "\u2303", Status: "\u25CE Offen" }, { strokeWeight: 2 }),
+        componentVariant("State=Selected", { Label: "Dokumenttyp", Value: "Essay", Chevron: "\u2304", Status: "\u2713 Ausgew\xE4hlt" }, { inverted: true, strokeWeight: 2 })
+      ]
+    }),
+    componentDefinition({
+      id: "composer",
+      name: "Onda/Composer",
+      label: "Composer",
+      labelRole: "Input",
+      tier: 1,
+      direction: "VERTICAL",
+      targetHeight: 88,
+      roles: [componentRole("Prompt", "TEXT"), componentRole("Input", "TEXT"), componentRole("Submit", "TEXT"), componentRole("Status", "TEXT")],
+      variants: [
+        componentVariant("State=Empty", { Prompt: "Nachricht an den Agenten", Input: "Frage oder Auftrag eingeben", Submit: "Senden", Status: "\u25CB Bereit" }),
+        componentVariant("State=Draft", { Prompt: "Nachricht an den Agenten", Input: "Pr\xFCfe die Argumentation auf Belegl\xFCcken.", Submit: "Senden", Status: "\u25CF Entwurf" }, { strokeWeight: 2 }),
+        componentVariant("State=Sending", { Prompt: "Nachricht an den Agenten", Input: "Pr\xFCfe die Argumentation auf Belegl\xFCcken.", Submit: "Senden", Status: "\u2026 Wird gesendet" }, { inverted: true, strokeWeight: 2 }),
+        componentVariant("State=Error", { Prompt: "Nachricht an den Agenten", Input: "Pr\xFCfe die Argumentation auf Belegl\xFCcken.", Submit: "Senden", Status: "! Fehler \xB7 Erneut versuchen" }, { strokeWeight: 2 })
+      ]
+    }),
+    componentDefinition({
+      id: "menu-item",
+      name: "Onda/Menu Item",
+      label: "Menu Item",
+      labelRole: "Label",
+      tier: 1,
+      radius: 0,
+      radiusToken: "radius/none",
+      roles: [componentRole("Icon", "TEXT"), componentRole("Label", "TEXT"), componentRole("Shortcut", "TEXT")],
+      variants: [
+        componentVariant("State=Default", { Icon: "\xA7", Label: "Quelle \xF6ffnen", Shortcut: "\u21B5" }),
+        componentVariant("State=Hover", { Icon: "\u2192", Label: "Quelle \xF6ffnen", Shortcut: "\u21B5 Hover" }, { strokeWeight: 2 }),
+        componentVariant("State=Selected", { Icon: "\u2713", Label: "Quelle \xF6ffnen", Shortcut: "\u21B5 Ausgew\xE4hlt" }, { inverted: true, strokeWeight: 2 }),
+        componentVariant("State=Disabled", { Icon: "\xD7", Label: "Quelle \xF6ffnen", Shortcut: "Nicht verf\xFCgbar" }, { opacity: 0.45, textToken: "color/text-muted" })
       ]
     })
   ]);
@@ -634,8 +735,21 @@
     const context = await requireContext();
     return mutate(context);
   }
+  function componentVariantPropertyExpectations(definition2) {
+    const axes = /* @__PURE__ */ new Map();
+    for (const variant of definition2.variants) {
+      for (const part of variant.name.split(", ")) {
+        const separator = part.indexOf("=");
+        const name = part.slice(0, separator);
+        const value = part.slice(separator + 1);
+        if (!axes.has(name)) axes.set(name, { name, defaultValue: value, variantOptions: [] });
+        const axis = axes.get(name);
+        if (!axis.variantOptions.includes(value)) axis.variantOptions.push(value);
+      }
+    }
+    return [...axes.values()];
+  }
   function validateComponentMutationInventory(inventory = {}, componentId) {
-    var _a;
     const errors = [];
     if (!COMPONENT_DEFINITIONS.some((component) => component.id === componentId)) return { valid: false, errors: [`Unbekannte Komponente: ${componentId}`] };
     const allSets = Array.isArray(inventory.sets) ? inventory.sets : [];
@@ -688,18 +802,22 @@
           }
         }
         const properties = Array.isArray(set.componentProperties) ? set.componentProperties : [];
-        const variantPropertyNames = new Set(definition2.variants.flatMap((variant) => variant.name.split(", ").map((part) => part.split("=")[0])));
+        const variantExpectations = componentVariantPropertyExpectations(definition2);
+        const variantPropertyNames = new Set(variantExpectations.map((property) => property.name));
         const labels = properties.filter((property) => property.name === "Label");
-        if (labels.length > 1 || labels.length === 1 && (labels[0].type !== "TEXT" || labels[0].defaultValue !== definition2.variants[0].copy[definition2.labelRole]) || properties.some((property) => property.type === "TEXT" && property.name !== "Label" || property.type === "VARIANT" && !variantPropertyNames.has(property.name) || !["TEXT", "VARIANT"].includes(property.type))) errors.push(`Ung\xFCltige Label-Property: ${definition2.name}`);
+        const variantProperties = properties.filter((property) => property.type === "VARIANT");
+        if (labels.length > 1 || labels.length === 1 && (labels[0].type !== "TEXT" || labels[0].defaultValue !== definition2.variants[0].copy[definition2.labelRole]) || properties.some((property) => property.type === "TEXT" && property.name !== "Label" || property.type === "VARIANT" && !variantPropertyNames.has(property.name) || !["TEXT", "VARIANT"].includes(property.type)) || new Set(variantProperties.map((property) => property.name)).size !== variantProperties.length || variantProperties.some((property) => {
+          const expected = variantExpectations.find((item) => item.name === property.name);
+          return !expected || !expected.variantOptions.includes(property.defaultValue) || !Array.isArray(property.variantOptions) || new Set(property.variantOptions).size !== property.variantOptions.length || property.variantOptions.some((option) => !expected.variantOptions.includes(option));
+        })) errors.push(`Ung\xFCltige Label-Property: ${definition2.name}`);
       }
       if (sample) {
         if (!set) errors.push(`Verwaiste Dokumentationsinstanz: ${definition2.name}`);
         if (!sample.nodeId || sample.parentId !== (set == null ? void 0 : set.parentId) || sample.parentType !== "SECTION" || sample.parentName !== "02 \xB7 Komponenten") errors.push(`Falscher Instanz-Parent: ${definition2.name}`);
         if (!validContainerAncestry(sample)) errors.push(`Falsche Instanz-Ancestry: ${definition2.name}`);
         if (sample.type !== "INSTANCE" || sample.owner !== PLUGIN_ORIGIN || sample.documentation !== true || sample.repeatedScreen !== false) errors.push(`Ung\xFCltige Dokumentationsinstanz: ${definition2.name}`);
-        const firstVariant = (_a = set == null ? void 0 : set.variants) == null ? void 0 : _a.find((variant) => variant.name === definition2.variants[0].name);
         const ownedVariantIds = new Set(((set == null ? void 0 : set.variants) || []).map((variant) => variant.nodeId));
-        if (set && (firstVariant ? sample.mainComponentId !== firstVariant.nodeId : !ownedVariantIds.has(sample.mainComponentId))) errors.push(`Falsch verkn\xFCpfte Dokumentationsinstanz: ${definition2.name}`);
+        if (set && !ownedVariantIds.has(sample.mainComponentId)) errors.push(`Falsch verkn\xFCpfte Dokumentationsinstanz: ${definition2.name}`);
       }
       if (set && stagingNodes.length) errors.push(`Staging neben ComponentSet: ${definition2.name}`);
       const stagingNames = stagingNodes.map((item) => item.stagingVariant);
@@ -903,10 +1021,15 @@
       if (!set.parentId || set.parentType !== "SECTION" || set.parentName !== "02 \xB7 Komponenten") errors.push(`ComponentSet-Parent ung\xFCltig: ${definition2.name}`);
       if (!container || set.containerId !== container.nodeId || set.containerType !== container.type || set.containerName !== container.name || set.containerOwner !== container.owner || set.containerParentId !== container.parentId || set.containerParentType !== container.parentType || set.containerParentName !== container.parentName) errors.push(`ComponentSet-Ancestry ung\xFCltig: ${definition2.name}`);
       const properties = Array.isArray(set.componentProperties) ? set.componentProperties : [];
-      const variantPropertyNames = new Set(definition2.variants.flatMap((variant) => variant.name.split(", ").map((part) => part.split("=")[0])));
+      const variantExpectations = componentVariantPropertyExpectations(definition2);
+      const variantPropertyNames = new Set(variantExpectations.map((property) => property.name));
       const labelProperties = properties.filter((property) => property.name === "Label");
       const labelProperty = labelProperties.length === 1 && labelProperties[0].type === "TEXT" ? labelProperties[0] : null;
-      if (properties.some((property) => property.type === "TEXT" && property.name !== "Label" || property.type === "VARIANT" && !variantPropertyNames.has(property.name) || !["TEXT", "VARIANT"].includes(property.type))) errors.push(`Component-Property ung\xFCltig: ${definition2.name}`);
+      const variantProperties = properties.filter((property) => property.type === "VARIANT");
+      if (properties.some((property) => property.type === "TEXT" && property.name !== "Label" || property.type === "VARIANT" && !variantPropertyNames.has(property.name) || !["TEXT", "VARIANT"].includes(property.type)) || variantProperties.length !== variantExpectations.length || new Set(variantProperties.map((property) => property.name)).size !== variantProperties.length || variantExpectations.some((expected) => {
+        const matching = variantProperties.filter((property) => property.name === expected.name);
+        return matching.length !== 1 || matching[0].defaultValue !== expected.defaultValue || !sameArray(matching[0].variantOptions, expected.variantOptions);
+      })) errors.push(`Component-Property ung\xFCltig: ${definition2.name}`);
       if (!labelProperty || labelProperty.defaultValue !== definition2.variants[0].copy[definition2.labelRole]) errors.push(`Label-Property ung\xFCltig: ${definition2.name}`);
       const variants = Array.isArray(set.variants) ? set.variants : [];
       if (variants.length !== definition2.variants.length || new Set(variants.map((variant) => variant.nodeId)).size !== variants.length) errors.push(`Variantenanzahl ung\xFCltig: ${definition2.name}`);
@@ -917,17 +1040,15 @@
           continue;
         }
         const variant = matchingVariants[0];
-        const focus = variantDefinition.name.includes("Focus");
-        const disabled = variantDefinition.name.includes("Disabled");
-        if (variant.type !== "COMPONENT" || variant.owner !== PLUGIN_ORIGIN || variant.layoutMode === "NONE") errors.push(`Variante strukturell ung\xFCltig: ${definition2.name}/${variantDefinition.name}`);
+        if (variant.type !== "COMPONENT" || variant.owner !== PLUGIN_ORIGIN || variant.layoutMode !== definition2.direction) errors.push(`Variante strukturell ung\xFCltig: ${definition2.name}/${variantDefinition.name}`);
         if (!variant.parentId || variant.parentId !== set.nodeId || variant.parentType !== "COMPONENT_SET" || variant.parentName !== set.name) errors.push(`Varianten-Parent ung\xFCltig: ${definition2.name}/${variantDefinition.name}`);
-        if (variant.height < definition2.targetHeight || variant.cornerRadius !== definition2.radius || variant.strokeWeight !== (focus ? 2 : 1) || variant.opacity !== (disabled ? 0.45 : 1)) errors.push(`Variante geometrisch ung\xFCltig: ${definition2.name}/${variantDefinition.name}`);
+        if (variant.height < definition2.targetHeight || variant.cornerRadius !== definition2.radius || variant.strokeWeight !== variantDefinition.strokeWeight || variant.opacity !== variantDefinition.opacity) errors.push(`Variante geometrisch ung\xFCltig: ${definition2.name}/${variantDefinition.name}`);
         if ((variant.effects || []).length !== 0) errors.push(`Variante hat Effekte: ${definition2.name}/${variantDefinition.name}`);
         if (!exactComponentPaint(variant.fills, semantic(variantDefinition.surfaceToken)) || !exactComponentPaint(variant.strokes, semantic("color/border"))) errors.push(`Varianten-Paints ung\xFCltig: ${definition2.name}/${variantDefinition.name}`);
         const fields = variant.fieldVariableIds || {};
-        if (!sameArray(fields.itemSpacing, [dimension("spacing/8")]) || !sameArray(fields.paddingTop, [dimension("spacing/12")]) || !sameArray(fields.paddingLeft, [dimension("spacing/16")]) || !sameArray(fields.paddingRight, [dimension("spacing/16")]) || !sameArray(fields.paddingBottom, [dimension("spacing/12")]) || !["topLeftRadius", "topRightRadius", "bottomLeftRadius", "bottomRightRadius"].every((field) => sameArray(fields[field], [dimension(definition2.radiusToken)]))) errors.push(`Variantenbindungen ung\xFCltig: ${definition2.name}/${variantDefinition.name}`);
+        if (!sameArray(fields.itemSpacing, [dimension(definition2.gapToken)]) || !sameArray(fields.paddingTop, [dimension(definition2.paddingTokens.top)]) || !sameArray(fields.paddingLeft, [dimension(definition2.paddingTokens.left)]) || !sameArray(fields.paddingRight, [dimension(definition2.paddingTokens.right)]) || !sameArray(fields.paddingBottom, [dimension(definition2.paddingTokens.bottom)]) || !["topLeftRadius", "topRightRadius", "bottomLeftRadius", "bottomRightRadius"].every((field) => sameArray(fields[field], [dimension(definition2.radiusToken)]))) errors.push(`Variantenbindungen ung\xFCltig: ${definition2.name}/${variantDefinition.name}`);
         const dimensions = variant.dimensionValues || {};
-        if (dimensions.itemSpacing !== 8 || dimensions.paddingTop !== 12 || dimensions.paddingRight !== 16 || dimensions.paddingBottom !== 12 || dimensions.paddingLeft !== 16 || dimensions.minHeight !== definition2.targetHeight) errors.push(`Variantendimensionen ung\xFCltig: ${definition2.name}/${variantDefinition.name}`);
+        if (dimensions.itemSpacing !== definition2.gap || dimensions.paddingTop !== definition2.padding.top || dimensions.paddingRight !== definition2.padding.right || dimensions.paddingBottom !== definition2.padding.bottom || dimensions.paddingLeft !== definition2.padding.left || dimensions.minHeight !== definition2.targetHeight) errors.push(`Variantendimensionen ung\xFCltig: ${definition2.name}/${variantDefinition.name}`);
         const roles = Array.isArray(variant.roles) ? variant.roles : [];
         if (roles.length !== definition2.roles.length || new Set(roles.map((role) => role.nodeId)).size !== roles.length) errors.push(`Rollenanzahl ung\xFCltig: ${definition2.name}/${variantDefinition.name}`);
         for (const roleDefinition of definition2.roles) {
@@ -2298,11 +2419,13 @@ ${result.errors.join("\n")}`);
       ["surface", "color/surface", "Onda \xB7 Semantic \xB7 Light"],
       ["inverted", "color/inverted", "Onda \xB7 Semantic \xB7 Light"],
       ["text", "color/text", "Onda \xB7 Semantic \xB7 Light"],
+      ["textMuted", "color/text-muted", "Onda \xB7 Semantic \xB7 Light"],
       ["onInverted", "color/on-inverted", "Onda \xB7 Semantic \xB7 Light"],
       ["border", "color/border", "Onda \xB7 Semantic \xB7 Light"],
       ["spacing8", "spacing/8", "Onda \xB7 Dimension"],
       ["spacing12", "spacing/12", "Onda \xB7 Dimension"],
       ["spacing16", "spacing/16", "Onda \xB7 Dimension"],
+      ["radiusNone", "radius/none", "Onda \xB7 Dimension"],
       ["radiusControl", "radius/control", "Onda \xB7 Dimension"],
       ["radiusCircle", "radius/circle", "Onda \xB7 Dimension"]
     ];
@@ -2310,13 +2433,31 @@ ${result.errors.join("\n")}`);
     const variables = Object.fromEntries(entries);
     const missing = requests.filter(([key]) => !variables[key]).map(([, name, collection]) => `${collection}/${name}`);
     if (missing.length) throw new Error(`Komponentenvariablen fehlen: ${missing.join(", ")}`);
-    return variables;
+    return __spreadProps(__spreadValues({}, variables), {
+      semanticByToken: {
+        "color/surface": variables.surface,
+        "color/inverted": variables.inverted,
+        "color/text": variables.text,
+        "color/text-muted": variables.textMuted,
+        "color/on-inverted": variables.onInverted,
+        "color/border": variables.border
+      },
+      dimensionByToken: {
+        "spacing/8": variables.spacing8,
+        "spacing/12": variables.spacing12,
+        "spacing/16": variables.spacing16,
+        "radius/none": variables.radiusNone,
+        "radius/control": variables.radiusControl,
+        "radius/circle": variables.radiusCircle
+      }
+    });
   }
   function boundComponentPaint(token, variable) {
     const palette = {
       "color/surface": "gray/000",
       "color/inverted": "gray/900",
       "color/text": "gray/900",
+      "color/text-muted": "gray/500",
       "color/on-inverted": "gray/000",
       "color/border": "gray/300"
     };
@@ -2341,30 +2482,30 @@ ${result.errors.join("\n")}`);
   function configureComponentVariant(component, definition2, variantDefinition, decision, variables) {
     component.name = variantDefinition.name;
     component.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN);
-    component.layoutMode = "HORIZONTAL";
+    component.layoutMode = definition2.direction;
     component.primaryAxisSizingMode = "AUTO";
     component.counterAxisSizingMode = "AUTO";
     component.primaryAxisAlignItems = "CENTER";
     component.counterAxisAlignItems = "CENTER";
-    component.itemSpacing = 8;
-    component.paddingTop = 12;
-    component.paddingRight = 16;
-    component.paddingBottom = 12;
-    component.paddingLeft = 16;
-    component.cornerRadius = 4;
+    component.itemSpacing = definition2.gap;
+    component.paddingTop = definition2.padding.top;
+    component.paddingRight = definition2.padding.right;
+    component.paddingBottom = definition2.padding.bottom;
+    component.paddingLeft = definition2.padding.left;
+    component.cornerRadius = definition2.radius;
     component.minHeight = definition2.targetHeight;
-    component.opacity = variantDefinition.name.includes("Disabled") ? 0.45 : 1;
-    component.fills = boundComponentPaint(variantDefinition.surfaceToken, variantDefinition.surfaceToken === "color/inverted" ? variables.inverted : variables.surface);
+    component.opacity = variantDefinition.opacity;
+    component.fills = boundComponentPaint(variantDefinition.surfaceToken, variables.semanticByToken[variantDefinition.surfaceToken]);
     component.strokes = boundComponentPaint("color/border", variables.border);
-    component.strokeWeight = variantDefinition.name.includes("Focus") ? 2 : 1;
+    component.strokeWeight = variantDefinition.strokeWeight;
     component.effects = [];
-    component.setBoundVariable("itemSpacing", variables.spacing8);
-    component.setBoundVariable("paddingTop", variables.spacing12);
-    component.setBoundVariable("paddingLeft", variables.spacing16);
-    component.setBoundVariable("paddingRight", variables.spacing16);
-    component.setBoundVariable("paddingBottom", variables.spacing12);
-    for (const field of ["topLeftRadius", "topRightRadius", "bottomLeftRadius", "bottomRightRadius"]) component.setBoundVariable(field, variables.radiusControl);
-    const textVariable = variantDefinition.textToken === "color/on-inverted" ? { name: "color/on-inverted", variable: variables.onInverted } : { name: "color/text", variable: variables.text };
+    component.setBoundVariable("itemSpacing", variables.dimensionByToken[definition2.gapToken]);
+    component.setBoundVariable("paddingTop", variables.dimensionByToken[definition2.paddingTokens.top]);
+    component.setBoundVariable("paddingLeft", variables.dimensionByToken[definition2.paddingTokens.left]);
+    component.setBoundVariable("paddingRight", variables.dimensionByToken[definition2.paddingTokens.right]);
+    component.setBoundVariable("paddingBottom", variables.dimensionByToken[definition2.paddingTokens.bottom]);
+    for (const field of ["topLeftRadius", "topRightRadius", "bottomLeftRadius", "bottomRightRadius"]) component.setBoundVariable(field, variables.dimensionByToken[definition2.radiusToken]);
+    const textVariable = { name: variantDefinition.textToken, variable: variables.semanticByToken[variantDefinition.textToken] };
     for (const roleDefinition of definition2.roles) {
       const role = component.children.find((node) => node.name === `Role/${roleDefinition.name}`);
       if (!role || role.type !== roleDefinition.type) throw new Error(`Rolle fehlt: ${definition2.name}/${variantDefinition.name}/${roleDefinition.name}`);
@@ -2457,7 +2598,7 @@ ${result.errors.join("\n")}`);
       }
     }
     set.name = definition2.name;
-    set.description = `${definition2.label}: monochrome Tier-0-Komponente mit Auto Layout, semantischen Variablen und expliziten Zust\xE4nden.`;
+    set.description = `${definition2.label}: monochrome Tier-${definition2.tier}-Komponente mit Auto Layout, semantischen Variablen und expliziten Zust\xE4nden.`;
     set.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN);
     set.setPluginData("ondaComponentId", definition2.id);
     set.layoutMode = "HORIZONTAL";

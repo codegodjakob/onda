@@ -123,5 +123,5 @@ test('runtime resolves only exact direct owned component children and immediatel
   assert.match(runtime, /getNodeByIdAsync/)
   assert.match(runtime, /setPluginData\(CREATED_MARKER_KEY, PLUGIN_ORIGIN\)/)
   assert.match(runtime, /buildComponentRecoveryActions/)
-  assert.deepEqual(COMPONENT_DEFINITIONS.map(item => item.id), ['button', 'icon-button', 'status-symbol', 'tag'])
+  assert.deepEqual(COMPONENT_DEFINITIONS.filter(item => item.tier === 0).map(item => item.id), ['button', 'icon-button', 'status-symbol', 'tag'])
 })

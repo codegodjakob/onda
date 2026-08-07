@@ -15,7 +15,19 @@ function boundPaint(variableIdValue, value) {
   }]
 }
 
-export function createValidComponentEvidence(foundation) {
+function variantProperties(definition) {
+  const axes = new Map()
+  for (const variant of definition.variants) {
+    for (const part of variant.name.split(', ')) {
+      const [name, value] = part.split('=')
+      if (!axes.has(name)) axes.set(name, { key: `${name}#variant`, name, type: 'VARIANT', defaultValue: value, variantOptions: [] })
+      if (!axes.get(name).variantOptions.includes(value)) axes.get(name).variantOptions.push(value)
+    }
+  }
+  return [...axes.values()]
+}
+
+export function createValidComponentEvidence(foundation, definitions = COMPONENT_DEFINITIONS) {
   const semantic = name => variableId(foundation, 'Onda · Semantic · Light', name)
   const dimension = name => variableId(foundation, 'Onda · Dimension', name)
   const section = { nodeId: 'section:components', name: '02 · Komponenten', type: 'SECTION', owner: PLUGIN_ORIGIN, parentId: 'page:1', parentType: 'PAGE', parentName: 'Page 1' }
@@ -23,10 +35,11 @@ export function createValidComponentEvidence(foundation) {
     containerId: section.nodeId, containerType: section.type, containerName: section.name, containerOwner: section.owner,
     containerParentId: section.parentId, containerParentType: section.parentType, containerParentName: section.parentName,
   }
-  return COMPONENT_DEFINITIONS.map(definition => {
+  return definitions.map(definition => {
     const labelKey = 'Label#property'
     const variants = definition.variants.map((variantDefinition, variantIndex) => {
       const inverted = variantDefinition.surfaceToken === 'color/inverted'
+      const textValue = variantDefinition.textToken === 'color/on-inverted' ? 1 : variantDefinition.textToken === 'color/text-muted' ? 0.45 : 0.08
       return {
         nodeId: `component:${definition.id}:${variantIndex}`,
         name: variantDefinition.name,
@@ -35,27 +48,34 @@ export function createValidComponentEvidence(foundation) {
         parentId: `set:${definition.id}`,
         parentType: 'COMPONENT_SET',
         parentName: definition.name,
-        layoutMode: 'HORIZONTAL',
+        layoutMode: definition.direction,
         width: definition.id === 'icon-button' ? 150 : 180,
         height: definition.targetHeight,
         cornerRadius: definition.radius,
-        strokeWeight: variantDefinition.name.includes('Focus') ? 2 : 1,
-        opacity: variantDefinition.name.includes('Disabled') ? 0.45 : 1,
+        strokeWeight: variantDefinition.strokeWeight,
+        opacity: variantDefinition.opacity,
         fills: boundPaint(semantic(variantDefinition.surfaceToken), inverted ? 0.08 : 1),
         strokes: boundPaint(semantic('color/border'), 0.82),
         effects: [],
         fieldVariableIds: {
-          itemSpacing: [dimension('spacing/8')],
-          paddingTop: [dimension('spacing/12')],
-          paddingLeft: [dimension('spacing/16')],
-          paddingRight: [dimension('spacing/16')],
-          paddingBottom: [dimension('spacing/12')],
+          itemSpacing: [dimension(definition.gapToken)],
+          paddingTop: [dimension(definition.paddingTokens.top)],
+          paddingLeft: [dimension(definition.paddingTokens.left)],
+          paddingRight: [dimension(definition.paddingTokens.right)],
+          paddingBottom: [dimension(definition.paddingTokens.bottom)],
           topLeftRadius: [dimension(definition.radiusToken)],
           topRightRadius: [dimension(definition.radiusToken)],
           bottomLeftRadius: [dimension(definition.radiusToken)],
           bottomRightRadius: [dimension(definition.radiusToken)],
         },
-        dimensionValues: { itemSpacing: 8, paddingTop: 12, paddingRight: 16, paddingBottom: 12, paddingLeft: 16, minHeight: 44 },
+        dimensionValues: {
+          itemSpacing: definition.gap,
+          paddingTop: definition.padding.top,
+          paddingRight: definition.padding.right,
+          paddingBottom: definition.padding.bottom,
+          paddingLeft: definition.padding.left,
+          minHeight: definition.targetHeight,
+        },
         roles: definition.roles.map((roleDefinition, roleIndex) => ({
           nodeId: `role:${definition.id}:${variantIndex}:${roleIndex}`,
           name: `Role/${roleDefinition.name}`,
@@ -67,7 +87,7 @@ export function createValidComponentEvidence(foundation) {
           characters: roleDefinition.type === 'TEXT' ? variantDefinition.copy[roleDefinition.name] : null,
           width: roleDefinition.type === 'ELLIPSE' ? 16 : 80,
           height: roleDefinition.type === 'ELLIPSE' ? 16 : 22,
-          fills: boundPaint(semantic(variantDefinition.textToken), inverted ? 1 : 0.08),
+          fills: boundPaint(semantic(variantDefinition.textToken), textValue),
           effects: [],
           fieldVariableIds: roleDefinition.type === 'ELLIPSE' ? {
             maxWidth: [dimension('radius/circle')],
@@ -94,7 +114,7 @@ export function createValidComponentEvidence(foundation) {
         name: 'Label',
         type: 'TEXT',
         defaultValue: definition.variants[0].copy[definition.labelRole],
-      }],
+      }, ...variantProperties(definition)],
       variants,
       sampleCount: 1,
       sample: {

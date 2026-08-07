@@ -23,6 +23,7 @@ function structuredComponentEvidence() {
     parentName: targetPage.name,
   }
   for (const set of componentSets) {
+    const definition = COMPONENT_DEFINITIONS.find(item => item.id === set.id)
     Object.assign(set, { parentId: section.nodeId, parentType: section.type, parentName: section.name })
     for (const variant of set.variants) {
       Object.assign(variant, { parentId: set.nodeId, parentType: set.type, parentName: set.name })
@@ -34,7 +35,7 @@ function structuredComponentEvidence() {
           paddingRight: 16,
           paddingBottom: 12,
           paddingLeft: 16,
-          minHeight: 44,
+          minHeight: definition.targetHeight,
         },
       })
       variant.fieldVariableIds.paddingTop = [foundation.variables.find(item => item.collectionName === 'Onda · Dimension' && item.name === 'spacing/12').id]

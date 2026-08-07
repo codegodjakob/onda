@@ -265,6 +265,21 @@ export async function executeFoundationMutation({ preflight, requireContext, mut
   return mutate(context)
 }
 
+function componentVariantPropertyExpectations(definition) {
+  const axes = new Map()
+  for (const variant of definition.variants) {
+    for (const part of variant.name.split(', ')) {
+      const separator = part.indexOf('=')
+      const name = part.slice(0, separator)
+      const value = part.slice(separator + 1)
+      if (!axes.has(name)) axes.set(name, { name, defaultValue: value, variantOptions: [] })
+      const axis = axes.get(name)
+      if (!axis.variantOptions.includes(value)) axis.variantOptions.push(value)
+    }
+  }
+  return [...axes.values()]
+}
+
 export function validateComponentMutationInventory(inventory = {}, componentId) {
   const errors = []
   if (!COMPONENT_DEFINITIONS.some(component => component.id === componentId)) return { valid: false, errors: [`Unbekannte Komponente: ${componentId}`] }
@@ -329,22 +344,32 @@ export function validateComponentMutationInventory(inventory = {}, componentId) 
       }
     }
     const properties = Array.isArray(set.componentProperties) ? set.componentProperties : []
-    const variantPropertyNames = new Set(definition.variants.flatMap(variant => variant.name.split(', ').map(part => part.split('=')[0])))
+    const variantExpectations = componentVariantPropertyExpectations(definition)
+    const variantPropertyNames = new Set(variantExpectations.map(property => property.name))
     const labels = properties.filter(property => property.name === 'Label')
+    const variantProperties = properties.filter(property => property.type === 'VARIANT')
     if (labels.length > 1
       || (labels.length === 1 && (labels[0].type !== 'TEXT' || labels[0].defaultValue !== definition.variants[0].copy[definition.labelRole]))
       || properties.some(property => (property.type === 'TEXT' && property.name !== 'Label')
         || (property.type === 'VARIANT' && !variantPropertyNames.has(property.name))
-        || !['TEXT', 'VARIANT'].includes(property.type))) errors.push(`Ungültige Label-Property: ${definition.name}`)
+        || !['TEXT', 'VARIANT'].includes(property.type))
+      || new Set(variantProperties.map(property => property.name)).size !== variantProperties.length
+      || variantProperties.some(property => {
+        const expected = variantExpectations.find(item => item.name === property.name)
+        return !expected
+          || !expected.variantOptions.includes(property.defaultValue)
+          || !Array.isArray(property.variantOptions)
+          || new Set(property.variantOptions).size !== property.variantOptions.length
+          || property.variantOptions.some(option => !expected.variantOptions.includes(option))
+      })) errors.push(`Ungültige Label-Property: ${definition.name}`)
     }
     if (sample) {
       if (!set) errors.push(`Verwaiste Dokumentationsinstanz: ${definition.name}`)
       if (!sample.nodeId || sample.parentId !== set?.parentId || sample.parentType !== 'SECTION' || sample.parentName !== '02 · Komponenten') errors.push(`Falscher Instanz-Parent: ${definition.name}`)
       if (!validContainerAncestry(sample)) errors.push(`Falsche Instanz-Ancestry: ${definition.name}`)
       if (sample.type !== 'INSTANCE' || sample.owner !== PLUGIN_ORIGIN || sample.documentation !== true || sample.repeatedScreen !== false) errors.push(`Ungültige Dokumentationsinstanz: ${definition.name}`)
-      const firstVariant = set?.variants?.find(variant => variant.name === definition.variants[0].name)
       const ownedVariantIds = new Set((set?.variants || []).map(variant => variant.nodeId))
-      if (set && (firstVariant ? sample.mainComponentId !== firstVariant.nodeId : !ownedVariantIds.has(sample.mainComponentId))) errors.push(`Falsch verknüpfte Dokumentationsinstanz: ${definition.name}`)
+      if (set && !ownedVariantIds.has(sample.mainComponentId)) errors.push(`Falsch verknüpfte Dokumentationsinstanz: ${definition.name}`)
     }
     if (set && stagingNodes.length) errors.push(`Staging neben ComponentSet: ${definition.name}`)
     const stagingNames = stagingNodes.map(item => item.stagingVariant)
@@ -583,12 +608,22 @@ export function validateComponentEvidence(evidence = {}) {
       || set.containerParentType !== container.parentType
       || set.containerParentName !== container.parentName) errors.push(`ComponentSet-Ancestry ungültig: ${definition.name}`)
     const properties = Array.isArray(set.componentProperties) ? set.componentProperties : []
-    const variantPropertyNames = new Set(definition.variants.flatMap(variant => variant.name.split(', ').map(part => part.split('=')[0])))
+    const variantExpectations = componentVariantPropertyExpectations(definition)
+    const variantPropertyNames = new Set(variantExpectations.map(property => property.name))
     const labelProperties = properties.filter(property => property.name === 'Label')
     const labelProperty = labelProperties.length === 1 && labelProperties[0].type === 'TEXT' ? labelProperties[0] : null
+    const variantProperties = properties.filter(property => property.type === 'VARIANT')
     if (properties.some(property => (property.type === 'TEXT' && property.name !== 'Label')
       || (property.type === 'VARIANT' && !variantPropertyNames.has(property.name))
-      || !['TEXT', 'VARIANT'].includes(property.type))) errors.push(`Component-Property ungültig: ${definition.name}`)
+      || !['TEXT', 'VARIANT'].includes(property.type))
+      || variantProperties.length !== variantExpectations.length
+      || new Set(variantProperties.map(property => property.name)).size !== variantProperties.length
+      || variantExpectations.some(expected => {
+        const matching = variantProperties.filter(property => property.name === expected.name)
+        return matching.length !== 1
+          || matching[0].defaultValue !== expected.defaultValue
+          || !sameArray(matching[0].variantOptions, expected.variantOptions)
+      })) errors.push(`Component-Property ungültig: ${definition.name}`)
     if (!labelProperty || labelProperty.defaultValue !== definition.variants[0].copy[definition.labelRole]) errors.push(`Label-Property ungültig: ${definition.name}`)
     const variants = Array.isArray(set.variants) ? set.variants : []
     if (variants.length !== definition.variants.length || new Set(variants.map(variant => variant.nodeId)).size !== variants.length) errors.push(`Variantenanzahl ungültig: ${definition.name}`)
@@ -596,26 +631,24 @@ export function validateComponentEvidence(evidence = {}) {
       const matchingVariants = variants.filter(variant => variant.name === variantDefinition.name)
       if (matchingVariants.length !== 1) { errors.push(`Variante fehlt oder doppelt: ${definition.name}/${variantDefinition.name}`); continue }
       const variant = matchingVariants[0]
-      const focus = variantDefinition.name.includes('Focus')
-      const disabled = variantDefinition.name.includes('Disabled')
-      if (variant.type !== 'COMPONENT' || variant.owner !== PLUGIN_ORIGIN || variant.layoutMode === 'NONE') errors.push(`Variante strukturell ungültig: ${definition.name}/${variantDefinition.name}`)
+      if (variant.type !== 'COMPONENT' || variant.owner !== PLUGIN_ORIGIN || variant.layoutMode !== definition.direction) errors.push(`Variante strukturell ungültig: ${definition.name}/${variantDefinition.name}`)
       if (!variant.parentId || variant.parentId !== set.nodeId || variant.parentType !== 'COMPONENT_SET' || variant.parentName !== set.name) errors.push(`Varianten-Parent ungültig: ${definition.name}/${variantDefinition.name}`)
-      if (variant.height < definition.targetHeight || variant.cornerRadius !== definition.radius || variant.strokeWeight !== (focus ? 2 : 1) || variant.opacity !== (disabled ? 0.45 : 1)) errors.push(`Variante geometrisch ungültig: ${definition.name}/${variantDefinition.name}`)
+      if (variant.height < definition.targetHeight || variant.cornerRadius !== definition.radius || variant.strokeWeight !== variantDefinition.strokeWeight || variant.opacity !== variantDefinition.opacity) errors.push(`Variante geometrisch ungültig: ${definition.name}/${variantDefinition.name}`)
       if ((variant.effects || []).length !== 0) errors.push(`Variante hat Effekte: ${definition.name}/${variantDefinition.name}`)
       if (!exactComponentPaint(variant.fills, semantic(variantDefinition.surfaceToken)) || !exactComponentPaint(variant.strokes, semantic('color/border'))) errors.push(`Varianten-Paints ungültig: ${definition.name}/${variantDefinition.name}`)
       const fields = variant.fieldVariableIds || {}
-      if (!sameArray(fields.itemSpacing, [dimension('spacing/8')])
-        || !sameArray(fields.paddingTop, [dimension('spacing/12')])
-        || !sameArray(fields.paddingLeft, [dimension('spacing/16')])
-        || !sameArray(fields.paddingRight, [dimension('spacing/16')])
-        || !sameArray(fields.paddingBottom, [dimension('spacing/12')])
+      if (!sameArray(fields.itemSpacing, [dimension(definition.gapToken)])
+        || !sameArray(fields.paddingTop, [dimension(definition.paddingTokens.top)])
+        || !sameArray(fields.paddingLeft, [dimension(definition.paddingTokens.left)])
+        || !sameArray(fields.paddingRight, [dimension(definition.paddingTokens.right)])
+        || !sameArray(fields.paddingBottom, [dimension(definition.paddingTokens.bottom)])
         || !['topLeftRadius', 'topRightRadius', 'bottomLeftRadius', 'bottomRightRadius'].every(field => sameArray(fields[field], [dimension(definition.radiusToken)]))) errors.push(`Variantenbindungen ungültig: ${definition.name}/${variantDefinition.name}`)
       const dimensions = variant.dimensionValues || {}
-      if (dimensions.itemSpacing !== 8
-        || dimensions.paddingTop !== 12
-        || dimensions.paddingRight !== 16
-        || dimensions.paddingBottom !== 12
-        || dimensions.paddingLeft !== 16
+      if (dimensions.itemSpacing !== definition.gap
+        || dimensions.paddingTop !== definition.padding.top
+        || dimensions.paddingRight !== definition.padding.right
+        || dimensions.paddingBottom !== definition.padding.bottom
+        || dimensions.paddingLeft !== definition.padding.left
         || dimensions.minHeight !== definition.targetHeight) errors.push(`Variantendimensionen ungültig: ${definition.name}/${variantDefinition.name}`)
       const roles = Array.isArray(variant.roles) ? variant.roles : []
       if (roles.length !== definition.roles.length || new Set(roles.map(role => role.nodeId)).size !== roles.length) errors.push(`Rollenanzahl ungültig: ${definition.name}/${variantDefinition.name}`)

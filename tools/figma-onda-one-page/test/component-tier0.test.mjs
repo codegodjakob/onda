@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import * as definitions from '../src/definitions.mjs'
 import * as plan from '../src/plan.mjs'
+import { createValidComponentEvidence as createSharedComponentEvidence } from './component-fixture.mjs'
 
 const ROOT = resolve(import.meta.dirname, '..')
 const OWNER = 'onda-one-page'
@@ -54,10 +55,10 @@ const EXPECTED = [
 
 const VARIABLE_IDS = Object.fromEntries([
   ['color/surface', 'variable:surface'], ['color/inverted', 'variable:inverted'],
-  ['color/text', 'variable:text'], ['color/on-inverted', 'variable:on-inverted'],
+  ['color/text', 'variable:text'], ['color/text-muted', 'variable:text-muted'], ['color/on-inverted', 'variable:on-inverted'],
   ['color/border', 'variable:border'], ['spacing/8', 'variable:spacing-8'], ['spacing/12', 'variable:spacing-12'],
   ['spacing/16', 'variable:spacing-16'], ['radius/control', 'variable:radius-control'],
-  ['radius/circle', 'variable:radius-circle'],
+  ['radius/none', 'variable:radius-none'], ['radius/circle', 'variable:radius-circle'],
 ])
 
 function foundationEvidence() {
@@ -76,6 +77,18 @@ function isInverted(definition, variantName) {
   return (definition.id === 'button' && /Kind=(Primary|Destructive)/.test(variantName))
     || (definition.id === 'icon-button' && variantName === 'State=Pressed')
     || (definition.id === 'tag' && variantName === 'Kind=Selected')
+}
+
+function generatedVariantProperties(variants) {
+  const axes = new Map()
+  for (const [variantName] of variants) {
+    for (const part of variantName.split(', ')) {
+      const [name, value] = part.split('=')
+      if (!axes.has(name)) axes.set(name, { key: `${name}#variant`, name, type: 'VARIANT', defaultValue: value, variantOptions: [] })
+      if (!axes.get(name).variantOptions.includes(value)) axes.get(name).variantOptions.push(value)
+    }
+  }
+  return [...axes.values()]
 }
 
 function componentEvidenceFixture() {
@@ -161,7 +174,10 @@ function componentEvidenceFixture() {
       ...ancestry,
       layoutMode: 'HORIZONTAL',
       effects: [],
-      componentProperties: [{ key: 'Label#property', name: 'Label', type: 'TEXT', defaultValue: definition.variants[0][1][definition.labelRole] }],
+      componentProperties: [
+        { key: 'Label#property', name: 'Label', type: 'TEXT', defaultValue: definition.variants[0][1][definition.labelRole] },
+        ...generatedVariantProperties(definition.variants),
+      ],
       variants,
       sample: {
         nodeId: `sample:${definition.id}`,
@@ -180,12 +196,15 @@ function componentEvidenceFixture() {
       setIndex,
     }
   })
-  return { componentSets, foundation: foundationEvidence(), targetPage, containers: [container] }
+  const foundation = foundationEvidence()
+  const tier1aSets = createSharedComponentEvidence(foundation).filter(set => definitions.COMPONENT_DEFINITIONS.find(item => item.id === set.id)?.tier === 1)
+  return { componentSets: [...componentSets, ...tier1aSets], foundation, targetPage, containers: [container] }
 }
 
 test('Tier0 component contract is deeply frozen with exact sets, variants, roles, and meaningful state copy', () => {
-  const actual = definitions.COMPONENT_DEFINITIONS
-  assert.equal(Object.isFrozen(actual), true)
+  const contract = definitions.COMPONENT_DEFINITIONS
+  const actual = contract.filter(definition => definition.tier === 0)
+  assert.equal(Object.isFrozen(contract), true)
   assert.deepEqual(actual.map(definition => ({
     id: definition.id,
     name: definition.name,
@@ -215,7 +234,8 @@ test('Tier0 component contract is deeply frozen with exact sets, variants, roles
 test('UI exposes only the four Tier0 commands in dependency order', () => {
   const ui = readFileSync(resolve(ROOT, 'ui.html'), 'utf8')
   const matches = [...ui.matchAll(/data-command="component-([^"]+)"/g)].map(match => match[1])
-  assert.deepEqual(matches, EXPECTED.map(definition => definition.id))
+  assert.deepEqual(matches.slice(0, EXPECTED.length), EXPECTED.map(definition => definition.id))
+  assert.equal(matches.filter(id => EXPECTED.some(definition => definition.id === id)).length, EXPECTED.length)
 })
 
 test('component preflight accepts fresh and exact owned rerun inventory but rejects every ownership, type, variant, role, and sample collision', () => {

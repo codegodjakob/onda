@@ -154,26 +154,51 @@ function componentRole(name, type) {
   return Object.freeze({ name, type })
 }
 
-function componentVariant(name, copy, inverted = false) {
+function componentVariant(name, copy, options = {}) {
+  const settings = typeof options === 'boolean' ? { inverted: options } : options
+  const inverted = settings.inverted === true
   return Object.freeze({
     name,
     copy: Object.freeze({ ...copy }),
-    surfaceToken: inverted ? 'color/inverted' : 'color/surface',
-    textToken: inverted ? 'color/on-inverted' : 'color/text',
+    surfaceToken: settings.surfaceToken || (inverted ? 'color/inverted' : 'color/surface'),
+    textToken: settings.textToken || (inverted ? 'color/on-inverted' : 'color/text'),
+    strokeWeight: settings.strokeWeight ?? (name.includes('Focus') ? 2 : 1),
+    opacity: settings.opacity ?? (name.includes('Disabled') ? 0.45 : 1),
   })
 }
 
-function componentDefinition({ id, name, label, roles, labelRole, variants }) {
+function componentDefinition({
+  id,
+  name,
+  label,
+  roles,
+  labelRole,
+  variants,
+  tier = 0,
+  radius = 4,
+  radiusToken = 'radius/control',
+  targetHeight = 44,
+  gap = 8,
+  gapToken = 'spacing/8',
+  padding = { top: 12, right: 16, bottom: 12, left: 16 },
+  paddingTokens = { top: 'spacing/12', right: 'spacing/16', bottom: 'spacing/12', left: 'spacing/16' },
+  direction = 'HORIZONTAL',
+}) {
   return Object.freeze({
     id,
     name,
     label,
-    tier: 0,
+    tier,
     roles: Object.freeze(roles),
     labelRole,
-    radius: 4,
-    radiusToken: 'radius/control',
-    targetHeight: 44,
+    radius,
+    radiusToken,
+    targetHeight,
+    gap,
+    gapToken,
+    padding: Object.freeze({ ...padding }),
+    paddingTokens: Object.freeze({ ...paddingTokens }),
+    direction,
     variants: Object.freeze(variants),
   })
 }
@@ -222,6 +247,55 @@ export const COMPONENT_DEFINITIONS = Object.freeze([
       componentVariant('Kind=Selected', { Icon: '✓', Label: 'Ausgewählt' }, true),
       componentVariant('Kind=Source', { Icon: '§', Label: 'Quelle' }),
       componentVariant('Kind=Warning', { Icon: '!', Label: 'Prüfen' }),
+    ],
+  }),
+  componentDefinition({
+    id: 'field', name: 'Onda/Field', label: 'Field', labelRole: 'Label', tier: 1, direction: 'VERTICAL',
+    roles: [componentRole('Label', 'TEXT'), componentRole('Input', 'TEXT'), componentRole('Hint', 'TEXT'), componentRole('Status', 'TEXT')],
+    variants: [
+      componentVariant('State=Empty', { Label: 'Arbeitstitel', Input: 'Arbeitstitel eingeben', Hint: 'Pflichtfeld', Status: '○ Leer' }),
+      componentVariant('State=Filled', { Label: 'Arbeitstitel', Input: 'Die leise Architektur', Hint: 'Kann später geändert werden', Status: '✓ Ausgefüllt' }),
+      componentVariant('State=Focus', { Label: 'Arbeitstitel', Input: 'Die leise Architektur bearbeiten', Hint: 'Eingabe aktiv', Status: '◎ Fokus' }, { strokeWeight: 2 }),
+      componentVariant('State=Error', { Label: 'Arbeitstitel', Input: 'Kein Arbeitstitel', Hint: 'Arbeitstitel ist erforderlich', Status: '! Fehler' }, { strokeWeight: 2 }),
+    ],
+  }),
+  componentDefinition({
+    id: 'search', name: 'Onda/Search', label: 'Search', labelRole: 'Input', tier: 1,
+    roles: [componentRole('Icon', 'TEXT'), componentRole('Input', 'TEXT'), componentRole('Clear', 'TEXT'), componentRole('Count', 'TEXT')],
+    variants: [
+      componentVariant('State=Empty', { Icon: '⌕', Input: 'Suche starten', Clear: '—', Count: '0 Treffer' }),
+      componentVariant('State=Typing', { Icon: '⌕', Input: 'Argumentation', Clear: '× Löschen', Count: 'Suche läuft' }, { strokeWeight: 2 }),
+      componentVariant('State=Results', { Icon: '⌕', Input: 'Argumentation', Clear: '× Löschen', Count: '12 Treffer' }),
+      componentVariant('State=No Results', { Icon: '⌕', Input: 'Argumentation', Clear: '× Löschen', Count: '0 Treffer · Suchbegriff ändern' }, { strokeWeight: 2, textToken: 'color/text-muted' }),
+    ],
+  }),
+  componentDefinition({
+    id: 'select', name: 'Onda/Select', label: 'Select', labelRole: 'Label', tier: 1, direction: 'VERTICAL',
+    roles: [componentRole('Label', 'TEXT'), componentRole('Value', 'TEXT'), componentRole('Chevron', 'TEXT'), componentRole('Status', 'TEXT')],
+    variants: [
+      componentVariant('State=Closed', { Label: 'Dokumenttyp', Value: 'Typ auswählen', Chevron: '⌄', Status: '○ Geschlossen' }),
+      componentVariant('State=Open', { Label: 'Dokumenttyp', Value: 'Essay · Bericht · Notiz', Chevron: '⌃', Status: '◎ Offen' }, { strokeWeight: 2 }),
+      componentVariant('State=Selected', { Label: 'Dokumenttyp', Value: 'Essay', Chevron: '⌄', Status: '✓ Ausgewählt' }, { inverted: true, strokeWeight: 2 }),
+    ],
+  }),
+  componentDefinition({
+    id: 'composer', name: 'Onda/Composer', label: 'Composer', labelRole: 'Input', tier: 1, direction: 'VERTICAL', targetHeight: 88,
+    roles: [componentRole('Prompt', 'TEXT'), componentRole('Input', 'TEXT'), componentRole('Submit', 'TEXT'), componentRole('Status', 'TEXT')],
+    variants: [
+      componentVariant('State=Empty', { Prompt: 'Nachricht an den Agenten', Input: 'Frage oder Auftrag eingeben', Submit: 'Senden', Status: '○ Bereit' }),
+      componentVariant('State=Draft', { Prompt: 'Nachricht an den Agenten', Input: 'Prüfe die Argumentation auf Beleglücken.', Submit: 'Senden', Status: '● Entwurf' }, { strokeWeight: 2 }),
+      componentVariant('State=Sending', { Prompt: 'Nachricht an den Agenten', Input: 'Prüfe die Argumentation auf Beleglücken.', Submit: 'Senden', Status: '… Wird gesendet' }, { inverted: true, strokeWeight: 2 }),
+      componentVariant('State=Error', { Prompt: 'Nachricht an den Agenten', Input: 'Prüfe die Argumentation auf Beleglücken.', Submit: 'Senden', Status: '! Fehler · Erneut versuchen' }, { strokeWeight: 2 }),
+    ],
+  }),
+  componentDefinition({
+    id: 'menu-item', name: 'Onda/Menu Item', label: 'Menu Item', labelRole: 'Label', tier: 1, radius: 0, radiusToken: 'radius/none',
+    roles: [componentRole('Icon', 'TEXT'), componentRole('Label', 'TEXT'), componentRole('Shortcut', 'TEXT')],
+    variants: [
+      componentVariant('State=Default', { Icon: '§', Label: 'Quelle öffnen', Shortcut: '↵' }),
+      componentVariant('State=Hover', { Icon: '→', Label: 'Quelle öffnen', Shortcut: '↵ Hover' }, { strokeWeight: 2 }),
+      componentVariant('State=Selected', { Icon: '✓', Label: 'Quelle öffnen', Shortcut: '↵ Ausgewählt' }, { inverted: true, strokeWeight: 2 }),
+      componentVariant('State=Disabled', { Icon: '×', Label: 'Quelle öffnen', Shortcut: 'Nicht verfügbar' }, { opacity: 0.45, textToken: 'color/text-muted' }),
     ],
   }),
 ])
