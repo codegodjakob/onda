@@ -927,6 +927,16 @@ function secondaryUntouchedPageChildLooksTargeted(record, modernViewNames) {
     || (hasOndaOwner && record?.type !== 'SECTION')
 }
 
+function secondaryUntouchedPageDescendantLooksTargeted(record, modernViewNames, secondaryInstanceNames) {
+  const markerKeys = ['secondaryView', 'ondaSecondaryView', 'responsiveFrame', 'ondaResponsiveFrame', 'legacy', 'secondaryRegionContract']
+  const hasSecondaryMarker = markerKeys.some(key => [record?.[key], record?.pluginData?.[key]]
+    .some(value => value !== undefined && value !== null && value !== ''))
+  return modernViewNames.has(record?.name)
+    || Object.hasOwn(SECONDARY_LEGACY_VIEW_SECTIONS, record?.name)
+    || secondaryInstanceNames.has(record?.name)
+    || hasSecondaryMarker
+}
+
 function secondaryExpectedMarker(group, definition) {
   return {
     group,
@@ -991,14 +1001,13 @@ function validateSecondaryRecordedAncestry(record, root, label, identify, errors
   return valid
 }
 
-function reconcileSecondaryContainerChildren(records, errors, untouchedPageChildren = []) {
+function reconcileSecondaryContainerChildren(records, errors) {
   const recordById = new Map(records.map(record => [secondaryNodeId(record), record]))
   const directChildren = new Map(records.map(record => [secondaryNodeId(record), []]))
   for (const child of records) {
     const parentId = child?.parentId
     if (parentId && recordById.has(parentId)) directChildren.get(parentId).push(secondaryNodeId(child))
   }
-  for (const child of untouchedPageChildren) if (directChildren.has(child?.parentId)) directChildren.get(child.parentId).push(secondaryNodeId(child))
   for (const container of records.filter(record => ['PAGE', 'SECTION', 'FRAME', 'GROUP', 'INSTANCE'].includes(record?.type))) {
     const containerId = secondaryNodeId(container)
     const expectedIds = directChildren.get(containerId) || []
@@ -1033,15 +1042,20 @@ function secondaryExpectedComponentLink(inventory, contract) {
   return { componentSetId: secondaryNodeId(component), mainComponentId: secondaryNodeId(variant) }
 }
 
-function secondaryVariableId(inventory, name) {
-  const matches = (inventory.variables || []).filter(variable => variable.name === name)
+function secondaryVariableId(inventory, name, collectionName = null) {
+  const candidates = (inventory.variables || []).filter(variable => variable.name === name)
+  const hasCollectionIdentity = candidates.some(variable => variable.collectionName || variable.variableCollectionName)
+  const matches = collectionName && hasCollectionIdentity
+    ? candidates.filter(variable => (variable.collectionName || variable.variableCollectionName) === collectionName)
+    : candidates
   return matches.length === 1 ? matches[0].id || matches[0].nodeId || null : null
 }
 
-function expectedSecondaryRegionBindings(inventory, contract) {
-  const surfaceId = secondaryVariableId(inventory, 'color/surface')
-  const borderId = secondaryVariableId(inventory, 'color/border')
-  const spacingId = value => value === 0 ? [] : [secondaryVariableId(inventory, `spacing/${value}`)].filter(Boolean)
+function expectedSecondaryRegionBindings(inventory, contract, theme = 'Light') {
+  const semanticCollection = `Onda · Semantic · ${theme}`
+  const surfaceId = secondaryVariableId(inventory, 'color/surface', semanticCollection)
+  const borderId = secondaryVariableId(inventory, 'color/border', semanticCollection)
+  const spacingId = value => value === 0 ? [] : [secondaryVariableId(inventory, `spacing/${value}`, 'Onda · Dimension')].filter(Boolean)
   const requiredSpacingValues = [contract.itemSpacing, contract.padding.top, contract.padding.right, contract.padding.bottom, contract.padding.left].filter(value => value !== 0)
   if (!surfaceId || !borderId || requiredSpacingValues.some(value => spacingId(value).length !== 1)) return null
   return {
@@ -1071,10 +1085,12 @@ export function validateSecondaryViewMutationInventory(inventory = {}) {
   const views = Array.isArray(inventory.views) ? inventory.views : []
   const legacyViews = Array.isArray(inventory.legacyViews) ? inventory.legacyViews : []
   const untouchedPageChildren = Array.isArray(inventory.untouchedPageChildren) ? inventory.untouchedPageChildren : []
+  const untouchedPageDescendants = Array.isArray(inventory.untouchedPageDescendants) ? inventory.untouchedPageDescendants : []
   const sectionNames = new Set(SECONDARY_SECTION_NAMES)
   const definitions = secondaryDefinitionsWithGroups()
   const definitionByName = new Map(definitions.map(entry => [entry.definition.name, entry]))
   const modernViewNames = new Set(definitionByName.keys())
+  const secondaryInstanceNames = new Set(definitions.flatMap(entry => entry.definition.instances.map(instance => instance.name)))
   const sectionByName = new Map(sections.map(section => [section.name, section]))
   const seenNodeIds = new Map()
   const categorizedRecords = []
@@ -1178,17 +1194,23 @@ export function validateSecondaryViewMutationInventory(inventory = {}) {
       const roleDescendants = Array.isArray(instance.roleDescendants) ? instance.roleDescendants : []
       secondaryDuplicateNames(roleDescendants, 'role', `Role in ${view.name}/${instance.name}`, errors)
       const roleIds = new Set()
+      const componentDefinition = COMPONENT_DEFINITIONS.find(component => component.id === contract?.setId)
       for (const role of roleDescendants) {
         identify(role, `${view.name}/${instance.name}/${role.name}`)
         const roleId = secondaryNodeId(role)
         if (roleIds.has(roleId)) errors.push(`Secondary-Views: doppelte Role-ID ${view.name}/${instance.name}/${role.name}`)
         roleIds.add(roleId)
-        const expectedRole = contract && Object.hasOwn(contract.roleCopy, role.role)
+        const expectedRole = componentDefinition?.roles.find(candidate => candidate.name === role.role)
+        const copyMatchesType = role.type === 'TEXT'
+          ? Boolean(contract && Object.hasOwn(contract.roleCopy, role.role))
+          : Boolean(contract && !Object.hasOwn(contract.roleCopy, role.role))
         const nestedUnderInstance = role.parentInstanceId === secondaryNodeId(instance)
           && validateSecondaryRecordedAncestry(role, instance, `${view.name}/${instance.name}/${role.name || role.role || '<unbenannt>'}`, identify, errors)
         if (!expectedRole
+          || role.name !== `Role/${role.role}`
           || !secondaryRecordOwnedAndIdentified(role)
-          || role.type !== 'TEXT'
+          || role.type !== expectedRole.type
+          || !copyMatchesType
           || !nestedUnderInstance) {
           errors.push(`Secondary-Views: ungeschützte oder verschobene Role ${view.name}/${instance.name}/${role.name || role.role || '<unbenannt>'}`)
         }
@@ -1246,10 +1268,31 @@ export function validateSecondaryViewMutationInventory(inventory = {}) {
       errors.push(`Secondary-Views: ungültiges unberührtes Page-Kind ${child.name || id || '<unbenannt>'}`)
       continue
     }
-    seenNodeIds.set(id, { context: child.name, record: child, untouchedPageChild: true })
+    identify(child, child.name)
   }
 
-  reconcileSecondaryContainerChildren(categorizedRecords, errors, untouchedPageChildren)
+  const untouchedById = new Map(untouchedPageChildren.map(record => [secondaryNodeId(record), record]))
+  for (const descendant of untouchedPageDescendants) untouchedById.set(secondaryNodeId(descendant), descendant)
+  for (const descendant of untouchedPageDescendants) {
+    const id = secondaryNodeId(descendant)
+    const parent = untouchedById.get(descendant?.parentId)
+    if (!id
+      || seenNodeIds.has(id)
+      || !descendant.name
+      || !descendant.type
+      || ['DOCUMENT', 'PAGE'].includes(descendant.type)
+      || sectionNames.has(descendant.name)
+      || secondaryUntouchedPageDescendantLooksTargeted(descendant, modernViewNames, secondaryInstanceNames)
+      || !parent
+      || descendant.parentType !== parent.type
+      || descendant.parentName !== parent.name) {
+      errors.push(`Secondary-Views: ungültiger unberührter Page-Nachfahr ${descendant.name || id || '<unbenannt>'}`)
+      continue
+    }
+    identify(descendant, descendant.name)
+  }
+
+  reconcileSecondaryContainerChildren(categorizedRecords, errors)
 
   return { valid: errors.length === 0, errors }
 }
@@ -1276,7 +1319,7 @@ export function buildSecondaryViewRecoveryActions(inventory = {}) {
     for (const region of definition.regions) {
       const candidate = layoutRegions.find(item => item.name === region.name)
       if (!candidate) actions.push({ type: 'region', viewName: definition.name, regionName: region.name })
-      else if (!secondaryRegionBindingsMatch(candidate, expectedSecondaryRegionBindings(inventory, region))) actions.push({ type: 'bind-region', viewName: definition.name, regionName: region.name })
+      else if (!secondaryRegionBindingsMatch(candidate, expectedSecondaryRegionBindings(inventory, region, definition.theme))) actions.push({ type: 'bind-region', viewName: definition.name, regionName: region.name })
     }
     const copyNodes = Array.isArray(view.copyNodes) ? view.copyNodes : []
     for (const contract of definition.copyContracts) {
@@ -1300,7 +1343,7 @@ export function buildSecondaryViewRecoveryActions(inventory = {}) {
       const labelProperty = Object.entries(instance.componentProperties || {}).find(([key]) => key.split('#')[0] === 'Label')?.[1]?.value ?? null
       if (instance.labelValue !== contract.label || labelProperty !== contract.label) actions.push({ type: 'label-instance', viewName: definition.name, instanceName: contract.name })
       const roles = Array.isArray(instance.roleDescendants) ? instance.roleDescendants : []
-      const roleCharacters = Object.fromEntries(roles.filter(role => role.visible !== false).map(role => [role.role, role.characters]))
+      const roleCharacters = Object.fromEntries(roles.filter(role => role.type === 'TEXT' && role.visible !== false).map(role => [role.role, role.characters]))
       if (!sameSecondaryValue(instance.roleCopy || {}, contract.roleCopy) || !sameSecondaryValue(roleCharacters, contract.roleCopy)) actions.push({ type: 'copy-instance', viewName: definition.name, instanceName: contract.name })
       if (instance.repeatedScreen !== true || instance.documentation === true) actions.push({ type: 'mark-instance', viewName: definition.name, instanceName: contract.name })
     }
@@ -1375,6 +1418,7 @@ export function canonicalSecondaryViewMutationSnapshot(inventory = {}) {
     views: sortSecondaryRecords((inventory.views || []).map(view)),
     legacyViews: sortSecondaryRecords((inventory.legacyViews || []).map(view)),
     untouchedPageChildren: sortSecondaryRecords((inventory.untouchedPageChildren || []).map(canonicalSecondaryRecord)),
+    untouchedPageDescendants: sortSecondaryRecords((inventory.untouchedPageDescendants || []).map(canonicalSecondaryRecord)),
     components: sortSecondaryRecords(((inventory.components || inventory.componentSets) || []).map(component)),
     variables: sortSecondaryRecords((inventory.variables || []).map(canonicalSecondaryRecord)),
   }

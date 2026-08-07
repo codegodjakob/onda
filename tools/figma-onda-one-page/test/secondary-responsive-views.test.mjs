@@ -1,7 +1,56 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import * as definitions from '../src/definitions.mjs'
 import * as plan from '../src/plan.mjs'
+
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+
+function runtimeSource() {
+  return readFileSync(resolve(ROOT, 'src/runtime.mjs'), 'utf8')
+}
+
+function sourceFunction(source, name, nextName) {
+  const start = source.indexOf(`function ${name}`)
+  assert.notEqual(start, -1, `${name} missing from Runtime`)
+  const end = nextName ? source.indexOf(`function ${nextName}`, start + 1) : source.length
+  assert.notEqual(end, -1, `${nextName} missing after ${name}`)
+  return source.slice(start, end)
+}
+
+function executableRuntimeFunction(source, name) {
+  const asyncStart = source.indexOf(`async function ${name}`)
+  const plainStart = source.indexOf(`function ${name}`)
+  const start = asyncStart >= 0 ? asyncStart : plainStart
+  assert.notEqual(start, -1, `${name} missing from Runtime`)
+  const bodyMarker = source.indexOf(') {', start)
+  assert.notEqual(bodyMarker, -1, `${name} has no function body marker`)
+  const brace = bodyMarker + 2
+  let depth = 0
+  let quote = null
+  let escaped = false
+  for (let index = brace; index < source.length; index += 1) {
+    const character = source[index]
+    if (quote) {
+      if (escaped) escaped = false
+      else if (character === '\\') escaped = true
+      else if (character === quote) quote = null
+      continue
+    }
+    if (character === "'" || character === '"' || character === '`') {
+      quote = character
+      continue
+    }
+    if (character === '{') depth += 1
+    else if (character === '}') {
+      depth -= 1
+      if (depth === 0) return Function(`return (${source.slice(start, index + 1)})`)()
+    }
+  }
+  assert.fail(`${name} has no balanced function body`)
+}
 
 const AGENT_SOURCES = [
   ['Gespräch · Bereit', ['aura@State=Idle', 'agent-message@Role=User', 'composer@State=Empty']],
@@ -121,7 +170,7 @@ function secondaryInventory({ complete = true } = {}) {
     const index = sectionIndexes.get(view.sectionName)
     sectionIndexes.set(view.sectionName, index + 1)
     const nodeId = `secondary:view:${viewIndex}`
-    const bounds = { x: 80, y: section.y + 100 + index * 1100, width: view.width, height: 960 }
+    const bounds = { x: 80, y: section.y + 100 + index * 1100, width: view.width, height: view.height }
     const regionIds = new Map(view.regions.map((region, regionIndex) => [region.name, `secondary:region:${viewIndex}:${regionIndex}`]))
     const spacingBinding = value => value === 0 ? [] : [`variable:spacing/${value}`]
     const layoutRegions = view.regions.map((region, regionIndex) => ({
@@ -197,9 +246,12 @@ function secondaryInventory({ complete = true } = {}) {
       nodeId, name: view.name, type: 'FRAME', owner: definitions.PLUGIN_ORIGIN,
       parentId: section.nodeId, parentType: 'SECTION', parentName: section.name,
       childIds: layoutRegions.filter(region => region.parentId === nodeId).map(region => region.nodeId), childCount: layoutRegions.filter(region => region.parentId === nodeId).length,
-      x: bounds.x, y: bounds.y, width: view.width, height: 960, bounds, absoluteBounds: bounds,
+      x: bounds.x, y: bounds.y, width: view.width, height: view.height, bounds, absoluteBounds: bounds,
       layoutMode: view.layoutMode, primaryAxisSizingMode: 'FIXED', counterAxisSizingMode: 'FIXED', primaryAxisAlignItems: 'MIN', counterAxisAlignItems: 'MIN',
-      itemSpacing: 0, paddingTop: 0, paddingRight: 0, paddingBottom: 0, paddingLeft: 0, layoutWrap: 'NO_WRAP', layoutSizingHorizontal: 'FIXED', layoutSizingVertical: 'FIXED',
+      itemSpacing: 0,
+      paddingTop: view.width === 320 ? 16 : 0, paddingRight: view.width === 320 ? 16 : 0,
+      paddingBottom: view.width === 320 ? 16 : 0, paddingLeft: view.width === 320 ? 16 : 0,
+      layoutWrap: 'NO_WRAP', layoutSizingHorizontal: 'FIXED', layoutSizingVertical: 'FIXED',
       fills: [{ type: 'SOLID', color: { r: 1, g: 1, b: 1 } }], strokes: [], fillBindings: [], strokeBindings: [], fieldVariableIds: {},
       effects: [], effectStyleId: null, opacity: 1, visible: true, cornerRadius: 0,
       secondaryView: marker, group, theme: view.theme, subject: view.subject || null, breakpoint: view.breakpoint ?? null,
@@ -252,6 +304,11 @@ function withUntouchedPageChildren(inventory = secondaryInventory()) {
       childIds: ['foreign:baseline:notes:child'], childCount: 1, visible: true,
     },
   ]
+  inventory.untouchedPageDescendants = untouchedPageChildren.map((parent, index) => ({
+    nodeId: parent.childIds[0], name: `Benign child ${index + 1}`, type: 'TEXT', owner: 'another-plugin',
+    parentId: parent.nodeId, parentType: parent.type, parentName: parent.name,
+    childIds: [], childCount: 0, visible: true, characters: `Benign ${index + 1}`,
+  }))
   inventory.untouchedPageChildren = untouchedPageChildren
   inventory.targetPage.childIds = [
     inventory.sections[0].nodeId,
@@ -582,6 +639,7 @@ test('untouched Page child identity drift between barriers still rejects with ze
   const before = withUntouchedPageChildren()
   const current = structuredClone(before)
   current.untouchedPageChildren[0].name = '08 · Dialoge · Drift'
+  for (const descendant of current.untouchedPageDescendants.filter(record => record.parentId === current.untouchedPageChildren[0].nodeId)) descendant.parentName = '08 · Dialoge · Drift'
   let writes = 0
   await assert.rejects(() => plan.executeGuardedSecondaryViewCommand({
     command: 'dialogs-and-secondary', phases: priorSecondaryPhases(),
@@ -824,4 +882,514 @@ test('guarded secondary command validates order first and rejects duplicate, sam
   assert.equal(received.context.page.id, 'page:1')
   assert.deepEqual(received.finalInventory, exact)
   assert.equal(received.resolvedNodes, resolved)
+})
+
+test('Runtime routes dialogs-and-secondary through the guarded three-section secondary adapter before any write', () => {
+  const source = runtimeSource()
+  assert.match(source, /SECONDARY_VIEW_DEFINITIONS/)
+  assert.match(source, /executeGuardedSecondaryViewCommand/)
+  assert.match(source, /async function collectSecondaryViewMutationInventory\(/)
+  assert.match(source, /async function preflightSecondaryViewMutation\(/)
+  assert.match(source, /async function resolveSecondaryInventoryNodes\(/)
+
+  const handler = sourceFunction(source, 'handleCommand')
+  const branch = handler.slice(handler.indexOf("if (command === 'dialogs-and-secondary')"))
+  assert.match(branch, /executeGuardedSecondaryViewCommand\s*\(\s*\{/)
+  assert.match(branch, /preflight:\s*preflightSecondaryViewMutation/)
+  assert.match(branch, /collectCurrentInventory:\s*\(\{ page \}\)\s*=>\s*collectSecondaryViewMutationInventory\(page\)/)
+  assert.match(branch, /resolveInventoryNodes:\s*resolveSecondaryInventoryNodes/)
+  assert.match(branch, /mutate:\s*runMutation/)
+
+  const mutation = sourceFunction(source, 'runDialogsAndSecondary', 'collectOndaNodes')
+  assert.match(mutation, /runSecondaryViews\(/)
+  assert.doesNotMatch(mutation, /createDialogs|createPrototype|08 · Dialoge|11 · Prototyp/)
+})
+
+test('Runtime resolves fonts, exact variables, nodes, and variants before the final barrier and performs no await before its first write', () => {
+  const source = runtimeSource()
+  const resolver = sourceFunction(source, 'resolveSecondaryInventoryNodes', 'applySecondaryContainerContract')
+  assert.match(resolver, /await loadDecisionFonts\(ledger\.fontDecision\)/)
+  assert.match(resolver, /await secondaryVariableContext\(\)/)
+  assert.match(resolver, /variants/)
+  assert.match(resolver, /return \{ nodes: resolved, variables, variants \}/)
+
+  const render = sourceFunction(source, 'runSecondaryViews', 'createAgentAndSources')
+  const firstWrite = render.indexOf('frame.name = definition.name')
+  assert.ok(firstWrite >= 0, 'first secondary frame write missing')
+  assert.equal(render.slice(0, firstWrite).includes('await '), false, 'secondary renderer must not yield after final barrier before its first write')
+})
+
+test('Runtime renders every secondary contract as real nested non-NONE Auto Layout and definition-sized instances', () => {
+  const source = runtimeSource()
+  const regions = sourceFunction(source, 'configureSecondaryLayoutRegions', 'configureSecondaryCopy')
+  assert.match(regions, /regionDefinition\.parentName === definition\.name\s*\?\s*frame\s*:\s*regions\.get\(regionDefinition\.parentName\)/)
+  assert.match(regions, /if \(region\.parent !== parent\) parent\.appendChild\(region\)/)
+  assert.match(regions, /region\.layoutMode = regionDefinition\.layoutMode/)
+  assert.match(regions, /if \(region\.layoutMode === 'NONE'\) throw new Error/)
+  assert.match(regions, /applySecondaryContainerContract\(\{ parent, node: region, contract: regionDefinition, maximumWidth, resize: resizeNode \}\)/)
+
+  const positioning = sourceFunction(source, 'positionSecondaryInstance', 'runSecondaryViews')
+  assert.match(positioning, /resizeNode\(instance, [^,]+, contract\.expectedHeight\)/)
+  assert.match(positioning, /definition\.width === 320/)
+  assert.match(positioning, /Math\.max\(definition\.width === 320 \? 44 : 0, contract\.expectedHeight\)/)
+
+  const render = sourceFunction(source, 'runSecondaryViews', 'createAgentAndSources')
+  assert.match(render, /secondaryDefinitionsWithGroups\(\)/)
+  assert.match(render, /frame\.layoutMode = definition\.layoutMode/)
+  assert.match(render, /frame\.paddingTop = narrow \? 16 : 0/)
+  assert.match(render, /frame\.paddingRight = narrow \? 16 : 0/)
+  assert.match(render, /frame\.paddingBottom = narrow \? 16 : 0/)
+  assert.match(render, /frame\.paddingLeft = narrow \? 16 : 0/)
+})
+
+test('Runtime awaits exact main-component identity and font loading before local Role copy changes', () => {
+  const source = runtimeSource()
+  const ensure = sourceFunction(source, 'applySecondaryInstanceContract', 'ensureSecondaryVariantInstance')
+  const identity = ensure.indexOf('await readIdentity(instance)')
+  const swap = ensure.indexOf('instance.swapComponent(variant)')
+  const fonts = ensure.indexOf('await loadFonts()')
+  const roleWrite = ensure.indexOf('roleNode.characters = characters')
+  assert.ok(identity >= 0, 'secondary Instance identity must be awaited')
+  assert.ok(swap > identity, 'swap must follow async main-component identity')
+  assert.ok(fonts > swap, 'font loading must follow exact component resolution')
+  assert.ok(roleWrite > fonts, 'local Role copy must follow font loading')
+
+  const resolver = sourceFunction(source, 'resolveSecondaryInventoryNodes', 'applySecondaryContainerContract')
+  assert.match(resolver, /await loadDecisionFonts\(ledger\.fontDecision\)/)
+})
+
+test('Runtime binds visible Dark secondary nodes to exact Dark semantic variables without Component or Component Set mutation', () => {
+  const source = runtimeSource()
+  const variables = sourceFunction(source, 'secondaryVariableContext', 'secondaryBoundPaint')
+  assert.match(variables, /'Onda · Semantic · Light'/)
+  assert.match(variables, /'Onda · Semantic · Dark'/)
+  assert.match(variables, /variable\.variableCollectionId === collection\.id/)
+  assert.match(variables, /semanticByTheme/)
+
+  const binding = sourceFunction(source, 'bindSecondaryNodeTheme', 'secondaryDefinitionsWithGroups')
+  assert.match(binding, /theme === 'Dark'\s*\?\s*variables\.semanticByTheme\.Dark\s*:\s*variables\.semanticByTheme\.Light/)
+  assert.match(binding, /figma\.variables\.setBoundVariableForPaint/)
+  const executableBinding = sourceFunction(source, 'applySecondaryThemeBinding', 'bindSecondaryNodeTheme')
+  assert.match(executableBinding, /for \(const child of node\.children\) applySecondaryThemeBinding\(\{ node: child, theme, variables, bindPaint \}\)/)
+
+  const mutation = source.slice(source.indexOf('async function collectSecondaryViewMutationInventory'), source.indexOf('function collectOndaNodes'))
+  assert.doesNotMatch(mutation, /createComponent\(|combineAsVariants|addComponentProperty|editComponentProperty/)
+  assert.doesNotMatch(mutation, /\.appendChild\([^)]*variant|variant\.appendChild|set\.appendChild/)
+})
+
+test('secondary recovery distinguishes exact Light and Dark semantic variable identities', () => {
+  const inventory = secondaryInventory()
+  const dimensionVariables = inventory.variables.filter(variable => variable.name.startsWith('spacing/'))
+  inventory.variables = [
+    { id: 'variable:light:surface', name: 'color/surface', collectionName: 'Onda · Semantic · Light' },
+    { id: 'variable:light:border', name: 'color/border', collectionName: 'Onda · Semantic · Light' },
+    { id: 'variable:dark:surface', name: 'color/surface', collectionName: 'Onda · Semantic · Dark' },
+    { id: 'variable:dark:border', name: 'color/border', collectionName: 'Onda · Semantic · Dark' },
+    ...dimensionVariables.map(variable => ({ ...variable, collectionName: 'Onda · Dimension' })),
+  ]
+  const themeByView = new Map(secondaryDefinitions().map(({ view }) => [view.name, view.theme]))
+  for (const view of inventory.views) {
+    const theme = themeByView.get(view.name)
+    for (const region of view.layoutRegions) {
+      region.fills[0].boundVariables.color.id = `variable:${theme.toLowerCase()}:surface`
+      region.strokes[0].boundVariables.color.id = `variable:${theme.toLowerCase()}:border`
+      region.fillBindings[0].variableIds = [`variable:${theme.toLowerCase()}:surface`]
+      region.strokeBindings[0].variableIds = [`variable:${theme.toLowerCase()}:border`]
+    }
+  }
+  assert.deepEqual(plan.buildSecondaryViewRecoveryActions(inventory), [])
+
+  const dark = inventory.views.find(view => view.theme === 'Dark')
+  dark.layoutRegions[0].fills[0].boundVariables.color.id = 'variable:light:surface'
+  dark.layoutRegions[0].fillBindings[0].variableIds = ['variable:light:surface']
+  assert.ok(plan.buildSecondaryViewRecoveryActions(inventory).some(action => action.type === 'bind-region' && action.viewName === dark.name))
+})
+
+test('executable Runtime adapters apply real nesting, exact height, async copy order, and Dark-only local bindings', async () => {
+  const source = runtimeSource()
+  const applyContainer = executableRuntimeFunction(source, 'applySecondaryContainerContract')
+  const applyInstance = executableRuntimeFunction(source, 'applySecondaryInstanceContract')
+  const applyTheme = executableRuntimeFunction(source, 'applySecondaryThemeBinding')
+
+  const events = []
+  const parent = {
+    appendChild(node) {
+      events.push(`append:${node.name}`)
+      node.parent = this
+    },
+  }
+  const region = { name: 'Layout / Detail', parent: null }
+  applyContainer({
+    parent,
+    node: region,
+    contract: {
+      layoutMode: 'VERTICAL', width: 288, height: 720, itemSpacing: 12,
+      padding: { top: 16, right: 16, bottom: 16, left: 16 },
+    },
+    resize(node, width, height) { events.push(`resize:${width}x${height}`); node.width = width; node.height = height },
+  })
+  assert.equal(region.parent, parent)
+  assert.equal(region.layoutMode, 'VERTICAL')
+  assert.deepEqual([region.paddingTop, region.paddingRight, region.paddingBottom, region.paddingLeft], [16, 16, 16, 16])
+
+  const narrowParent = { width: 320, paddingLeft: 16, paddingRight: 16, appendChild: parent.appendChild }
+  const narrowShell = { name: 'Layout / Shell', parent: null }
+  applyContainer({
+    parent: narrowParent,
+    node: narrowShell,
+    contract: { layoutMode: 'VERTICAL', width: 320, height: 960, itemSpacing: 16, padding: { top: 16, right: 16, bottom: 16, left: 16 } },
+    maximumWidth: narrowParent.width - narrowParent.paddingLeft - narrowParent.paddingRight,
+    resize(node, width, height) { node.width = width; node.height = height },
+  })
+  assert.equal(narrowShell.width, 288, '320 outer padding must leave a contained 288px child width')
+
+  const role = { type: 'TEXT', name: 'Role/Label', characters: 'alt' }
+  const instance = {
+    id: 'instance:1', name: 'Aktion', parent: null, componentProperties: { 'Label#1': { value: 'alt' } },
+    swapComponent(variant) { events.push(`swap:${variant.id}`); this.main = variant },
+    setProperties(properties) { events.push('properties'); this.properties = properties },
+    findOne(predicate) { return predicate(role) ? role : null },
+  }
+  await applyInstance({
+    parent,
+    instance,
+    variant: { id: 'component:expected' },
+    contract: { name: 'Aktion', label: 'Neu', roleCopy: { Label: 'Lokale Kopie' }, expectedWidth: 180, expectedHeight: 52 },
+    definition: { width: 320, theme: 'Dark' },
+    readIdentity: async () => { events.push('identity'); return { id: 'component:wrong' } },
+    loadFonts: async () => { events.push('fonts') },
+    resize(node, width, height) { events.push(`instance-size:${width}x${height}`); node.width = width; node.height = height },
+    bindTheme: () => events.push('bind:Dark'),
+  })
+  assert.equal(instance.parent, parent)
+  assert.equal(instance.height, 52)
+  assert.equal(role.characters, 'Lokale Kopie')
+  assert.ok(events.indexOf('identity') < events.indexOf('swap:component:expected'))
+  assert.ok(events.indexOf('swap:component:expected') < events.indexOf('fonts'))
+  assert.ok(events.indexOf('fonts') < events.indexOf('properties'))
+
+  const darkChild = { fills: [{ type: 'SOLID' }], strokes: [{ type: 'SOLID' }], children: [] }
+  const darkRoot = { fills: [{ type: 'SOLID' }], strokes: [{ type: 'SOLID' }], children: [darkChild] }
+  const variables = {
+    semanticByTheme: {
+      Light: { surface: { id: 'variable:light:surface' }, border: { id: 'variable:light:border' }, text: { id: 'variable:light:text' } },
+      Dark: { surface: { id: 'variable:dark:surface' }, border: { id: 'variable:dark:border' }, text: { id: 'variable:dark:text' } },
+    },
+  }
+  applyTheme({
+    node: darkRoot,
+    theme: 'Dark',
+    variables,
+    bindPaint(_paint, variable) { return { boundVariableId: variable.id } },
+  })
+  const boundIds = [darkRoot, darkChild].flatMap(node => [...node.fills, ...node.strokes]).map(paint => paint.boundVariableId)
+  assert.ok(boundIds.every(id => id.startsWith('variable:dark:')))
+  assert.ok(boundIds.every(id => !id.includes(':light:')))
+})
+
+test('Runtime inventory retains every exact-set child, every duplicate or unknown visible Role, and recursive legacy leaves', () => {
+  const source = runtimeSource()
+  const components = sourceFunction(source, 'secondaryComponentInventory', 'collectSecondaryViewMutationInventory')
+  assert.match(components, /variants:\s*set\.children\.map\(/)
+  assert.doesNotMatch(components, /set\.children\.filter\(/)
+
+  const instances = sourceFunction(source, 'secondaryInstanceRecord', 'secondaryViewRecord')
+  assert.match(instances, /collectSecondaryInstanceRoleRecords\(instance\)/)
+  assert.doesNotMatch(instances, /for \(const role of Object\.keys\(contract\.roleCopy\)\)/)
+  const roleCollector = sourceFunction(source, 'collectSecondaryInstanceRoleRecords', 'secondaryInstanceRecord')
+  assert.match(roleCollector, /instance\.findAll\(/)
+
+  const views = sourceFunction(source, 'secondaryViewRecord', 'secondaryComponentInventory')
+  assert.match(views, /collectLegacyLeaves/)
+  assert.match(views, /for \(const child of node\.children\) collectLegacyLeaves\(child\)/)
+})
+
+function secondaryBoxContains(outer, inner) {
+  return inner.x >= outer.x
+    && inner.y >= outer.y
+    && inner.x + inner.width <= outer.x + outer.width
+    && inner.y + inner.height <= outer.y + outer.height
+}
+
+function secondaryBoxesOverlap(left, right) {
+  return left.x < right.x + right.width
+    && left.x + left.width > right.x
+    && left.y < right.y + right.height
+    && left.y + left.height > right.y
+}
+
+test('every 320 contract executes as a fully contained, non-overlapping nested vertical geometry in both axes', () => {
+  const narrowViews = definitions.SECONDARY_VIEW_DEFINITIONS.responsive.filter(view => view.width === 320)
+  assert.equal(narrowViews.length, 4)
+  for (const view of narrowViews) {
+    assert.equal(view.layoutMode, 'VERTICAL')
+    assert.equal(view.width, 320)
+    assert.ok(Number.isInteger(view.height) && view.height > 0, `${view.name}: missing derived frame height`)
+    const outerPadding = { top: 16, right: 16, bottom: 16, left: 16 }
+    const root = { name: view.name, box: { x: 0, y: 0, width: view.width, height: view.height }, layoutMode: view.layoutMode, itemSpacing: 0, padding: outerPadding }
+    const nodes = new Map([[view.name, root]])
+    const childContracts = new Map()
+    for (const region of view.regions) {
+      assert.notEqual(region.layoutMode, 'NONE')
+      const children = childContracts.get(region.parentName) || []
+      children.push({ kind: 'region', contract: region })
+      childContracts.set(region.parentName, children)
+    }
+    for (const copy of view.copyContracts) {
+      assert.ok(Number.isInteger(copy.expectedHeight) && copy.expectedHeight > 0, `${view.name}/${copy.role}: missing text height`)
+      const copyWidth = 224
+      const lineHeight = copy.kind === 'title' ? 28 : 22
+      const fontScale = copy.kind === 'title' ? 21 / 15 : 1
+      const wrappedLines = Math.max(1, Math.ceil(definitions.estimateCoreTextWidth(copy.characters) * fontScale / copyWidth))
+      assert.ok(copy.expectedHeight >= wrappedLines * lineHeight, `${view.name}/${copy.role}: wrapped Copy height underestimated`)
+      const children = childContracts.get(copy.region) || []
+      children.push({ kind: 'copy', contract: copy })
+      childContracts.set(copy.region, children)
+    }
+    for (const instance of view.instances) {
+      assert.ok(instance.expectedHeight >= 44, `${view.name}/${instance.name}: target below 44px`)
+      const children = childContracts.get(instance.region) || []
+      children.push({ kind: 'instance', contract: instance })
+      childContracts.set(instance.region, children)
+    }
+
+    function layout(parentName) {
+      const parent = nodes.get(parentName)
+      const padding = parent.padding
+      const content = {
+        x: parent.box.x + padding.left,
+        y: parent.box.y + padding.top,
+        width: parent.box.width - padding.left - padding.right,
+        height: parent.box.height - padding.top - padding.bottom,
+      }
+      let cursor = parent.layoutMode === 'HORIZONTAL' ? content.x : content.y
+      const laidOut = []
+      for (const item of childContracts.get(parentName) || []) {
+        const width = item.kind === 'region' ? item.contract.width : Math.min(item.contract.expectedWidth || content.width, content.width)
+        const height = item.kind === 'copy' ? item.contract.expectedHeight : item.contract.height || item.contract.expectedHeight
+        const box = parent.layoutMode === 'HORIZONTAL'
+          ? { x: cursor, y: content.y, width, height }
+          : { x: content.x, y: cursor, width, height }
+        assert.equal(secondaryBoxContains(content, box), true, `${view.name}/${item.contract.name || item.contract.role}: overflow in x or y`)
+        for (const sibling of laidOut) assert.equal(secondaryBoxesOverlap(sibling.box, box), false, `${view.name}: sibling overlap`)
+        laidOut.push({ ...item, box })
+        cursor += (parent.layoutMode === 'HORIZONTAL' ? width : height) + parent.itemSpacing
+        if (item.kind === 'region') {
+          nodes.set(item.contract.name, { name: item.contract.name, box, layoutMode: item.contract.layoutMode, itemSpacing: item.contract.itemSpacing, padding: item.contract.padding })
+          layout(item.contract.name)
+        }
+        if (item.kind === 'instance') {
+          const component = definitions.COMPONENT_DEFINITIONS.find(candidate => candidate.id === item.contract.setId)
+          const roleContent = {
+            x: box.x + component.padding.left,
+            y: box.y + component.padding.top,
+            width: box.width - component.padding.left - component.padding.right,
+            height: box.height - component.padding.top - component.padding.bottom,
+          }
+          let roleCursor = component.direction === 'HORIZONTAL' ? roleContent.x : roleContent.y
+          const roles = []
+          for (const role of component.roles) {
+            const roleHeight = role.type === 'ELLIPSE' || role.name === 'Description' ? 16 : 22
+            const roleWidth = role.type === 'ELLIPSE' ? 16 : definitions.estimateCoreTextWidth(item.contract.roleCopy[role.name], role.name)
+            const roleBox = component.direction === 'HORIZONTAL'
+              ? { x: roleCursor, y: roleContent.y, width: roleWidth, height: roleHeight }
+              : { x: roleContent.x, y: roleCursor, width: roleWidth, height: roleHeight }
+            assert.equal(secondaryBoxContains(roleContent, roleBox), true, `${view.name}/${item.contract.name}/Role/${role.name}: overflow`)
+            for (const sibling of roles) assert.equal(secondaryBoxesOverlap(sibling, roleBox), false, `${view.name}/${item.contract.name}: Role overlap`)
+            roles.push(roleBox)
+            roleCursor += (component.direction === 'HORIZONTAL' ? roleBox.width : roleBox.height) + component.gap
+          }
+        }
+      }
+    }
+    layout(view.name)
+  }
+  assert.match(runtimeSource(), /frame\.clipsContent\s*=\s*false/)
+  const sectionLayout = executableRuntimeFunction(runtimeSource(), 'secondarySectionLayout')
+  const layout = sectionLayout(definitions.SECONDARY_VIEW_DEFINITIONS.responsive)
+  for (let index = 1; index < layout.positions.length; index += 1) {
+    const previous = layout.positions[index - 1]
+    const current = layout.positions[index]
+    assert.ok(previous.y + previous.height <= current.y, `${previous.name} overlaps ${current.name}`)
+  }
+  assert.ok(layout.height >= layout.positions.at(-1).y + layout.positions.at(-1).height)
+})
+
+test('every 320 Instance keeps honest complete compact copy within the real 192px Detail content width', async () => {
+  const expectedBySet = {
+    'nav-item': label => ({ Icon: '▤', Label: label, Count: '1', Status: 'Aktiv' }),
+    search: () => ({ Icon: '⌕', Input: 'Suchen', Clear: '—', Count: '0' }),
+    select: () => ({ Label: 'Ansicht', Value: 'Alle', Chevron: '⌄', Status: 'Bereit' }),
+    'list-row': () => ({ Leading: '▤', Title: 'Text', Meta: '1 S.', Status: 'Klar', Action: '→' }),
+    'mode-toggle': () => ({ 'Text Label': 'Text', 'Note Label': 'Notiz', Indicator: 'Aktiv' }),
+    'review-bar': () => ({ Symbol: '◎', Message: '1 offen', 'Primary Action': '→', 'Secondary Action': 'Alle' }),
+    'annotation-anchor': () => ({ Symbol: '¶', Label: 'Hinweis', Count: '1' }),
+    'annotation-card': () => ({ Type: 'Hinweis', Title: 'Beleg', Body: 'Quelle fehlt.', Scope: 'Hier', 'Primary Action': 'Prüfen', 'Secondary Action': 'Später', Status: 'Offen' }),
+  }
+  const narrowViews = definitions.SECONDARY_VIEW_DEFINITIONS.responsive.filter(view => view.width === 320)
+  for (const view of narrowViews) {
+    const navigationLabel = view.subject === 'Bibliothek' ? 'Projekte' : 'Editor'
+    for (const instance of view.instances) {
+      const component = definitions.COMPONENT_DEFINITIONS.find(candidate => candidate.id === instance.setId)
+      const expected = expectedBySet[instance.setId](navigationLabel)
+      assert.deepEqual(instance.roleCopy, expected, `${view.name}/${instance.name}: compact semantic copy mismatch`)
+      assert.deepEqual(Object.keys(instance.roleCopy).sort(), component.roles.filter(role => role.type === 'TEXT').map(role => role.name).sort())
+      assert.equal(instance.label, instance.roleCopy[component.labelRole], `${view.name}/${instance.name}: Label property disagrees with label Role`)
+      const computedMinimum = definitions.componentMinimumWidth(component, instance.roleCopy)
+      assert.equal(instance.minimumWidth, computedMinimum)
+      assert.ok(computedMinimum <= 192, `${view.name}/${instance.name}: ${computedMinimum}px exceeds real Detail content width`)
+    }
+  }
+
+  const applyInstance = executableRuntimeFunction(runtimeSource(), 'applySecondaryInstanceContract')
+  const role = { type: 'TEXT', name: 'Role/Label', characters: 'Alt' }
+  const instance = {
+    id: 'instance:too-wide', name: 'Zu breit', parent: null, componentProperties: { Label: { value: 'Alt' } },
+    swapComponent() {}, setProperties() {}, findOne(predicate) { return predicate(role) ? role : null },
+  }
+  await assert.rejects(() => applyInstance({
+    parent: { width: 224, paddingLeft: 16, paddingRight: 16, appendChild(node) { node.parent = this } },
+    instance,
+    variant: { id: 'component:expected' },
+    contract: { name: 'Zu breit', label: 'Neu', roleCopy: { Label: 'Neu' }, minimumWidth: 193, expectedWidth: 193, expectedHeight: 44 },
+    definition: { width: 320, theme: 'Light' },
+    readIdentity: async () => ({ id: 'component:expected' }), loadFonts: async () => {}, resize() {}, bindTheme() {},
+  }), /193.*192|192.*193|Mindestbreite/)
+})
+
+test('executable Instance collector preserves real direct children and recursively records typed Component roles', () => {
+  const collect = executableRuntimeFunction(runtimeSource(), 'collectSecondaryInstanceRoleRecords')
+  const instance = { id: 'instance:typed', name: 'Status', type: 'INSTANCE', children: [] }
+  const group = { id: 'group:roles', name: 'Role group', type: 'GROUP', parent: instance, children: [] }
+  const textRole = { id: 'role:label', name: 'Role/Label', type: 'TEXT', characters: 'Bereit', parent: group, children: [] }
+  const ellipseRole = { id: 'role:dot', name: 'Role/Dot', type: 'ELLIPSE', parent: instance, children: [] }
+  const benignSibling = { id: 'shape:decoration', name: 'Decoration', type: 'RECTANGLE', parent: group, children: [] }
+  group.children.push(textRole, benignSibling)
+  instance.children.push(group, ellipseRole)
+  instance.findAll = predicate => {
+    const found = []
+    const visit = node => { for (const child of node.children || []) { if (predicate(child)) found.push(child); visit(child) } }
+    visit(instance)
+    return found
+  }
+  const recordNode = node => ({
+    nodeId: node.id, name: node.name, type: node.type, owner: definitions.PLUGIN_ORIGIN,
+    parentId: node.parent?.id || null, parentType: node.parent?.type || null, parentName: node.parent?.name || null,
+    childIds: (node.children || []).map(child => child.id), childCount: (node.children || []).length,
+  })
+  const recordedAncestry = (node, root) => {
+    const ancestorChain = []
+    let parent = node.parent
+    while (parent && parent !== root) { ancestorChain.push(recordNode(parent)); parent = parent.parent }
+    return { ancestorChain, ancestorIds: [...ancestorChain.map(record => record.nodeId), root.id] }
+  }
+  const result = collect(instance, recordNode, recordedAncestry)
+  assert.deepEqual(result.instanceRecord.childIds, ['group:roles', 'role:dot'])
+  assert.equal(result.instanceRecord.childCount, 2)
+  assert.deepEqual(result.roleDescendants.map(role => [role.role, role.type]), [['Label', 'TEXT'], ['Dot', 'ELLIPSE']])
+  assert.deepEqual(result.roleDescendants[0].ancestorChain[0].childIds, ['role:label', 'shape:decoration'])
+  assert.deepEqual(result.roleCopy, { Label: 'Bereit' })
+
+  const inventory = secondaryInventory()
+  const view = inventory.views.find(candidate => candidate.instances.some(item => item.componentSetName === 'Onda/Status Symbol'))
+  const typed = view.instances.find(item => item.componentSetName === 'Onda/Status Symbol')
+  const ellipse = {
+    ...structuredClone(typed.roleDescendants[0]), nodeId: `${typed.nodeId}:dot`, name: 'Role/Dot', role: 'Dot', type: 'ELLIPSE', characters: undefined,
+  }
+  typed.roleDescendants.push(ellipse)
+  typed.childIds.push(ellipse.nodeId)
+  typed.childCount = typed.childIds.length
+  assert.equal(plan.validateSecondaryViewMutationInventory(inventory).valid, true)
+  const wrongType = structuredClone(inventory)
+  wrongType.views.find(candidate => candidate.nodeId === view.nodeId).instances.find(item => item.nodeId === typed.nodeId).roleDescendants.at(-1).type = 'TEXT'
+  assert.match(plan.validateSecondaryViewMutationInventory(wrongType).errors.join('\n'), /Role\/Dot/)
+})
+
+test('recursive untouched-subtree probe rejects hidden secondary candidates and snapshots benign descendant drift', async () => {
+  const collect = executableRuntimeFunction(runtimeSource(), 'collectSecondaryUntouchedDescendantRecords')
+  const root = { id: 'foreign:root', name: 'Foreign root', type: 'FRAME', children: [], parent: { id: 'page:1', name: 'Page 1', type: 'PAGE' } }
+  const group = { id: 'foreign:group', name: 'Nested group', type: 'GROUP', children: [], parent: root }
+  const hiddenTarget = { id: 'foreign:hidden-target', name: 'Responsive / Editor · 320 Dark', type: 'FRAME', children: [], parent: group }
+  group.children.push(hiddenTarget)
+  root.children.push(group)
+  const records = collect(root, node => ({
+    nodeId: node.id, name: node.name, type: node.type, owner: 'another-plugin',
+    parentId: node.parent.id, parentType: node.parent.type, parentName: node.parent.name,
+    childIds: node.children.map(child => child.id), childCount: node.children.length,
+  }))
+  assert.deepEqual(records.map(record => record.nodeId), ['foreign:group', 'foreign:hidden-target'])
+
+  const benignInventory = withUntouchedPageChildren()
+  const section02 = {
+    nodeId: 'section:untouched:02', name: '02 · Komponenten', type: 'SECTION', owner: definitions.PLUGIN_ORIGIN,
+    parentId: benignInventory.targetPage.nodeId, parentType: 'PAGE', parentName: benignInventory.targetPage.name,
+    childIds: ['untouched:02:set'], childCount: 1, visible: true,
+  }
+  benignInventory.untouchedPageChildren.push(section02)
+  benignInventory.targetPage.childIds.push(section02.nodeId)
+  benignInventory.targetPage.childCount = benignInventory.targetPage.childIds.length
+  benignInventory.untouchedPageDescendants.push(
+    {
+      nodeId: 'untouched:02:set', name: 'Onda/Button', type: 'COMPONENT_SET', owner: definitions.PLUGIN_ORIGIN,
+      parentId: section02.nodeId, parentType: section02.type, parentName: section02.name,
+      childIds: ['untouched:02:component'], childCount: 1, visible: true,
+    },
+    {
+      nodeId: 'untouched:02:component', name: 'Kind=Primary, State=Default', type: 'COMPONENT', owner: definitions.PLUGIN_ORIGIN,
+      parentId: 'untouched:02:set', parentType: 'COMPONENT_SET', parentName: 'Onda/Button',
+      childIds: ['untouched:02:role'], childCount: 1, visible: true,
+    },
+    {
+      nodeId: 'untouched:02:role', name: 'Role/Label', type: 'TEXT', owner: definitions.PLUGIN_ORIGIN,
+      parentId: 'untouched:02:component', parentType: 'COMPONENT', parentName: 'Kind=Primary, State=Default',
+      childIds: [], childCount: 0, visible: true, pluginData: { owner: definitions.PLUGIN_ORIGIN, role: 'Label' },
+    },
+  )
+  const section08 = benignInventory.untouchedPageChildren.find(record => record.name === '08 · Dialoge')
+  section08.childIds.push('untouched:08:dialog')
+  section08.childCount = section08.childIds.length
+  benignInventory.untouchedPageDescendants.push(
+    {
+      nodeId: 'untouched:08:dialog', name: 'Dialog / Export', type: 'FRAME', owner: definitions.PLUGIN_ORIGIN,
+      parentId: section08.nodeId, parentType: section08.type, parentName: section08.name,
+      childIds: ['untouched:08:dialog:role'], childCount: 1, visible: true,
+    },
+    {
+      nodeId: 'untouched:08:dialog:role', name: 'Role/Title', type: 'TEXT', owner: definitions.PLUGIN_ORIGIN,
+      parentId: 'untouched:08:dialog', parentType: 'FRAME', parentName: 'Dialog / Export',
+      childIds: [], childCount: 0, visible: true, pluginData: { owner: definitions.PLUGIN_ORIGIN, role: 'Title' },
+    },
+  )
+  assert.deepEqual(plan.validateSecondaryViewMutationInventory(benignInventory), { valid: true, errors: [] })
+
+  const inventory = structuredClone(benignInventory)
+  const foreignRoot = inventory.untouchedPageChildren.at(-1)
+  const benign = inventory.untouchedPageDescendants.find(record => record.parentId === foreignRoot.nodeId)
+  foreignRoot.childIds = [benign.nodeId, 'foreign:hidden-target']
+  foreignRoot.childCount = 2
+  inventory.untouchedPageDescendants.push({
+    nodeId: 'foreign:hidden-target', name: hiddenTarget.name, type: 'FRAME', owner: 'another-plugin',
+    parentId: foreignRoot.nodeId, parentType: foreignRoot.type, parentName: foreignRoot.name,
+    childIds: [], childCount: 0, visible: true,
+  })
+  assert.match(plan.validateSecondaryViewMutationInventory(inventory).errors.join('\n'), /Responsive \/ Editor · 320 Dark/)
+  await rejectBeforeSecondaryWrite(inventory, /Responsive \/ Editor · 320 Dark|unberühr/i)
+
+  const exact = withUntouchedPageChildren()
+  const changed = structuredClone(exact)
+  changed.untouchedPageDescendants[0].characters = 'Benign drift'
+  assert.notDeepEqual(plan.canonicalSecondaryViewMutationSnapshot(changed), plan.canonicalSecondaryViewMutationSnapshot(exact))
+})
+
+test('exact semantic collection indexing rejects duplicate Light, Dark, and Dimension collections before writes', () => {
+  const indexCollections = executableRuntimeFunction(runtimeSource(), 'indexSecondaryVariableCollections')
+  const required = ['Onda · Semantic · Light', 'Onda · Semantic · Dark', 'Onda · Dimension']
+  assert.deepEqual([...indexCollections(required.map((name, index) => ({ id: `collection:${index}`, name }))).keys()], required)
+  for (const collectionName of required) {
+    let writes = 0
+    const collections = required.map((name, index) => ({ id: `collection:${index}`, name }))
+    collections.push({ id: `collection:duplicate:${collectionName}`, name: collectionName })
+    assert.throws(() => indexCollections(collections, () => { writes += 1 }), new RegExp(collectionName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+    assert.equal(writes, 0)
+  }
 })

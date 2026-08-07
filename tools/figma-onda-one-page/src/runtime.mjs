@@ -10,6 +10,7 @@ import {
   PLUGIN_ORIGIN,
   RADIUS_TOKENS,
   SEMANTIC_COLOR_ROLES,
+  SECONDARY_VIEW_DEFINITIONS,
   SECTION_DEFINITIONS,
   SPACING_TOKENS,
   TARGET_DOCUMENT_NAME,
@@ -23,6 +24,7 @@ import {
   authorizeMutation,
   buildBaselineShards,
   buildComponentRecoveryActions,
+  buildSecondaryViewRecoveryActions,
   CORE_LEGACY_VIEW_NAMES,
   buildVerificationReport,
   canReuseOwnedNode,
@@ -36,6 +38,7 @@ import {
   executeComponentMutation,
   executeGuardedComponentCommand,
   executeGuardedCoreViewCommand,
+  executeGuardedSecondaryViewCommand,
   executeStagingAssembly,
   executeFoundationMutation,
   hashBaselineRecords,
@@ -56,6 +59,7 @@ import {
   validateComponentMutationInventory,
   validateCoreViewMutationInventory,
   validateFoundationMutationInventory,
+  validateSecondaryViewMutationInventory,
   validatePhaseTransition,
   validateTargetContext,
   buildDesignPlan,
@@ -1716,6 +1720,658 @@ async function runAnnotationBatch(page, ledger, batchIndex) {
   return { batch: batchIndex + 1, annotationCount: batch.length, createdSections, createdViews }
 }
 
+const SECONDARY_SECTION_NAMES = Object.freeze([
+  '07 · Agent & Quellen',
+  '09 · Menüs & Nebenansichten',
+  '10 · Responsive & Dark',
+])
+
+const SECONDARY_LEGACY_VIEW_SECTIONS = Object.freeze({
+  'Agent · Ruhe': '07 · Agent & Quellen',
+  'Agent · Gespräch': '07 · Agent & Quellen',
+  'Agent · Antwort mit Fundstelle': '07 · Agent & Quellen',
+  'Agent · Fehler und Rückkehr': '07 · Agent & Quellen',
+  'Dokumentmenü · geschlossen': '09 · Menüs & Nebenansichten',
+  'Dokumentmenü · offen': '09 · Menüs & Nebenansichten',
+  'Quellenleser · offen': '09 · Menüs & Nebenansichten',
+  'Recherchelauf · pausiert': '09 · Menüs & Nebenansichten',
+  'Entscheidungsverlauf · gefüllt': '09 · Menüs & Nebenansichten',
+  'Leerer Zustand · Recovery': '09 · Menüs & Nebenansichten',
+  'Editor / 1440px · Responsive': '10 · Responsive & Dark',
+  'Editor / 1024px · Responsive': '10 · Responsive & Dark',
+  'Editor / 720px · Responsive': '10 · Responsive & Dark',
+  'Editor / 320px · Kleinbreite': '10 · Responsive & Dark',
+  'Editor / 1440px · Dark': '10 · Responsive & Dark',
+})
+
+function indexSecondaryVariableCollections(collections) {
+  const requiredNames = [
+    'Onda · Semantic · Light',
+    'Onda · Semantic · Dark',
+    'Onda · Dimension',
+  ]
+  return new Map(requiredNames.map(name => {
+    const matches = collections.filter(collection => collection.name === name)
+    if (matches.length !== 1) throw new Error(`Secondary-Variable-Collection fehlt oder ist mehrdeutig: ${name}`)
+    return [name, matches[0]]
+  }))
+}
+
+function secondaryVariableContext() {
+  return Promise.all([
+    figma.variables.getLocalVariableCollectionsAsync(),
+    figma.variables.getLocalVariablesAsync(),
+  ]).then(([collections, localVariables]) => {
+    const collectionByName = indexSecondaryVariableCollections(collections)
+    const exactVariable = (collectionName, name) => {
+      const collection = collectionByName.get(collectionName)
+      if (!collection) throw new Error(`Secondary-Variable-Collection fehlt: ${collectionName}`)
+      const matches = localVariables.filter(variable => variable.variableCollectionId === collection.id && variable.name === name)
+      if (matches.length !== 1) throw new Error(`Secondary-Variable fehlt oder ist mehrdeutig: ${collectionName}/${name}`)
+      return matches[0]
+    }
+    const semantic = collectionName => ({
+      surface: exactVariable(collectionName, 'color/surface'),
+      border: exactVariable(collectionName, 'color/border'),
+      text: exactVariable(collectionName, 'color/text'),
+      textMuted: exactVariable(collectionName, 'color/text-muted'),
+    })
+    const dimensionValues = [...new Set(SECONDARY_VIEW_DEFINITIONS.agentSources
+      .concat(SECONDARY_VIEW_DEFINITIONS.secondary, SECONDARY_VIEW_DEFINITIONS.responsive)
+      .flatMap(definition => definition.regions.flatMap(region => [
+        region.itemSpacing,
+        region.padding.top,
+        region.padding.right,
+        region.padding.bottom,
+        region.padding.left,
+      ]))
+      .filter(value => value > 0))]
+    return {
+      semanticByTheme: {
+        Light: semantic('Onda · Semantic · Light'),
+        Dark: semantic('Onda · Semantic · Dark'),
+      },
+      dimensionByValue: new Map(dimensionValues.map(value => [value, exactVariable('Onda · Dimension', `spacing/${value}`)])),
+      inventory: [
+        ...['Light', 'Dark'].flatMap(theme => Object.values(semantic(`Onda · Semantic · ${theme}`)).map(variable => ({
+          id: variable.id,
+          nodeId: variable.id,
+          name: variable.name,
+          collectionName: `Onda · Semantic · ${theme}`,
+        }))),
+        ...dimensionValues.map(value => {
+          const variable = exactVariable('Onda · Dimension', `spacing/${value}`)
+          return { id: variable.id, nodeId: variable.id, name: variable.name, collectionName: 'Onda · Dimension' }
+        }),
+      ],
+    }
+  })
+}
+
+function secondaryBoundPaint(paint, variable) {
+  return figma.variables.setBoundVariableForPaint(paint, 'color', variable)
+}
+
+function applySecondaryThemeBinding({ node, theme, variables, bindPaint }) {
+  const semantic = theme === 'Dark' ? variables.semanticByTheme.Dark : variables.semanticByTheme.Light
+  if (Array.isArray(node.fills) && node.fills.length) {
+    const variable = node.type === 'TEXT' || node.type === 'ELLIPSE' ? semantic.text : semantic.surface
+    node.fills = node.fills.map(paint => paint?.type === 'SOLID' ? bindPaint(paint, variable) : paint)
+  }
+  if (Array.isArray(node.strokes) && node.strokes.length) {
+    node.strokes = node.strokes.map(paint => paint?.type === 'SOLID' ? bindPaint(paint, semantic.border) : paint)
+  }
+  if (Array.isArray(node.children)) {
+    for (const child of node.children) applySecondaryThemeBinding({ node: child, theme, variables, bindPaint })
+  }
+}
+
+function bindSecondaryNodeTheme(node, theme, variables) {
+  const semantic = theme === 'Dark' ? variables.semanticByTheme.Dark : variables.semanticByTheme.Light
+  applySecondaryThemeBinding({
+    node,
+    theme,
+    variables,
+    bindPaint: (paint, variable) => figma.variables.setBoundVariableForPaint(paint, 'color', variable),
+  })
+  return semantic
+}
+
+function secondaryDefinitionsWithGroups() {
+  return Object.entries(SECONDARY_VIEW_DEFINITIONS)
+    .flatMap(([group, definitions]) => definitions.map(definition => ({ group, definition })))
+}
+
+function parseSecondaryMarker(node) {
+  const raw = node.getPluginData('secondaryView')
+  if (!raw) return null
+  try { return JSON.parse(raw) } catch (_error) { return { invalid: true } }
+}
+
+function secondaryPluginData(node) {
+  return {
+    owner: node.getPluginData(CREATED_MARKER_KEY),
+    secondaryView: node.getPluginData('secondaryView'),
+    ondaSecondaryView: node.getPluginData('ondaSecondaryView'),
+    responsiveFrame: node.getPluginData('responsiveFrame'),
+    ondaResponsiveFrame: node.getPluginData('ondaResponsiveFrame'),
+    role: node.getPluginData('role'),
+    legacy: node.getPluginData('legacy'),
+    secondaryRegionContract: node.getPluginData('secondaryRegionContract'),
+    repeatedScreen: node.getPluginData('ondaRepeatedScreenInstance'),
+    documentation: node.getPluginData('ondaDocumentationInstance'),
+  }
+}
+
+function secondaryNodeRecord(node) {
+  const record = {
+    ...coreBaseRecord(node),
+    ...coreVisualRecord(node),
+    pluginData: secondaryPluginData(node),
+  }
+  if ('children' in node) {
+    record.childIds = node.children.map(child => child.id)
+    record.childCount = node.children.length
+  } else {
+    record.childIds = []
+    record.childCount = 0
+  }
+  return record
+}
+
+function secondaryAncestorRecord(node) {
+  return secondaryNodeRecord(node)
+}
+
+function secondaryRecordedAncestry(node, root) {
+  const chain = []
+  let parent = node.parent
+  while (parent && parent !== root) {
+    chain.push(secondaryAncestorRecord(parent))
+    parent = parent.parent
+  }
+  return {
+    ancestorChain: chain,
+    ancestorIds: [...chain.map(record => record.nodeId), root.id],
+  }
+}
+
+function collectSecondaryInstanceRoleRecords(instance, recordNode = secondaryNodeRecord, recordedAncestry = secondaryRecordedAncestry) {
+  const instanceRecord = recordNode(instance)
+  const roleDescendants = instance.findAll(node => node.name.startsWith('Role/')).map(roleNode => {
+    const role = roleNode.name.slice('Role/'.length)
+    return {
+      ...recordNode(roleNode),
+      parentInstanceId: instance.id,
+      role,
+      ...(roleNode.type === 'TEXT' ? { characters: roleNode.characters } : {}),
+      ...recordedAncestry(roleNode, instance),
+    }
+  })
+  return {
+    instanceRecord,
+    roleDescendants,
+    roleCopy: Object.fromEntries(roleDescendants
+      .filter(role => role.type === 'TEXT' && role.visible !== false)
+      .map(role => [role.role, role.characters])),
+  }
+}
+
+async function secondaryInstanceRecord(instance, contract) {
+  let main = null
+  try {
+    const identity = await readMainComponentIdentity(instance)
+    main = identity.id ? await figma.getNodeByIdAsync(identity.id) : null
+  } catch (_error) {
+    main = null
+  }
+  const set = main?.parent?.type === 'COMPONENT_SET' ? main.parent : null
+  const { instanceRecord, roleDescendants, roleCopy } = collectSecondaryInstanceRoleRecords(instance)
+  return {
+    ...instanceRecord,
+    region: contract.region,
+    repeatedScreen: instance.getPluginData('ondaRepeatedScreenInstance') === 'true',
+    documentation: instance.getPluginData('ondaDocumentationInstance') === 'true',
+    mainComponentId: main?.id || null,
+    componentId: main?.id || null,
+    componentSetId: set?.id || null,
+    componentSetName: set?.name || null,
+    variantName: main?.name || null,
+    labelValue: coreLabelValue(instance),
+    componentProperties: cloneSerializable(instance.componentProperties || {}),
+    roleCopy,
+    roleDescendants,
+  }
+}
+
+async function secondaryViewRecord(node, group, definition, legacy = false) {
+  if (legacy) {
+    const legacyChildren = []
+    function collectLegacyLeaves(child) {
+      if ('children' in child && child.children.length) {
+        for (const nested of child.children) collectLegacyLeaves(nested)
+        return
+      }
+      legacyChildren.push({
+        ...secondaryNodeRecord(child),
+        ...secondaryRecordedAncestry(child, node),
+      })
+    }
+    for (const child of node.children) collectLegacyLeaves(child)
+    return {
+      ...secondaryNodeRecord(node),
+      legacy: true,
+      responsiveFrame: node.getPluginData('ondaResponsiveFrame') || node.getPluginData('responsiveFrame'),
+      legacyChildren,
+    }
+  }
+  const regionContracts = new Map(definition.regions.map(region => [region.name, region]))
+  const copyContracts = new Map(definition.copyContracts.map(copy => [copy.role, copy]))
+  const instanceContracts = new Map(definition.instances.map(instance => [instance.name, instance]))
+  const layoutRegions = []
+  const copyNodes = []
+  const instances = []
+  const standIns = []
+  async function visit(child) {
+    const copyRole = child.name.startsWith('Copy / ') ? child.name.slice('Copy / '.length) : null
+    if (child.type === 'FRAME' && regionContracts.has(child.name)) {
+      layoutRegions.push(secondaryNodeRecord(child))
+      for (const nested of child.children) await visit(nested)
+    } else if (child.type === 'TEXT' && copyContracts.has(copyRole)) {
+      copyNodes.push({ ...secondaryNodeRecord(child), role: copyRole, characters: child.characters })
+    } else if (child.type === 'INSTANCE' && instanceContracts.has(child.name)) {
+      instances.push(await secondaryInstanceRecord(child, instanceContracts.get(child.name)))
+    } else {
+      standIns.push({ ...secondaryNodeRecord(child), ...secondaryRecordedAncestry(child, node) })
+    }
+  }
+  for (const child of node.children) await visit(child)
+  return {
+    ...secondaryNodeRecord(node),
+    secondaryView: parseSecondaryMarker(node),
+    group,
+    theme: definition.theme,
+    subject: definition.subject || null,
+    breakpoint: definition.breakpoint ?? null,
+    layoutRegions,
+    copyNodes,
+    instances,
+    standIns,
+  }
+}
+
+function secondaryComponentInventory(page) {
+  const usedIds = new Set(secondaryDefinitionsWithGroups().flatMap(({ definition }) => definition.instances.map(instance => instance.setId)))
+  return COMPONENT_DEFINITIONS.filter(definition => usedIds.has(definition.id)).map(definition => {
+    const sets = componentSetById(page, definition.id)
+    if (sets.length !== 1 || sets[0].getPluginData(CREATED_MARKER_KEY) !== PLUGIN_ORIGIN) {
+      throw new Error(`Secondary Component Set fehlt oder ist mehrdeutig: ${definition.name}`)
+    }
+    const set = sets[0]
+    return {
+      id: definition.id,
+      nodeId: set.id,
+      name: set.name,
+      type: set.type,
+      owner: set.getPluginData(CREATED_MARKER_KEY),
+      childIds: set.children.map(child => child.id),
+      childCount: set.children.length,
+      variants: set.children.map(variant => ({
+        ...secondaryAncestorRecord(variant),
+      })),
+    }
+  })
+}
+
+function collectSecondaryUntouchedDescendantRecords(root, recordNode = secondaryNodeRecord) {
+  const records = []
+  function visit(parent) {
+    if (!('children' in parent)) return
+    for (const child of parent.children) {
+      records.push(recordNode(child))
+      visit(child)
+    }
+  }
+  visit(root)
+  return records
+}
+
+async function collectSecondaryViewMutationInventory(page = figma.currentPage) {
+  await figma.loadAllPagesAsync()
+  const definitionEntries = secondaryDefinitionsWithGroups()
+  const definitionByName = new Map(definitionEntries.map(entry => [entry.definition.name, entry]))
+  const targetSections = page.children.filter(node => node.type === 'SECTION' && SECONDARY_SECTION_NAMES.includes(node.name))
+  const sections = targetSections.map(secondaryNodeRecord)
+  const views = []
+  const legacyViews = []
+  for (const section of targetSections) {
+    for (const child of section.children) {
+      const entry = definitionByName.get(child.name)
+      if (entry || child.getPluginData('secondaryView')) {
+        views.push(await secondaryViewRecord(child, entry?.group || '', entry?.definition || { regions: [], copyContracts: [], instances: [], theme: 'Light' }))
+      } else if (SECONDARY_LEGACY_VIEW_SECTIONS[child.name] === section.name) {
+        legacyViews.push(await secondaryViewRecord(child, '', null, true))
+      }
+    }
+  }
+  const variables = await secondaryVariableContext()
+  const targetPage = secondaryNodeRecord(page)
+  const untouchedPageNodes = page.children.filter(node => !SECONDARY_SECTION_NAMES.includes(node.name))
+  const untouchedPageChildren = untouchedPageNodes.map(secondaryNodeRecord)
+  const untouchedPageDescendants = untouchedPageNodes.flatMap(node => collectSecondaryUntouchedDescendantRecords(node))
+  return {
+    targetPage,
+    sections,
+    views,
+    legacyViews,
+    untouchedPageChildren,
+    untouchedPageDescendants,
+    components: secondaryComponentInventory(page),
+    variables: variables.inventory,
+  }
+}
+
+async function preflightSecondaryViewMutation() {
+  const inventory = await collectSecondaryViewMutationInventory(figma.currentPage)
+  const validation = validateSecondaryViewMutationInventory(inventory)
+  if (!validation.valid) throw new Error(validation.errors.join('\n'))
+  return inventory
+}
+
+function secondaryMutableRecords(inventory) {
+  return [
+    ...(inventory.sections || []),
+    ...(inventory.views || []),
+    ...(inventory.legacyViews || []),
+    ...(inventory.views || []).flatMap(view => [
+      ...(view.layoutRegions || []),
+      ...(view.copyNodes || []),
+      ...(view.instances || []),
+      ...(view.instances || []).flatMap(instance => (instance.roleDescendants || []).flatMap(role => [role, ...(role.ancestorChain || [])])),
+      ...(view.standIns || []),
+    ]),
+    ...(inventory.legacyViews || []).flatMap(view => view.legacyChildren || []),
+  ]
+}
+
+async function resolveSecondaryInventoryNodes({ page, ledger }, inventory) {
+  if (page.id !== inventory.targetPage?.nodeId) throw new Error('TOCTOU: Secondary-Zielseite wurde gewechselt.')
+  await loadDecisionFonts(ledger.fontDecision)
+  const variables = await secondaryVariableContext()
+  const resolved = new Map()
+  for (const record of secondaryMutableRecords(inventory)) {
+    const node = await figma.getNodeByIdAsync(record.nodeId)
+    if (!node
+      || node.type !== record.type
+      || node.name !== record.name
+      || node.parent?.id !== record.parentId
+      || node.getPluginData(CREATED_MARKER_KEY) !== record.owner) {
+      throw new Error(`TOCTOU: Secondary-Knoten ersetzt oder verschoben: ${record.name}`)
+    }
+    resolved.set(record.nodeId, node)
+  }
+  const variants = new Map()
+  for (const { definition } of secondaryDefinitionsWithGroups()) for (const contract of definition.instances) {
+    const key = `${contract.setId}\u0000${contract.variant}`
+    if (!variants.has(key)) variants.set(key, ownedSecondaryVariant(page, contract))
+  }
+  return { nodes: resolved, variables, variants }
+}
+
+function applySecondaryContainerContract({ parent, node, contract, maximumWidth = contract.width, resize }) {
+  if (node.parent !== parent) parent.appendChild(node)
+  node.layoutMode = contract.layoutMode
+  if (node.layoutMode === 'NONE') throw new Error(`Secondary Auto Layout fehlt: ${node.name}`)
+  node.primaryAxisSizingMode = 'FIXED'
+  node.counterAxisSizingMode = 'FIXED'
+  node.primaryAxisAlignItems = 'MIN'
+  node.counterAxisAlignItems = 'MIN'
+  node.itemSpacing = contract.itemSpacing
+  node.paddingTop = contract.padding.top
+  node.paddingRight = contract.padding.right
+  node.paddingBottom = contract.padding.bottom
+  node.paddingLeft = contract.padding.left
+  resize(node, Math.min(contract.width, maximumWidth), contract.height)
+}
+
+function configureSecondaryLayoutRegions(frame, definition, variables) {
+  const regions = new Map()
+  for (const regionDefinition of definition.regions) {
+    const parent = regionDefinition.parentName === definition.name ? frame : regions.get(regionDefinition.parentName)
+    if (!parent) throw new Error(`Secondary-Elternregion fehlt: ${definition.name}/${regionDefinition.name}`)
+    let region = frame.findOne(node => node.type === 'FRAME' && node.name === regionDefinition.name)
+    if (!region) {
+      region = figma.createFrame()
+      region.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN)
+    }
+    if (region.parent !== parent) parent.appendChild(region)
+    region.name = regionDefinition.name
+    const maximumWidth = definition.width === 320
+      ? parent.width - parent.paddingLeft - parent.paddingRight
+      : regionDefinition.width
+    applySecondaryContainerContract({ parent, node: region, contract: regionDefinition, maximumWidth, resize: resizeNode })
+    region.layoutMode = regionDefinition.layoutMode
+    if (region.layoutMode === 'NONE') throw new Error(`Secondary Auto Layout fehlt: ${definition.name}/${region.name}`)
+    region.fills = [solid(definition.theme === 'Dark' ? 'gray/900' : 'gray/000')]
+    region.strokes = [solid(definition.theme === 'Dark' ? 'gray/700' : 'gray/200')]
+    region.strokeWeight = 1
+    region.cornerRadius = 0
+    region.effects = []
+    region.visible = true
+    region.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN)
+    region.setPluginData('secondaryRegionContract', JSON.stringify({ width: regionDefinition.width, height: regionDefinition.height }))
+    for (const [field, value] of [
+      ['itemSpacing', regionDefinition.itemSpacing],
+      ['paddingTop', regionDefinition.padding.top],
+      ['paddingRight', regionDefinition.padding.right],
+      ['paddingBottom', regionDefinition.padding.bottom],
+      ['paddingLeft', regionDefinition.padding.left],
+    ]) if (value > 0) region.setBoundVariable(field, variables.dimensionByValue.get(value))
+    bindSecondaryNodeTheme(region, definition.theme, variables)
+    regions.set(regionDefinition.name, region)
+  }
+  return regions
+}
+
+function configureSecondaryCopy(frame, definition, decision, regions, variables) {
+  const copyByRegion = new Map()
+  for (const contract of definition.copyContracts) {
+    const parent = regions.get(contract.region)
+    let copy = frame.findOne(node => node.type === 'TEXT' && node.name === `Copy / ${contract.role}`)
+    if (copy && copy.parent !== parent) parent.appendChild(copy)
+    copy = textNode(parent, `Copy / ${contract.role}`, contract.characters, decision, {
+      size: contract.kind === 'title' ? 21 : 15,
+      weight: contract.kind === 'title' ? 700 : 400,
+      muted: contract.kind !== 'title',
+      dark: definition.theme === 'Dark',
+      width: Math.max(40, parent.width - parent.paddingLeft - parent.paddingRight),
+    }).node
+    copy.visible = true
+    copy.setPluginData('role', contract.role)
+    bindSecondaryNodeTheme(copy, definition.theme, variables)
+    const index = copyByRegion.get(contract.region) || 0
+    parent.insertChild(index, copy)
+    copyByRegion.set(contract.region, index + 1)
+  }
+  return copyByRegion
+}
+
+function ownedSecondaryVariant(page, contract) {
+  const definition = COMPONENT_DEFINITIONS.find(component => component.id === contract.setId)
+  const sets = componentSetById(page, contract.setId)
+  if (sets.length !== 1 || sets[0].getPluginData(CREATED_MARKER_KEY) !== PLUGIN_ORIGIN) throw new Error(`Secondary Component Set fehlt oder ist mehrdeutig: ${definition?.name || contract.setId}`)
+  const matches = sets[0].children.filter(node => node.name === contract.variant)
+  if (matches.length !== 1
+    || matches[0].type !== 'COMPONENT'
+    || matches[0].getPluginData(CREATED_MARKER_KEY) !== PLUGIN_ORIGIN) {
+    throw new Error(`Secondary Variante fehlt oder ist mehrdeutig: ${definition.name}/${contract.variant}`)
+  }
+  return matches[0]
+}
+
+async function applySecondaryInstanceContract({ parent, instance, variant, contract, definition, readIdentity, loadFonts, resize, bindTheme }) {
+  const parentContentWidth = Number.isFinite(parent.width)
+    ? parent.width - (parent.paddingLeft || 0) - (parent.paddingRight || 0)
+    : contract.expectedWidth
+  const availableWidth = definition.width === 320 ? Math.min(definition.width - 32, parentContentWidth) : contract.expectedWidth
+  if (definition.width === 320 && Number.isFinite(contract.minimumWidth) && contract.minimumWidth > availableWidth) {
+    throw new Error(`Secondary-Mindestbreite überschreitet verfügbaren Inhalt: ${contract.name} (${contract.minimumWidth}px > ${availableWidth}px)`)
+  }
+  const identity = await readIdentity(instance)
+  if (identity.id !== variant.id) instance.swapComponent(variant)
+  await loadFonts()
+  if (instance.parent !== parent) parent.appendChild(instance)
+  instance.name = contract.name
+  const labelKey = Object.keys(instance.componentProperties || {}).find(key => key.split('#')[0] === 'Label')
+  if (!labelKey) throw new Error(`Label-Property fehlt: ${contract.name}`)
+  instance.setProperties({ [labelKey]: contract.label })
+  for (const [role, characters] of Object.entries(contract.roleCopy)) {
+    const roleNode = instance.findOne(node => node.type === 'TEXT' && node.name === `Role/${role}`)
+    if (!roleNode) throw new Error(`Textrolle fehlt: ${contract.name}/Role/${role}`)
+    roleNode.characters = characters
+  }
+  const width = Math.min(contract.expectedWidth, availableWidth)
+  const height = Math.max(definition.width === 320 ? 44 : 0, contract.expectedHeight)
+  resize(instance, width, height)
+  bindTheme(instance, definition.theme)
+  return instance
+}
+
+async function ensureSecondaryVariantInstance(parent, variant, contract, definition, decision, variables, root) {
+  let instance = root.findOne(node => node.type === 'INSTANCE' && node.name === contract.name)
+  if (!instance) instance = variant.createInstance()
+  await applySecondaryInstanceContract({
+    parent,
+    instance,
+    variant,
+    contract,
+    definition,
+    readIdentity: readMainComponentIdentity,
+    loadFonts: () => loadDecisionFonts(decision),
+    resize: resizeNode,
+    bindTheme: node => bindSecondaryNodeTheme(node, definition.theme, variables),
+  })
+  instance.visible = true
+  instance.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN)
+  instance.setPluginData('ondaDocumentationInstance', '')
+  instance.setPluginData('ondaRepeatedScreenInstance', 'true')
+  for (const role of Object.keys(contract.roleCopy)) {
+    const roleNode = instance.findOne(node => node.type === 'TEXT' && node.name === `Role/${role}`)
+    if (!roleNode) throw new Error(`Textrolle fehlt: ${contract.name}/Role/${role}`)
+    roleNode.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN)
+  }
+  return instance
+}
+
+function positionSecondaryInstance(instance, contract, definition, region) {
+  const regionContentWidth = region.width - region.paddingLeft - region.paddingRight
+  const availableWidth = definition.width === 320
+    ? Math.min(definition.width - 32, regionContentWidth)
+    : regionContentWidth
+  const width = Math.min(contract.expectedWidth, availableWidth)
+  const height = Math.max(definition.width === 320 ? 44 : 0, contract.expectedHeight)
+  resizeNode(instance, width, contract.expectedHeight)
+  if (height !== contract.expectedHeight) resizeNode(instance, width, height)
+}
+
+function secondarySectionLayout(definitions, start = 100, gap = 76, bottom = 100) {
+  let y = start
+  const positions = definitions.map(definition => {
+    const position = { name: definition.name, y, height: definition.height }
+    y += definition.height + gap
+    return position
+  })
+  const last = positions[positions.length - 1]
+  return { positions, height: last ? last.y + last.height + bottom : start + bottom }
+}
+
+async function runSecondaryViews(page, ledger, writeBarrierInventory, resolved) {
+  const { nodes, variables, variants } = resolved
+  const recoveryActions = buildSecondaryViewRecoveryActions(writeBarrierInventory)
+  const sectionRecords = new Map((writeBarrierInventory.sections || []).map(record => [record.name, record]))
+  const viewRecords = new Map((writeBarrierInventory.views || []).map(record => [record.name, record]))
+  const sectionLayouts = new Map(SECONDARY_SECTION_NAMES.map(sectionName => [
+    sectionName,
+    secondarySectionLayout(secondaryDefinitionsWithGroups()
+      .filter(({ definition }) => definition.sectionName === sectionName)
+      .map(({ definition }) => definition)),
+  ]))
+  const positionByViewName = new Map([...sectionLayouts.values()].flatMap(layout => layout.positions.map(position => [position.name, position])))
+  for (const { group, definition } of secondaryDefinitionsWithGroups()) {
+    const sectionRecord = sectionRecords.get(definition.sectionName)
+    const section = sectionRecord ? nodes.get(sectionRecord.nodeId) : ensureSection(page, ledger, definition.sectionName, 1800).node
+    const viewRecord = viewRecords.get(definition.name)
+    let frame = viewRecord ? nodes.get(viewRecord.nodeId) : null
+    if (!frame) {
+      frame = figma.createFrame()
+      frame.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN)
+      section.appendChild(frame)
+    }
+    frame.name = definition.name
+    frame.layoutMode = definition.layoutMode
+    if (frame.layoutMode === 'NONE') throw new Error(`Secondary Auto Layout fehlt: ${definition.name}`)
+    frame.primaryAxisSizingMode = 'FIXED'
+    frame.counterAxisSizingMode = 'FIXED'
+    frame.primaryAxisAlignItems = 'MIN'
+    frame.counterAxisAlignItems = 'MIN'
+    frame.itemSpacing = 0
+    const narrow = definition.width === 320
+    frame.paddingTop = narrow ? 16 : 0
+    frame.paddingRight = narrow ? 16 : 0
+    frame.paddingBottom = narrow ? 16 : 0
+    frame.paddingLeft = narrow ? 16 : 0
+    frame.x = 80
+    frame.y = positionByViewName.get(definition.name).y
+    resizeNode(frame, definition.width, definition.height)
+    frame.fills = [solid(definition.theme === 'Dark' ? 'gray/900' : 'gray/000')]
+    frame.strokes = [solid(definition.theme === 'Dark' ? 'gray/700' : 'gray/200')]
+    frame.strokeWeight = 1
+    frame.effects = []
+    frame.cornerRadius = 0
+    frame.clipsContent = false
+    frame.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN)
+    frame.setPluginData('secondaryView', JSON.stringify({
+      group,
+      theme: definition.theme,
+      subject: definition.subject || null,
+      breakpoint: definition.breakpoint ?? null,
+    }))
+    const regions = configureSecondaryLayoutRegions(frame, definition, variables)
+    const copyByRegion = configureSecondaryCopy(frame, definition, ledger.fontDecision, regions, variables)
+    const instanceByRegion = new Map()
+    for (const contract of definition.instances) {
+      const parent = regions.get(contract.region)
+      const variant = variants.get(`${contract.setId}\u0000${contract.variant}`)
+      const instance = await ensureSecondaryVariantInstance(parent, variant, contract, definition, ledger.fontDecision, variables, frame)
+      positionSecondaryInstance(instance, contract, definition, parent)
+      const localIndex = instanceByRegion.get(contract.region) || 0
+      parent.insertChild((copyByRegion.get(contract.region) || 0) + localIndex, instance)
+      instanceByRegion.set(contract.region, localIndex + 1)
+    }
+    bindSecondaryNodeTheme(frame, definition.theme, variables)
+  }
+  for (const legacy of writeBarrierInventory.legacyViews || []) {
+    const node = nodes.get(legacy.nodeId)
+    if (node) node.visible = false
+    for (const child of legacy.legacyChildren || []) {
+      const childNode = nodes.get(child.nodeId)
+      if (childNode) childNode.visible = false
+    }
+  }
+  for (const sectionName of SECONDARY_SECTION_NAMES) {
+    const section = directChild(page, sectionName, ['SECTION'])
+    resizeNode(section, SECTION_WIDTH, sectionLayouts.get(sectionName).height)
+  }
+  return {
+    sections: SECONDARY_SECTION_NAMES.length,
+    agentSourceViews: SECONDARY_VIEW_DEFINITIONS.agentSources.length,
+    secondaryViews: SECONDARY_VIEW_DEFINITIONS.secondary.length,
+    responsiveViews: SECONDARY_VIEW_DEFINITIONS.responsive.length,
+    totalViews: secondaryDefinitionsWithGroups().length,
+    recoveryActions: recoveryActions.length,
+  }
+}
+
 function createAgentAndSources(section, decision) {
   const views = [
     ['Agent · Ruhe', '○ AURA RUHIG', 'Der Agent wartet, bis er bewusst geöffnet wird.'],
@@ -1816,19 +2472,8 @@ async function createPrototype(section, decision) {
   }
 }
 
-async function runDialogsAndSecondary(page, ledger) {
-  await loadDecisionFonts(ledger.fontDecision)
-  const agent = ensureSection(page, ledger, '07 · Agent & Quellen', 1700).node
-  createAgentAndSources(agent, ledger.fontDecision)
-  const dialogs = ensureSection(page, ledger, '08 · Dialoge', 9800).node
-  const dialogStateCount = createDialogs(dialogs, ledger.fontDecision)
-  const menus = ensureSection(page, ledger, '09 · Menüs & Nebenansichten', 2200).node
-  createMenus(menus, ledger.fontDecision)
-  const responsive = ensureSection(page, ledger, '10 · Responsive & Dark', 6200).node
-  createResponsiveDark(responsive, ledger.fontDecision)
-  const prototype = ensureSection(page, ledger, '11 · Prototyp', 2400).node
-  await createPrototype(prototype, ledger.fontDecision)
-  return { sections: 5, dialogFamilies: DIALOG_FAMILIES.length, dialogStates: dialogStateCount, responsiveWidths: 4, darkReferences: 1, prototypeFlows: 4 }
+async function runDialogsAndSecondary(page, ledger, writeBarrierInventory, resolvedInventoryNodes) {
+  return runSecondaryViews(page, ledger, writeBarrierInventory, resolvedInventoryNodes)
 }
 
 function collectOndaNodes(sections) {
@@ -2360,7 +3005,7 @@ async function handleCommand(command) {
     let counts
     if (command === 'foundations') counts = await runFoundations(page, ledger)
     else if (command === 'core-views') counts = await runCoreViews(page, ledger, validatedInventory, resolvedInventoryNodes)
-    else if (command === 'dialogs-and-secondary') counts = await runDialogsAndSecondary(page, ledger)
+    else if (command === 'dialogs-and-secondary') counts = await runDialogsAndSecondary(page, ledger, validatedInventory, resolvedInventoryNodes)
     else if (command.startsWith('component-')) counts = await runComponent(page, ledger, command.slice('component-'.length), validatedInventory)
     else if (command.startsWith('annotations-')) counts = await runAnnotationBatch(page, ledger, Number(command.slice('annotations-'.length)) - 1)
     else throw new Error(`Unbekannter Befehl: ${command}`)
@@ -2400,6 +3045,19 @@ async function handleCommand(command) {
         await loadDecisionFonts(ledger.fontDecision)
         return resolveCoreInventoryNodes(inventory, page)
       },
+      mutate: runMutation,
+    })
+    return
+  }
+  if (command === 'dialogs-and-secondary') {
+    const phases = readLedger(figma.currentPage)?.phases || {}
+    await executeGuardedSecondaryViewCommand({
+      command,
+      phases,
+      preflight: preflightSecondaryViewMutation,
+      requireContext: requireMutationContext,
+      collectCurrentInventory: ({ page }) => collectSecondaryViewMutationInventory(page),
+      resolveInventoryNodes: resolveSecondaryInventoryNodes,
       mutate: runMutation,
     })
     return

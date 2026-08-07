@@ -211,7 +211,10 @@ test('prototype reactions use the dynamic-page async API exclusively', () => {
   assert.doesNotMatch(runtime, /\.reactions\s*=/)
   assert.match(runtime, /async function createPrototype/)
   assert.match(runtime, /await frame\.setReactionsAsync\(/)
-  assert.match(runtime, /await createPrototype\(/)
+  const secondaryStart = runtime.indexOf('async function runDialogsAndSecondary')
+  const secondaryEnd = runtime.indexOf('function collectOndaNodes', secondaryStart)
+  assert.ok(secondaryStart >= 0 && secondaryEnd > secondaryStart)
+  assert.doesNotMatch(runtime.slice(secondaryStart, secondaryEnd), /createPrototype|11 · Prototyp/)
 })
 
 test('foundation documentation uses real variable bindings and update-or-create helpers', () => {

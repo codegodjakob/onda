@@ -1236,6 +1236,253 @@
       ]
     })
   ]);
+  function freezeSecondary(value) {
+    if (!value || typeof value !== "object" || Object.isFrozen(value)) return value;
+    for (const nested of Object.values(value)) freezeSecondary(nested);
+    return Object.freeze(value);
+  }
+  function secondaryRoleCopy(name, setId, variant, label, overrides = {}) {
+    const component = COMPONENT_DEFINITIONS.find((item) => item.id === setId);
+    const componentVariant2 = component == null ? void 0 : component.variants.find((item) => item.name === variant);
+    const roleDefaults = Object.fromEntries(((component == null ? void 0 : component.roles) || []).filter((role) => role.type === "TEXT").map((role) => {
+      var _a;
+      return [role.name, ((_a = componentVariant2 == null ? void 0 : componentVariant2.copy) == null ? void 0 : _a[role.name]) || ""];
+    }));
+    return coreRoleCopy(name, setId, variant, label, __spreadValues(__spreadValues({}, roleDefaults), overrides));
+  }
+  function secondaryInstance(name, setId, variant, label, region = "Layout / Content", roleCopy = {}) {
+    return coreInstance(name, setId, variant, label, {
+      region,
+      roleCopy: secondaryRoleCopy(name, setId, variant, label, roleCopy)
+    });
+  }
+  function secondaryStackHeight(items, itemSpacing, padding) {
+    return padding.top + padding.bottom + items.reduce((total, item) => total + item.expectedHeight, 0) + Math.max(0, items.length - 1) * itemSpacing;
+  }
+  function secondaryCopyContracts(name, subject, theme, width) {
+    const availableWidth = width === 320 ? 224 : 256;
+    const expectedHeight = (characters, kind) => {
+      const lineHeight = kind === "title" ? 28 : 22;
+      const fontScale = kind === "title" ? 21 / 15 : 1;
+      const wrappedLines = Math.max(1, Math.ceil(estimateCoreTextWidth(characters) * fontScale * 1.1 / availableWidth));
+      return wrappedLines * lineHeight;
+    };
+    const summary = `${subject || "Arbeitsansicht"} \xB7 ${theme} \xB7 ${width}px`;
+    return Object.freeze([
+      Object.freeze({ role: "title", characters: name, region: "Layout / Context", kind: "title", expectedHeight: expectedHeight(name, "title") }),
+      Object.freeze({ role: "summary", characters: summary, region: "Layout / Context", kind: "paragraph", expectedHeight: expectedHeight(summary, "paragraph") })
+    ]);
+  }
+  function secondaryRegions(viewName, width, layoutMode, instances, copyContracts) {
+    const narrow = width === 320;
+    const padding = narrow ? { top: 16, right: 16, bottom: 16, left: 16 } : { top: 24, right: 32, bottom: 24, left: 32 };
+    const shellMode = narrow ? "VERTICAL" : "HORIZONTAL";
+    if (!narrow) {
+      const contentWidth2 = Math.max(480, width - 320);
+      return Object.freeze({
+        height: 1024,
+        regions: Object.freeze([
+          coreRegion("Layout / Shell", viewName, width, 960, shellMode, { itemSpacing: 16, padding }),
+          coreRegion("Layout / Context", "Layout / Shell", width - contentWidth2, 960, "VERTICAL", { itemSpacing: 12, padding }),
+          coreRegion("Layout / Content", "Layout / Shell", contentWidth2, 960, "VERTICAL", { itemSpacing: 16, padding }),
+          coreRegion("Layout / Detail", "Layout / Content", contentWidth2, 720, layoutMode === "HORIZONTAL" ? "HORIZONTAL" : "VERTICAL", { itemSpacing: 12, padding })
+        ])
+      });
+    }
+    const shellWidth = width - padding.left - padding.right;
+    const contextWidth = shellWidth - padding.left - padding.right;
+    const contentWidth = contextWidth;
+    const detailWidth = contentWidth - padding.left - padding.right;
+    const contextHeight = secondaryStackHeight(copyContracts, 12, padding);
+    const detailHeight = secondaryStackHeight(instances, 12, padding);
+    const contentHeight = secondaryStackHeight([{ expectedHeight: detailHeight }], 16, padding);
+    const shellHeight = secondaryStackHeight([{ expectedHeight: contextHeight }, { expectedHeight: contentHeight }], 16, padding);
+    return Object.freeze({
+      height: secondaryStackHeight([{ expectedHeight: shellHeight }], 0, padding),
+      regions: Object.freeze([
+        coreRegion("Layout / Shell", viewName, shellWidth, shellHeight, shellMode, { itemSpacing: 16, padding }),
+        coreRegion("Layout / Context", "Layout / Shell", contextWidth, contextHeight, "VERTICAL", { itemSpacing: 12, padding }),
+        coreRegion("Layout / Content", "Layout / Shell", contentWidth, contentHeight, "VERTICAL", { itemSpacing: 16, padding }),
+        coreRegion("Layout / Detail", "Layout / Content", detailWidth, detailHeight, "VERTICAL", { itemSpacing: 12, padding })
+      ])
+    });
+  }
+  function secondaryView({ name, sectionName, width = 1440, theme = "Light", layoutMode = "HORIZONTAL", subject, breakpoint, instances }) {
+    const copyContracts = secondaryCopyContracts(name, subject, theme, width);
+    const geometry = secondaryRegions(name, width, layoutMode, instances, copyContracts);
+    return freezeSecondary(__spreadProps(__spreadValues({
+      name,
+      sectionName,
+      width,
+      height: geometry.height,
+      theme,
+      layoutMode
+    }, subject ? { subject, breakpoint } : {}), {
+      regions: geometry.regions,
+      copyContracts,
+      instances
+    }));
+  }
+  function mappedInstances(mapping, label, overrides = {}) {
+    return mapping.map(([setId, variant], index) => {
+      var _a, _b, _c, _d;
+      return secondaryInstance(
+        ((_a = overrides[index]) == null ? void 0 : _a.name) || `${label} / ${String(index + 1).padStart(2, "0")}`,
+        setId,
+        variant,
+        ((_b = overrides[index]) == null ? void 0 : _b.label) || label,
+        ((_c = overrides[index]) == null ? void 0 : _c.region) || "Layout / Detail",
+        ((_d = overrides[index]) == null ? void 0 : _d.roleCopy) || {}
+      );
+    });
+  }
+  function secondaryContentOverrides(label) {
+    if (label === "Slash-Men\xFC \xB7 Suche leer") return {
+      0: { roleCopy: { Input: "Slash-Befehl suchen", Count: "Zuletzt verwendet" } },
+      1: { label: "\xDCberschrift einf\xFCgen", roleCopy: { Icon: "H", Shortcut: "zuletzt verwendet" } },
+      2: { label: "Quellenbeleg einf\xFCgen", roleCopy: { Icon: "\xA7", Shortcut: "zuletzt verwendet" } }
+    };
+    if (label === "Slash-Men\xFC \xB7 Treffer") return {
+      0: { roleCopy: { Input: "Befehl \u201E\xDCberschrift\u201C", Count: "2 passende Befehle" } },
+      1: { label: "\xDCberschrift einf\xFCgen", roleCopy: { Icon: "H", Shortcut: "\u23181" } },
+      2: { label: "\xDCberschrift einf\xFCgen", roleCopy: { Icon: "H", Shortcut: "ausgew\xE4hlt" } }
+    };
+    if (label === "Slash-Men\xFC \xB7 Keine Treffer") return {
+      0: { roleCopy: { Input: "Befehl \u201EZeitachse\u201C", Count: "0 Treffer \xB7 Suchbegriff \xE4ndern" } },
+      1: { label: "Kein passender Befehl", roleCopy: { Title: "Keine Befehle gefunden", Description: "Suchbegriff \xE4ndern oder k\xFCrzer eingeben.", Action: "Suche l\xF6schen" } },
+      2: { label: "Suche l\xF6schen" }
+    };
+    if (label === "Blockeinf\xFCgung \xB7 Position w\xE4hlen") return {
+      0: { label: "Nach Absatz \u201EPrinzipien\u201C", roleCopy: { Label: "Einf\xFCgeposition", Value: "Nach Absatz \u201EPrinzipien\u201C", Status: "Position gew\xE4hlt" } },
+      1: { label: "Nach der Fundstelle einf\xFCgen", roleCopy: { Icon: "\u2193", Shortcut: "ausgew\xE4hlt" } },
+      2: { label: "Block einf\xFCgen" },
+      3: { label: "Abbrechen" }
+    };
+    if (label === "Quellenleser \xB7 Fundstelle \xFCbernehmen") return {
+      0: { label: "Markierte Fundstelle", roleCopy: { Title: "Markierte Fundstelle", Location: "Seite 12 \xB7 Absatz 3", Excerpt: "Diese Passage belegt die Aussage zur ruhigen Technik.", Status: "Zur \xDCbernahme bereit", Action: "Mit Beleg verkn\xFCpfen" } },
+      1: { label: "Beleg verifiziert", roleCopy: { Claim: "Ruhige Technik informiert ohne Unterbrechung.", Source: "Weiser \xB7 Brown \xB7 Seite 12", Confidence: "Verifiziert", Action: "Beleg \xFCbernehmen" } },
+      2: { label: "Fundstelle \xFCbernehmen" },
+      3: { label: "Zur\xFCck" }
+    };
+    if (label === "Rechercheablauf \xB7 Pausiert und Fehler") return {
+      0: { label: "Recherche pausiert", roleCopy: { Query: "Wirkung von Schreibassistenz", Progress: "2 von 5 Schritten", Sources: "3 Quellen vorgemerkt", Status: "Pausiert", Action: "Recherche fortsetzen" } },
+      1: { label: "Recherchefehler", roleCopy: { Query: "Wirkung von Schreibassistenz", Progress: "Recherche unterbrochen", Sources: "Quellenstand bleibt erhalten", Status: "Verbindung fehlgeschlagen", Action: "Erneut versuchen" } },
+      2: { label: "Recherche fortsetzen", roleCopy: { Icon: "\u21BB", Shortcut: "Wiederherstellung" } },
+      3: { label: "Fehlerdetails pr\xFCfen", roleCopy: { Icon: "!", Shortcut: "Details" } }
+    };
+    return {};
+  }
+  function responsiveContentOverrides(name) {
+    if (name === "Responsive / Bibliothek \xB7 320 Light" || name === "Responsive / Bibliothek \xB7 320 Dark") return {
+      0: { label: "Projekte", roleCopy: { Icon: "\u25A4", Label: "Projekte", Count: "1", Status: "Aktiv" } },
+      1: { label: "Suchen", roleCopy: { Icon: "\u2315", Input: "Suchen", Clear: "\u2014", Count: "0" } },
+      2: { label: "Ansicht", roleCopy: { Label: "Ansicht", Value: "Alle", Chevron: "\u2304", Status: "Bereit" } },
+      3: { label: "Text", roleCopy: { Leading: "\u25A4", Title: "Text", Meta: "1 S.", Status: "Klar", Action: "\u2192" } }
+    };
+    if (name === "Responsive / Editor \xB7 320 Light" || name === "Responsive / Editor \xB7 320 Dark") return {
+      0: { label: "Editor", roleCopy: { Icon: "\u25A4", Label: "Editor", Count: "1", Status: "Aktiv" } },
+      1: { label: "Text", roleCopy: { "Text Label": "Text", "Note Label": "Notiz", Indicator: "Aktiv" } },
+      2: { label: "1 offen", roleCopy: { Symbol: "\u25CE", Message: "1 offen", "Primary Action": "\u2192", "Secondary Action": "Alle" } },
+      3: { label: "Hinweis", roleCopy: { Symbol: "\xB6", Label: "Hinweis", Count: "1" } },
+      4: { label: "Beleg", roleCopy: { Type: "Hinweis", Title: "Beleg", Body: "Quelle fehlt.", Scope: "Hier", "Primary Action": "Pr\xFCfen", "Secondary Action": "Sp\xE4ter", Status: "Offen" } }
+    };
+    if (name === "Responsive / Annotation \xB7 Beleg fehlt \xB7 Dark") return {
+      0: { name: "Anker / Textbeleg fehlt", label: "Textbeleg fehlt", roleCopy: { Label: "Textbeleg fehlt", Count: "1 aktiver Hinweis" } },
+      1: { name: "Formular / Quelle erg\xE4nzen", label: "Quelle erg\xE4nzen", roleCopy: { Label: "Quelle erg\xE4nzen" } },
+      2: { name: "Anmerkung / Beleg fehlt", label: "Beleg fehlt", roleCopy: { "Primary Action": "Quelle verkn\xFCpfen", "Secondary Action": "Sp\xE4ter pr\xFCfen" } },
+      3: { name: "Aktion / Quelle verkn\xFCpfen", label: "Quelle verkn\xFCpfen", roleCopy: { Symbol: "\u2192", Label: "Quelle verkn\xFCpfen", Hint: "Gepr\xFCfte Fundstelle \xFCbernehmen" } },
+      4: { name: "Aktion / Sp\xE4ter pr\xFCfen", label: "Sp\xE4ter pr\xFCfen", roleCopy: { Symbol: "\u2190", Label: "Sp\xE4ter pr\xFCfen", Hint: "Hinweis bleibt offen" } }
+    };
+    if (name === "Responsive / Agent \xB7 Streaming \xB7 Dark") return {
+      0: { name: "Aura / Antwort entsteht", label: "Aura pr\xFCft den Auftrag" },
+      1: { name: "Agent / Antwort wird erstellt", label: "Antwort wird schrittweise erstellt" },
+      2: { name: "Composer / Belegl\xFCcken pr\xFCfen", label: "Belegl\xFCcken pr\xFCfen" },
+      3: { name: "Aktion / Senden gesperrt", label: "Senden gesperrt", roleCopy: { Symbol: "\xD7", Label: "Senden gesperrt", Hint: "Antwort wird noch erstellt" } }
+    };
+    if (name === "Responsive / Evidence \xB7 Konflikt \xB7 Dark") return {
+      0: { name: "Evidence / Quellenkonflikt", label: "Quellen widersprechen sich" },
+      1: { name: "Quelle / Ung\xFCltige Konfliktquelle", label: "Eine Konfliktquelle kann nicht gelesen werden", roleCopy: { Type: "Ung\xFCltige Quelle", Title: "Eine Konfliktquelle kann nicht gelesen werden", Meta: "Adresse oder Format der Fundstelle pr\xFCfen" } },
+      2: { name: "Leser / Abweichende Fundstelle", label: "Abweichende Fundstelle", roleCopy: { Title: "Abweichende Fundstelle", Excerpt: "Diese abweichende Fundstelle widerspricht der zweiten Quelle.", Status: "Zum Konflikt markiert", Action: "Fundstelle vergleichen" } }
+    };
+    if (name === "Responsive / Dialog \xB7 Lang \xB7 Dark") return {
+      0: { name: "Dialog / Datenkontrolle und Export", label: "Datenkontrolle und Export", roleCopy: { Eyebrow: "Exportpr\xFCfung" } },
+      1: { name: "Aktion / Export fortsetzen", label: "Fortfahren", roleCopy: { Symbol: "\u2192", Label: "Fortfahren", Hint: "Exportpr\xFCfung abschlie\xDFen" } },
+      2: { name: "Aktion / Datenkontrolle fortsetzen", label: "Zur\xFCck", roleCopy: { Symbol: "\u2190", Label: "Zur\xFCck", Hint: "Datenkontrolle weiter pr\xFCfen" } }
+    };
+    return {};
+  }
+  var agentSourceMatrix = [
+    ["Gespr\xE4ch \xB7 Bereit", [["aura", "State=Idle"], ["agent-message", "Role=User"], ["composer", "State=Empty"]]],
+    ["Gespr\xE4ch \xB7 Antwort entsteht", [["aura", "State=Working"], ["agent-message", "State=Streaming"], ["composer", "State=Draft"]]],
+    ["Gespr\xE4ch \xB7 Antwort bereit", [["aura", "State=Complete"], ["agent-message", "Role=Agent"], ["evidence-card", "Status=Unverified"], ["source-card", "Status=Ready"]]],
+    ["Gespr\xE4ch \xB7 Fehler & R\xFCckkehr", [["aura", "State=Error"], ["agent-message", "State=Error"], ["composer", "State=Draft"], ["status-symbol", "Status=Error"]]],
+    ["Entscheidungsverlauf", [["decision-card", "Status=Pending"], ["decision-card", "Status=Accepted"], ["decision-card", "Status=Rejected"], ["decision-card", "Status=Overridden"]]],
+    ["Evidence \xB7 Pr\xFCfmatrix", [["evidence-card", "Status=Unverified"], ["evidence-card", "Status=Verified"], ["evidence-card", "Status=Conflict"], ["evidence-card", "Status=Missing"], ["tag", "Kind=Source"]]],
+    ["Quellen \xB7 Bereit und Laden", [["source-card", "Status=Ready"], ["source-card", "Status=Loading"]]],
+    ["Quellen \xB7 Ung\xFCltig oder offline", [["source-card", "Status=Invalid"], ["source-card", "Status=Offline"], ["evidence-card", "Status=Missing"]]],
+    ["Import \xB7 Auswahl und Validierung", [["import-panel", "State=Empty"], ["import-panel", "State=Validating"]]],
+    ["Import \xB7 Bereit", [["import-panel", "State=Ready"], ["source-card", "Status=Ready"]]],
+    ["Import \xB7 Fehler", [["import-panel", "State=Error"], ["status-symbol", "Status=Error"]]],
+    ["Leser \xB7 Fundstelle", [["reader-panel", "State=Reading"], ["reader-panel", "State=Highlight"], ["evidence-card", "Status=Verified"]]],
+    ["Leser \xB7 Nicht verf\xFCgbar", [["reader-panel", "State=Unavailable"], ["source-card", "Status=Offline"], ["status-symbol", "Status=Error"]]],
+    ["Recherche \xB7 \xDCbersicht", [["research-card", "Status=Planned"], ["research-card", "Status=Running"], ["research-card", "Status=Paused"], ["research-card", "Status=Ready"]]],
+    ["Recherche \xB7 Fehler", [["research-card", "Status=Error"], ["aura", "State=Error"], ["status-symbol", "Status=Error"]]]
+  ];
+  var secondaryMatrix = [
+    ["Einstellungen \xB7 Bereit", [["field", "State=Filled"], ["select", "State=Selected"], ["mode-toggle", "Mode=Text, State=Active"], ["button", "Kind=Primary, State=Default"], ["button", "Kind=Secondary, State=Default"]]],
+    ["Einstellungen \xB7 Validierungsfehler", [["field", "State=Error"], ["select", "State=Open"], ["mode-toggle", "Mode=Text, State=Active"], ["button", "Kind=Primary, State=Default"], ["button", "Kind=Secondary, State=Default"]]],
+    ["Link-Men\xFC \xB7 Ge\xF6ffnet", [["menu-item", "State=Default"], ["menu-item", "State=Hover"], ["menu-item", "State=Selected"], ["menu-item", "State=Disabled"]]],
+    ["Slash-Men\xFC \xB7 Suche leer", [["search", "State=Empty"], ["menu-item", "State=Default"], ["menu-item", "State=Default"]]],
+    ["Slash-Men\xFC \xB7 Treffer", [["search", "State=Results"], ["menu-item", "State=Default"], ["menu-item", "State=Selected"]]],
+    ["Slash-Men\xFC \xB7 Keine Treffer", [["search", "State=No Results"], ["empty-state", "Context=No Active Annotation"], ["button", "Kind=Secondary, State=Default"]]],
+    ["Blockeinf\xFCgung \xB7 Position w\xE4hlen", [["select", "State=Open"], ["menu-item", "State=Selected"], ["dialog-action", "Kind=Primary"], ["dialog-action", "Kind=Secondary"]]],
+    ["Quellenleser \xB7 Fundstelle \xFCbernehmen", [["reader-panel", "State=Highlight"], ["evidence-card", "Status=Verified"], ["dialog-action", "Kind=Primary"], ["dialog-action", "Kind=Secondary"]]],
+    ["Rechercheablauf \xB7 Pausiert und Fehler", [["research-card", "Status=Paused"], ["research-card", "Status=Error"], ["menu-item", "State=Default"], ["menu-item", "State=Default"]]]
+  ];
+  function responsiveBase(subject, width) {
+    const collapsed = width === 720 || width === 320;
+    return subject === "Bibliothek" ? [["nav-item", collapsed ? "State=Collapsed" : "State=Default"], ["search", "State=Empty"], ["select", "State=Selected"], ["list-row", "State=Default"]] : [["nav-item", collapsed ? "State=Collapsed" : "State=Default"], ["mode-toggle", "Mode=Text, State=Active"], ["review-bar", "Status=Open"], ["annotation-anchor", "Kind=Text, State=Idle"], ["annotation-card", "State=Open"]];
+  }
+  var responsiveMatrix = [
+    ["Responsive / Bibliothek \xB7 1440 Light", 1440, "Light", "Bibliothek", 1440, responsiveBase("Bibliothek", 1440)],
+    ["Responsive / Bibliothek \xB7 1024 Light", 1024, "Light", "Bibliothek", 1024, responsiveBase("Bibliothek", 1024)],
+    ["Responsive / Bibliothek \xB7 720 Light", 720, "Light", "Bibliothek", 720, responsiveBase("Bibliothek", 720)],
+    ["Responsive / Bibliothek \xB7 320 Light", 320, "Light", "Bibliothek", 320, responsiveBase("Bibliothek", 320)],
+    ["Responsive / Editor \xB7 1440 Light", 1440, "Light", "Editor", 1440, responsiveBase("Editor", 1440)],
+    ["Responsive / Editor \xB7 1024 Light", 1024, "Light", "Editor", 1024, responsiveBase("Editor", 1024)],
+    ["Responsive / Editor \xB7 720 Light", 720, "Light", "Editor", 720, responsiveBase("Editor", 720)],
+    ["Responsive / Editor \xB7 320 Light", 320, "Light", "Editor", 320, responsiveBase("Editor", 320)],
+    ["Responsive / Bibliothek \xB7 1440 Dark", 1440, "Dark", "Bibliothek", 1440, responsiveBase("Bibliothek", 1440)],
+    ["Responsive / Bibliothek \xB7 320 Dark", 320, "Dark", "Bibliothek", 320, responsiveBase("Bibliothek", 320)],
+    ["Responsive / Editor \xB7 1440 Dark", 1440, "Dark", "Editor", 1440, responsiveBase("Editor", 1440)],
+    ["Responsive / Editor \xB7 320 Dark", 320, "Dark", "Editor", 320, responsiveBase("Editor", 320)],
+    ["Responsive / Annotation \xB7 Beleg fehlt \xB7 Dark", 720, "Dark", "Annotation", "reference", [["annotation-anchor", "Kind=Text, State=Active"], ["annotation-form", "Form=Source"], ["annotation-card", "State=Open"], ["dialog-action", "Kind=Primary"], ["dialog-action", "Kind=Secondary"]]],
+    ["Responsive / Agent \xB7 Streaming \xB7 Dark", 720, "Dark", "Agent", "reference", [["aura", "State=Working"], ["agent-message", "State=Streaming"], ["composer", "State=Draft"], ["dialog-action", "Kind=Disabled"]]],
+    ["Responsive / Evidence \xB7 Konflikt \xB7 Dark", 720, "Dark", "Evidence", "reference", [["evidence-card", "Status=Conflict"], ["source-card", "Status=Invalid"], ["reader-panel", "State=Highlight"]]],
+    ["Responsive / Dialog \xB7 Lang \xB7 Dark", 720, "Dark", "Dialog", "reference", [["dialog", "Size=Long"], ["dialog-action", "Kind=Primary"], ["dialog-action", "Kind=Secondary"]]]
+  ];
+  var SECONDARY_VIEW_DEFINITIONS = freezeSecondary({
+    agentSources: agentSourceMatrix.map(([suffix, mapping]) => secondaryView({
+      name: `Agent & Quellen / ${suffix}`,
+      sectionName: "07 \xB7 Agent & Quellen",
+      instances: mappedInstances(mapping, suffix)
+    })),
+    secondary: secondaryMatrix.map(([suffix, mapping]) => secondaryView({
+      name: `Nebenansicht / ${suffix}`,
+      sectionName: "09 \xB7 Men\xFCs & Nebenansichten",
+      instances: mappedInstances(mapping, suffix, secondaryContentOverrides(suffix))
+    })),
+    responsive: responsiveMatrix.map(([name, width, theme, subject, breakpoint, mapping]) => secondaryView({
+      name,
+      sectionName: "10 \xB7 Responsive & Dark",
+      width,
+      theme,
+      subject,
+      breakpoint,
+      layoutMode: width === 320 ? "VERTICAL" : "HORIZONTAL",
+      instances: mappedInstances(mapping, `${subject} \xB7 ${width}px \xB7 ${theme}`, responsiveContentOverrides(name))
+    }))
+  });
   var fixedSections = [
     Object.freeze({ name: "00 \xB7 \xDCbersicht", kind: "overview" }),
     Object.freeze({ name: "01 \xB7 Foundations", kind: "foundations" }),
@@ -2021,6 +2268,562 @@ ${currentValidation.errors.join("\n")}`);
     if (!writeBarrierValidation.valid) throw new Error(`TOCTOU: Core-View-Inventar an der Schreibbarriere ung\xFCltig.
 ${writeBarrierValidation.errors.join("\n")}`);
     if (JSON.stringify(canonicalCoreViewMutationSnapshot(currentInventory)) !== JSON.stringify(canonicalCoreViewMutationSnapshot(writeBarrierInventory))) throw new Error("TOCTOU: Core-View-Inventar wurde vor dem ersten Schreibzugriff ver\xE4ndert.");
+    return mutate(context, writeBarrierInventory, resolvedInventoryNodes);
+  }
+  var SECONDARY_SECTION_NAMES = Object.freeze([
+    "07 \xB7 Agent & Quellen",
+    "09 \xB7 Men\xFCs & Nebenansichten",
+    "10 \xB7 Responsive & Dark"
+  ]);
+  var SECONDARY_LEGACY_VIEW_SECTIONS = Object.freeze({
+    "Agent \xB7 Ruhe": "07 \xB7 Agent & Quellen",
+    "Agent \xB7 Gespr\xE4ch": "07 \xB7 Agent & Quellen",
+    "Agent \xB7 Antwort mit Fundstelle": "07 \xB7 Agent & Quellen",
+    "Agent \xB7 Fehler und R\xFCckkehr": "07 \xB7 Agent & Quellen",
+    "Dokumentmen\xFC \xB7 geschlossen": "09 \xB7 Men\xFCs & Nebenansichten",
+    "Dokumentmen\xFC \xB7 offen": "09 \xB7 Men\xFCs & Nebenansichten",
+    "Quellenleser \xB7 offen": "09 \xB7 Men\xFCs & Nebenansichten",
+    "Recherchelauf \xB7 pausiert": "09 \xB7 Men\xFCs & Nebenansichten",
+    "Entscheidungsverlauf \xB7 gef\xFCllt": "09 \xB7 Men\xFCs & Nebenansichten",
+    "Leerer Zustand \xB7 Recovery": "09 \xB7 Men\xFCs & Nebenansichten",
+    "Editor / 1440px \xB7 Responsive": "10 \xB7 Responsive & Dark",
+    "Editor / 1024px \xB7 Responsive": "10 \xB7 Responsive & Dark",
+    "Editor / 720px \xB7 Responsive": "10 \xB7 Responsive & Dark",
+    "Editor / 320px \xB7 Kleinbreite": "10 \xB7 Responsive & Dark",
+    "Editor / 1440px \xB7 Dark": "10 \xB7 Responsive & Dark"
+  });
+  var SECONDARY_LEGACY_RESPONSIVE_WIDTHS = Object.freeze({
+    "Editor / 1440px \xB7 Responsive": "1440",
+    "Editor / 1024px \xB7 Responsive": "1024",
+    "Editor / 720px \xB7 Responsive": "720",
+    "Editor / 320px \xB7 Kleinbreite": "320",
+    "Editor / 1440px \xB7 Dark": "1440"
+  });
+  function secondaryDefinitionsWithGroups() {
+    return Object.entries(SECONDARY_VIEW_DEFINITIONS).flatMap(([group, definitions]) => definitions.map((definition2) => ({ group, definition: definition2 })));
+  }
+  function secondaryNodeId(record) {
+    return (record == null ? void 0 : record.nodeId) || (record == null ? void 0 : record.id) || null;
+  }
+  function secondaryOwner(record) {
+    var _a, _b, _c;
+    return (_c = (_b = record == null ? void 0 : record.owner) != null ? _b : (_a = record == null ? void 0 : record.pluginData) == null ? void 0 : _a.owner) != null ? _c : null;
+  }
+  function secondaryMarker(record) {
+    var _a;
+    if ((record == null ? void 0 : record.secondaryView) && typeof record.secondaryView === "object") return record.secondaryView;
+    const raw = (_a = record == null ? void 0 : record.pluginData) == null ? void 0 : _a.secondaryView;
+    if (!raw || typeof raw !== "string") return null;
+    try {
+      return JSON.parse(raw);
+    } catch (_error) {
+      return { invalid: true };
+    }
+  }
+  function secondaryUntouchedPageChildLooksTargeted(record, modernViewNames) {
+    var _a, _b;
+    const markerKeys = ["secondaryView", "ondaSecondaryView", "responsiveFrame", "ondaResponsiveFrame", "legacy"];
+    const hasMarker = markerKeys.some((key) => {
+      var _a2;
+      return [record == null ? void 0 : record[key], (_a2 = record == null ? void 0 : record.pluginData) == null ? void 0 : _a2[key]].some((value) => value !== void 0 && value !== null && value !== "");
+    });
+    const hasRole = [record == null ? void 0 : record.role, (_a = record == null ? void 0 : record.pluginData) == null ? void 0 : _a.role].some((value) => value !== void 0 && value !== null && value !== "");
+    const hasOndaOwner = [record == null ? void 0 : record.owner, (_b = record == null ? void 0 : record.pluginData) == null ? void 0 : _b.owner].includes(PLUGIN_ORIGIN);
+    return modernViewNames.has(record == null ? void 0 : record.name) || Object.hasOwn(SECONDARY_LEGACY_VIEW_SECTIONS, record == null ? void 0 : record.name) || hasMarker || hasRole || hasOndaOwner && (record == null ? void 0 : record.type) !== "SECTION";
+  }
+  function secondaryUntouchedPageDescendantLooksTargeted(record, modernViewNames, secondaryInstanceNames) {
+    const markerKeys = ["secondaryView", "ondaSecondaryView", "responsiveFrame", "ondaResponsiveFrame", "legacy", "secondaryRegionContract"];
+    const hasSecondaryMarker = markerKeys.some((key) => {
+      var _a;
+      return [record == null ? void 0 : record[key], (_a = record == null ? void 0 : record.pluginData) == null ? void 0 : _a[key]].some((value) => value !== void 0 && value !== null && value !== "");
+    });
+    return modernViewNames.has(record == null ? void 0 : record.name) || Object.hasOwn(SECONDARY_LEGACY_VIEW_SECTIONS, record == null ? void 0 : record.name) || secondaryInstanceNames.has(record == null ? void 0 : record.name) || hasSecondaryMarker;
+  }
+  function secondaryExpectedMarker(group, definition2) {
+    var _a;
+    return {
+      group,
+      theme: definition2.theme,
+      subject: definition2.subject || null,
+      breakpoint: (_a = definition2.breakpoint) != null ? _a : null
+    };
+  }
+  function secondaryLegacyChildren(view) {
+    return [
+      ...Array.isArray(view == null ? void 0 : view.standIns) ? view.standIns : [],
+      ...Array.isArray(view == null ? void 0 : view.legacyChildren) ? view.legacyChildren : [],
+      ...Array.isArray(view == null ? void 0 : view.children) ? view.children : []
+    ];
+  }
+  function secondaryDuplicateNames(records, key, label, errors) {
+    const seen = /* @__PURE__ */ new Set();
+    for (const record of records) {
+      const value = record == null ? void 0 : record[key];
+      if (seen.has(value)) errors.push(`Secondary-Views: doppelter ${label} ${(record == null ? void 0 : record.name) || value || "<unbenannt>"}`);
+      else seen.add(value);
+    }
+  }
+  function secondaryRecordOwnedAndIdentified(record) {
+    return Boolean(secondaryNodeId(record)) && secondaryOwner(record) === PLUGIN_ORIGIN;
+  }
+  function sameSecondaryIdentity(left, right) {
+    return ["nodeId", "id", "name", "type", "owner", "parentId", "parentType", "parentName"].every((key) => {
+      var _a, _b;
+      return ((_a = left == null ? void 0 : left[key]) != null ? _a : null) === ((_b = right == null ? void 0 : right[key]) != null ? _b : null);
+    });
+  }
+  function validateSecondaryRecordedAncestry(record, root, label, identify, errors) {
+    var _a, _b;
+    const rootId = secondaryNodeId(root);
+    const chain = Array.isArray(record == null ? void 0 : record.ancestorChain) ? record.ancestorChain : [];
+    if ((record == null ? void 0 : record.parentId) === rootId) {
+      if (record.parentType !== root.type || record.parentName !== root.name || chain.length) {
+        errors.push(`Secondary-Views: falsche Ancestry ${label}`);
+        return false;
+      }
+      if (Array.isArray(record.ancestorIds) && !sameSecondaryValue(record.ancestorIds, [rootId])) errors.push(`Secondary-Views: falsche Ancestor-IDs ${label}`);
+      return true;
+    }
+    if (!chain.length) {
+      errors.push(`Secondary-Views: unvollst\xE4ndige Ancestry-Kette ${label}`);
+      return false;
+    }
+    let valid = true;
+    if (record.parentId !== secondaryNodeId(chain[0]) || record.parentType !== ((_a = chain[0]) == null ? void 0 : _a.type) || record.parentName !== ((_b = chain[0]) == null ? void 0 : _b.name)) valid = false;
+    for (const [index, ancestor] of chain.entries()) {
+      identify(ancestor, `${label}/${(ancestor == null ? void 0 : ancestor.name) || "Ancestor"}`, true);
+      if (!secondaryRecordOwnedAndIdentified(ancestor) || !["FRAME", "GROUP", "INSTANCE"].includes(ancestor.type)) valid = false;
+      const parent = chain[index + 1] || root;
+      if (ancestor.parentId !== secondaryNodeId(parent) || ancestor.parentType !== parent.type || ancestor.parentName !== parent.name) valid = false;
+    }
+    const expectedAncestorIds = [...chain.map(secondaryNodeId), rootId];
+    if (!sameSecondaryValue(record.ancestorIds, expectedAncestorIds)) valid = false;
+    if (!valid) errors.push(`Secondary-Views: falsche Ancestry-Kette ${label}`);
+    return valid;
+  }
+  function reconcileSecondaryContainerChildren(records, errors) {
+    const recordById = new Map(records.map((record) => [secondaryNodeId(record), record]));
+    const directChildren = new Map(records.map((record) => [secondaryNodeId(record), []]));
+    for (const child of records) {
+      const parentId = child == null ? void 0 : child.parentId;
+      if (parentId && recordById.has(parentId)) directChildren.get(parentId).push(secondaryNodeId(child));
+    }
+    for (const container of records.filter((record) => ["PAGE", "SECTION", "FRAME", "GROUP", "INSTANCE"].includes(record == null ? void 0 : record.type))) {
+      const containerId = secondaryNodeId(container);
+      const expectedIds = directChildren.get(containerId) || [];
+      const actualIds = Array.isArray(container.childIds) ? container.childIds : null;
+      if (!actualIds || !Number.isInteger(container.childCount)) {
+        errors.push(`Secondary-Views: Child-Inventar fehlt ${container.name || containerId}`);
+        continue;
+      }
+      const duplicates2 = actualIds.filter((id, index) => actualIds.indexOf(id) !== index);
+      const expectedSet = new Set(expectedIds);
+      const actualSet = new Set(actualIds);
+      const unaccounted = actualIds.filter((id) => !expectedSet.has(id));
+      const missing = expectedIds.filter((id) => !actualSet.has(id));
+      if (container.childCount !== actualIds.length || actualIds.length !== expectedIds.length || duplicates2.length || unaccounted.length || missing.length) {
+        const detail = [.../* @__PURE__ */ new Set([...unaccounted, ...missing, ...duplicates2])].join(", ") || `${container.childCount}/${actualIds.length}/${expectedIds.length}`;
+        errors.push(`Secondary-Views: Child-Inventar ung\xFCltig ${container.name || containerId}: ${detail}`);
+      }
+    }
+  }
+  function secondaryExpectedComponentLink(inventory, contract) {
+    const components = Array.isArray(inventory.components) ? inventory.components : Array.isArray(inventory.componentSets) ? inventory.componentSets : [];
+    const component = components.find((candidate) => candidate.id === contract.setId || candidate.componentId === contract.setId);
+    const variant = ((component == null ? void 0 : component.variants) || []).find((candidate) => candidate.name === contract.variant);
+    if ((component == null ? void 0 : component.type) !== "COMPONENT_SET" || secondaryOwner(component) !== PLUGIN_ORIGIN || (variant == null ? void 0 : variant.type) !== "COMPONENT" || secondaryOwner(variant) !== PLUGIN_ORIGIN || variant.parentId !== secondaryNodeId(component) || variant.parentType !== "COMPONENT_SET" || variant.parentName !== component.name) return null;
+    return { componentSetId: secondaryNodeId(component), mainComponentId: secondaryNodeId(variant) };
+  }
+  function secondaryVariableId(inventory, name, collectionName = null) {
+    const candidates = (inventory.variables || []).filter((variable) => variable.name === name);
+    const hasCollectionIdentity = candidates.some((variable) => variable.collectionName || variable.variableCollectionName);
+    const matches = collectionName && hasCollectionIdentity ? candidates.filter((variable) => (variable.collectionName || variable.variableCollectionName) === collectionName) : candidates;
+    return matches.length === 1 ? matches[0].id || matches[0].nodeId || null : null;
+  }
+  function expectedSecondaryRegionBindings(inventory, contract, theme = "Light") {
+    const semanticCollection = `Onda \xB7 Semantic \xB7 ${theme}`;
+    const surfaceId = secondaryVariableId(inventory, "color/surface", semanticCollection);
+    const borderId = secondaryVariableId(inventory, "color/border", semanticCollection);
+    const spacingId = (value) => value === 0 ? [] : [secondaryVariableId(inventory, `spacing/${value}`, "Onda \xB7 Dimension")].filter(Boolean);
+    const requiredSpacingValues = [contract.itemSpacing, contract.padding.top, contract.padding.right, contract.padding.bottom, contract.padding.left].filter((value) => value !== 0);
+    if (!surfaceId || !borderId || requiredSpacingValues.some((value) => spacingId(value).length !== 1)) return null;
+    return {
+      fillBindings: [{ index: 0, type: "SOLID", variableIds: [surfaceId] }],
+      strokeBindings: [{ index: 0, type: "SOLID", variableIds: [borderId] }],
+      fieldVariableIds: {
+        itemSpacing: spacingId(contract.itemSpacing),
+        paddingTop: spacingId(contract.padding.top),
+        paddingRight: spacingId(contract.padding.right),
+        paddingBottom: spacingId(contract.padding.bottom),
+        paddingLeft: spacingId(contract.padding.left)
+      }
+    };
+  }
+  function secondaryRegionBindingsMatch(region, expected) {
+    if (!expected) return false;
+    if (!sameSecondaryValue(region.fillBindings, expected.fillBindings) || !sameSecondaryValue(region.strokeBindings, expected.strokeBindings)) return false;
+    return Object.entries(expected.fieldVariableIds).every(([field, ids]) => {
+      var _a;
+      return sameSecondaryValue(((_a = region.fieldVariableIds) == null ? void 0 : _a[field]) || [], ids);
+    });
+  }
+  function validateSecondaryViewMutationInventory(inventory = {}) {
+    var _a, _b, _c, _d, _e, _f;
+    const errors = [];
+    const targetPage = inventory.targetPage;
+    const targetPageId = secondaryNodeId(targetPage);
+    const sections = Array.isArray(inventory.sections) ? inventory.sections : [];
+    const views = Array.isArray(inventory.views) ? inventory.views : [];
+    const legacyViews = Array.isArray(inventory.legacyViews) ? inventory.legacyViews : [];
+    const untouchedPageChildren = Array.isArray(inventory.untouchedPageChildren) ? inventory.untouchedPageChildren : [];
+    const untouchedPageDescendants = Array.isArray(inventory.untouchedPageDescendants) ? inventory.untouchedPageDescendants : [];
+    const sectionNames = new Set(SECONDARY_SECTION_NAMES);
+    const definitions = secondaryDefinitionsWithGroups();
+    const definitionByName = new Map(definitions.map((entry) => [entry.definition.name, entry]));
+    const modernViewNames = new Set(definitionByName.keys());
+    const secondaryInstanceNames = new Set(definitions.flatMap((entry) => entry.definition.instances.map((instance) => instance.name)));
+    const sectionByName = new Map(sections.map((section) => [section.name, section]));
+    const seenNodeIds = /* @__PURE__ */ new Map();
+    const categorizedRecords = [];
+    function identify(record, context, repeatedAncestorReference = false) {
+      const id = secondaryNodeId(record);
+      if (!id) return;
+      const seen = seenNodeIds.get(id);
+      if (seen) {
+        if (!repeatedAncestorReference || !seen.ancestor || !sameSecondaryIdentity(seen.record, record)) errors.push(`Secondary-Views: doppelte Node-ID ${id} bei ${(record == null ? void 0 : record.name) || context}`);
+        return;
+      }
+      seenNodeIds.set(id, { context, record, ancestor: repeatedAncestorReference });
+      categorizedRecords.push(record);
+    }
+    if (!targetPageId || (targetPage == null ? void 0 : targetPage.type) !== "PAGE" || (targetPage == null ? void 0 : targetPage.name) !== TARGET_PAGE_NAME) errors.push("Secondary-Views: Zielseite Page 1 ung\xFCltig");
+    else identify(targetPage, TARGET_PAGE_NAME);
+    secondaryDuplicateNames(sections, "name", "Section", errors);
+    for (const section of sections) {
+      identify(section, section.name);
+      if (!sectionNames.has(section.name) || section.type !== "SECTION" || !secondaryRecordOwnedAndIdentified(section) || section.parentId !== targetPageId || section.parentType !== "PAGE" || section.parentName !== TARGET_PAGE_NAME) errors.push(`Secondary-Views: ung\xFCltige Section ${section.name || "<unbenannt>"}`);
+    }
+    secondaryDuplicateNames(views, "name", "View", errors);
+    secondaryDuplicateNames(legacyViews, "name", "Legacy-View", errors);
+    for (const view of views) {
+      const entry = definitionByName.get(view.name);
+      identify(view, view.name);
+      if (!entry) {
+        errors.push(`Secondary-Views: unerwarteter oder unbekannt markierter View-Kandidat ${view.name || "<unbenannt>"}`);
+        continue;
+      }
+      const { definition: definition2 } = entry;
+      const section = sectionByName.get(definition2.sectionName);
+      if (!secondaryRecordOwnedAndIdentified(view) || view.type !== "FRAME" || !section || view.parentId !== secondaryNodeId(section) || view.parentType !== "SECTION" || view.parentName !== definition2.sectionName) errors.push(`Secondary-Views: ung\xFCltiger View ${view.name}`);
+      const layoutRegions = Array.isArray(view.layoutRegions) ? view.layoutRegions : [];
+      const copyNodes = Array.isArray(view.copyNodes) ? view.copyNodes : [];
+      const instances = Array.isArray(view.instances) ? view.instances : [];
+      const standIns = Array.isArray(view.standIns) ? view.standIns : [];
+      const expectedRegions = new Map(definition2.regions.map((region) => [region.name, region]));
+      const regionByName = new Map(layoutRegions.map((region) => [region.name, region]));
+      secondaryDuplicateNames(layoutRegions, "name", `Region in ${view.name}`, errors);
+      for (const region of layoutRegions) {
+        identify(region, `${view.name}/${region.name}`);
+        const contract = expectedRegions.get(region.name);
+        if (!contract) {
+          errors.push(`Secondary-Views: unerwartete Region ${view.name}/${region.name || "<unbenannt>"}`);
+          continue;
+        }
+        const expectedParent = contract.parentName === definition2.name ? view : regionByName.get(contract.parentName);
+        if (!secondaryRecordOwnedAndIdentified(region) || region.type !== "FRAME" || !expectedParent || region.parentId !== secondaryNodeId(expectedParent) || region.parentType !== "FRAME" || region.parentName !== contract.parentName) errors.push(`Secondary-Views: falsche Region-Ancestry ${view.name}/${region.name}`);
+      }
+      secondaryDuplicateNames(copyNodes, "role", `Copy in ${view.name}`, errors);
+      for (const copy of copyNodes) {
+        identify(copy, `${view.name}/${copy.name}`);
+        const contract = definition2.copyContracts.find((candidate) => candidate.role === copy.role);
+        const parent = regionByName.get(contract == null ? void 0 : contract.region);
+        if (!contract) errors.push(`Secondary-Views: unerwartete Copy ${view.name}/${copy.name || copy.role || "<unbenannt>"}`);
+        else if (!secondaryRecordOwnedAndIdentified(copy) || copy.type !== "TEXT" || !parent || copy.parentId !== secondaryNodeId(parent) || copy.parentType !== "FRAME" || copy.parentName !== contract.region) errors.push(`Secondary-Views: falsche Copy-Ancestry ${view.name}/${copy.name || copy.role}`);
+      }
+      secondaryDuplicateNames(instances, "name", `Instanz in ${view.name}`, errors);
+      for (const instance of instances) {
+        identify(instance, `${view.name}/${instance.name}`);
+        const contract = definition2.instances.find((candidate) => candidate.name === instance.name);
+        const parent = regionByName.get(contract == null ? void 0 : contract.region);
+        if (!contract) errors.push(`Secondary-Views: unerwartete Instanz ${view.name}/${instance.name || "<unbenannt>"}`);
+        else if (!secondaryRecordOwnedAndIdentified(instance) || instance.type !== "INSTANCE" || !parent || instance.parentId !== secondaryNodeId(parent) || instance.parentType !== "FRAME" || instance.parentName !== contract.region) errors.push(`Secondary-Views: falsche Instanz-Ancestry ${view.name}/${instance.name}`);
+        const roleDescendants = Array.isArray(instance.roleDescendants) ? instance.roleDescendants : [];
+        secondaryDuplicateNames(roleDescendants, "role", `Role in ${view.name}/${instance.name}`, errors);
+        const roleIds = /* @__PURE__ */ new Set();
+        const componentDefinition3 = COMPONENT_DEFINITIONS.find((component) => component.id === (contract == null ? void 0 : contract.setId));
+        for (const role of roleDescendants) {
+          identify(role, `${view.name}/${instance.name}/${role.name}`);
+          const roleId = secondaryNodeId(role);
+          if (roleIds.has(roleId)) errors.push(`Secondary-Views: doppelte Role-ID ${view.name}/${instance.name}/${role.name}`);
+          roleIds.add(roleId);
+          const expectedRole = componentDefinition3 == null ? void 0 : componentDefinition3.roles.find((candidate) => candidate.name === role.role);
+          const copyMatchesType = role.type === "TEXT" ? Boolean(contract && Object.hasOwn(contract.roleCopy, role.role)) : Boolean(contract && !Object.hasOwn(contract.roleCopy, role.role));
+          const nestedUnderInstance = role.parentInstanceId === secondaryNodeId(instance) && validateSecondaryRecordedAncestry(role, instance, `${view.name}/${instance.name}/${role.name || role.role || "<unbenannt>"}`, identify, errors);
+          if (!expectedRole || role.name !== `Role/${role.role}` || !secondaryRecordOwnedAndIdentified(role) || role.type !== expectedRole.type || !copyMatchesType || !nestedUnderInstance) {
+            errors.push(`Secondary-Views: ungesch\xFCtzte oder verschobene Role ${view.name}/${instance.name}/${role.name || role.role || "<unbenannt>"}`);
+          }
+        }
+      }
+      for (const standIn of standIns) {
+        identify(standIn, `${view.name}/${standIn.name}`);
+        const belongsToView = validateSecondaryRecordedAncestry(standIn, view, `${view.name}/${standIn.name || "<unbenannt>"}`, identify, errors);
+        if (!secondaryRecordOwnedAndIdentified(standIn) || !belongsToView) errors.push(`Secondary-Views: ungesch\xFCtzter oder verschobener Ersatzknoten ${view.name}/${standIn.name || "<unbenannt>"}`);
+        else if (standIn.visible !== false) errors.push(`Secondary-Views: sichtbarer Legacy-Rest ${view.name}/${standIn.name || "<unbenannt>"}`);
+      }
+    }
+    for (const view of legacyViews) {
+      identify(view, view.name);
+      const expectedSectionName = SECONDARY_LEGACY_VIEW_SECTIONS[view.name];
+      const section = sectionByName.get(expectedSectionName);
+      const expectedResponsiveWidth = SECONDARY_LEGACY_RESPONSIVE_WIDTHS[view.name];
+      const responsiveMarker = String((_f = (_e = (_c = (_a = view.responsiveFrame) != null ? _a : view.ondaResponsiveFrame) != null ? _c : (_b = view.pluginData) == null ? void 0 : _b.responsiveFrame) != null ? _e : (_d = view.pluginData) == null ? void 0 : _d.ondaResponsiveFrame) != null ? _f : "");
+      if (!expectedSectionName || !secondaryRecordOwnedAndIdentified(view) || view.type !== "FRAME" || !section || view.parentId !== secondaryNodeId(section) || view.parentType !== "SECTION" || view.parentName !== expectedSectionName || expectedResponsiveWidth && responsiveMarker !== expectedResponsiveWidth) {
+        errors.push(`Secondary-Views: ung\xFCltiger Legacy-View ${view.name || "<unbenannt>"}`);
+      }
+      const children = secondaryLegacyChildren(view);
+      for (const child of children) {
+        identify(child, `${view.name}/${child.name}`);
+        const belongsToView = validateSecondaryRecordedAncestry(child, view, `${view.name}/${child.name || "<unbenannt>"}`, identify, errors);
+        if (!secondaryRecordOwnedAndIdentified(child) || !belongsToView) errors.push(`Secondary-Views: ungesch\xFCtztes oder verschobenes Legacy-Kind ${view.name}/${child.name || "<unbenannt>"}`);
+      }
+    }
+    for (const child of untouchedPageChildren) {
+      const id = secondaryNodeId(child);
+      if (!id || seenNodeIds.has(id) || !child.name || !child.type || ["DOCUMENT", "PAGE"].includes(child.type) || sectionNames.has(child.name) || secondaryUntouchedPageChildLooksTargeted(child, modernViewNames) || child.parentId !== targetPageId || child.parentType !== "PAGE" || child.parentName !== TARGET_PAGE_NAME) {
+        errors.push(`Secondary-Views: ung\xFCltiges unber\xFChrtes Page-Kind ${child.name || id || "<unbenannt>"}`);
+        continue;
+      }
+      identify(child, child.name);
+    }
+    const untouchedById = new Map(untouchedPageChildren.map((record) => [secondaryNodeId(record), record]));
+    for (const descendant of untouchedPageDescendants) untouchedById.set(secondaryNodeId(descendant), descendant);
+    for (const descendant of untouchedPageDescendants) {
+      const id = secondaryNodeId(descendant);
+      const parent = untouchedById.get(descendant == null ? void 0 : descendant.parentId);
+      if (!id || seenNodeIds.has(id) || !descendant.name || !descendant.type || ["DOCUMENT", "PAGE"].includes(descendant.type) || sectionNames.has(descendant.name) || secondaryUntouchedPageDescendantLooksTargeted(descendant, modernViewNames, secondaryInstanceNames) || !parent || descendant.parentType !== parent.type || descendant.parentName !== parent.name) {
+        errors.push(`Secondary-Views: ung\xFCltiger unber\xFChrter Page-Nachfahr ${descendant.name || id || "<unbenannt>"}`);
+        continue;
+      }
+      identify(descendant, descendant.name);
+    }
+    reconcileSecondaryContainerChildren(categorizedRecords, errors);
+    return { valid: errors.length === 0, errors };
+  }
+  function sameSecondaryValue(left, right) {
+    return JSON.stringify(canonicalScalar(left)) === JSON.stringify(canonicalScalar(right));
+  }
+  function buildSecondaryViewRecoveryActions(inventory = {}) {
+    var _a, _b, _c;
+    const validation = validateSecondaryViewMutationInventory(inventory);
+    if (!validation.valid) throw new Error(validation.errors.join("\n"));
+    const actions = [];
+    const sections = Array.isArray(inventory.sections) ? inventory.sections : [];
+    const views = Array.isArray(inventory.views) ? inventory.views : [];
+    for (const sectionName of SECONDARY_SECTION_NAMES) if (!sections.some((section) => section.name === sectionName)) actions.push({ type: "section", sectionName });
+    for (const { group, definition: definition2 } of secondaryDefinitionsWithGroups()) {
+      const view = views.find((candidate) => candidate.name === definition2.name);
+      if (!view) {
+        actions.push({ type: "view", viewName: definition2.name });
+        continue;
+      }
+      if (!sameSecondaryValue(secondaryMarker(view), secondaryExpectedMarker(group, definition2))) actions.push({ type: "mark-view", viewName: definition2.name });
+      const layoutRegions = Array.isArray(view.layoutRegions) ? view.layoutRegions : [];
+      for (const region of definition2.regions) {
+        const candidate = layoutRegions.find((item) => item.name === region.name);
+        if (!candidate) actions.push({ type: "region", viewName: definition2.name, regionName: region.name });
+        else if (!secondaryRegionBindingsMatch(candidate, expectedSecondaryRegionBindings(inventory, region, definition2.theme))) actions.push({ type: "bind-region", viewName: definition2.name, regionName: region.name });
+      }
+      const copyNodes = Array.isArray(view.copyNodes) ? view.copyNodes : [];
+      for (const contract of definition2.copyContracts) {
+        const copy = copyNodes.find((candidate) => candidate.role === contract.role);
+        if (!copy || copy.characters !== contract.characters) actions.push({ type: "copy", viewName: definition2.name, role: contract.role });
+      }
+      const instances = Array.isArray(view.instances) ? view.instances : [];
+      for (const contract of definition2.instances) {
+        const instance = instances.find((candidate) => candidate.name === contract.name);
+        if (!instance) {
+          actions.push({ type: "instance", viewName: definition2.name, instanceName: contract.name });
+          continue;
+        }
+        const component = COMPONENT_DEFINITIONS.find((candidate) => candidate.id === contract.setId);
+        const expectedLink = secondaryExpectedComponentLink(inventory, contract);
+        if (!expectedLink || instance.mainComponentId !== expectedLink.mainComponentId || instance.componentSetId !== expectedLink.componentSetId || instance.componentSetName !== (component == null ? void 0 : component.name) || instance.variantName !== contract.variant) actions.push({ type: "relink-instance", viewName: definition2.name, instanceName: contract.name });
+        const labelProperty = (_c = (_b = (_a = Object.entries(instance.componentProperties || {}).find(([key]) => key.split("#")[0] === "Label")) == null ? void 0 : _a[1]) == null ? void 0 : _b.value) != null ? _c : null;
+        if (instance.labelValue !== contract.label || labelProperty !== contract.label) actions.push({ type: "label-instance", viewName: definition2.name, instanceName: contract.name });
+        const roles = Array.isArray(instance.roleDescendants) ? instance.roleDescendants : [];
+        const roleCharacters = Object.fromEntries(roles.filter((role) => role.type === "TEXT" && role.visible !== false).map((role) => [role.role, role.characters]));
+        if (!sameSecondaryValue(instance.roleCopy || {}, contract.roleCopy) || !sameSecondaryValue(roleCharacters, contract.roleCopy)) actions.push({ type: "copy-instance", viewName: definition2.name, instanceName: contract.name });
+        if (instance.repeatedScreen !== true || instance.documentation === true) actions.push({ type: "mark-instance", viewName: definition2.name, instanceName: contract.name });
+      }
+    }
+    for (const legacy of inventory.legacyViews || []) {
+      if (legacy.visible !== false) actions.push({ type: "hide-legacy-view", legacyName: legacy.name, nodeId: secondaryNodeId(legacy) });
+      for (const child of secondaryLegacyChildren(legacy)) if (child.visible !== false) actions.push({ type: "hide-legacy-child", legacyName: legacy.name, childName: child.name, nodeId: secondaryNodeId(child) });
+    }
+    return actions;
+  }
+  var SECONDARY_CANONICAL_RECORD_KEYS = Object.freeze([
+    "id",
+    "nodeId",
+    "name",
+    "type",
+    "owner",
+    "parentId",
+    "parentType",
+    "parentName",
+    "parentInstanceId",
+    "ancestorIds",
+    "childIds",
+    "childCount",
+    "x",
+    "y",
+    "width",
+    "height",
+    "bounds",
+    "absoluteBounds",
+    "relativeTransform",
+    "absoluteTransform",
+    "layoutMode",
+    "primaryAxisSizingMode",
+    "counterAxisSizingMode",
+    "primaryAxisAlignItems",
+    "counterAxisAlignItems",
+    "itemSpacing",
+    "counterAxisSpacing",
+    "paddingTop",
+    "paddingRight",
+    "paddingBottom",
+    "paddingLeft",
+    "layoutWrap",
+    "layoutSizingHorizontal",
+    "layoutSizingVertical",
+    "layoutPositioning",
+    "layoutAlign",
+    "layoutGrow",
+    "constraints",
+    "minWidth",
+    "maxWidth",
+    "minHeight",
+    "maxHeight",
+    "clipsContent",
+    "fills",
+    "strokes",
+    "strokeWeight",
+    "strokeAlign",
+    "dashPattern",
+    "fillStyleId",
+    "strokeStyleId",
+    "fillBindings",
+    "strokeBindings",
+    "fieldVariableIds",
+    "textRangeBindings",
+    "boundVariables",
+    "effects",
+    "effectStyleId",
+    "opacity",
+    "blendMode",
+    "visible",
+    "cornerRadius",
+    "topLeftRadius",
+    "topRightRadius",
+    "bottomLeftRadius",
+    "bottomRightRadius",
+    "pluginData",
+    "secondaryView",
+    "ondaSecondaryView",
+    "responsiveFrame",
+    "ondaResponsiveFrame",
+    "group",
+    "theme",
+    "subject",
+    "breakpoint",
+    "legacy",
+    "characters",
+    "role",
+    "region",
+    "repeatedScreen",
+    "documentation",
+    "mainComponentId",
+    "componentId",
+    "componentSetId",
+    "componentSetName",
+    "mainComponentName",
+    "variantId",
+    "variantName",
+    "labelValue",
+    "roleCopy",
+    "componentProperties"
+  ]);
+  function canonicalSecondaryRecord(record = {}) {
+    return Object.fromEntries(SECONDARY_CANONICAL_RECORD_KEYS.map((key) => [key, canonicalScalar(record[key])]));
+  }
+  function sortSecondaryRecords(records) {
+    return [...records].sort((left, right) => {
+      const leftKey = `${left.name || left.role || ""}\0${secondaryNodeId(left) || ""}`;
+      const rightKey = `${right.name || right.role || ""}\0${secondaryNodeId(right) || ""}`;
+      return leftKey.localeCompare(rightKey);
+    });
+  }
+  function canonicalSecondaryViewMutationSnapshot(inventory = {}) {
+    function descendant(record) {
+      return __spreadProps(__spreadValues({}, canonicalSecondaryRecord(record)), {
+        ancestorChain: (record.ancestorChain || []).map(canonicalSecondaryRecord)
+      });
+    }
+    function instance(record) {
+      return __spreadProps(__spreadValues({}, canonicalSecondaryRecord(record)), {
+        roleDescendants: sortSecondaryRecords((record.roleDescendants || []).map(descendant))
+      });
+    }
+    function view(record) {
+      return __spreadProps(__spreadValues({}, canonicalSecondaryRecord(record)), {
+        layoutRegions: sortSecondaryRecords((record.layoutRegions || []).map(canonicalSecondaryRecord)),
+        copyNodes: sortSecondaryRecords((record.copyNodes || []).map(canonicalSecondaryRecord)),
+        instances: sortSecondaryRecords((record.instances || []).map(instance)),
+        standIns: sortSecondaryRecords((record.standIns || []).map(descendant)),
+        legacyChildren: sortSecondaryRecords((record.legacyChildren || []).map(descendant)),
+        children: sortSecondaryRecords((record.children || []).map(descendant))
+      });
+    }
+    function component(record) {
+      return __spreadProps(__spreadValues({}, canonicalSecondaryRecord(record)), {
+        variants: sortSecondaryRecords((record.variants || []).map(canonicalSecondaryRecord))
+      });
+    }
+    return {
+      targetPage: canonicalSecondaryRecord(inventory.targetPage || {}),
+      sections: sortSecondaryRecords((inventory.sections || []).map(canonicalSecondaryRecord)),
+      views: sortSecondaryRecords((inventory.views || []).map(view)),
+      legacyViews: sortSecondaryRecords((inventory.legacyViews || []).map(view)),
+      untouchedPageChildren: sortSecondaryRecords((inventory.untouchedPageChildren || []).map(canonicalSecondaryRecord)),
+      untouchedPageDescendants: sortSecondaryRecords((inventory.untouchedPageDescendants || []).map(canonicalSecondaryRecord)),
+      components: sortSecondaryRecords((inventory.components || inventory.componentSets || []).map(component)),
+      variables: sortSecondaryRecords((inventory.variables || []).map(canonicalSecondaryRecord))
+    };
+  }
+  async function executeGuardedSecondaryViewCommand({ command, phases, preflight, requireContext, collectCurrentInventory, resolveInventoryNodes = async () => null, mutate }) {
+    const transition = validatePhaseTransition(command, phases);
+    if (!transition.ok) throw new Error(transition.warning);
+    const preflightInventory = await preflight();
+    const preflightSnapshot = canonicalSecondaryViewMutationSnapshot(preflightInventory);
+    const context = await requireContext();
+    if (typeof collectCurrentInventory !== "function") throw new Error("TOCTOU: zweite Secondary-View-Inventur fehlt.");
+    const currentInventory = await collectCurrentInventory(context);
+    const currentValidation = validateSecondaryViewMutationInventory(currentInventory);
+    if (!currentValidation.valid) throw new Error(`TOCTOU: aktuelles Secondary-View-Inventar ung\xFCltig.
+${currentValidation.errors.join("\n")}`);
+    const currentSnapshot = canonicalSecondaryViewMutationSnapshot(currentInventory);
+    if (!sameSecondaryValue(preflightSnapshot, currentSnapshot)) {
+      throw new Error("TOCTOU: Secondary-View-Inventar wurde nach Preflight ver\xE4ndert.");
+    }
+    const resolvedInventoryNodes = await resolveInventoryNodes(context, currentInventory);
+    const writeBarrierInventory = await collectCurrentInventory(context);
+    const writeBarrierValidation = validateSecondaryViewMutationInventory(writeBarrierInventory);
+    if (!writeBarrierValidation.valid) throw new Error(`TOCTOU: Secondary-View-Inventar an der Schreibbarriere ung\xFCltig.
+${writeBarrierValidation.errors.join("\n")}`);
+    if (!sameSecondaryValue(currentSnapshot, canonicalSecondaryViewMutationSnapshot(writeBarrierInventory))) {
+      throw new Error("TOCTOU: Secondary-View-Inventar wurde vor dem ersten Schreibzugriff ver\xE4ndert.");
+    }
     return mutate(context, writeBarrierInventory, resolvedInventoryNodes);
   }
   function visiblePaintsAreGray(paints) {
@@ -4358,113 +5161,601 @@ ${result.errors.join("\n")}`);
     }
     return { batch: batchIndex + 1, annotationCount: batch.length, createdSections, createdViews };
   }
-  function createAgentAndSources(section, decision) {
-    const views = [
-      ["Agent \xB7 Ruhe", "\u25CB AURA RUHIG", "Der Agent wartet, bis er bewusst ge\xF6ffnet wird."],
-      ["Agent \xB7 Gespr\xE4ch", "\u25CF AGENT AKTIV", "Welche Aussage m\xF6chtest du als N\xE4chstes belegen?"],
-      ["Agent \xB7 Antwort mit Fundstelle", "\u2713 ANTWORT \xB7 2 FUNDSTELLEN", "Die Antwort trennt Beobachtung, Schluss und Quelle."],
-      ["Agent \xB7 Fehler und R\xFCckkehr", "! VERBINDUNG FEHLT", "Erneut versuchen \xB7 KI-Anschluss \xF6ffnen \xB7 Abbrechen"]
+  var SECONDARY_SECTION_NAMES2 = Object.freeze([
+    "07 \xB7 Agent & Quellen",
+    "09 \xB7 Men\xFCs & Nebenansichten",
+    "10 \xB7 Responsive & Dark"
+  ]);
+  var SECONDARY_LEGACY_VIEW_SECTIONS2 = Object.freeze({
+    "Agent \xB7 Ruhe": "07 \xB7 Agent & Quellen",
+    "Agent \xB7 Gespr\xE4ch": "07 \xB7 Agent & Quellen",
+    "Agent \xB7 Antwort mit Fundstelle": "07 \xB7 Agent & Quellen",
+    "Agent \xB7 Fehler und R\xFCckkehr": "07 \xB7 Agent & Quellen",
+    "Dokumentmen\xFC \xB7 geschlossen": "09 \xB7 Men\xFCs & Nebenansichten",
+    "Dokumentmen\xFC \xB7 offen": "09 \xB7 Men\xFCs & Nebenansichten",
+    "Quellenleser \xB7 offen": "09 \xB7 Men\xFCs & Nebenansichten",
+    "Recherchelauf \xB7 pausiert": "09 \xB7 Men\xFCs & Nebenansichten",
+    "Entscheidungsverlauf \xB7 gef\xFCllt": "09 \xB7 Men\xFCs & Nebenansichten",
+    "Leerer Zustand \xB7 Recovery": "09 \xB7 Men\xFCs & Nebenansichten",
+    "Editor / 1440px \xB7 Responsive": "10 \xB7 Responsive & Dark",
+    "Editor / 1024px \xB7 Responsive": "10 \xB7 Responsive & Dark",
+    "Editor / 720px \xB7 Responsive": "10 \xB7 Responsive & Dark",
+    "Editor / 320px \xB7 Kleinbreite": "10 \xB7 Responsive & Dark",
+    "Editor / 1440px \xB7 Dark": "10 \xB7 Responsive & Dark"
+  });
+  function indexSecondaryVariableCollections(collections) {
+    const requiredNames = [
+      "Onda \xB7 Semantic \xB7 Light",
+      "Onda \xB7 Semantic \xB7 Dark",
+      "Onda \xB7 Dimension"
     ];
-    for (const [index, [name, status, body]] of views.entries()) {
-      const frame = autoFrame(section, name, { x: 80 + index % 2 * 980, y: 160 + Math.floor(index / 2) * 620, width: 900, padding: 32, gap: 16, radius: 8 }).node;
-      textNode(frame, `${name} / Status`, status, decision, { size: 12, weight: 700, width: 820 });
-      textNode(frame, `${name} / Titel`, name, decision, { size: 21, weight: 700, width: 820 });
-      textNode(frame, `${name} / Inhalt`, body, decision, { size: 15, width: 820 });
-      textNode(frame, `${name} / Aktionen`, "Antworten \xB7 Fundstelle \xF6ffnen \xB7 Zur\xFCck zum Editor", decision, { size: 15, weight: 500, width: 820 });
+    return new Map(requiredNames.map((name) => {
+      const matches = collections.filter((collection) => collection.name === name);
+      if (matches.length !== 1) throw new Error(`Secondary-Variable-Collection fehlt oder ist mehrdeutig: ${name}`);
+      return [name, matches[0]];
+    }));
+  }
+  function secondaryVariableContext() {
+    return Promise.all([
+      figma.variables.getLocalVariableCollectionsAsync(),
+      figma.variables.getLocalVariablesAsync()
+    ]).then(([collections, localVariables]) => {
+      const collectionByName = indexSecondaryVariableCollections(collections);
+      const exactVariable = (collectionName, name) => {
+        const collection = collectionByName.get(collectionName);
+        if (!collection) throw new Error(`Secondary-Variable-Collection fehlt: ${collectionName}`);
+        const matches = localVariables.filter((variable) => variable.variableCollectionId === collection.id && variable.name === name);
+        if (matches.length !== 1) throw new Error(`Secondary-Variable fehlt oder ist mehrdeutig: ${collectionName}/${name}`);
+        return matches[0];
+      };
+      const semantic = (collectionName) => ({
+        surface: exactVariable(collectionName, "color/surface"),
+        border: exactVariable(collectionName, "color/border"),
+        text: exactVariable(collectionName, "color/text"),
+        textMuted: exactVariable(collectionName, "color/text-muted")
+      });
+      const dimensionValues = [...new Set(SECONDARY_VIEW_DEFINITIONS.agentSources.concat(SECONDARY_VIEW_DEFINITIONS.secondary, SECONDARY_VIEW_DEFINITIONS.responsive).flatMap((definition2) => definition2.regions.flatMap((region) => [
+        region.itemSpacing,
+        region.padding.top,
+        region.padding.right,
+        region.padding.bottom,
+        region.padding.left
+      ])).filter((value) => value > 0))];
+      return {
+        semanticByTheme: {
+          Light: semantic("Onda \xB7 Semantic \xB7 Light"),
+          Dark: semantic("Onda \xB7 Semantic \xB7 Dark")
+        },
+        dimensionByValue: new Map(dimensionValues.map((value) => [value, exactVariable("Onda \xB7 Dimension", `spacing/${value}`)])),
+        inventory: [
+          ...["Light", "Dark"].flatMap((theme) => Object.values(semantic(`Onda \xB7 Semantic \xB7 ${theme}`)).map((variable) => ({
+            id: variable.id,
+            nodeId: variable.id,
+            name: variable.name,
+            collectionName: `Onda \xB7 Semantic \xB7 ${theme}`
+          }))),
+          ...dimensionValues.map((value) => {
+            const variable = exactVariable("Onda \xB7 Dimension", `spacing/${value}`);
+            return { id: variable.id, nodeId: variable.id, name: variable.name, collectionName: "Onda \xB7 Dimension" };
+          })
+        ]
+      };
+    });
+  }
+  function applySecondaryThemeBinding({ node, theme, variables, bindPaint }) {
+    const semantic = theme === "Dark" ? variables.semanticByTheme.Dark : variables.semanticByTheme.Light;
+    if (Array.isArray(node.fills) && node.fills.length) {
+      const variable = node.type === "TEXT" || node.type === "ELLIPSE" ? semantic.text : semantic.surface;
+      node.fills = node.fills.map((paint) => (paint == null ? void 0 : paint.type) === "SOLID" ? bindPaint(paint, variable) : paint);
+    }
+    if (Array.isArray(node.strokes) && node.strokes.length) {
+      node.strokes = node.strokes.map((paint) => (paint == null ? void 0 : paint.type) === "SOLID" ? bindPaint(paint, semantic.border) : paint);
+    }
+    if (Array.isArray(node.children)) {
+      for (const child of node.children) applySecondaryThemeBinding({ node: child, theme, variables, bindPaint });
     }
   }
-  function dialogStatus(state) {
-    const lower = state.toLowerCase();
-    if (lower.includes("fehler") || lower.includes("blockiert") || lower.includes("nicht belastbar")) return "! FEHLER / BLOCKADE \xB7 Recovery sichtbar";
-    if (lower.includes("l\xE4uft") || lower.includes("gepr\xFCft") || lower.includes("wird")) return "\u2026 ARBEITSSTAND \xB7 Abbrechen bleibt erreichbar";
-    if (lower.includes("leer") || lower.includes("fehlt") || lower.includes("deaktiviert")) return "\u25CB AUSGANGSLAGE \xB7 n\xE4chste Handlung sichtbar";
-    return "\u2713 BEST\xC4TIGT / ENTSCHEIDUNGSBEREIT";
+  function bindSecondaryNodeTheme(node, theme, variables) {
+    const semantic = theme === "Dark" ? variables.semanticByTheme.Dark : variables.semanticByTheme.Light;
+    applySecondaryThemeBinding({
+      node,
+      theme,
+      variables,
+      bindPaint: (paint, variable) => figma.variables.setBoundVariableForPaint(paint, "color", variable)
+    });
+    return semantic;
   }
-  function createDialogs(section, decision) {
-    let row = 0;
-    let count = 0;
-    for (const family of DIALOG_FAMILIES) {
-      for (const [index, state] of family.states.entries()) {
-        const x = 80 + index % 3 * 640;
-        const y = 120 + row * 500;
-        const name = `${family.name} / ${state}`;
-        const frame = autoFrame(section, name, { x, y, width: 580, padding: 24, gap: 14, radius: 8 }).node;
-        frame.effects = [{ type: "DROP_SHADOW", color: { r: 0, g: 0, b: 0, a: 0.1 }, offset: { x: 0, y: 4 }, radius: 12, spread: 0, visible: true, blendMode: "NORMAL" }];
-        textNode(frame, `${name} / Familie`, family.name.toUpperCase(), decision, { size: 12, weight: 700, width: 520 });
-        textNode(frame, `${name} / Zustand`, state, decision, { size: 21, weight: 700, width: 520 });
-        textNode(frame, `${name} / Status`, dialogStatus(state), decision, { size: 12, weight: 700, width: 520 });
-        textNode(frame, `${name} / Inhalt`, "Der Dialog zeigt Status, Begr\xFCndung und den n\xE4chsten sicheren Schritt. Lange Inhalte bleiben scrollbar.", decision, { size: 15, width: 520 });
-        textNode(frame, `${name} / Aktionen`, "Schlie\xDFen \xB7 Zur\xFCck \xB7 Fortfahren / Erneut versuchen", decision, { size: 15, weight: 500, width: 520 });
-        frame.setPluginData("ondaDialogFamily", family.name);
-        frame.setPluginData("ondaDialogState", state);
-        count += 1;
+  function secondaryDefinitionsWithGroups2() {
+    return Object.entries(SECONDARY_VIEW_DEFINITIONS).flatMap(([group, definitions]) => definitions.map((definition2) => ({ group, definition: definition2 })));
+  }
+  function parseSecondaryMarker(node) {
+    const raw = node.getPluginData("secondaryView");
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw);
+    } catch (_error) {
+      return { invalid: true };
+    }
+  }
+  function secondaryPluginData(node) {
+    return {
+      owner: node.getPluginData(CREATED_MARKER_KEY),
+      secondaryView: node.getPluginData("secondaryView"),
+      ondaSecondaryView: node.getPluginData("ondaSecondaryView"),
+      responsiveFrame: node.getPluginData("responsiveFrame"),
+      ondaResponsiveFrame: node.getPluginData("ondaResponsiveFrame"),
+      role: node.getPluginData("role"),
+      legacy: node.getPluginData("legacy"),
+      secondaryRegionContract: node.getPluginData("secondaryRegionContract"),
+      repeatedScreen: node.getPluginData("ondaRepeatedScreenInstance"),
+      documentation: node.getPluginData("ondaDocumentationInstance")
+    };
+  }
+  function secondaryNodeRecord(node) {
+    const record = __spreadProps(__spreadValues(__spreadValues({}, coreBaseRecord(node)), coreVisualRecord(node)), {
+      pluginData: secondaryPluginData(node)
+    });
+    if ("children" in node) {
+      record.childIds = node.children.map((child) => child.id);
+      record.childCount = node.children.length;
+    } else {
+      record.childIds = [];
+      record.childCount = 0;
+    }
+    return record;
+  }
+  function secondaryAncestorRecord(node) {
+    return secondaryNodeRecord(node);
+  }
+  function secondaryRecordedAncestry(node, root) {
+    const chain = [];
+    let parent = node.parent;
+    while (parent && parent !== root) {
+      chain.push(secondaryAncestorRecord(parent));
+      parent = parent.parent;
+    }
+    return {
+      ancestorChain: chain,
+      ancestorIds: [...chain.map((record) => record.nodeId), root.id]
+    };
+  }
+  function collectSecondaryInstanceRoleRecords(instance, recordNode = secondaryNodeRecord, recordedAncestry = secondaryRecordedAncestry) {
+    const instanceRecord = recordNode(instance);
+    const roleDescendants = instance.findAll((node) => node.name.startsWith("Role/")).map((roleNode) => {
+      const role = roleNode.name.slice("Role/".length);
+      return __spreadValues(__spreadValues(__spreadProps(__spreadValues({}, recordNode(roleNode)), {
+        parentInstanceId: instance.id,
+        role
+      }), roleNode.type === "TEXT" ? { characters: roleNode.characters } : {}), recordedAncestry(roleNode, instance));
+    });
+    return {
+      instanceRecord,
+      roleDescendants,
+      roleCopy: Object.fromEntries(roleDescendants.filter((role) => role.type === "TEXT" && role.visible !== false).map((role) => [role.role, role.characters]))
+    };
+  }
+  async function secondaryInstanceRecord(instance, contract) {
+    var _a;
+    let main = null;
+    try {
+      const identity = await readMainComponentIdentity(instance);
+      main = identity.id ? await figma.getNodeByIdAsync(identity.id) : null;
+    } catch (_error) {
+      main = null;
+    }
+    const set = ((_a = main == null ? void 0 : main.parent) == null ? void 0 : _a.type) === "COMPONENT_SET" ? main.parent : null;
+    const { instanceRecord, roleDescendants, roleCopy } = collectSecondaryInstanceRoleRecords(instance);
+    return __spreadProps(__spreadValues({}, instanceRecord), {
+      region: contract.region,
+      repeatedScreen: instance.getPluginData("ondaRepeatedScreenInstance") === "true",
+      documentation: instance.getPluginData("ondaDocumentationInstance") === "true",
+      mainComponentId: (main == null ? void 0 : main.id) || null,
+      componentId: (main == null ? void 0 : main.id) || null,
+      componentSetId: (set == null ? void 0 : set.id) || null,
+      componentSetName: (set == null ? void 0 : set.name) || null,
+      variantName: (main == null ? void 0 : main.name) || null,
+      labelValue: coreLabelValue(instance),
+      componentProperties: cloneSerializable(instance.componentProperties || {}),
+      roleCopy,
+      roleDescendants
+    });
+  }
+  async function secondaryViewRecord(node, group, definition2, legacy = false) {
+    var _a;
+    if (legacy) {
+      let collectLegacyLeaves = function(child) {
+        if ("children" in child && child.children.length) {
+          for (const nested of child.children) collectLegacyLeaves(nested);
+          return;
+        }
+        legacyChildren.push(__spreadValues(__spreadValues({}, secondaryNodeRecord(child)), secondaryRecordedAncestry(child, node)));
+      };
+      const legacyChildren = [];
+      for (const child of node.children) collectLegacyLeaves(child);
+      return __spreadProps(__spreadValues({}, secondaryNodeRecord(node)), {
+        legacy: true,
+        responsiveFrame: node.getPluginData("ondaResponsiveFrame") || node.getPluginData("responsiveFrame"),
+        legacyChildren
+      });
+    }
+    const regionContracts = new Map(definition2.regions.map((region) => [region.name, region]));
+    const copyContracts = new Map(definition2.copyContracts.map((copy) => [copy.role, copy]));
+    const instanceContracts = new Map(definition2.instances.map((instance) => [instance.name, instance]));
+    const layoutRegions = [];
+    const copyNodes = [];
+    const instances = [];
+    const standIns = [];
+    async function visit(child) {
+      const copyRole = child.name.startsWith("Copy / ") ? child.name.slice("Copy / ".length) : null;
+      if (child.type === "FRAME" && regionContracts.has(child.name)) {
+        layoutRegions.push(secondaryNodeRecord(child));
+        for (const nested of child.children) await visit(nested);
+      } else if (child.type === "TEXT" && copyContracts.has(copyRole)) {
+        copyNodes.push(__spreadProps(__spreadValues({}, secondaryNodeRecord(child)), { role: copyRole, characters: child.characters }));
+      } else if (child.type === "INSTANCE" && instanceContracts.has(child.name)) {
+        instances.push(await secondaryInstanceRecord(child, instanceContracts.get(child.name)));
+      } else {
+        standIns.push(__spreadValues(__spreadValues({}, secondaryNodeRecord(child)), secondaryRecordedAncestry(child, node)));
       }
-      row += Math.ceil(family.states.length / 3);
     }
-    return count;
+    for (const child of node.children) await visit(child);
+    return __spreadProps(__spreadValues({}, secondaryNodeRecord(node)), {
+      secondaryView: parseSecondaryMarker(node),
+      group,
+      theme: definition2.theme,
+      subject: definition2.subject || null,
+      breakpoint: (_a = definition2.breakpoint) != null ? _a : null,
+      layoutRegions,
+      copyNodes,
+      instances,
+      standIns
+    });
   }
-  function createMenus(section, decision) {
-    const views = [
-      ["Dokumentmen\xFC \xB7 geschlossen", "Mehr Aktionen \xB7 nicht ge\xF6ffnet"],
-      ["Dokumentmen\xFC \xB7 offen", "Umbenennen \xB7 Duplizieren \xB7 Exportieren \xB7 Archivieren"],
-      ["Quellenleser \xB7 offen", "Original verifiziert \xB7 Fundstelle \xFCbernehmen \xB7 Zur\xFCck"],
-      ["Recherchelauf \xB7 pausiert", "Fortsetzen \xB7 Plan \xE4ndern \xB7 Lauf abbrechen"],
-      ["Entscheidungsverlauf \xB7 gef\xFCllt", "\xDCbernommen \xB7 R\xFCckg\xE4ngig \xB7 Abgelehnt \xB7 G\xFCltigkeit ge\xE4ndert"],
-      ["Leerer Zustand \xB7 Recovery", "Noch keine Daten \xB7 Importieren oder zum Editor zur\xFCckkehren"]
+  function secondaryComponentInventory(page) {
+    const usedIds = new Set(secondaryDefinitionsWithGroups2().flatMap(({ definition: definition2 }) => definition2.instances.map((instance) => instance.setId)));
+    return COMPONENT_DEFINITIONS.filter((definition2) => usedIds.has(definition2.id)).map((definition2) => {
+      const sets = componentSetById(page, definition2.id);
+      if (sets.length !== 1 || sets[0].getPluginData(CREATED_MARKER_KEY) !== PLUGIN_ORIGIN) {
+        throw new Error(`Secondary Component Set fehlt oder ist mehrdeutig: ${definition2.name}`);
+      }
+      const set = sets[0];
+      return {
+        id: definition2.id,
+        nodeId: set.id,
+        name: set.name,
+        type: set.type,
+        owner: set.getPluginData(CREATED_MARKER_KEY),
+        childIds: set.children.map((child) => child.id),
+        childCount: set.children.length,
+        variants: set.children.map((variant) => __spreadValues({}, secondaryAncestorRecord(variant)))
+      };
+    });
+  }
+  function collectSecondaryUntouchedDescendantRecords(root, recordNode = secondaryNodeRecord) {
+    const records = [];
+    function visit(parent) {
+      if (!("children" in parent)) return;
+      for (const child of parent.children) {
+        records.push(recordNode(child));
+        visit(child);
+      }
+    }
+    visit(root);
+    return records;
+  }
+  async function collectSecondaryViewMutationInventory(page = figma.currentPage) {
+    await figma.loadAllPagesAsync();
+    const definitionEntries = secondaryDefinitionsWithGroups2();
+    const definitionByName = new Map(definitionEntries.map((entry) => [entry.definition.name, entry]));
+    const targetSections = page.children.filter((node) => node.type === "SECTION" && SECONDARY_SECTION_NAMES2.includes(node.name));
+    const sections = targetSections.map(secondaryNodeRecord);
+    const views = [];
+    const legacyViews = [];
+    for (const section of targetSections) {
+      for (const child of section.children) {
+        const entry = definitionByName.get(child.name);
+        if (entry || child.getPluginData("secondaryView")) {
+          views.push(await secondaryViewRecord(child, (entry == null ? void 0 : entry.group) || "", (entry == null ? void 0 : entry.definition) || { regions: [], copyContracts: [], instances: [], theme: "Light" }));
+        } else if (SECONDARY_LEGACY_VIEW_SECTIONS2[child.name] === section.name) {
+          legacyViews.push(await secondaryViewRecord(child, "", null, true));
+        }
+      }
+    }
+    const variables = await secondaryVariableContext();
+    const targetPage = secondaryNodeRecord(page);
+    const untouchedPageNodes = page.children.filter((node) => !SECONDARY_SECTION_NAMES2.includes(node.name));
+    const untouchedPageChildren = untouchedPageNodes.map(secondaryNodeRecord);
+    const untouchedPageDescendants = untouchedPageNodes.flatMap((node) => collectSecondaryUntouchedDescendantRecords(node));
+    return {
+      targetPage,
+      sections,
+      views,
+      legacyViews,
+      untouchedPageChildren,
+      untouchedPageDescendants,
+      components: secondaryComponentInventory(page),
+      variables: variables.inventory
+    };
+  }
+  async function preflightSecondaryViewMutation() {
+    const inventory = await collectSecondaryViewMutationInventory(figma.currentPage);
+    const validation = validateSecondaryViewMutationInventory(inventory);
+    if (!validation.valid) throw new Error(validation.errors.join("\n"));
+    return inventory;
+  }
+  function secondaryMutableRecords(inventory) {
+    return [
+      ...inventory.sections || [],
+      ...inventory.views || [],
+      ...inventory.legacyViews || [],
+      ...(inventory.views || []).flatMap((view) => [
+        ...view.layoutRegions || [],
+        ...view.copyNodes || [],
+        ...view.instances || [],
+        ...(view.instances || []).flatMap((instance) => (instance.roleDescendants || []).flatMap((role) => [role, ...role.ancestorChain || []])),
+        ...view.standIns || []
+      ]),
+      ...(inventory.legacyViews || []).flatMap((view) => view.legacyChildren || [])
     ];
-    for (const [index, [name, detail]] of views.entries()) {
-      const frame = autoFrame(section, name, { x: 80 + index % 2 * 980, y: 140 + Math.floor(index / 2) * 560, width: 900, padding: 28, gap: 16, radius: name.includes("men\xFC \xB7 offen") ? 8 : 6 }).node;
-      textNode(frame, `${name} / Titel`, name, decision, { size: 21, weight: 700, width: 820 });
-      textNode(frame, `${name} / Inhalt`, detail, decision, { size: 15, width: 820 });
-      textNode(frame, `${name} / Fokus`, "\u25CE Fokus sichtbar \xB7 Trefferfl\xE4chen mindestens 44 \xD7 44 px", decision, { size: 12, weight: 700, width: 820 });
-    }
   }
-  function createResponsiveDark(section, decision) {
-    const widths = [1440, 1024, 720, 320];
-    for (const [index, width] of widths.entries()) {
-      const view = createEditorView(section, decision, `${width}px \xB7 ${width === 320 ? "Kleinbreite" : "Responsive"}`, 80, false, width);
-      view.y = 120 + index * 1100;
-    }
-    const dark = createEditorView(section, decision, "1440px \xB7 Dark", 80, true, 1440);
-    dark.y = 4520;
-  }
-  async function createPrototype(section, decision) {
-    const flows = [
-      ["Hauptablauf", "Bibliothek \u2192 Projekt \u2192 Dokument \u2192 Anmerkung \u2192 \xDCbernehmen \u2192 R\xFCckg\xE4ngig \u2192 Schlussaudit \u2192 Export"],
-      ["Projektwissen", "Projektverst\xE4ndnis \u2192 Projektged\xE4chtnis / Argumentationsdossier / Sprache & Wirkung \u2192 Editor"],
-      ["Quellen & Recherche", "Quellen \u2192 Import \u2192 Recherche planen \u2192 Lauf \u2192 Pr\xFCfung \u2192 Fundstelle \xFCbernehmen"],
-      ["Agent & Beleg", "Aura \u2192 Agentengespr\xE4ch \u2192 Antwort \u2192 Fundstelle \u2192 Editor"]
-    ];
-    const frames = [];
-    for (const [index, [name, path]] of flows.entries()) {
-      const frame = autoFrame(section, `Prototyp / ${name}`, { x: 80, y: 120 + index * 500, width: 1940, padding: 32, gap: 20, radius: 6 }).node;
-      frames.push(frame);
-      textNode(frame, `Prototyp / ${name} / Titel`, name, decision, { size: 21, weight: 700, width: 1800 });
-      textNode(frame, `Prototyp / ${name} / Pfad`, path, decision, { size: 15, weight: 500, width: 1800 });
-      textNode(frame, `Prototyp / ${name} / Recovery`, "Fehler \u2192 Wiederholen / Einrichten / Korrigieren / Abbrechen \xB7 keine tote Zwischenstation", decision, { size: 12, weight: 700, width: 1800 });
-    }
-    for (const [index, frame] of frames.entries()) {
-      const destination = frames[(index + 1) % frames.length];
-      await frame.setReactionsAsync([{
-        trigger: { type: "ON_CLICK" },
-        actions: [{ type: "NODE", destinationId: destination.id, navigation: "NAVIGATE", transition: null, preserveScrollPosition: false }]
-      }]);
-      frame.setPluginData("ondaPrototypeReaction", "true");
-    }
-  }
-  async function runDialogsAndSecondary(page, ledger) {
+  async function resolveSecondaryInventoryNodes({ page, ledger }, inventory) {
+    var _a, _b;
+    if (page.id !== ((_a = inventory.targetPage) == null ? void 0 : _a.nodeId)) throw new Error("TOCTOU: Secondary-Zielseite wurde gewechselt.");
     await loadDecisionFonts(ledger.fontDecision);
-    const agent = ensureSection(page, ledger, "07 \xB7 Agent & Quellen", 1700).node;
-    createAgentAndSources(agent, ledger.fontDecision);
-    const dialogs = ensureSection(page, ledger, "08 \xB7 Dialoge", 9800).node;
-    const dialogStateCount = createDialogs(dialogs, ledger.fontDecision);
-    const menus = ensureSection(page, ledger, "09 \xB7 Men\xFCs & Nebenansichten", 2200).node;
-    createMenus(menus, ledger.fontDecision);
-    const responsive = ensureSection(page, ledger, "10 \xB7 Responsive & Dark", 6200).node;
-    createResponsiveDark(responsive, ledger.fontDecision);
-    const prototype = ensureSection(page, ledger, "11 \xB7 Prototyp", 2400).node;
-    await createPrototype(prototype, ledger.fontDecision);
-    return { sections: 5, dialogFamilies: DIALOG_FAMILIES.length, dialogStates: dialogStateCount, responsiveWidths: 4, darkReferences: 1, prototypeFlows: 4 };
+    const variables = await secondaryVariableContext();
+    const resolved = /* @__PURE__ */ new Map();
+    for (const record of secondaryMutableRecords(inventory)) {
+      const node = await figma.getNodeByIdAsync(record.nodeId);
+      if (!node || node.type !== record.type || node.name !== record.name || ((_b = node.parent) == null ? void 0 : _b.id) !== record.parentId || node.getPluginData(CREATED_MARKER_KEY) !== record.owner) {
+        throw new Error(`TOCTOU: Secondary-Knoten ersetzt oder verschoben: ${record.name}`);
+      }
+      resolved.set(record.nodeId, node);
+    }
+    const variants = /* @__PURE__ */ new Map();
+    for (const { definition: definition2 } of secondaryDefinitionsWithGroups2()) for (const contract of definition2.instances) {
+      const key = `${contract.setId}\0${contract.variant}`;
+      if (!variants.has(key)) variants.set(key, ownedSecondaryVariant(page, contract));
+    }
+    return { nodes: resolved, variables, variants };
+  }
+  function applySecondaryContainerContract({ parent, node, contract, maximumWidth = contract.width, resize }) {
+    if (node.parent !== parent) parent.appendChild(node);
+    node.layoutMode = contract.layoutMode;
+    if (node.layoutMode === "NONE") throw new Error(`Secondary Auto Layout fehlt: ${node.name}`);
+    node.primaryAxisSizingMode = "FIXED";
+    node.counterAxisSizingMode = "FIXED";
+    node.primaryAxisAlignItems = "MIN";
+    node.counterAxisAlignItems = "MIN";
+    node.itemSpacing = contract.itemSpacing;
+    node.paddingTop = contract.padding.top;
+    node.paddingRight = contract.padding.right;
+    node.paddingBottom = contract.padding.bottom;
+    node.paddingLeft = contract.padding.left;
+    resize(node, Math.min(contract.width, maximumWidth), contract.height);
+  }
+  function configureSecondaryLayoutRegions(frame, definition2, variables) {
+    const regions = /* @__PURE__ */ new Map();
+    for (const regionDefinition of definition2.regions) {
+      const parent = regionDefinition.parentName === definition2.name ? frame : regions.get(regionDefinition.parentName);
+      if (!parent) throw new Error(`Secondary-Elternregion fehlt: ${definition2.name}/${regionDefinition.name}`);
+      let region = frame.findOne((node) => node.type === "FRAME" && node.name === regionDefinition.name);
+      if (!region) {
+        region = figma.createFrame();
+        region.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN);
+      }
+      if (region.parent !== parent) parent.appendChild(region);
+      region.name = regionDefinition.name;
+      const maximumWidth = definition2.width === 320 ? parent.width - parent.paddingLeft - parent.paddingRight : regionDefinition.width;
+      applySecondaryContainerContract({ parent, node: region, contract: regionDefinition, maximumWidth, resize: resizeNode });
+      region.layoutMode = regionDefinition.layoutMode;
+      if (region.layoutMode === "NONE") throw new Error(`Secondary Auto Layout fehlt: ${definition2.name}/${region.name}`);
+      region.fills = [solid(definition2.theme === "Dark" ? "gray/900" : "gray/000")];
+      region.strokes = [solid(definition2.theme === "Dark" ? "gray/700" : "gray/200")];
+      region.strokeWeight = 1;
+      region.cornerRadius = 0;
+      region.effects = [];
+      region.visible = true;
+      region.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN);
+      region.setPluginData("secondaryRegionContract", JSON.stringify({ width: regionDefinition.width, height: regionDefinition.height }));
+      for (const [field, value] of [
+        ["itemSpacing", regionDefinition.itemSpacing],
+        ["paddingTop", regionDefinition.padding.top],
+        ["paddingRight", regionDefinition.padding.right],
+        ["paddingBottom", regionDefinition.padding.bottom],
+        ["paddingLeft", regionDefinition.padding.left]
+      ]) if (value > 0) region.setBoundVariable(field, variables.dimensionByValue.get(value));
+      bindSecondaryNodeTheme(region, definition2.theme, variables);
+      regions.set(regionDefinition.name, region);
+    }
+    return regions;
+  }
+  function configureSecondaryCopy(frame, definition2, decision, regions, variables) {
+    const copyByRegion = /* @__PURE__ */ new Map();
+    for (const contract of definition2.copyContracts) {
+      const parent = regions.get(contract.region);
+      let copy = frame.findOne((node) => node.type === "TEXT" && node.name === `Copy / ${contract.role}`);
+      if (copy && copy.parent !== parent) parent.appendChild(copy);
+      copy = textNode(parent, `Copy / ${contract.role}`, contract.characters, decision, {
+        size: contract.kind === "title" ? 21 : 15,
+        weight: contract.kind === "title" ? 700 : 400,
+        muted: contract.kind !== "title",
+        dark: definition2.theme === "Dark",
+        width: Math.max(40, parent.width - parent.paddingLeft - parent.paddingRight)
+      }).node;
+      copy.visible = true;
+      copy.setPluginData("role", contract.role);
+      bindSecondaryNodeTheme(copy, definition2.theme, variables);
+      const index = copyByRegion.get(contract.region) || 0;
+      parent.insertChild(index, copy);
+      copyByRegion.set(contract.region, index + 1);
+    }
+    return copyByRegion;
+  }
+  function ownedSecondaryVariant(page, contract) {
+    const definition2 = COMPONENT_DEFINITIONS.find((component) => component.id === contract.setId);
+    const sets = componentSetById(page, contract.setId);
+    if (sets.length !== 1 || sets[0].getPluginData(CREATED_MARKER_KEY) !== PLUGIN_ORIGIN) throw new Error(`Secondary Component Set fehlt oder ist mehrdeutig: ${(definition2 == null ? void 0 : definition2.name) || contract.setId}`);
+    const matches = sets[0].children.filter((node) => node.name === contract.variant);
+    if (matches.length !== 1 || matches[0].type !== "COMPONENT" || matches[0].getPluginData(CREATED_MARKER_KEY) !== PLUGIN_ORIGIN) {
+      throw new Error(`Secondary Variante fehlt oder ist mehrdeutig: ${definition2.name}/${contract.variant}`);
+    }
+    return matches[0];
+  }
+  async function applySecondaryInstanceContract({ parent, instance, variant, contract, definition: definition2, readIdentity, loadFonts, resize, bindTheme }) {
+    const parentContentWidth = Number.isFinite(parent.width) ? parent.width - (parent.paddingLeft || 0) - (parent.paddingRight || 0) : contract.expectedWidth;
+    const availableWidth = definition2.width === 320 ? Math.min(definition2.width - 32, parentContentWidth) : contract.expectedWidth;
+    if (definition2.width === 320 && Number.isFinite(contract.minimumWidth) && contract.minimumWidth > availableWidth) {
+      throw new Error(`Secondary-Mindestbreite \xFCberschreitet verf\xFCgbaren Inhalt: ${contract.name} (${contract.minimumWidth}px > ${availableWidth}px)`);
+    }
+    const identity = await readIdentity(instance);
+    if (identity.id !== variant.id) instance.swapComponent(variant);
+    await loadFonts();
+    if (instance.parent !== parent) parent.appendChild(instance);
+    instance.name = contract.name;
+    const labelKey = Object.keys(instance.componentProperties || {}).find((key) => key.split("#")[0] === "Label");
+    if (!labelKey) throw new Error(`Label-Property fehlt: ${contract.name}`);
+    instance.setProperties({ [labelKey]: contract.label });
+    for (const [role, characters] of Object.entries(contract.roleCopy)) {
+      const roleNode = instance.findOne((node) => node.type === "TEXT" && node.name === `Role/${role}`);
+      if (!roleNode) throw new Error(`Textrolle fehlt: ${contract.name}/Role/${role}`);
+      roleNode.characters = characters;
+    }
+    const width = Math.min(contract.expectedWidth, availableWidth);
+    const height = Math.max(definition2.width === 320 ? 44 : 0, contract.expectedHeight);
+    resize(instance, width, height);
+    bindTheme(instance, definition2.theme);
+    return instance;
+  }
+  async function ensureSecondaryVariantInstance(parent, variant, contract, definition2, decision, variables, root) {
+    let instance = root.findOne((node) => node.type === "INSTANCE" && node.name === contract.name);
+    if (!instance) instance = variant.createInstance();
+    await applySecondaryInstanceContract({
+      parent,
+      instance,
+      variant,
+      contract,
+      definition: definition2,
+      readIdentity: readMainComponentIdentity,
+      loadFonts: () => loadDecisionFonts(decision),
+      resize: resizeNode,
+      bindTheme: (node) => bindSecondaryNodeTheme(node, definition2.theme, variables)
+    });
+    instance.visible = true;
+    instance.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN);
+    instance.setPluginData("ondaDocumentationInstance", "");
+    instance.setPluginData("ondaRepeatedScreenInstance", "true");
+    for (const role of Object.keys(contract.roleCopy)) {
+      const roleNode = instance.findOne((node) => node.type === "TEXT" && node.name === `Role/${role}`);
+      if (!roleNode) throw new Error(`Textrolle fehlt: ${contract.name}/Role/${role}`);
+      roleNode.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN);
+    }
+    return instance;
+  }
+  function positionSecondaryInstance(instance, contract, definition2, region) {
+    const regionContentWidth = region.width - region.paddingLeft - region.paddingRight;
+    const availableWidth = definition2.width === 320 ? Math.min(definition2.width - 32, regionContentWidth) : regionContentWidth;
+    const width = Math.min(contract.expectedWidth, availableWidth);
+    const height = Math.max(definition2.width === 320 ? 44 : 0, contract.expectedHeight);
+    resizeNode(instance, width, contract.expectedHeight);
+    if (height !== contract.expectedHeight) resizeNode(instance, width, height);
+  }
+  function secondarySectionLayout(definitions, start = 100, gap = 76, bottom = 100) {
+    let y = start;
+    const positions = definitions.map((definition2) => {
+      const position = { name: definition2.name, y, height: definition2.height };
+      y += definition2.height + gap;
+      return position;
+    });
+    const last = positions[positions.length - 1];
+    return { positions, height: last ? last.y + last.height + bottom : start + bottom };
+  }
+  async function runSecondaryViews(page, ledger, writeBarrierInventory, resolved) {
+    var _a;
+    const { nodes, variables, variants } = resolved;
+    const recoveryActions = buildSecondaryViewRecoveryActions(writeBarrierInventory);
+    const sectionRecords = new Map((writeBarrierInventory.sections || []).map((record) => [record.name, record]));
+    const viewRecords = new Map((writeBarrierInventory.views || []).map((record) => [record.name, record]));
+    const sectionLayouts = new Map(SECONDARY_SECTION_NAMES2.map((sectionName) => [
+      sectionName,
+      secondarySectionLayout(secondaryDefinitionsWithGroups2().filter(({ definition: definition2 }) => definition2.sectionName === sectionName).map(({ definition: definition2 }) => definition2))
+    ]));
+    const positionByViewName = new Map([...sectionLayouts.values()].flatMap((layout) => layout.positions.map((position) => [position.name, position])));
+    for (const { group, definition: definition2 } of secondaryDefinitionsWithGroups2()) {
+      const sectionRecord = sectionRecords.get(definition2.sectionName);
+      const section = sectionRecord ? nodes.get(sectionRecord.nodeId) : ensureSection(page, ledger, definition2.sectionName, 1800).node;
+      const viewRecord = viewRecords.get(definition2.name);
+      let frame = viewRecord ? nodes.get(viewRecord.nodeId) : null;
+      if (!frame) {
+        frame = figma.createFrame();
+        frame.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN);
+        section.appendChild(frame);
+      }
+      frame.name = definition2.name;
+      frame.layoutMode = definition2.layoutMode;
+      if (frame.layoutMode === "NONE") throw new Error(`Secondary Auto Layout fehlt: ${definition2.name}`);
+      frame.primaryAxisSizingMode = "FIXED";
+      frame.counterAxisSizingMode = "FIXED";
+      frame.primaryAxisAlignItems = "MIN";
+      frame.counterAxisAlignItems = "MIN";
+      frame.itemSpacing = 0;
+      const narrow = definition2.width === 320;
+      frame.paddingTop = narrow ? 16 : 0;
+      frame.paddingRight = narrow ? 16 : 0;
+      frame.paddingBottom = narrow ? 16 : 0;
+      frame.paddingLeft = narrow ? 16 : 0;
+      frame.x = 80;
+      frame.y = positionByViewName.get(definition2.name).y;
+      resizeNode(frame, definition2.width, definition2.height);
+      frame.fills = [solid(definition2.theme === "Dark" ? "gray/900" : "gray/000")];
+      frame.strokes = [solid(definition2.theme === "Dark" ? "gray/700" : "gray/200")];
+      frame.strokeWeight = 1;
+      frame.effects = [];
+      frame.cornerRadius = 0;
+      frame.clipsContent = false;
+      frame.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN);
+      frame.setPluginData("secondaryView", JSON.stringify({
+        group,
+        theme: definition2.theme,
+        subject: definition2.subject || null,
+        breakpoint: (_a = definition2.breakpoint) != null ? _a : null
+      }));
+      const regions = configureSecondaryLayoutRegions(frame, definition2, variables);
+      const copyByRegion = configureSecondaryCopy(frame, definition2, ledger.fontDecision, regions, variables);
+      const instanceByRegion = /* @__PURE__ */ new Map();
+      for (const contract of definition2.instances) {
+        const parent = regions.get(contract.region);
+        const variant = variants.get(`${contract.setId}\0${contract.variant}`);
+        const instance = await ensureSecondaryVariantInstance(parent, variant, contract, definition2, ledger.fontDecision, variables, frame);
+        positionSecondaryInstance(instance, contract, definition2, parent);
+        const localIndex = instanceByRegion.get(contract.region) || 0;
+        parent.insertChild((copyByRegion.get(contract.region) || 0) + localIndex, instance);
+        instanceByRegion.set(contract.region, localIndex + 1);
+      }
+      bindSecondaryNodeTheme(frame, definition2.theme, variables);
+    }
+    for (const legacy of writeBarrierInventory.legacyViews || []) {
+      const node = nodes.get(legacy.nodeId);
+      if (node) node.visible = false;
+      for (const child of legacy.legacyChildren || []) {
+        const childNode = nodes.get(child.nodeId);
+        if (childNode) childNode.visible = false;
+      }
+    }
+    for (const sectionName of SECONDARY_SECTION_NAMES2) {
+      const section = directChild(page, sectionName, ["SECTION"]);
+      resizeNode(section, SECTION_WIDTH, sectionLayouts.get(sectionName).height);
+    }
+    return {
+      sections: SECONDARY_SECTION_NAMES2.length,
+      agentSourceViews: SECONDARY_VIEW_DEFINITIONS.agentSources.length,
+      secondaryViews: SECONDARY_VIEW_DEFINITIONS.secondary.length,
+      responsiveViews: SECONDARY_VIEW_DEFINITIONS.responsive.length,
+      totalViews: secondaryDefinitionsWithGroups2().length,
+      recoveryActions: recoveryActions.length
+    };
+  }
+  async function runDialogsAndSecondary(page, ledger, writeBarrierInventory, resolvedInventoryNodes) {
+    return runSecondaryViews(page, ledger, writeBarrierInventory, resolvedInventoryNodes);
   }
   function collectOndaNodes(sections) {
     const nodes = [];
@@ -4959,7 +6250,7 @@ ${result.errors.join("\n")}`);
     figma.ui.postMessage({ type: "phase-result", command, ok, message, counts, unlockMutations });
   }
   async function handleCommand(command) {
-    var _a, _b, _c, _d, _e, _f;
+    var _a, _b, _c, _d, _e, _f, _g;
     if (command === "inspect") {
       const inspection = await inspectCurrentTarget();
       const authorization = authorizeMutation(inspection.target);
@@ -4989,7 +6280,7 @@ ${result.errors.join("\n")}`);
       let counts;
       if (command === "foundations") counts = await runFoundations(page, ledger);
       else if (command === "core-views") counts = await runCoreViews(page, ledger, validatedInventory, resolvedInventoryNodes);
-      else if (command === "dialogs-and-secondary") counts = await runDialogsAndSecondary(page, ledger);
+      else if (command === "dialogs-and-secondary") counts = await runDialogsAndSecondary(page, ledger, validatedInventory, resolvedInventoryNodes);
       else if (command.startsWith("component-")) counts = await runComponent(page, ledger, command.slice("component-".length), validatedInventory);
       else if (command.startsWith("annotations-")) counts = await runAnnotationBatch(page, ledger, Number(command.slice("annotations-".length)) - 1);
       else throw new Error(`Unbekannter Befehl: ${command}`);
@@ -5029,6 +6320,19 @@ ${result.errors.join("\n")}`);
           await loadDecisionFonts(ledger.fontDecision);
           return resolveCoreInventoryNodes(inventory, page);
         },
+        mutate: runMutation
+      });
+      return;
+    }
+    if (command === "dialogs-and-secondary") {
+      const phases = ((_g = readLedger(figma.currentPage)) == null ? void 0 : _g.phases) || {};
+      await executeGuardedSecondaryViewCommand({
+        command,
+        phases,
+        preflight: preflightSecondaryViewMutation,
+        requireContext: requireMutationContext,
+        collectCurrentInventory: ({ page }) => collectSecondaryViewMutationInventory(page),
+        resolveInventoryNodes: resolveSecondaryInventoryNodes,
         mutate: runMutation
       });
       return;

@@ -963,33 +963,75 @@ function secondaryInstance(name, setId, variant, label, region = 'Layout / Conte
   })
 }
 
-function secondaryRegions(viewName, width, layoutMode) {
-  const narrow = width === 320
-  const padding = narrow ? { top: 16, right: 16, bottom: 16, left: 16 } : { top: 24, right: 32, bottom: 24, left: 32 }
-  const shellMode = narrow ? 'VERTICAL' : 'HORIZONTAL'
-  const contentWidth = narrow ? 320 : Math.max(480, width - 320)
+function secondaryStackHeight(items, itemSpacing, padding) {
+  return padding.top + padding.bottom
+    + items.reduce((total, item) => total + item.expectedHeight, 0)
+    + Math.max(0, items.length - 1) * itemSpacing
+}
+
+function secondaryCopyContracts(name, subject, theme, width) {
+  const availableWidth = width === 320 ? 224 : 256
+  const expectedHeight = (characters, kind) => {
+    const lineHeight = kind === 'title' ? 28 : 22
+    const fontScale = kind === 'title' ? 21 / 15 : 1
+    const wrappedLines = Math.max(1, Math.ceil(estimateCoreTextWidth(characters) * fontScale * 1.1 / availableWidth))
+    return wrappedLines * lineHeight
+  }
+  const summary = `${subject || 'Arbeitsansicht'} · ${theme} · ${width}px`
   return Object.freeze([
-    coreRegion('Layout / Shell', viewName, width, 960, shellMode, { itemSpacing: 16, padding }),
-    coreRegion('Layout / Context', 'Layout / Shell', narrow ? 320 : width - contentWidth, 960, 'VERTICAL', { itemSpacing: 12, padding }),
-    coreRegion('Layout / Content', 'Layout / Shell', contentWidth, 960, 'VERTICAL', { itemSpacing: 16, padding }),
-    coreRegion('Layout / Detail', 'Layout / Content', contentWidth, 720, layoutMode === 'HORIZONTAL' ? 'HORIZONTAL' : 'VERTICAL', { itemSpacing: 12, padding }),
+    Object.freeze({ role: 'title', characters: name, region: 'Layout / Context', kind: 'title', expectedHeight: expectedHeight(name, 'title') }),
+    Object.freeze({ role: 'summary', characters: summary, region: 'Layout / Context', kind: 'paragraph', expectedHeight: expectedHeight(summary, 'paragraph') }),
   ])
 }
 
+function secondaryRegions(viewName, width, layoutMode, instances, copyContracts) {
+  const narrow = width === 320
+  const padding = narrow ? { top: 16, right: 16, bottom: 16, left: 16 } : { top: 24, right: 32, bottom: 24, left: 32 }
+  const shellMode = narrow ? 'VERTICAL' : 'HORIZONTAL'
+  if (!narrow) {
+    const contentWidth = Math.max(480, width - 320)
+    return Object.freeze({
+      height: 1024,
+      regions: Object.freeze([
+        coreRegion('Layout / Shell', viewName, width, 960, shellMode, { itemSpacing: 16, padding }),
+        coreRegion('Layout / Context', 'Layout / Shell', width - contentWidth, 960, 'VERTICAL', { itemSpacing: 12, padding }),
+        coreRegion('Layout / Content', 'Layout / Shell', contentWidth, 960, 'VERTICAL', { itemSpacing: 16, padding }),
+        coreRegion('Layout / Detail', 'Layout / Content', contentWidth, 720, layoutMode === 'HORIZONTAL' ? 'HORIZONTAL' : 'VERTICAL', { itemSpacing: 12, padding }),
+      ]),
+    })
+  }
+  const shellWidth = width - padding.left - padding.right
+  const contextWidth = shellWidth - padding.left - padding.right
+  const contentWidth = contextWidth
+  const detailWidth = contentWidth - padding.left - padding.right
+  const contextHeight = secondaryStackHeight(copyContracts, 12, padding)
+  const detailHeight = secondaryStackHeight(instances, 12, padding)
+  const contentHeight = secondaryStackHeight([{ expectedHeight: detailHeight }], 16, padding)
+  const shellHeight = secondaryStackHeight([{ expectedHeight: contextHeight }, { expectedHeight: contentHeight }], 16, padding)
+  return Object.freeze({
+    height: secondaryStackHeight([{ expectedHeight: shellHeight }], 0, padding),
+    regions: Object.freeze([
+      coreRegion('Layout / Shell', viewName, shellWidth, shellHeight, shellMode, { itemSpacing: 16, padding }),
+      coreRegion('Layout / Context', 'Layout / Shell', contextWidth, contextHeight, 'VERTICAL', { itemSpacing: 12, padding }),
+      coreRegion('Layout / Content', 'Layout / Shell', contentWidth, contentHeight, 'VERTICAL', { itemSpacing: 16, padding }),
+      coreRegion('Layout / Detail', 'Layout / Content', detailWidth, detailHeight, 'VERTICAL', { itemSpacing: 12, padding }),
+    ]),
+  })
+}
+
 function secondaryView({ name, sectionName, width = 1440, theme = 'Light', layoutMode = 'HORIZONTAL', subject, breakpoint, instances }) {
-  const regions = secondaryRegions(name, width, layoutMode)
+  const copyContracts = secondaryCopyContracts(name, subject, theme, width)
+  const geometry = secondaryRegions(name, width, layoutMode, instances, copyContracts)
   return freezeSecondary({
     name,
     sectionName,
     width,
+    height: geometry.height,
     theme,
     layoutMode,
     ...(subject ? { subject, breakpoint } : {}),
-    regions,
-    copyContracts: [
-      { role: 'title', characters: name, region: 'Layout / Context', kind: 'title' },
-      { role: 'summary', characters: `${subject || 'Arbeitsansicht'} · ${theme} · ${width}px`, region: 'Layout / Context', kind: 'paragraph' },
-    ],
+    regions: geometry.regions,
+    copyContracts,
     instances,
   })
 }
@@ -1043,6 +1085,19 @@ function secondaryContentOverrides(label) {
 }
 
 function responsiveContentOverrides(name) {
+  if (name === 'Responsive / Bibliothek · 320 Light' || name === 'Responsive / Bibliothek · 320 Dark') return {
+    0: { label: 'Projekte', roleCopy: { Icon: '▤', Label: 'Projekte', Count: '1', Status: 'Aktiv' } },
+    1: { label: 'Suchen', roleCopy: { Icon: '⌕', Input: 'Suchen', Clear: '—', Count: '0' } },
+    2: { label: 'Ansicht', roleCopy: { Label: 'Ansicht', Value: 'Alle', Chevron: '⌄', Status: 'Bereit' } },
+    3: { label: 'Text', roleCopy: { Leading: '▤', Title: 'Text', Meta: '1 S.', Status: 'Klar', Action: '→' } },
+  }
+  if (name === 'Responsive / Editor · 320 Light' || name === 'Responsive / Editor · 320 Dark') return {
+    0: { label: 'Editor', roleCopy: { Icon: '▤', Label: 'Editor', Count: '1', Status: 'Aktiv' } },
+    1: { label: 'Text', roleCopy: { 'Text Label': 'Text', 'Note Label': 'Notiz', Indicator: 'Aktiv' } },
+    2: { label: '1 offen', roleCopy: { Symbol: '◎', Message: '1 offen', 'Primary Action': '→', 'Secondary Action': 'Alle' } },
+    3: { label: 'Hinweis', roleCopy: { Symbol: '¶', Label: 'Hinweis', Count: '1' } },
+    4: { label: 'Beleg', roleCopy: { Type: 'Hinweis', Title: 'Beleg', Body: 'Quelle fehlt.', Scope: 'Hier', 'Primary Action': 'Prüfen', 'Secondary Action': 'Später', Status: 'Offen' } },
+  }
   if (name === 'Responsive / Annotation · Beleg fehlt · Dark') return {
     0: { name: 'Anker / Textbeleg fehlt', label: 'Textbeleg fehlt', roleCopy: { Label: 'Textbeleg fehlt', Count: '1 aktiver Hinweis' } },
     1: { name: 'Formular / Quelle ergänzen', label: 'Quelle ergänzen', roleCopy: { Label: 'Quelle ergänzen' } },
