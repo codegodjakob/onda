@@ -31,6 +31,28 @@ function assertDeepFrozen(value, label = 'value') {
   }
 }
 
+function deepFreeze(value) {
+  if (value && typeof value === 'object') {
+    for (const child of Object.values(value)) deepFreeze(child)
+    Object.freeze(value)
+  }
+  return value
+}
+
+async function mutatedContract(mutate) {
+  const definitions = await import('../src/definitions.mjs')
+  const candidate = definitions.ANNOTATION_VIEW_DEFINITIONS.map((annotation, index) => ({
+    ...structuredClone(annotation),
+    definition: definitions.ANNOTATION_SECTIONS[index],
+  }))
+  mutate(candidate)
+  return { definitions, candidate: deepFreeze(candidate) }
+}
+
+function namedView(candidate, kind, viewName) {
+  return candidate.find(annotation => annotation.kind === kind).views.find(view => view.name === viewName)
+}
+
 test('annotation contract is the exact frozen 29 by 6 fixture matrix', async () => {
   const definitions = await import('../src/definitions.mjs')
   const { ANNOTATION_CASES } = await import('../../../app/evals/fixtures/annotation-cases.mjs')
@@ -100,14 +122,76 @@ test('annotation contract is the exact frozen 29 by 6 fixture matrix', async () 
     }
   }
 
-  const dishonest = structuredClone(definitions.ANNOTATION_VIEW_DEFINITIONS)
-  const unsupportedAccept = dishonest.find(item => item.kind === 'faden').views.find(view => view.name === 'Accept · Undo')
-  unsupportedAccept.operation = 'replace-range'
-  unsupportedAccept.effectiveOperation = 'replace-range'
-  unsupportedAccept.instances[2].roleCopy['Primary Action'] = 'Text ändern'
-  assert.ok(definitions.validateAnnotationViewDefinitions(dishonest).some(error => error.includes('unsupported operation is dishonest')))
+})
 
-  const extraRole = structuredClone(definitions.ANNOTATION_VIEW_DEFINITIONS)
-  extraRole[0].views[0].instances[0].roleCopy.Unexpected = 'nicht erlaubt'
-  assert.ok(definitions.validateAnnotationViewDefinitions(extraRole).some(error => error.includes('incomplete TEXT roles')))
+test('validator names a non-null unsupported operation independently', async () => {
+  const { definitions, candidate } = await mutatedContract(contract => {
+    namedView(contract, 'faden', 'Accept · Undo').operation = 'replace-range'
+  })
+  assert.deepEqual(definitions.validateAnnotationViewDefinitions(candidate), [
+    'faden/Accept · Undo: unsupported operation must be null',
+  ])
+})
+
+test('validator names a non-null unsupported effective operation independently', async () => {
+  const { definitions, candidate } = await mutatedContract(contract => {
+    namedView(contract, 'faden', 'Accept · Undo').effectiveOperation = 'replace-range'
+  })
+  assert.deepEqual(definitions.validateAnnotationViewDefinitions(candidate), [
+    'faden/Accept · Undo: unsupported effectiveOperation must be null',
+  ])
+})
+
+test('validator names an unsupported Card text-change claim independently', async () => {
+  const { definitions, candidate } = await mutatedContract(contract => {
+    namedView(contract, 'faden', 'Accept · Undo').instances[2].roleCopy['Primary Action'] = 'Text ändern'
+  })
+  assert.deepEqual(definitions.validateAnnotationViewDefinitions(candidate), [
+    'faden/Accept · Undo: unsupported Card action claims a text change',
+  ])
+})
+
+test('validator names a missing TEXT Role independently', async () => {
+  const { definitions, candidate } = await mutatedContract(contract => {
+    delete namedView(contract, 'rechtschreibung', 'Open').instances[0].roleCopy.Count
+  })
+  assert.deepEqual(definitions.validateAnnotationViewDefinitions(candidate), [
+    'rechtschreibung/Open: Anchor is missing TEXT Role Count',
+  ])
+})
+
+test('validator names an extra TEXT Role independently', async () => {
+  const { definitions, candidate } = await mutatedContract(contract => {
+    namedView(contract, 'rechtschreibung', 'Open').instances[0].roleCopy.Unexpected = 'nicht erlaubt'
+  })
+  assert.deepEqual(definitions.validateAnnotationViewDefinitions(candidate), [
+    'rechtschreibung/Open: Anchor has extra TEXT Role Unexpected',
+  ])
+})
+
+test('validator names a non-vertical region independently', async () => {
+  const { definitions, candidate } = await mutatedContract(contract => {
+    namedView(contract, 'rechtschreibung', 'Open').regions[0].layoutMode = 'HORIZONTAL'
+  })
+  assert.deepEqual(definitions.validateAnnotationViewDefinitions(candidate), [
+    'rechtschreibung/Open: Content region layoutMode must be VERTICAL',
+  ])
+})
+
+test('validator names a wrong region width independently', async () => {
+  const { definitions, candidate } = await mutatedContract(contract => {
+    namedView(contract, 'rechtschreibung', 'Open').regions[0].width = 579
+  })
+  assert.deepEqual(definitions.validateAnnotationViewDefinitions(candidate), [
+    'rechtschreibung/Open: Content region width must be 580',
+  ])
+})
+
+test('validator names a wrong region padding independently', async () => {
+  const { definitions, candidate } = await mutatedContract(contract => {
+    namedView(contract, 'rechtschreibung', 'Open').regions[0].padding = 23
+  })
+  assert.deepEqual(definitions.validateAnnotationViewDefinitions(candidate), [
+    'rechtschreibung/Open: Content region padding must be 24',
+  ])
 })

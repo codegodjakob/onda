@@ -728,7 +728,15 @@ function annotationViewErrors(view, annotation, fixture, annotationIndex) {
     padding: spec.padding,
     layoutMode: 'VERTICAL',
   })) if (view[key] !== expected) errors.push(`${annotation.kind}/${view.name}: ${key} is invalid`)
-  if (!Array.isArray(view.regions) || !view.regions.length || view.regions.some(region => region.layoutMode === 'NONE')) errors.push(`${annotation.kind}/${view.name}: regions need Auto Layout`)
+  if (!Array.isArray(view.regions) || !view.regions.length) {
+    errors.push(`${annotation.kind}/${view.name}: regions need Auto Layout`)
+  } else {
+    for (const region of view.regions) {
+      if (region.layoutMode !== 'VERTICAL') errors.push(`${annotation.kind}/${view.name}: ${region.name} region layoutMode must be VERTICAL`)
+      if (region.width !== spec.width) errors.push(`${annotation.kind}/${view.name}: ${region.name} region width must be ${spec.width}`)
+      if (region.padding !== spec.padding) errors.push(`${annotation.kind}/${view.name}: ${region.name} region padding must be ${spec.padding}`)
+    }
+  }
   if (!view.copyContracts || !['Target', 'Finding', 'Reason', 'Consequence'].every(key => view.copyContracts[key] === ({ Target: fixture.target, Finding: fixture.short, Reason: fixture.why, Consequence: fixture.folge })[key])) errors.push(`${annotation.kind}/${view.name}: fixture copy differs`)
   if (!Array.isArray(view.instances) || view.instances.length !== ANNOTATION_INSTANCE_ORDER.length) {
     errors.push(`${annotation.kind}/${view.name}: instance count is invalid`)
@@ -741,7 +749,9 @@ function annotationViewErrors(view, annotation, fixture, annotationIndex) {
     if (!view.regions.some(region => region.name === instance?.region)) errors.push(`${annotation.kind}/${view.name}: ${expected.name} has no owned region`)
     if (instance?.expectedHeight !== componentRenderedHeight(component)) errors.push(`${annotation.kind}/${view.name}: ${expected.name} height is invalid`)
     const roleNames = component.roles.filter(role => role.type === 'TEXT').map(role => role.name)
-    if (!instance?.roleCopy || Object.keys(instance.roleCopy).length !== roleNames.length || !roleNames.every(role => Object.hasOwn(instance.roleCopy, role))) errors.push(`${annotation.kind}/${view.name}: ${expected.name} has incomplete TEXT roles`)
+    const roleCopyNames = Object.keys(instance?.roleCopy || {})
+    for (const roleName of roleNames.filter(role => !roleCopyNames.includes(role))) errors.push(`${annotation.kind}/${view.name}: ${expected.name} is missing TEXT Role ${roleName}`)
+    for (const roleName of roleCopyNames.filter(role => !roleNames.includes(role))) errors.push(`${annotation.kind}/${view.name}: ${expected.name} has extra TEXT Role ${roleName}`)
   }
   const [anchor, form, card, status, primary, secondary] = view.instances
   const expectedAnchor = `Kind=${annotationIndex < TEXT_ANNOTATION_KINDS.length ? 'Text' : 'Note'}, State=Active`
@@ -749,10 +759,14 @@ function annotationViewErrors(view, annotation, fixture, annotationIndex) {
   if (form.roleCopy.Input !== fixture.target || form.roleCopy.Preview !== fixture.action || form.roleCopy.Help !== fixture.why) errors.push(`${annotation.kind}/${view.name}: form payload differs`)
   if ((!annotation.operation && form.roleCopy['Primary Action'] !== 'Nicht verfügbar') || (annotation.operation && form.roleCopy['Primary Action'] === 'Nicht verfügbar')) errors.push(`${annotation.kind}/${view.name}: form operation is dishonest`)
   if (card.variant !== (unsupportedAccept ? 'State=Open' : spec.card) || status.variant !== spec.status || primary.variant !== (unsupportedAccept ? 'Kind=Disabled' : spec.primary) || secondary.variant !== spec.secondary) errors.push(`${annotation.kind}/${view.name}: view variants are invalid`)
-  if (unsupportedAccept) {
-    if (card.roleCopy['Primary Action'] !== 'Übernehmen nicht verfügbar' || card.roleCopy.Status !== 'Nur redaktioneller Hinweis' || card.roleCopy.Body !== fixture.short || primary.roleCopy.Label !== 'Übernehmen nicht verfügbar' || secondary.roleCopy.Label !== 'Als Hinweis behalten' || Object.hasOwn(view, 'operation') || Object.hasOwn(view, 'effectiveOperation')) errors.push(`${annotation.kind}/${view.name}: unsupported operation is dishonest`)
+  if (!annotation.operation) {
+    if (view.operation != null) errors.push(`${annotation.kind}/${view.name}: unsupported operation must be null`)
+    if (view.effectiveOperation != null) errors.push(`${annotation.kind}/${view.name}: unsupported effectiveOperation must be null`)
   }
-  if (!annotation.operation && card.roleCopy['Primary Action'] !== (unsupportedAccept ? 'Übernehmen nicht verfügbar' : 'Nicht verfügbar')) errors.push(`${annotation.kind}/${view.name}: unsupported card action is dishonest`)
+  if (unsupportedAccept) {
+    if (card.roleCopy.Status !== 'Nur redaktioneller Hinweis' || card.roleCopy.Body !== fixture.short || primary.roleCopy.Label !== 'Übernehmen nicht verfügbar' || secondary.roleCopy.Label !== 'Als Hinweis behalten') errors.push(`${annotation.kind}/${view.name}: unsupported editorial-note semantics are invalid`)
+  }
+  if (!annotation.operation && card.roleCopy['Primary Action'] !== (unsupportedAccept ? 'Übernehmen nicht verfügbar' : 'Nicht verfügbar')) errors.push(`${annotation.kind}/${view.name}: unsupported Card action claims a text change`)
   if (view.name === 'Responsive · 320 px' && (!view.instances.filter(instance => instance.interactive).every(instance => instance.expectedHeight >= 44) || view.width !== 320 || view.padding !== 16)) errors.push(`${annotation.kind}/${view.name}: responsive constraints are invalid`)
   if (view.name === 'Dark' && view.theme !== 'Dark') errors.push(`${annotation.kind}/${view.name}: dark constraints are invalid`)
   return errors
