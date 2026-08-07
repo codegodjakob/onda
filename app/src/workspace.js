@@ -108,6 +108,7 @@ import {
   validateAnnotationOperation,
 } from './annotation-operations.mjs'
 import { ondaIcon } from './onda-icons.mjs'
+import { blaseAmOrbAusrichten, blaseAnhaengen } from './onda-blase-dom.mjs'
 import { VARIANTEN, VARIANTEN_ERKLAERUNG, VARIANTEN_LABEL, bilanzText, bilanzVorlesetext, normalisiereVariante, punkteFuer } from './bilanz-varianten.mjs'
 
 const BLOCK_TYPES = [
@@ -3576,11 +3577,25 @@ function renderEntscheidungsverlauf(workspace) {
   return section
 }
 
+// renderAgentWidget raeumt bei jedem Lauf ALLE Kinder ab — auch die Kontur.
+// Sie wird deshalb jedes Mal neu angehaengt, und der alte Groessenbeobachter
+// vorher abgemeldet. Ihn stehenzulassen hiesse, bei jedem Tastendruck im
+// Gespraech einen weiteren zu sammeln.
+let blaseAbraeumen = null
+
+function haltBlaseAmOrb() {
+  const ui = elements()
+  if (!ui.agentWidget || ui.agentWidget.hidden) return
+  blaseAmOrbAusrichten(ui.agentWidget, ui.agentPresence)
+}
+
 function renderAgentWidget() {
   const ui = elements()
   const workspace = activeWorkspace()
   if (!ui.agentWidget || !workspace) return
   const inputState = captureInputState(ui.agentWidget, '.agent-chat-input')
+  blaseAbraeumen?.()
+  blaseAbraeumen = null
   ui.agentWidget.replaceChildren()
   if (!workspace.agent.open) {
     if (agentPresenceFocusRequest) {
@@ -3589,6 +3604,8 @@ function renderAgentWidget() {
     }
     return
   }
+  blaseAbraeumen = blaseAnhaengen(ui.agentWidget)
+  haltBlaseAmOrb()
 
   const message = activeAgentMessage(workspace)
   const header = createNode('header', 'agent-widget-header')
@@ -3629,18 +3646,22 @@ function renderAgentWidget() {
   const messages = createNode('div', 'agent-widget-messages')
   message.thread.forEach(entry => appendThreadMessageNode(messages, entry))
 
+  // Composer nach dem Design System: EIN Rahmen um Feld und Knopf, nicht zwei
+  // Formen nebeneinander (components/conversation/Composer.jsx).
   const form = createNode('form', 'agent-chat-form agent-widget-form')
+  const composer = createNode('div', 'onda-composer')
   const input = createNode('input', 'agent-chat-input')
   input.type = 'text'
-  input.placeholder = 'Antworten …'
+  input.placeholder = 'Schreib eine Anweisung …'
   input.setAttribute('aria-label', 'Dem Agenten antworten')
   const send = createNode('button', 'agent-chat-send')
-  send.append(ondaIcon('arrow-right', { size: 18 }))
+  send.append(ondaIcon('arrow-right', { size: 15 }))
   send.type = 'submit'
   send.title = 'Senden'
-  send.setAttribute('aria-label', 'Nachricht senden')
+  send.setAttribute('aria-label', 'Senden')
   send.disabled = Boolean(laufenderChatLauf)
-  form.append(input, send)
+  composer.append(input, send)
+  form.append(composer)
   form.addEventListener('submit', event => {
     event.preventDefault()
     const text = input.value.trim()
@@ -4583,6 +4604,9 @@ export function initWorkspace(context) {
     closeInsertMenu({ restoreFocus: false })
     scheduleTriggerRender()
     if (localDecoratedBlockId) scheduleLocalPosition(localDecoratedBlockId)
+    // Der Orb wandert mit der Fensterbreite; sein Sitz muss mitwandern,
+    // sonst haengt die Blase neben ihm statt an ihm.
+    haltBlaseAmOrb()
   }
   const onViewChange = event => {
     if (event.detail?.view !== 'editor') {

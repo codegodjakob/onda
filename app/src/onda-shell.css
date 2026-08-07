@@ -308,8 +308,17 @@ body.view-editor #editorView {
   scroll-padding-block: var(--space-10);
 }
 
+/* Die eine Quelle fuer den Anmerkungsrand im Schreibraum. Sie steht an
+   #editorView und nicht an #page, weil style.css sie dort ebenfalls braucht:
+   die Rechnung "wieviel Rand darf die Blase bekommen" haengt an derselben Zahl.
+   Zwei Fassungen davon waeren zwei Wahrheiten, und eine waere immer veraltet —
+   genau daran ist die Schwelle von 1712px gescheitert. */
+#editorView {
+  --onda-anmerkungsrand-breit: 388px;
+}
+
 #editorView #page {
-  --onda-anmerkungsrand: 388px;
+  --onda-anmerkungsrand: var(--onda-anmerkungsrand-breit);
   width: calc(var(--container-reading) + var(--onda-anmerkungsrand));
   max-width: 100%;
   min-height: 100%;

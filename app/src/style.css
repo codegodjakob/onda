@@ -1192,9 +1192,18 @@ body.zen #title:focus { opacity: 1; }
   padding: 0 var(--space-4);
 }
 
+/* Der Orb bleibt oben rechts in der Ecke — auch wenn die Blase offen ist.
+   Er liegt UEBER ihr: die Blase kommt aus ihm hervor, nicht er aus ihr.
+   36px ist kein Gefallen ans Auge, sondern Passform: der Sitz der Blase hat
+   Radius 24, also 48px Durchmesser, und laesst so ringsum 6px Luft — genau
+   wie im Design System, wo der Avatar mit size=36 bei left/top 6px sitzt.
+   Die Zahl steht als BLASEN_MASSE.orb in onda-blase.mjs und wird von
+   onda-blase.test.mjs gegen den Sitz gehalten. */
 #ondaAura {
   margin-left: auto;
-  --aura-size: 30px;
+  --aura-size: 36px;
+  position: relative;
+  z-index: 46;
   width: 44px;
   height: 44px;
   background: transparent;
@@ -1818,12 +1827,82 @@ body.zen #title:focus { opacity: 1; }
   animation: ondaHintIn var(--dur-normal) var(--ease-out);
 }
 
+/* ============================================================
+   Das Agentengespraech ist eine Sprechblase, die aus dem Orb kommt.
+   Vorlage: Design System 2, components/conversation/Bubble.jsx mit
+   seat="top" — "der Orb sitzt oben rechts, die Blase waechst nach unten".
+
+   Die Blase SCHWEBT. Sie nimmt der Lesespalte keinen Millimeter weg; das
+   ist die harte Regel weiter unten bei @media (min-width: 1712px), und
+   sie gilt hier genauso. Deshalb position: fixed und kein Platzhalter im
+   Fluss der Editor-Spalte.
+
+   Die eigene Flaeche verschwindet, sobald die Kontur sie ersetzt — sonst
+   saehe man zwei Formen uebereinander: den Kasten und die Silhouette.
+   Welche der beiden gilt, entscheidet blaseTraegtKontur() in
+   onda-blase.mjs, nicht das Stylesheet.
+   ============================================================ */
 #agentWidget {
-  top: 68px;
-  height: min(560px, calc(100dvh - 104px));
+  right: var(--onda-blase-rechts, 14px);
+  top: var(--onda-blase-oben, 8px);
+  width: min(380px, calc(100vw - 28px));
+  height: min(560px, calc(100dvh - var(--onda-blase-oben, 8px) - 24px));
+  max-height: min(620px, calc(100dvh - var(--onda-blase-oben, 8px) - 24px));
   min-height: 280px;
   display: flex;
   flex-direction: column;
+  overflow: visible;
+  animation: ondaBlaseIn var(--dur-normal) var(--ease-out);
+}
+
+/* Die Kontur liegt unter dem Inhalt und faengt keine Klicks ab. */
+.onda-blase__kontur {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 0;
+  pointer-events: none;
+  filter: drop-shadow(0 1px 5px rgba(28, 26, 23, .07));
+}
+
+.onda-blase__kontur path {
+  fill: var(--bg-surface);
+  stroke: var(--border-subtle);
+  stroke-width: 1;
+}
+
+[data-theme="dark"] .onda-blase__kontur {
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, .4));
+}
+
+/* Traegt die Blase ihre Kontur, gibt sie Kasten, Rahmen und Schatten ab. */
+#agentWidget.is-kontur {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+/* Alles ausser der Kontur liegt darueber. */
+#agentWidget > *:not(.onda-blase__kontur) {
+  position: relative;
+  z-index: 1;
+}
+
+/* Die Nase des Sitzes ragt 34px ueber den Panelkoerper (24 Sitz + 10 Fillet).
+   Genau so viel Luft braucht die Kopfzeile, sonst laege sie in der Nase.
+   Die Zahl kommt aus nasenTiefe() in onda-blase.mjs — sie steht hier nur,
+   weil CSS nicht rechnen kann, was JavaScript schon weiss. */
+#agentWidget.is-kontur .agent-widget-header {
+  padding-top: 38px;
+  padding-right: 56px;
+}
+
+@keyframes ondaBlaseIn {
+  from { opacity: 0; transform: translateY(-6px) scale(.985); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #agentWidget { animation: none; }
 }
 
 #evidenceWindow {
@@ -1863,21 +1942,73 @@ body.zen #title:focus { opacity: 1; }
   padding: var(--space-3) var(--space-6) var(--space-6);
 }
 
-.agent-widget-form .agent-chat-input {
-  height: 38px;
-  border-radius: var(--radius-pill);
-  padding: 6px 14px;
+/* Composer, uebernommen aus Design System 2 (components/conversation/Composer.jsx).
+   Der Unterschied zur alten Fassung ist die Zahl der Formen: dort waren es zwei
+   Pillen nebeneinander, hier ist es EIN Rahmen, in dem Feld und Knopf sitzen.
+   Die Ecke ist --radius-control (8px), keine Pille — das Design System hat die
+   Pillen abgeschafft, und die Ecken sind in onda-tokens.test.mjs festgenagelt. */
+.agent-widget-form {
+  display: block;
 }
 
-.agent-widget-form .agent-chat-send {
-  border-radius: var(--radius-pill);
+.onda-composer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 7px 7px 7px 10px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-control);
+  background: var(--bg-surface);
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.onda-composer:hover { border-color: var(--border-strong); }
+.onda-composer:focus-within { box-shadow: var(--shadow-focus); }
+
+.onda-composer .agent-chat-input {
+  flex: 1;
+  min-width: 0;
+  height: auto;
+  padding: 9px 4px;
+  border: 0;
+  border-radius: 0;
+  outline: none;
+  background: transparent;
+  font: var(--type-body);
+  line-height: 22px;
+}
+
+.onda-composer .agent-chat-input:focus {
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.onda-composer .agent-chat-input::placeholder { color: var(--text-tertiary); }
+
+.onda-composer .agent-chat-send {
+  width: 34px;
+  height: 34px;
+  flex: none;
+  border-radius: var(--radius-control);
   background: var(--accent);
   color: var(--on-accent);
+  transition: var(--transition-colors), transform var(--dur-fast) var(--ease-out);
 }
 
-.agent-widget-form .agent-chat-send:hover {
+.onda-composer .agent-chat-send:hover:not(:disabled) {
   background: var(--accent-hover);
   color: var(--on-accent);
+}
+
+.onda-composer .agent-chat-send:active:not(:disabled) { transform: scale(.96); }
+
+.onda-composer .agent-chat-send:disabled {
+  background: var(--bg-sunken);
+  color: var(--text-disabled);
+  cursor: not-allowed;
 }
 
 .unplaced-findings {
@@ -2182,16 +2313,41 @@ body.zen #title:focus { opacity: 1; }
    Das Agentenfenster schwebt ohnehin (position: fixed), es BRAUCHT den Platz nicht.
    Der Rand ist nur eine Hoeflichkeit, damit es nichts verdeckt.
 
-   Die Schwelle ist gerechnet, nicht geraten:
-     Seitenleiste 264 + Lesespalte 680 + Seitenpolster 48 + Anmerkungsrand 300
-     + Agentenfenster 420 = 1712px.
-   Darunter schwebt das Fenster ueber dem Anmerkungsrand. Anmerkungen sind
-   nachrangig gegenueber dem Text — das ist die Rangfolge, nicht ein Zufall. */
-@media (min-width: 1712px) {
-  #editorView.is-agent-open .onda-editor-col,
-  #editorView.is-evidence-open .onda-editor-col {
-    padding-right: 420px;
-  }
+   Danach stand hier eine gerechnete Schwelle von 1712px. Sie war mit einem
+   Anmerkungsrand von 300px gerechnet — der tatsaechliche steht in
+   onda-shell.css und betraegt 388px. Bei genau 1712px schrumpfte der Titel
+   deshalb von 680 auf 592. Gefunden hat das test/blase-schwebt.test.mjs, nicht
+   das Auge: eine Zahl, die man von Hand nachrechnet, wird irgendwann falsch,
+   wenn eine der Zutaten sich woanders aendert.
+
+   Deshalb steht hier jetzt keine Schwelle mehr, sondern eine Rechnung. Der Rand
+   ist, was UEBRIG ist — nie das, was fehlt:
+     brauchen  = Lesespalte 680 + Anmerkungsrand 388 + Seitenpolster 2x24
+     uebrig    = Fensterbreite - Seitenleiste - brauchen
+     Rand      = zwischen 0 und 420, so viel wie uebrig ist
+   Reicht es nicht, wird der Rand kleiner und irgendwann 0 — die Blase schwebt
+   dann ueber dem Anmerkungsrand. Anmerkungen sind nachrangig gegenueber dem
+   Text; das ist die Rangfolge, nicht ein Zufall.
+
+   Prozente in `padding` beziehen sich auf die Breite des Elternelements
+   (#editorView, also das Fenster) — nicht auf die Spalte selbst. Ohne das
+   waere die Rechnung zirkulaer. */
+#editorView {
+  /* --onda-anmerkungsrand-breit kommt aus onda-shell.css und ist DIE Quelle
+     fuer den Anmerkungsrand. Steht sie nicht (Testkulissen ohne die Shell),
+     faellt die Rechnung auf 388px zurueck — denselben Wert. */
+  --onda-spalte-braucht: calc(
+    var(--container-reading) + var(--onda-anmerkungsrand-breit, 388px) + 2 * var(--space-6)
+  );
+}
+
+#editorView.is-agent-open .onda-editor-col,
+#editorView.is-evidence-open .onda-editor-col {
+  padding-right: clamp(
+    0px,
+    calc(100% - var(--sidebar-width) - var(--onda-spalte-braucht)),
+    420px
+  );
 }
 
 @media (max-width: 760px) {
