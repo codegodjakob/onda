@@ -941,6 +941,213 @@ export function validateCoreRoleCopySemantics(views = CORE_VIEW_DEFINITIONS) {
   return { valid: errors.length === 0, errors, checked }
 }
 
+function freezeSecondary(value) {
+  if (!value || typeof value !== 'object' || Object.isFrozen(value)) return value
+  for (const nested of Object.values(value)) freezeSecondary(nested)
+  return Object.freeze(value)
+}
+
+function secondaryRoleCopy(name, setId, variant, label, overrides = {}) {
+  const component = COMPONENT_DEFINITIONS.find(item => item.id === setId)
+  const componentVariant = component?.variants.find(item => item.name === variant)
+  const roleDefaults = Object.fromEntries((component?.roles || [])
+    .filter(role => role.type === 'TEXT')
+    .map(role => [role.name, componentVariant?.copy?.[role.name] || '']))
+  return coreRoleCopy(name, setId, variant, label, { ...roleDefaults, ...overrides })
+}
+
+function secondaryInstance(name, setId, variant, label, region = 'Layout / Content', roleCopy = {}) {
+  return coreInstance(name, setId, variant, label, {
+    region,
+    roleCopy: secondaryRoleCopy(name, setId, variant, label, roleCopy),
+  })
+}
+
+function secondaryRegions(viewName, width, layoutMode) {
+  const narrow = width === 320
+  const padding = narrow ? { top: 16, right: 16, bottom: 16, left: 16 } : { top: 24, right: 32, bottom: 24, left: 32 }
+  const shellMode = narrow ? 'VERTICAL' : 'HORIZONTAL'
+  const contentWidth = narrow ? 320 : Math.max(480, width - 320)
+  return Object.freeze([
+    coreRegion('Layout / Shell', viewName, width, 960, shellMode, { itemSpacing: 16, padding }),
+    coreRegion('Layout / Context', 'Layout / Shell', narrow ? 320 : width - contentWidth, 960, 'VERTICAL', { itemSpacing: 12, padding }),
+    coreRegion('Layout / Content', 'Layout / Shell', contentWidth, 960, 'VERTICAL', { itemSpacing: 16, padding }),
+    coreRegion('Layout / Detail', 'Layout / Content', contentWidth, 720, layoutMode === 'HORIZONTAL' ? 'HORIZONTAL' : 'VERTICAL', { itemSpacing: 12, padding }),
+  ])
+}
+
+function secondaryView({ name, sectionName, width = 1440, theme = 'Light', layoutMode = 'HORIZONTAL', subject, breakpoint, instances }) {
+  const regions = secondaryRegions(name, width, layoutMode)
+  return freezeSecondary({
+    name,
+    sectionName,
+    width,
+    theme,
+    layoutMode,
+    ...(subject ? { subject, breakpoint } : {}),
+    regions,
+    copyContracts: [
+      { role: 'title', characters: name, region: 'Layout / Context', kind: 'title' },
+      { role: 'summary', characters: `${subject || 'Arbeitsansicht'} · ${theme} · ${width}px`, region: 'Layout / Context', kind: 'paragraph' },
+    ],
+    instances,
+  })
+}
+
+function mappedInstances(mapping, label, overrides = {}) {
+  return mapping.map(([setId, variant], index) => secondaryInstance(
+    overrides[index]?.name || `${label} / ${String(index + 1).padStart(2, '0')}`,
+    setId,
+    variant,
+    overrides[index]?.label || label,
+    overrides[index]?.region || 'Layout / Detail',
+    overrides[index]?.roleCopy || {},
+  ))
+}
+
+function secondaryContentOverrides(label) {
+  if (label === 'Slash-Menü · Suche leer') return {
+    0: { roleCopy: { Input: 'Slash-Befehl suchen', Count: 'Zuletzt verwendet' } },
+    1: { label: 'Überschrift einfügen', roleCopy: { Icon: 'H', Shortcut: 'zuletzt verwendet' } },
+    2: { label: 'Quellenbeleg einfügen', roleCopy: { Icon: '§', Shortcut: 'zuletzt verwendet' } },
+  }
+  if (label === 'Slash-Menü · Treffer') return {
+    0: { roleCopy: { Input: 'Befehl „Überschrift“', Count: '2 passende Befehle' } },
+    1: { label: 'Überschrift einfügen', roleCopy: { Icon: 'H', Shortcut: '⌘1' } },
+    2: { label: 'Überschrift einfügen', roleCopy: { Icon: 'H', Shortcut: 'ausgewählt' } },
+  }
+  if (label === 'Slash-Menü · Keine Treffer') return {
+    0: { roleCopy: { Input: 'Befehl „Zeitachse“', Count: '0 Treffer · Suchbegriff ändern' } },
+    1: { label: 'Kein passender Befehl', roleCopy: { Title: 'Keine Befehle gefunden', Description: 'Suchbegriff ändern oder kürzer eingeben.', Action: 'Suche löschen' } },
+    2: { label: 'Suche löschen' },
+  }
+  if (label === 'Blockeinfügung · Position wählen') return {
+    0: { label: 'Nach Absatz „Prinzipien“', roleCopy: { Label: 'Einfügeposition', Value: 'Nach Absatz „Prinzipien“', Status: 'Position gewählt' } },
+    1: { label: 'Nach der Fundstelle einfügen', roleCopy: { Icon: '↓', Shortcut: 'ausgewählt' } },
+    2: { label: 'Block einfügen' },
+    3: { label: 'Abbrechen' },
+  }
+  if (label === 'Quellenleser · Fundstelle übernehmen') return {
+    0: { label: 'Markierte Fundstelle', roleCopy: { Title: 'Markierte Fundstelle', Location: 'Seite 12 · Absatz 3', Excerpt: 'Diese Passage belegt die Aussage zur ruhigen Technik.', Status: 'Zur Übernahme bereit', Action: 'Mit Beleg verknüpfen' } },
+    1: { label: 'Beleg verifiziert', roleCopy: { Claim: 'Ruhige Technik informiert ohne Unterbrechung.', Source: 'Weiser · Brown · Seite 12', Confidence: 'Verifiziert', Action: 'Beleg übernehmen' } },
+    2: { label: 'Fundstelle übernehmen' },
+    3: { label: 'Zurück' },
+  }
+  if (label === 'Rechercheablauf · Pausiert und Fehler') return {
+    0: { label: 'Recherche pausiert', roleCopy: { Query: 'Wirkung von Schreibassistenz', Progress: '2 von 5 Schritten', Sources: '3 Quellen vorgemerkt', Status: 'Pausiert', Action: 'Recherche fortsetzen' } },
+    1: { label: 'Recherchefehler', roleCopy: { Query: 'Wirkung von Schreibassistenz', Progress: 'Recherche unterbrochen', Sources: 'Quellenstand bleibt erhalten', Status: 'Verbindung fehlgeschlagen', Action: 'Erneut versuchen' } },
+    2: { label: 'Recherche fortsetzen', roleCopy: { Icon: '↻', Shortcut: 'Wiederherstellung' } },
+    3: { label: 'Fehlerdetails prüfen', roleCopy: { Icon: '!', Shortcut: 'Details' } },
+  }
+  return {}
+}
+
+function responsiveContentOverrides(name) {
+  if (name === 'Responsive / Annotation · Beleg fehlt · Dark') return {
+    0: { name: 'Anker / Textbeleg fehlt', label: 'Textbeleg fehlt', roleCopy: { Label: 'Textbeleg fehlt', Count: '1 aktiver Hinweis' } },
+    1: { name: 'Formular / Quelle ergänzen', label: 'Quelle ergänzen', roleCopy: { Label: 'Quelle ergänzen' } },
+    2: { name: 'Anmerkung / Beleg fehlt', label: 'Beleg fehlt', roleCopy: { 'Primary Action': 'Quelle verknüpfen', 'Secondary Action': 'Später prüfen' } },
+    3: { name: 'Aktion / Quelle verknüpfen', label: 'Quelle verknüpfen', roleCopy: { Symbol: '→', Label: 'Quelle verknüpfen', Hint: 'Geprüfte Fundstelle übernehmen' } },
+    4: { name: 'Aktion / Später prüfen', label: 'Später prüfen', roleCopy: { Symbol: '←', Label: 'Später prüfen', Hint: 'Hinweis bleibt offen' } },
+  }
+  if (name === 'Responsive / Agent · Streaming · Dark') return {
+    0: { name: 'Aura / Antwort entsteht', label: 'Aura prüft den Auftrag' },
+    1: { name: 'Agent / Antwort wird erstellt', label: 'Antwort wird schrittweise erstellt' },
+    2: { name: 'Composer / Beleglücken prüfen', label: 'Beleglücken prüfen' },
+    3: { name: 'Aktion / Senden gesperrt', label: 'Senden gesperrt', roleCopy: { Symbol: '×', Label: 'Senden gesperrt', Hint: 'Antwort wird noch erstellt' } },
+  }
+  if (name === 'Responsive / Evidence · Konflikt · Dark') return {
+    0: { name: 'Evidence / Quellenkonflikt', label: 'Quellen widersprechen sich' },
+    1: { name: 'Quelle / Ungültige Konfliktquelle', label: 'Eine Konfliktquelle kann nicht gelesen werden', roleCopy: { Type: 'Ungültige Quelle', Title: 'Eine Konfliktquelle kann nicht gelesen werden', Meta: 'Adresse oder Format der Fundstelle prüfen' } },
+    2: { name: 'Leser / Abweichende Fundstelle', label: 'Abweichende Fundstelle', roleCopy: { Title: 'Abweichende Fundstelle', Excerpt: 'Diese abweichende Fundstelle widerspricht der zweiten Quelle.', Status: 'Zum Konflikt markiert', Action: 'Fundstelle vergleichen' } },
+  }
+  if (name === 'Responsive / Dialog · Lang · Dark') return {
+    0: { name: 'Dialog / Datenkontrolle und Export', label: 'Datenkontrolle und Export', roleCopy: { Eyebrow: 'Exportprüfung' } },
+    1: { name: 'Aktion / Export fortsetzen', label: 'Fortfahren', roleCopy: { Symbol: '→', Label: 'Fortfahren', Hint: 'Exportprüfung abschließen' } },
+    2: { name: 'Aktion / Datenkontrolle fortsetzen', label: 'Zurück', roleCopy: { Symbol: '←', Label: 'Zurück', Hint: 'Datenkontrolle weiter prüfen' } },
+  }
+  return {}
+}
+
+const agentSourceMatrix = [
+  ['Gespräch · Bereit', [['aura', 'State=Idle'], ['agent-message', 'Role=User'], ['composer', 'State=Empty']]],
+  ['Gespräch · Antwort entsteht', [['aura', 'State=Working'], ['agent-message', 'State=Streaming'], ['composer', 'State=Draft']]],
+  ['Gespräch · Antwort bereit', [['aura', 'State=Complete'], ['agent-message', 'Role=Agent'], ['evidence-card', 'Status=Unverified'], ['source-card', 'Status=Ready']]],
+  ['Gespräch · Fehler & Rückkehr', [['aura', 'State=Error'], ['agent-message', 'State=Error'], ['composer', 'State=Draft'], ['status-symbol', 'Status=Error']]],
+  ['Entscheidungsverlauf', [['decision-card', 'Status=Pending'], ['decision-card', 'Status=Accepted'], ['decision-card', 'Status=Rejected'], ['decision-card', 'Status=Overridden']]],
+  ['Evidence · Prüfmatrix', [['evidence-card', 'Status=Unverified'], ['evidence-card', 'Status=Verified'], ['evidence-card', 'Status=Conflict'], ['evidence-card', 'Status=Missing'], ['tag', 'Kind=Source']]],
+  ['Quellen · Bereit und Laden', [['source-card', 'Status=Ready'], ['source-card', 'Status=Loading']]],
+  ['Quellen · Ungültig oder offline', [['source-card', 'Status=Invalid'], ['source-card', 'Status=Offline'], ['evidence-card', 'Status=Missing']]],
+  ['Import · Auswahl und Validierung', [['import-panel', 'State=Empty'], ['import-panel', 'State=Validating']]],
+  ['Import · Bereit', [['import-panel', 'State=Ready'], ['source-card', 'Status=Ready']]],
+  ['Import · Fehler', [['import-panel', 'State=Error'], ['status-symbol', 'Status=Error']]],
+  ['Leser · Fundstelle', [['reader-panel', 'State=Reading'], ['reader-panel', 'State=Highlight'], ['evidence-card', 'Status=Verified']]],
+  ['Leser · Nicht verfügbar', [['reader-panel', 'State=Unavailable'], ['source-card', 'Status=Offline'], ['status-symbol', 'Status=Error']]],
+  ['Recherche · Übersicht', [['research-card', 'Status=Planned'], ['research-card', 'Status=Running'], ['research-card', 'Status=Paused'], ['research-card', 'Status=Ready']]],
+  ['Recherche · Fehler', [['research-card', 'Status=Error'], ['aura', 'State=Error'], ['status-symbol', 'Status=Error']]],
+]
+
+const secondaryMatrix = [
+  ['Einstellungen · Bereit', [['field', 'State=Filled'], ['select', 'State=Selected'], ['mode-toggle', 'Mode=Text, State=Active'], ['button', 'Kind=Primary, State=Default'], ['button', 'Kind=Secondary, State=Default']]],
+  ['Einstellungen · Validierungsfehler', [['field', 'State=Error'], ['select', 'State=Open'], ['mode-toggle', 'Mode=Text, State=Active'], ['button', 'Kind=Primary, State=Default'], ['button', 'Kind=Secondary, State=Default']]],
+  ['Link-Menü · Geöffnet', [['menu-item', 'State=Default'], ['menu-item', 'State=Hover'], ['menu-item', 'State=Selected'], ['menu-item', 'State=Disabled']]],
+  ['Slash-Menü · Suche leer', [['search', 'State=Empty'], ['menu-item', 'State=Default'], ['menu-item', 'State=Default']]],
+  ['Slash-Menü · Treffer', [['search', 'State=Results'], ['menu-item', 'State=Default'], ['menu-item', 'State=Selected']]],
+  ['Slash-Menü · Keine Treffer', [['search', 'State=No Results'], ['empty-state', 'Context=No Active Annotation'], ['button', 'Kind=Secondary, State=Default']]],
+  ['Blockeinfügung · Position wählen', [['select', 'State=Open'], ['menu-item', 'State=Selected'], ['dialog-action', 'Kind=Primary'], ['dialog-action', 'Kind=Secondary']]],
+  ['Quellenleser · Fundstelle übernehmen', [['reader-panel', 'State=Highlight'], ['evidence-card', 'Status=Verified'], ['dialog-action', 'Kind=Primary'], ['dialog-action', 'Kind=Secondary']]],
+  ['Rechercheablauf · Pausiert und Fehler', [['research-card', 'Status=Paused'], ['research-card', 'Status=Error'], ['menu-item', 'State=Default'], ['menu-item', 'State=Default']]],
+]
+
+function responsiveBase(subject, width) {
+  const collapsed = width === 720 || width === 320
+  return subject === 'Bibliothek'
+    ? [['nav-item', collapsed ? 'State=Collapsed' : 'State=Default'], ['search', 'State=Empty'], ['select', 'State=Selected'], ['list-row', 'State=Default']]
+    : [['nav-item', collapsed ? 'State=Collapsed' : 'State=Default'], ['mode-toggle', 'Mode=Text, State=Active'], ['review-bar', 'Status=Open'], ['annotation-anchor', 'Kind=Text, State=Idle'], ['annotation-card', 'State=Open']]
+}
+
+const responsiveMatrix = [
+  ['Responsive / Bibliothek · 1440 Light', 1440, 'Light', 'Bibliothek', 1440, responsiveBase('Bibliothek', 1440)],
+  ['Responsive / Bibliothek · 1024 Light', 1024, 'Light', 'Bibliothek', 1024, responsiveBase('Bibliothek', 1024)],
+  ['Responsive / Bibliothek · 720 Light', 720, 'Light', 'Bibliothek', 720, responsiveBase('Bibliothek', 720)],
+  ['Responsive / Bibliothek · 320 Light', 320, 'Light', 'Bibliothek', 320, responsiveBase('Bibliothek', 320)],
+  ['Responsive / Editor · 1440 Light', 1440, 'Light', 'Editor', 1440, responsiveBase('Editor', 1440)],
+  ['Responsive / Editor · 1024 Light', 1024, 'Light', 'Editor', 1024, responsiveBase('Editor', 1024)],
+  ['Responsive / Editor · 720 Light', 720, 'Light', 'Editor', 720, responsiveBase('Editor', 720)],
+  ['Responsive / Editor · 320 Light', 320, 'Light', 'Editor', 320, responsiveBase('Editor', 320)],
+  ['Responsive / Bibliothek · 1440 Dark', 1440, 'Dark', 'Bibliothek', 1440, responsiveBase('Bibliothek', 1440)],
+  ['Responsive / Bibliothek · 320 Dark', 320, 'Dark', 'Bibliothek', 320, responsiveBase('Bibliothek', 320)],
+  ['Responsive / Editor · 1440 Dark', 1440, 'Dark', 'Editor', 1440, responsiveBase('Editor', 1440)],
+  ['Responsive / Editor · 320 Dark', 320, 'Dark', 'Editor', 320, responsiveBase('Editor', 320)],
+  ['Responsive / Annotation · Beleg fehlt · Dark', 720, 'Dark', 'Annotation', 'reference', [['annotation-anchor', 'Kind=Text, State=Active'], ['annotation-form', 'Form=Source'], ['annotation-card', 'State=Open'], ['dialog-action', 'Kind=Primary'], ['dialog-action', 'Kind=Secondary']]],
+  ['Responsive / Agent · Streaming · Dark', 720, 'Dark', 'Agent', 'reference', [['aura', 'State=Working'], ['agent-message', 'State=Streaming'], ['composer', 'State=Draft'], ['dialog-action', 'Kind=Disabled']]],
+  ['Responsive / Evidence · Konflikt · Dark', 720, 'Dark', 'Evidence', 'reference', [['evidence-card', 'Status=Conflict'], ['source-card', 'Status=Invalid'], ['reader-panel', 'State=Highlight']]],
+  ['Responsive / Dialog · Lang · Dark', 720, 'Dark', 'Dialog', 'reference', [['dialog', 'Size=Long'], ['dialog-action', 'Kind=Primary'], ['dialog-action', 'Kind=Secondary']]],
+]
+
+export const SECONDARY_VIEW_DEFINITIONS = freezeSecondary({
+  agentSources: agentSourceMatrix.map(([suffix, mapping]) => secondaryView({
+    name: `Agent & Quellen / ${suffix}`,
+    sectionName: '07 · Agent & Quellen',
+    instances: mappedInstances(mapping, suffix),
+  })),
+  secondary: secondaryMatrix.map(([suffix, mapping]) => secondaryView({
+    name: `Nebenansicht / ${suffix}`,
+    sectionName: '09 · Menüs & Nebenansichten',
+    instances: mappedInstances(mapping, suffix, secondaryContentOverrides(suffix)),
+  })),
+  responsive: responsiveMatrix.map(([name, width, theme, subject, breakpoint, mapping]) => secondaryView({
+    name,
+    sectionName: '10 · Responsive & Dark',
+    width,
+    theme,
+    subject,
+    breakpoint,
+    layoutMode: width === 320 ? 'VERTICAL' : 'HORIZONTAL',
+    instances: mappedInstances(mapping, `${subject} · ${width}px · ${theme}`, responsiveContentOverrides(name)),
+  })),
+})
+
 const fixedSections = [
   Object.freeze({ name: '00 · Übersicht', kind: 'overview' }),
   Object.freeze({ name: '01 · Foundations', kind: 'foundations' }),
