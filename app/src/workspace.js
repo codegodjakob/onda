@@ -108,6 +108,7 @@ import {
   validateAnnotationOperation,
 } from './annotation-operations.mjs'
 import { ondaIcon } from './onda-icons.mjs'
+import { VARIANTEN, VARIANTEN_ERKLAERUNG, VARIANTEN_LABEL, bilanzText, bilanzVorlesetext, normalisiereVariante, punkteFuer } from './bilanz-varianten.mjs'
 
 const BLOCK_TYPES = [
   ['paragraph', 'Freier Absatz'],
@@ -2972,6 +2973,37 @@ function replyToAnnotation(finding, text) {
   sendeLocalChat(finding, text)
 }
 
+// Ein Umschalter zum Vergleichen, KEIN Bedienelement des Produkts. Er erscheint nur,
+// wenn jemand ihn ausdruecklich einschaltet (localStorage 'ondaVarianten' = '1'), und
+// fliegt wieder raus, sobald die Fassung entschieden ist. So laesst sich am eigenen
+// Text vergleichen statt an einer Beschreibung — jede Gestaltungsentscheidung dieses
+// Projekts, die aus blossem Ueberlegen kam, musste spaeter zurueckgenommen werden.
+function renderBilanzUmschalter(bar) {
+  if (!bar) return
+  const an = (() => { try { return localStorage.getItem('ondaVarianten') === '1' } catch { return false } })()
+  const vorhanden = bar.querySelector('.onda-varianten')
+  if (!an) { vorhanden?.remove(); return }
+  if (vorhanden) return
+
+  const leiste = createNode('div', 'onda-varianten')
+  leiste.setAttribute('aria-label', 'Fassungen der Anmerkungszeile vergleichen')
+  const aktuell = normalisiereVariante(document.documentElement.dataset.bilanzVariante)
+  VARIANTEN.forEach(variante => {
+    const knopf = createNode('button', 'onda-varianten-knopf', VARIANTEN_LABEL[variante])
+    knopf.type = 'button'
+    knopf.title = VARIANTEN_ERKLAERUNG[variante]
+    knopf.setAttribute('aria-pressed', String(variante === aktuell))
+    knopf.addEventListener('click', () => {
+      document.documentElement.dataset.bilanzVariante = variante
+      try { localStorage.setItem('ondaBilanzVariante', variante) } catch { /* egal */ }
+      leiste.remove()
+      refreshWorkspace()
+    })
+    leiste.append(knopf)
+  })
+  bar.prepend(leiste)
+}
+
 function renderAnnotationReviewBar() {
   const doc = ctx?.activeDoc()
   const workspace = activeWorkspace()
@@ -2984,10 +3016,26 @@ function renderAnnotationReviewBar() {
   bar.hidden = summary.total === 0 && workspace.undoStack.length === 0 && !workspace.lastAnnotationRejection
   const label = document.getElementById('annotationReviewSummary')
   if (label) {
-    label.textContent = summary.total
-      ? `${summary.fehler} ${summary.fehler === 1 ? 'Fehler' : 'Fehler'} · ${summary.empfehlungen} ${summary.empfehlungen === 1 ? 'Empfehlung' : 'Empfehlungen'} · ${summary.geschmack} Geschmack`
-      : 'Keine offenen Anmerkungen'
+    // Vier Fassungen zur Wahl (bilanz-varianten.mjs). Welche gilt, steht am
+    // Wurzelelement; unbekannt oder nicht gesetzt heisst: der heutige Stand.
+    const variante = normalisiereVariante(document.documentElement.dataset.bilanzVariante)
+    const text = bilanzText(variante, summary)
+    const punkte = punkteFuer(variante, summary)
+
+    label.replaceChildren()
+    label.classList.toggle('is-punkte', punkte.length > 0)
+    if (text) label.append(document.createTextNode(text))
+    punkte.forEach(art => {
+      const punkt = createNode('span', `onda-bilanz-punkt is-${art}`)
+      punkt.setAttribute('aria-hidden', 'true')
+      label.append(punkt)
+    })
+    // Vorlesegeraete bekommen IMMER den vollen Wortlaut — auch in der stillen
+    // Fassung. Die Zurueckhaltung ist eine Frage der Augen, nicht der Zugaenglichkeit.
+    label.setAttribute('aria-label', bilanzVorlesetext(summary))
+    label.hidden = !text && !punkte.length
   }
+  renderBilanzUmschalter(bar)
   const bulk = document.getElementById('annotationBulkAccept')
   const safeCount = modeFindings.filter(finding => (
     finding.status === 'open'

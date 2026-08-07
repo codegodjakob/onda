@@ -416,3 +416,45 @@ body.view-editor #editorView {
   .onda-library-sidebar, #ondaSidebar { display: none !important; }
   #editorView .onda-editor-col { box-shadow: none; }
 }
+
+
+/* ---------- Vergleich der Anmerkungszeile (vorübergehend) ----------
+   Der Umschalter ist Werkzeug, kein Produkt. Er erscheint nur, wenn er
+   ausdrücklich eingeschaltet wurde, und fliegt raus, sobald die Fassung
+   entschieden ist. Deshalb bewusst schlicht — er soll nicht mitgestalten. */
+/* Der Umschalter belegt eine eigene Zeile ueber der Leiste. Ohne flex-basis und
+   den Umbruch quetscht er sich in die bestehende Reihe und zerdrueckt die
+   Anmerkungszeile — genau das war beim ersten Versuch zu sehen. */
+.onda-review-bar:has(.onda-varianten) { flex-wrap: wrap; }
+.onda-varianten {
+  display: flex; gap: var(--space-1); align-items: center;
+  flex: 0 0 100%; order: -1;
+  margin-bottom: var(--space-3);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px dashed var(--border-subtle);
+}
+.onda-varianten-knopf {
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  background: transparent; color: var(--text-tertiary);
+  font: var(--type-caption); cursor: pointer;
+}
+.onda-varianten-knopf:hover { color: var(--text-primary); background: var(--bg-hover); }
+.onda-varianten-knopf[aria-pressed="true"] {
+  color: var(--text-primary); border-color: var(--accent); background: var(--accent-tint);
+}
+
+/* Die Punkte-Fassung: ein Punkt je offener Anmerkung, keine Ziffer. Man sieht,
+   DASS etwas da ist — nicht, wie viel abzuarbeiten wäre. */
+#annotationReviewSummary.is-punkte { display: inline-flex; align-items: center; gap: var(--space-1); }
+.onda-bilanz-punkt {
+  width: 6px; height: 6px; flex: none;
+  border-radius: var(--radius-full);
+  background: var(--text-tertiary);
+}
+/* Nur der Fehler bekommt Rot — das Design System hält Rot ausdrücklich für
+   Fehler und Zerstörendes frei. Empfehlung und Geschmack bleiben Tinte. */
+.onda-bilanz-punkt.is-fehler { background: var(--danger); }
+.onda-bilanz-punkt.is-empfehlungen { background: var(--text-secondary); }
+.onda-bilanz-punkt.is-geschmack { background: var(--text-tertiary); }

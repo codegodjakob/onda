@@ -1233,6 +1233,9 @@ body.zen #title:focus { opacity: 1; }
    (Design System) gibt es ihn nicht mehr, und die Anmerkungen rutschen wieder
    unter den Text — so ist es dort auch vorgesehen. */
 #editorView #page {
+  /* Harte Untergrenze: was auch immer daneben aufgeht, die Lesespalte bleibt.
+     Ohne sie kann jede kuenftige Nebenflaeche den Text wieder zusammendruecken. */
+  min-width: min(100%, calc(var(--container-reading) + 48px));
   --onda-anmerkungsrand: 300px;
   width: min(calc(100% - 48px), calc(var(--container-reading) + 48px));
   max-width: calc(var(--container-reading) + 48px);
@@ -2172,7 +2175,19 @@ body.zen #title:focus { opacity: 1; }
   display: none;
 }
 
-@media (min-width: 761px) {
+/* DER TEXT SCHRUMPFT NIE. Er ist das Produkt; alles andere weicht ihm.
+   Vorher stand hier `padding-right: 420px` ab 761px Fensterbreite — das Fenster
+   war dann zwar breit genug fuer das Agentenfenster, aber nicht mehr fuer die
+   Lesespalte. Ergebnis: die Ueberschrift brach mit EINEM Buchstaben pro Zeile um.
+   Das Agentenfenster schwebt ohnehin (position: fixed), es BRAUCHT den Platz nicht.
+   Der Rand ist nur eine Hoeflichkeit, damit es nichts verdeckt.
+
+   Die Schwelle ist gerechnet, nicht geraten:
+     Seitenleiste 264 + Lesespalte 680 + Seitenpolster 48 + Anmerkungsrand 300
+     + Agentenfenster 420 = 1712px.
+   Darunter schwebt das Fenster ueber dem Anmerkungsrand. Anmerkungen sind
+   nachrangig gegenueber dem Text — das ist die Rangfolge, nicht ein Zufall. */
+@media (min-width: 1712px) {
   #editorView.is-agent-open .onda-editor-col,
   #editorView.is-evidence-open .onda-editor-col {
     padding-right: 420px;
