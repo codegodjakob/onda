@@ -101,21 +101,16 @@ export function normalisiereBausteinarten(wert) {
     if (!roh || typeof roh !== 'object') return
     const name = text(roh.name)
     if (!name) return
-    let id = text(roh.id) || `art-${index + 1}`
+    const id = text(roh.id) || `art-${index + 1}`
+
+    // Bei doppelten Ids gewinnt der erste Eintrag — die zweite Art faellt weg
+    if (benutztIds.has(id)) {
+      return
+    }
+
     const schluessel = name.toLocaleLowerCase('de')
     const bekannt = nachName.get(schluessel)
     if (bekannt) { umleitung.set(id, bekannt); return }
-    // Doppelte ids bekommen eine neue eindeutige Kennung
-    if (benutztIds.has(id)) {
-      let suffix = 2
-      let neueId = `${id}-${suffix}`
-      while (benutztIds.has(neueId)) {
-        suffix += 1
-        neueId = `${id}-${suffix}`
-      }
-      id = neueId
-    }
-    benutztIds.add(id)
     const art = {
       id,
       name,
@@ -124,7 +119,8 @@ export function normalisiereBausteinarten(wert) {
     }
     arten.push(art)
     nachName.set(schluessel, id)
-    umleitung.set(text(roh.id) || `art-${index + 1}`, id)
+    benutztIds.add(id)
+    umleitung.set(id, id)
   })
   if (!arten.length) return null
 

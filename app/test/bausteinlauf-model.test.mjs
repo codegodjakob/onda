@@ -293,7 +293,7 @@ test('eine semanticRole von "constructor" wird nicht als gueltige alte Rolle beh
   assert.deepEqual(Object.keys(bestand.zuordnung), ['b2'])
 })
 
-test('doppelte Ids bekommen eindeutige neue Kennungen, zuordnungen bleiben konsistent', () => {
+test('bei doppelten Ids gewinnt der erste Eintrag, der zweite faellt weg', () => {
   const bestand = normalisiereBausteinarten({
     arten: [
       { id: 'art-dup', name: 'Befund', funktion: 'evidence' },
@@ -304,14 +304,14 @@ test('doppelte Ids bekommen eindeutige neue Kennungen, zuordnungen bleiben konsi
       b2: { artId: 'art-dup', zeichen: 5 },
     },
   })
-  // Beide Namen bleiben
-  assert.equal(bestand.arten.length, 2)
+  // Nur der erste Eintrag bleibt
+  assert.equal(bestand.arten.length, 1)
   assert.equal(bestand.arten[0].name, 'Befund')
-  assert.equal(bestand.arten[1].name, 'Einordnung')
-  // Aber die Ids sind verschieden
-  assert.notEqual(bestand.arten[0].id, bestand.arten[1].id)
-  // Zuordnungen bleiben sauber — auch mit der neuen Id
-  assert.equal(Object.keys(bestand.zuordnung).length, 2)
-  assert.ok(bestand.zuordnung.b1.artId)
-  assert.ok(bestand.zuordnung.b2.artId)
+  assert.equal(bestand.arten[0].funktion, 'evidence')
+
+  // Zuordnungen lösen beide zum ERSTEN Eintrag auf
+  assert.equal(bestand.zuordnung.b1.artId, bestand.arten[0].id)
+  assert.equal(bestand.zuordnung.b2.artId, bestand.arten[0].id)
+  assert.equal(bestand.zuordnung.b1.artId, 'art-dup')
+  assert.equal(bestand.zuordnung.b2.artId, 'art-dup')
 })
