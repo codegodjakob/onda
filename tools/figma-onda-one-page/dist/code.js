@@ -834,6 +834,408 @@
       ]
     })
   ]);
+  function componentRenderedHeight(definition2) {
+    if (!definition2) return 0;
+    const roleHeights = definition2.roles.map((role) => role.type === "ELLIPSE" || role.name === "Description" ? 16 : 22);
+    const contentHeight = definition2.direction === "VERTICAL" ? roleHeights.reduce((total, height) => total + height, 0) + Math.max(0, roleHeights.length - 1) * definition2.gap : Math.max(0, ...roleHeights);
+    return Math.max(definition2.targetHeight, contentHeight + definition2.padding.top + definition2.padding.bottom);
+  }
+  function estimateCoreTextWidth(characters, roleName = "") {
+    const size = roleName === "Description" ? 12 : 15;
+    return Math.ceil([...String(characters || "")].reduce((width, character) => {
+      if (/\s/.test(character)) return width + size * 0.32;
+      if (/[ilI1.,:;!|'`]/.test(character)) return width + size * 0.3;
+      if (/[MW@%&]/.test(character)) return width + size * 0.82;
+      return width + size * 0.54;
+    }, 0));
+  }
+  function componentMinimumWidth(definition2, roleCopy = {}) {
+    if (!definition2) return 0;
+    const roleWidths = definition2.roles.map((role) => role.type === "ELLIPSE" ? 16 : estimateCoreTextWidth(roleCopy[role.name], role.name));
+    const contentWidth = definition2.direction === "VERTICAL" ? Math.max(0, ...roleWidths) : roleWidths.reduce((total, width) => total + width, 0) + Math.max(0, roleWidths.length - 1) * definition2.gap;
+    return Math.ceil(contentWidth + definition2.padding.left + definition2.padding.right);
+  }
+  function coreRoleCopy(name, setId, variantName, label, overrides = {}) {
+    const definition2 = COMPONENT_DEFINITIONS.find((component) => component.id === setId);
+    const variant = definition2 == null ? void 0 : definition2.variants.find((item) => item.name === variantName);
+    const copy = Object.fromEntries(((definition2 == null ? void 0 : definition2.roles) || []).filter((role) => role.type === "TEXT").map((role) => {
+      var _a;
+      return [role.name, ((_a = variant == null ? void 0 : variant.copy) == null ? void 0 : _a[role.name]) || ""];
+    }));
+    if (definition2 == null ? void 0 : definition2.labelRole) copy[definition2.labelRole] = label;
+    if (setId === "select") Object.assign(copy, { Label: "Sortieren nach", Value: label });
+    if (setId === "list-row") Object.assign(copy, {
+      Title: label,
+      Meta: name.startsWith("Nutzer /") ? "Pers\xF6nlicher Arbeitsbereich" : name.startsWith("Verlauf /") ? "Zuletzt bearbeitet \xB7 heute" : "Calm Technology"
+    });
+    if (setId === "nav-item") {
+      const count = name.endsWith("Projekte") ? "1" : name.endsWith("Dokumente") ? "12" : name.endsWith("Papierkorb") ? "2" : "1";
+      Object.assign(copy, { Label: label, Count: count });
+      if (name === "Navigation / Dokument") copy.Count = "1";
+      if (variantName === "State=Collapsed") Object.assign(copy, { Label: "", Count: "", Status: "" });
+    }
+    Object.assign(copy, overrides);
+    for (const [role, characters] of Object.entries(copy)) copy[role] = String(characters).replaceAll("Projekt Nordstern", "Calm Technology").replace(/\bEssay\b/g, "Dokument");
+    return Object.freeze(copy);
+  }
+  function coreInstance(name, setId, variant, label, options = {}) {
+    const definition2 = COMPONENT_DEFINITIONS.find((component) => component.id === setId);
+    const roleCopy = coreRoleCopy(name, setId, variant, label, options.roleCopy);
+    const minimumWidth = componentMinimumWidth(definition2, roleCopy);
+    const preferredWidths = { search: 520, select: 300, "icon-button": 208, "mode-toggle": 280, "status-symbol": 200, button: 240 };
+    return Object.freeze({
+      name,
+      setId,
+      variant,
+      label,
+      region: options.region || null,
+      roleCopy,
+      expectedHeight: componentRenderedHeight(definition2),
+      minimumWidth,
+      expectedWidth: Math.max(minimumWidth, options.width || preferredWidths[setId] || 0)
+    });
+  }
+  function coreRegion(name, parentName, width, height, layoutMode, options = {}) {
+    var _a;
+    return Object.freeze({
+      name,
+      parentName,
+      width,
+      height,
+      layoutMode,
+      itemSpacing: (_a = options.itemSpacing) != null ? _a : 16,
+      padding: Object.freeze(__spreadValues({}, options.padding || { top: 16, right: 16, bottom: 16, left: 16 }))
+    });
+  }
+  function libraryRegions(viewName) {
+    return Object.freeze([
+      coreRegion("Layout / Rail", viewName, 360, 800, "VERTICAL", { itemSpacing: 8, padding: { top: 24, right: 16, bottom: 24, left: 16 } }),
+      coreRegion("Layout / Main", viewName, 1080, 800, "VERTICAL", { itemSpacing: 0, padding: { top: 0, right: 0, bottom: 0, left: 0 } }),
+      coreRegion("Layout / Header", "Layout / Main", 1080, 168, "VERTICAL", { itemSpacing: 8, padding: { top: 20, right: 32, bottom: 20, left: 32 } }),
+      coreRegion("Layout / Toolbar", "Layout / Main", 1080, 176, "HORIZONTAL", { itemSpacing: 16, padding: { top: 20, right: 32, bottom: 20, left: 32 } }),
+      coreRegion("Layout / Content", "Layout / Main", 1080, 456, "VERTICAL", { itemSpacing: 16, padding: { top: 24, right: 32, bottom: 24, left: 32 } })
+    ]);
+  }
+  function editorRegions(viewName, compact = false) {
+    const railWidth = compact ? 96 : 240;
+    const mainWidth = 1440 - railWidth;
+    const reviewWidth = 640;
+    return Object.freeze([
+      coreRegion("Layout / Rail", viewName, railWidth, 800, "VERTICAL", { itemSpacing: 8, padding: compact ? { top: 24, right: 8, bottom: 24, left: 8 } : { top: 24, right: 16, bottom: 24, left: 16 } }),
+      coreRegion("Layout / Main", viewName, mainWidth, 800, "VERTICAL", { itemSpacing: 0, padding: { top: 0, right: 0, bottom: 0, left: 0 } }),
+      coreRegion("Layout / Toolbar", "Layout / Main", mainWidth, 104, "HORIZONTAL", { itemSpacing: 16, padding: { top: 20, right: 24, bottom: 20, left: 24 } }),
+      coreRegion("Layout / Body", "Layout / Main", mainWidth, 696, "HORIZONTAL", { itemSpacing: 0, padding: { top: 0, right: 0, bottom: 0, left: 0 } }),
+      coreRegion("Layout / Document", "Layout / Body", mainWidth - reviewWidth, 696, "VERTICAL", { itemSpacing: 12, padding: { top: 40, right: 48, bottom: 40, left: 48 } }),
+      coreRegion("Layout / Review", "Layout / Body", reviewWidth, 696, "VERTICAL", { itemSpacing: 16, padding: { top: 24, right: 24, bottom: 24, left: 24 } })
+    ]);
+  }
+  var CORE_EDITOR_DOCUMENT_FIXTURE = Object.freeze({
+    title: "Calm Technology",
+    blocks: Object.freeze([
+      Object.freeze({ kind: "paragraph", text: "Calm Technology beschreibt Technik, die in der Peripherie bleibt und Aufmerksamkeit nur beansprucht, wenn sie wirklich gebraucht wird." }),
+      Object.freeze({ kind: "heading", text: "Prinzipien" }),
+      Object.freeze({ kind: "paragraph", text: "Weiser und Brown formulierten: Technik soll sich an den R\xE4ndern der Aufmerksamkeit bewegen und nahtlos zwischen Zentrum und Peripherie wechseln." }),
+      Object.freeze({ kind: "heading", text: "Beispiele" }),
+      Object.freeze({ kind: "paragraph", text: "Die Teekanne pfeift erst, wenn es relevant ist. Eine Statusleuchte informiert, ohne zu unterbrechen." }),
+      Object.freeze({ kind: "heading", text: "\xDCbertragung aufs Schreiben" }),
+      Object.freeze({ kind: "paragraph", text: "F\xFCr Schreibsoftware hei\xDFt das: Werkzeuge erscheinen im Kontext, Hinweise sammeln sich leise, nichts dr\xE4ngt sich in den Fluss." }),
+      Object.freeze({ kind: "paragraph", text: "Ruhige Technik ist kein Verzicht auf Funktionen, sondern eine Haltung: volle Kraft, leise Pr\xE4sentation." })
+    ])
+  });
+  function libraryRailInstances(state) {
+    const active = state.startsWith("Dokumente") || state.startsWith("Sortierung") ? "Dokumente" : state.startsWith("Papierkorb") ? "Papierkorb" : state.startsWith("Projekte") || state === "Leerzustand" || state.startsWith("Fehler") ? "Projekte" : "";
+    const empty = state === "Leerzustand";
+    return [
+      coreInstance("Navigation / Projekte", "nav-item", active === "Projekte" ? "State=Active" : "State=Default", "Projekte", { region: "Layout / Rail", roleCopy: empty ? { Count: "0" } : void 0 }),
+      coreInstance("Navigation / Dokumente", "nav-item", active === "Dokumente" ? "State=Active" : "State=Default", "Dokumente", { region: "Layout / Rail", roleCopy: empty ? { Count: "0" } : void 0 }),
+      coreInstance("Navigation / Papierkorb", "nav-item", active === "Papierkorb" ? "State=Active" : "State=Default", "Papierkorb", { region: "Layout / Rail", roleCopy: empty ? { Count: "0" } : void 0 }),
+      empty ? coreInstance("Verlauf / Leer", "nav-item", "State=Default", "Noch kein Verlauf", { region: "Layout / Rail", roleCopy: { Icon: "\u21BA", Count: "0", Status: "Leer" } }) : coreInstance("Verlauf / Calm Technology", "nav-item", "State=Default", "Calm Technology", { region: "Layout / Rail", roleCopy: { Icon: "\u21BA", Count: "1", Status: "Verlauf" } }),
+      coreInstance("Nutzer / Jakob", "nav-item", "State=Default", "Jakob", { region: "Layout / Rail", roleCopy: { Icon: "\u25CB", Count: "1", Status: "Angemeldet" } })
+    ];
+  }
+  function coreRegionForInstance(section, setId) {
+    if (setId === "nav-item") return "Layout / Rail";
+    if (section === "Bibliothek") return ["search", "select"].includes(setId) ? "Layout / Toolbar" : "Layout / Content";
+    return ["review-bar", "annotation-anchor", "empty-state"].includes(setId) ? "Layout / Review" : "Layout / Toolbar";
+  }
+  function coreView({ name, section, state, copy, instances }) {
+    const regions = section === "Bibliothek" ? libraryRegions(name) : editorRegions(name, ["Seitenleiste \xB7 Eingeklappt", "Fokusmodus"].includes(state));
+    const screenInstances = section === "Bibliothek" ? [...libraryRailInstances(state), ...instances.filter((instance) => instance.setId !== "nav-item")] : instances;
+    const screenCopyContracts = Object.entries(copy).map(([role, characters]) => Object.freeze({
+      role,
+      characters,
+      region: section === "Bibliothek" ? "Layout / Header" : ["title", "body"].includes(role) ? "Layout / Document" : "Layout / Review"
+    }));
+    const documentCopyContracts = section === "Editor" ? [
+      Object.freeze({ role: "document-title", characters: CORE_EDITOR_DOCUMENT_FIXTURE.title, region: "Layout / Document", kind: "title" }),
+      ...CORE_EDITOR_DOCUMENT_FIXTURE.blocks.map((block, index) => Object.freeze({ role: `document-${index + 1}`, characters: block.text, region: "Layout / Document", kind: block.kind }))
+    ] : [];
+    const copyContracts = Object.freeze([...screenCopyContracts, ...documentCopyContracts]);
+    return Object.freeze({
+      name,
+      section,
+      sectionName: section === "Bibliothek" ? "03 \xB7 Bibliothek" : "04 \xB7 Editor",
+      state,
+      width: 1440,
+      height: 800,
+      radius: 0,
+      layoutMode: "HORIZONTAL",
+      effects: Object.freeze([]),
+      regions,
+      copy: Object.freeze(__spreadValues({}, copy)),
+      copyContracts,
+      document: section === "Editor" ? CORE_EDITOR_DOCUMENT_FIXTURE : null,
+      reviewContext: section === "Editor" ? Object.freeze({ state, relation: `${state} \u2194 Calm Technology` }) : null,
+      instances: Object.freeze(screenInstances.map((instance) => Object.freeze(__spreadProps(__spreadValues({}, instance), {
+        region: instance.region || coreRegionForInstance(section, instance.setId)
+      }))))
+    });
+  }
+  var CORE_OVERVIEW_DEFINITION = Object.freeze({
+    name: "\xDCbersicht / Coverage",
+    width: 1940,
+    radius: 6,
+    effects: Object.freeze([]),
+    lines: Object.freeze([
+      "Onda Write \xB7 Produkt\xFCbersicht",
+      "Bibliothek \xB7 8 Produktansichten",
+      "Editor \xB7 10 Produktansichten",
+      "Komponenten \xB7 27 Component Sets"
+    ])
+  });
+  var CORE_VIEW_DEFINITIONS = Object.freeze([
+    coreView({
+      name: "Bibliothek / Projekte \xB7 Gef\xFCllt",
+      section: "Bibliothek",
+      state: "Projekte \xB7 Gef\xFCllt",
+      copy: { title: "Onda Write \xB7 Projekte", body: "Projekt \u201EBeispiel: Calm Technology\u201C mit 12 Dokumenten.", status: "Projekte sind bereit.", action: "Projekt \xF6ffnen" },
+      instances: [
+        coreInstance("Navigation / Projekte", "nav-item", "State=Active", "Projekte"),
+        coreInstance("Suche / Projekte", "search", "State=Empty", "Projekte und Dokumente durchsuchen"),
+        coreInstance("Sortierung / Projekte", "select", "State=Selected", "Zuletzt bearbeitet"),
+        coreInstance("Projekt / Calm Technology", "list-row", "State=Selected", "Beispiel: Calm Technology"),
+        coreInstance("Aktion / Projekt \xF6ffnen", "button", "Kind=Primary, State=Default", "Projekt \xF6ffnen")
+      ]
+    }),
+    coreView({
+      name: "Bibliothek / Dokumente \xB7 Gef\xFCllt",
+      section: "Bibliothek",
+      state: "Dokumente \xB7 Gef\xFCllt",
+      copy: { title: "Onda Write \xB7 Dokumente", body: "\u201EBeispiel: Calm Technology\u201C \xB7 12 Dokumente, zuletzt \u201EDie leise Architektur eines Arguments\u201C.", status: "Nach \u201EZuletzt bearbeitet\u201C sortiert.", action: "Dokument \xF6ffnen" },
+      instances: [
+        coreInstance("Navigation / Dokumente", "nav-item", "State=Active", "Dokumente"),
+        coreInstance("Suche / Dokumente", "search", "State=Empty", "Dokumente durchsuchen"),
+        coreInstance("Sortierung / Dokumente", "select", "State=Selected", "Zuletzt bearbeitet"),
+        coreInstance("Dokument / Leise Architektur", "list-row", "State=Selected", "Die leise Architektur eines Arguments"),
+        coreInstance("Dokument / Quellen", "list-row", "State=Default", "Quellen und Belege")
+      ]
+    }),
+    coreView({
+      name: "Bibliothek / Papierkorb \xB7 Gef\xFCllt",
+      section: "Bibliothek",
+      state: "Papierkorb \xB7 Gef\xFCllt",
+      copy: { title: "Onda Write \xB7 Papierkorb", body: "Zwei Dokumente k\xF6nnen wiederhergestellt oder bewusst endg\xFCltig gel\xF6scht werden.", status: "Papierkorb \xB7 2 Dokumente", action: "Auswahl wiederherstellen oder endg\xFCltig l\xF6schen" },
+      instances: [
+        coreInstance("Navigation / Papierkorb", "nav-item", "State=Active", "Papierkorb"),
+        coreInstance("Suche / Papierkorb", "search", "State=Empty", "Papierkorb durchsuchen"),
+        coreInstance("Sortierung / Papierkorb", "select", "State=Selected", "Zuletzt bearbeitet"),
+        coreInstance("Dokument / Alte Fassung", "list-row", "State=Trash", "Alte Fassung"),
+        coreInstance("Aktion / Wiederherstellen", "button", "Kind=Primary, State=Default", "Wiederherstellen"),
+        coreInstance("Aktion / Endg\xFCltig l\xF6schen", "button", "Kind=Destructive, State=Default", "Endg\xFCltig l\xF6schen")
+      ]
+    }),
+    coreView({
+      name: "Bibliothek / Suche \xB7 Treffer",
+      section: "Bibliothek",
+      state: "Suche \xB7 Treffer",
+      copy: { title: "Onda Write \xB7 Suche", body: "Suchbegriff \u201Ecalm\u201C findet das Projekt \u201EBeispiel: Calm Technology\u201C.", status: "3 Treffer", action: "Treffer \xF6ffnen" },
+      instances: [
+        coreInstance("Navigation / Suche", "nav-item", "State=Active", "Suche"),
+        coreInstance("Suche / Calm", "search", "State=Results", "calm", { roleCopy: { Count: "3 Treffer" } }),
+        coreInstance("Sortierung / Treffer", "select", "State=Selected", "Zuletzt bearbeitet"),
+        coreInstance("Treffer / Calm Technology", "list-row", "State=Selected", "Beispiel: Calm Technology"),
+        coreInstance("Status / Treffer", "status-symbol", "Status=Ready", "3 Treffer")
+      ]
+    }),
+    coreView({
+      name: "Bibliothek / Suche \xB7 Keine Treffer",
+      section: "Bibliothek",
+      state: "Suche \xB7 Keine Treffer",
+      copy: { title: "Onda Write \xB7 Suche", body: "F\xFCr den Suchbegriff \u201Eunruhe\u201C wurden keine Projekte oder Dokumente gefunden.", status: "Keine Treffer", action: "Suche l\xF6schen" },
+      instances: [
+        coreInstance("Navigation / Suche", "nav-item", "State=Active", "Suche"),
+        coreInstance("Suche / Ohne Treffer", "search", "State=No Results", "unruhe"),
+        coreInstance("Sortierung / Ohne Treffer", "select", "State=Selected", "Titel"),
+        coreInstance("Leerzustand / Suche", "empty-state", "Context=Library", "Keine Treffer", { roleCopy: { Symbol: "\u25CB", Description: "Suchbegriff \xE4ndern", Action: "Suche l\xF6schen" } }),
+        coreInstance("Aktion / Suche l\xF6schen", "button", "Kind=Secondary, State=Default", "Suche l\xF6schen")
+      ]
+    }),
+    coreView({
+      name: "Bibliothek / Sortierung \xB7 Men\xFC offen",
+      section: "Bibliothek",
+      state: "Sortierung \xB7 Men\xFC offen",
+      copy: { title: "Onda Write \xB7 Sortierung", body: "Sortieroptionen: Zuletzt bearbeitet, Titel oder Erstellt.", status: "Men\xFC ge\xF6ffnet", action: "Sortierung ausw\xE4hlen" },
+      instances: [
+        coreInstance("Navigation / Dokumente", "nav-item", "State=Active", "Dokumente"),
+        coreInstance("Suche / Sortierung", "search", "State=Empty", "Dokumente durchsuchen"),
+        coreInstance("Sortierung / Ge\xF6ffnet", "select", "State=Open", "Sortierung ge\xF6ffnet"),
+        coreInstance("Option / Zuletzt bearbeitet", "menu-item", "State=Selected", "Zuletzt bearbeitet"),
+        coreInstance("Option / Titel", "menu-item", "State=Default", "Titel"),
+        coreInstance("Option / Erstellt", "menu-item", "State=Default", "Erstellt")
+      ]
+    }),
+    coreView({
+      name: "Bibliothek / Leerzustand",
+      section: "Bibliothek",
+      state: "Leerzustand",
+      copy: { title: "Onda Write \xB7 Projekte", body: "Noch keine Projekte. Ein neues Projekt b\xFCndelt Dokumente und Quellen.", status: "Bibliothek ist leer", action: "Projekt erstellen" },
+      instances: [
+        coreInstance("Navigation / Projekte", "nav-item", "State=Active", "Projekte"),
+        coreInstance("Leerzustand / Projekte", "empty-state", "Context=Library", "Noch keine Projekte"),
+        coreInstance("Aktion / Projekt erstellen", "button", "Kind=Primary, State=Default", "Projekt erstellen")
+      ]
+    }),
+    coreView({
+      name: "Bibliothek / Fehler \xB7 Wiederholen",
+      section: "Bibliothek",
+      state: "Fehler \xB7 Wiederholen",
+      copy: { title: "Onda Write \xB7 Bibliothek", body: "Projekte konnten nicht geladen werden. Sucheingabe und bereits sichtbare Daten bleiben erhalten.", status: "Laden fehlgeschlagen", action: "Erneut versuchen" },
+      instances: [
+        coreInstance("Navigation / Projekte", "nav-item", "State=Active", "Projekte"),
+        coreInstance("Fehler / Bibliothek", "empty-state", "Context=Recoverable Error", "Projekte konnten nicht geladen werden"),
+        coreInstance("Status / Fehler", "status-symbol", "Status=Error", "Laden fehlgeschlagen"),
+        coreInstance("Aktion / Wiederholen", "button", "Kind=Primary, State=Default", "Erneut versuchen")
+      ]
+    }),
+    coreView({
+      name: "Editor / Textmodus \xB7 Bereit",
+      section: "Editor",
+      state: "Textmodus \xB7 Bereit",
+      copy: { title: "Onda Write \xB7 Textmodus", body: "\u201EDie leise Architektur eines Arguments\u201C ist als Flie\xDFtext ge\xF6ffnet.", status: "Textmodus \xB7 Bereit", action: "Text pr\xFCfen" },
+      instances: [
+        coreInstance("Navigation / Dokument", "nav-item", "State=Active", "Dokument"),
+        coreInstance("Modus / Text", "mode-toggle", "Mode=Text, State=Active", "Text"),
+        coreInstance("Anmerkungen / Text", "annotation-anchor", "Kind=Text, State=Idle", "Textanmerkungen"),
+        coreInstance("Aktion / Text pr\xFCfen", "button", "Kind=Primary, State=Default", "Text pr\xFCfen"),
+        coreInstance("Aktion / Hinzuf\xFCgen", "icon-button", "State=Default", "Hinzuf\xFCgen")
+      ]
+    }),
+    coreView({
+      name: "Editor / Notizmodus \xB7 Bereit",
+      section: "Editor",
+      state: "Notizmodus \xB7 Bereit",
+      copy: { title: "Onda Write \xB7 Notizmodus", body: "Notizen bleiben vom Dokumenttext getrennt und k\xF6nnen gezielt erg\xE4nzt werden.", status: "Notizmodus \xB7 Bereit", action: "Notiz hinzuf\xFCgen" },
+      instances: [
+        coreInstance("Navigation / Dokument", "nav-item", "State=Active", "Dokument"),
+        coreInstance("Modus / Notiz", "mode-toggle", "Mode=Notiz, State=Active", "Text"),
+        coreInstance("Anmerkungen / Notiz", "annotation-anchor", "Kind=Note, State=Active", "Notizen"),
+        coreInstance("Aktion / Notiz hinzuf\xFCgen", "button", "Kind=Primary, State=Default", "Notiz hinzuf\xFCgen"),
+        coreInstance("Aktion / Hinzuf\xFCgen", "icon-button", "State=Default", "Hinzuf\xFCgen")
+      ]
+    }),
+    coreView({
+      name: "Editor / Review \xB7 Offen",
+      section: "Editor",
+      state: "Review \xB7 Offen",
+      copy: { title: "Onda Write \xB7 Review", body: "Drei Hinweise warten auf eine bewusste redaktionelle Entscheidung.", status: "Review offen \xB7 3 Hinweise", action: "N\xE4chsten Hinweis pr\xFCfen" },
+      instances: [
+        coreInstance("Navigation / Dokument", "nav-item", "State=Active", "Dokument"),
+        coreInstance("Modus / Text", "mode-toggle", "Mode=Text, State=Active", "Text"),
+        coreInstance("Review / Offen", "review-bar", "Status=Open", "3 Hinweise zur Pr\xFCfung"),
+        coreInstance("Anmerkungen / Aktiv", "annotation-anchor", "Kind=Text, State=Active", "Textanmerkungen"),
+        coreInstance("Aktion / N\xE4chster Hinweis", "button", "Kind=Primary, State=Default", "N\xE4chsten Hinweis pr\xFCfen")
+      ]
+    }),
+    coreView({
+      name: "Editor / Ruhig \xB7 Anmerkungen verborgen",
+      section: "Editor",
+      state: "Ruhig \xB7 Anmerkungen verborgen",
+      copy: { title: "Onda Write \xB7 Ruhiger Modus", body: "Anmerkungen sind nur verborgen; der Text und alle Entscheidungen bleiben erhalten.", status: "Anmerkungen verborgen", action: "Anmerkungen wieder anzeigen" },
+      instances: [
+        coreInstance("Navigation / Dokument", "nav-item", "State=Active", "Dokument"),
+        coreInstance("Modus / Text", "mode-toggle", "Mode=Text, State=Active", "Text"),
+        coreInstance("Review / Ruhig", "review-bar", "Status=Quiet", "Anmerkungen sind verborgen"),
+        coreInstance("Anmerkungen / Verborgen", "annotation-anchor", "Kind=Text, State=Idle", "Textanmerkungen"),
+        coreInstance("Aktion / Anmerkungen zeigen", "button", "Kind=Secondary, State=Default", "Anmerkungen wieder anzeigen")
+      ]
+    }),
+    coreView({
+      name: "Editor / Seitenleiste \xB7 Eingeklappt",
+      section: "Editor",
+      state: "Seitenleiste \xB7 Eingeklappt",
+      copy: { title: "Onda Write \xB7 Editor", body: "Die linke Navigation ist eingeklappt und die Schreibfl\xE4che bleibt vollst\xE4ndig nutzbar.", status: "Seitenleiste eingeklappt", action: "Seitenleiste \xF6ffnen" },
+      instances: [
+        coreInstance("Navigation / Eingeklappt", "nav-item", "State=Collapsed", ""),
+        coreInstance("Modus / Text", "mode-toggle", "Mode=Text, State=Active", "Text"),
+        coreInstance("Anmerkungen / Text", "annotation-anchor", "Kind=Text, State=Idle", "Textanmerkungen"),
+        coreInstance("Aktion / Seitenleiste \xF6ffnen", "icon-button", "State=Default", "Seitenleiste \xF6ffnen", { roleCopy: { Icon: "\u2630" } })
+      ]
+    }),
+    coreView({
+      name: "Editor / Fokusmodus",
+      section: "Editor",
+      state: "Fokusmodus",
+      copy: { title: "Onda Write \xB7 Fokusmodus", body: "Navigation und Hinweise treten zur\xFCck, damit die breite Schreibfl\xE4che im Mittelpunkt steht.", status: "Fokusmodus aktiv", action: "Fokusmodus verlassen" },
+      instances: [
+        coreInstance("Navigation / Eingeklappt", "nav-item", "State=Collapsed", ""),
+        coreInstance("Modus / Text", "mode-toggle", "Mode=Text, State=Active", "Text"),
+        coreInstance("Anmerkungen / Ruhig", "annotation-anchor", "Kind=Text, State=Idle", "Textanmerkungen"),
+        coreInstance("Aktion / Fokus verlassen", "button", "Kind=Secondary, State=Default", "Fokusmodus verlassen")
+      ]
+    }),
+    coreView({
+      name: "Editor / Speichern \xB7 L\xE4uft",
+      section: "Editor",
+      state: "Speichern \xB7 L\xE4uft",
+      copy: { title: "Onda Write \xB7 Speichern", body: "Die aktuelle Fassung wird gespeichert; der Inhalt bleibt w\xE4hrenddessen sichtbar.", status: "Speichern l\xE4uft \u2026", action: "Weiter schreiben" },
+      instances: [
+        coreInstance("Navigation / Dokument", "nav-item", "State=Active", "Dokument"),
+        coreInstance("Modus / Text", "mode-toggle", "Mode=Text, State=Active", "Text"),
+        coreInstance("Review / Speichern", "review-bar", "Status=Saving", "\xC4nderungen werden gespeichert \u2026"),
+        coreInstance("Status / Speichern", "status-symbol", "Status=Working", "Speichert"),
+        coreInstance("Aktion / Weiter schreiben", "button", "Kind=Secondary, State=Default", "Weiter schreiben")
+      ]
+    }),
+    coreView({
+      name: "Editor / Speichern \xB7 Gespeichert",
+      section: "Editor",
+      state: "Speichern \xB7 Gespeichert",
+      copy: { title: "Onda Write \xB7 Gespeichert", body: "Die aktuelle Fassung wurde gespeichert.", status: "Gespeichert", action: "Weiter schreiben" },
+      instances: [
+        coreInstance("Navigation / Dokument", "nav-item", "State=Active", "Dokument"),
+        coreInstance("Modus / Text", "mode-toggle", "Mode=Text, State=Active", "Text"),
+        coreInstance("Review / Gespeichert", "review-bar", "Status=Saved", "\xC4nderungen gespeichert"),
+        coreInstance("Status / Gespeichert", "status-symbol", "Status=Ready", "Gespeichert"),
+        coreInstance("Aktion / Weiter schreiben", "button", "Kind=Secondary, State=Default", "Weiter schreiben")
+      ]
+    }),
+    coreView({
+      name: "Editor / Speichern \xB7 Fehler",
+      section: "Editor",
+      state: "Speichern \xB7 Fehler",
+      copy: { title: "Onda Write \xB7 Speichern", body: "Speichern ist fehlgeschlagen. Der Inhalt bleibt lokal sichtbar und erhalten.", status: "Speichern fehlgeschlagen", action: "Erneut versuchen" },
+      instances: [
+        coreInstance("Navigation / Dokument", "nav-item", "State=Active", "Dokument"),
+        coreInstance("Modus / Text", "mode-toggle", "Mode=Text, State=Active", "Text"),
+        coreInstance("Review / Fehler", "review-bar", "Status=Error", "Speichern fehlgeschlagen"),
+        coreInstance("Status / Fehler", "status-symbol", "Status=Error", "Speichern fehlgeschlagen"),
+        coreInstance("Aktion / Wiederholen", "button", "Kind=Primary, State=Default", "Erneut versuchen")
+      ]
+    }),
+    coreView({
+      name: "Editor / Keine aktive Anmerkung",
+      section: "Editor",
+      state: "Keine aktive Anmerkung",
+      copy: { title: "Onda Write \xB7 Editor", body: "Keine Anmerkung ist ausgew\xE4hlt. Der Dokumenttext bleibt bearbeitbar.", status: "Keine aktive Anmerkung", action: "Anmerkungen anzeigen" },
+      instances: [
+        coreInstance("Navigation / Dokument", "nav-item", "State=Active", "Dokument"),
+        coreInstance("Modus / Text", "mode-toggle", "Mode=Text, State=Active", "Text"),
+        coreInstance("Leerzustand / Anmerkung", "empty-state", "Context=No Active Annotation", "Keine aktive Anmerkung"),
+        coreInstance("Anmerkungen / Text", "annotation-anchor", "Kind=Text, State=Idle", "Textanmerkungen"),
+        coreInstance("Aktion / Anmerkungen zeigen", "button", "Kind=Secondary, State=Default", "Anmerkungen anzeigen")
+      ]
+    })
+  ]);
   var fixedSections = [
     Object.freeze({ name: "00 \xB7 \xDCbersicht", kind: "overview" }),
     Object.freeze({ name: "01 \xB7 Foundations", kind: "foundations" }),
@@ -889,6 +1291,7 @@
       annotations: ANNOTATION_SECTIONS,
       dialogs: DIALOG_FAMILIES,
       components: COMPONENT_DEFINITIONS,
+      coreViews: CORE_VIEW_DEFINITIONS,
       phases: PHASE_DEFINITIONS,
       palette: PALETTE,
       radii: RADIUS_TOKENS,
@@ -1433,6 +1836,328 @@ ${currentValidation.errors.join("\n")}`);
     }
     return actions;
   }
+  var CORE_LEGACY_VIEW_NAMES = Object.freeze({
+    "Bibliothek / Gef\xFCllte Bibliothek": "Bibliothek / Projekte \xB7 Gef\xFCllt",
+    "Bibliothek / Leerzustand": "Bibliothek / Leerzustand",
+    "Editor / Desktop \xB7 Bereit": "Editor / Textmodus \xB7 Bereit",
+    "Editor / Desktop \xB7 Review offen": "Editor / Review \xB7 Offen"
+  });
+  function reconcileLegacyCoreChildren(frame, expectedTopLevelNames = /* @__PURE__ */ new Set()) {
+    const candidates = [...(frame == null ? void 0 : frame.children) || []].filter((child) => !expectedTopLevelNames.has(child.name));
+    const ownerOf = (node) => {
+      var _a;
+      return (_a = node == null ? void 0 : node.owner) != null ? _a : typeof (node == null ? void 0 : node.getPluginData) === "function" ? node.getPluginData("ondaOrigin") : "";
+    };
+    const unsafe = candidates.find((node) => ownerOf(node) !== PLUGIN_ORIGIN);
+    if (unsafe) throw new Error(`Core-Views: fremdes oder ungesch\xFCtztes Legacy-Kind ${unsafe.name}`);
+    for (const child of candidates) {
+      child.visible = false;
+      if ("layoutPositioning" in child) child.layoutPositioning = "ABSOLUTE";
+    }
+    return candidates;
+  }
+  function expectedCoreSectionNames() {
+    return ["00 \xB7 \xDCbersicht", "03 \xB7 Bibliothek", "04 \xB7 Editor"];
+  }
+  function validateCoreViewMutationInventory(inventory = {}) {
+    var _a;
+    const errors = [];
+    const targetPage = inventory.targetPage;
+    const sections = Array.isArray(inventory.sections) ? inventory.sections : [];
+    const views = Array.isArray(inventory.views) ? inventory.views : [];
+    const legacyViews = Array.isArray(inventory.legacyViews) ? inventory.legacyViews : [];
+    const allViews = [...views, ...legacyViews];
+    if (!targetPage || targetPage.type !== "PAGE" || targetPage.name !== TARGET_PAGE_NAME || !targetPage.id) errors.push("Core-Views: Zielseite ung\xFCltig");
+    const sectionNames = new Set(expectedCoreSectionNames());
+    if (new Set(sections.map((section) => section.name)).size !== sections.length) errors.push("Core-Views: doppelte Sections");
+    for (const section of sections) {
+      if (!sectionNames.has(section.name) || section.type !== "SECTION" || section.owner !== PLUGIN_ORIGIN || section.parentId !== (targetPage == null ? void 0 : targetPage.id) || section.parentType !== "PAGE" || section.parentName !== TARGET_PAGE_NAME) errors.push(`Core-Views: ung\xFCltige Section ${section.name}`);
+    }
+    const expectedNames = new Set(CORE_VIEW_DEFINITIONS.map((definition2) => definition2.name));
+    const allowedLegacyNames = new Set(Object.keys(CORE_LEGACY_VIEW_NAMES));
+    for (const view of allViews) if (!expectedNames.has(view.name) && !allowedLegacyNames.has(view.name)) errors.push(`Core-Views: unerwarteter View-Kandidat ${view.name}`);
+    for (const definition2 of CORE_VIEW_DEFINITIONS) {
+      const matching = allViews.filter((view2) => (CORE_LEGACY_VIEW_NAMES[view2.name] || view2.name) === definition2.name);
+      if (matching.length > 1) {
+        errors.push(`Core-Views: doppelter View ${definition2.name}`);
+        continue;
+      }
+      if (!matching.length) continue;
+      const view = matching[0];
+      if (!view.nodeId || view.type !== "FRAME" || view.owner !== PLUGIN_ORIGIN || view.parentType !== "SECTION" || view.parentName !== definition2.sectionName || !view.parentId) errors.push(`Core-Views: ung\xFCltiger View ${definition2.name}`);
+      const allChildren = [...view.layoutRegions || [], ...view.copyNodes || [], ...view.instances || [], ...view.standIns || []];
+      for (const child of allChildren) if (!child.nodeId || child.owner !== PLUGIN_ORIGIN || child.parentType !== "FRAME") errors.push(`Core-Views: ungesch\xFCtztes View-Kind ${definition2.name}/${child.name}`);
+      if (view.name !== definition2.name || view.legacy === true) continue;
+      const expectedRegions = new Map(definition2.regions.map((region) => [region.name, region]));
+      const layoutRegions = Array.isArray(view.layoutRegions) ? view.layoutRegions : [];
+      if (new Set(layoutRegions.map((region) => region.name)).size !== layoutRegions.length || layoutRegions.some((region) => !expectedRegions.has(region.name))) errors.push(`Core-Views: ung\xFCltige Layout-Region ${definition2.name}`);
+      const regionByName = new Map(layoutRegions.map((region) => [region.name, region]));
+      for (const region of layoutRegions) {
+        const contract = expectedRegions.get(region.name);
+        const expectedParentId = (contract == null ? void 0 : contract.parentName) === definition2.name ? view.nodeId : (_a = regionByName.get(contract == null ? void 0 : contract.parentName)) == null ? void 0 : _a.nodeId;
+        if (region.type !== "FRAME" || region.layoutMode === "NONE" || region.parentName !== (contract == null ? void 0 : contract.parentName) || !expectedParentId || region.parentId !== expectedParentId) errors.push(`Core-Views: Layout-Hierarchie ung\xFCltig ${definition2.name}/${region.name}`);
+      }
+      const expectedCopyRoles = new Set(definition2.copyContracts.map((copy) => copy.role));
+      const copyNodes = Array.isArray(view.copyNodes) ? view.copyNodes : [];
+      if (new Set(copyNodes.map((node) => node.role)).size !== copyNodes.length || copyNodes.some((node) => !expectedCopyRoles.has(node.role))) errors.push(`Core-Views: ung\xFCltige Copy ${definition2.name}`);
+      for (const copy of copyNodes) {
+        const contract = definition2.copyContracts.find((item) => item.role === copy.role);
+        const parent = regionByName.get(contract == null ? void 0 : contract.region);
+        if (!copy.nodeId || copy.type !== "TEXT" || copy.owner !== PLUGIN_ORIGIN || copy.parentId !== (parent == null ? void 0 : parent.nodeId) || copy.parentType !== "FRAME" || copy.parentName !== (contract == null ? void 0 : contract.region)) errors.push(`Core-Views: falsche Copy-Ancestry ${definition2.name}/${copy.role}`);
+      }
+      const expectedInstances = new Map(definition2.instances.map((instance) => [instance.name, instance]));
+      const instances = Array.isArray(view.instances) ? view.instances : [];
+      if (new Set(instances.map((instance) => instance.name)).size !== instances.length || instances.some((instance) => !expectedInstances.has(instance.name))) errors.push(`Core-Views: ung\xFCltiges Instanzinventar ${definition2.name}`);
+      for (const instance of instances) {
+        const contract = expectedInstances.get(instance.name);
+        const parent = regionByName.get(contract == null ? void 0 : contract.region);
+        if (!instance.nodeId || instance.type !== "INSTANCE" || instance.owner !== PLUGIN_ORIGIN || instance.parentId !== (parent == null ? void 0 : parent.nodeId) || instance.parentType !== "FRAME" || instance.parentName !== (contract == null ? void 0 : contract.region)) errors.push(`Core-Views: falsche Instanz-Ancestry ${definition2.name}/${instance.name}`);
+        const roleDescendants = Array.isArray(instance.roleDescendants) ? instance.roleDescendants : [];
+        if (new Set(roleDescendants.map((role) => role.nodeId)).size !== roleDescendants.length || new Set(roleDescendants.map((role) => role.role)).size !== roleDescendants.length) errors.push(`Core-Views: doppelte Rollen ${definition2.name}/${instance.name}`);
+        for (const role of roleDescendants) if (!role.nodeId || role.type !== "TEXT" || role.owner !== PLUGIN_ORIGIN || role.parentId !== instance.nodeId || role.parentType !== "INSTANCE" || role.parentInstanceId !== instance.nodeId) errors.push(`Core-Views: ungesch\xFCtzte oder verschobene Rolle ${definition2.name}/${instance.name}/${role.name}`);
+      }
+      if ((view.standIns || []).some((node) => node.visible !== false)) errors.push(`Core-Views: sichtbarer Ersatzknoten ${definition2.name}`);
+    }
+    const overview = inventory.overview;
+    if (overview && (!overview.nodeId || overview.name !== CORE_OVERVIEW_DEFINITION.name || overview.type !== "FRAME" || overview.owner !== PLUGIN_ORIGIN || overview.parentType !== "SECTION" || overview.parentName !== "00 \xB7 \xDCbersicht")) errors.push("Core-Views: \xDCbersicht ung\xFCltig");
+    for (const child of [...(overview == null ? void 0 : overview.lines) || [], ...(overview == null ? void 0 : overview.standIns) || []]) if (!child.nodeId || child.owner !== PLUGIN_ORIGIN || child.parentId !== overview.nodeId || child.parentType !== "FRAME" || child.parentName !== CORE_OVERVIEW_DEFINITION.name) errors.push(`Core-Views: ungesch\xFCtztes oder verschobenes \xDCbersichtskind ${child.name}`);
+    return { valid: errors.length === 0, errors };
+  }
+  function canonicalCoreRecord(record = {}, extraKeys = []) {
+    const keys = ["nodeId", "name", "type", "owner", "parentId", "parentType", "parentName", ...extraKeys];
+    return Object.fromEntries(keys.map((key) => {
+      var _a;
+      return [key, canonicalScalar((_a = record[key]) != null ? _a : null)];
+    }));
+  }
+  function sortCoreRecords(records) {
+    return [...records].sort((left, right) => `${left.name || ""}\0${left.nodeId || ""}`.localeCompare(`${right.name || ""}\0${right.nodeId || ""}`));
+  }
+  function canonicalCoreViewMutationSnapshot(inventory = {}) {
+    const geometryLayoutPaintKeys = [
+      "x",
+      "y",
+      "width",
+      "height",
+      "bounds",
+      "absoluteBounds",
+      "cornerRadius",
+      "fills",
+      "strokes",
+      "strokeWeight",
+      "effects",
+      "opacity",
+      "visible",
+      "layoutMode",
+      "primaryAxisSizingMode",
+      "counterAxisSizingMode",
+      "primaryAxisAlignItems",
+      "counterAxisAlignItems",
+      "itemSpacing",
+      "paddingTop",
+      "paddingRight",
+      "paddingBottom",
+      "paddingLeft",
+      "layoutWrap",
+      "layoutSizingHorizontal",
+      "layoutSizingVertical",
+      "layoutPositioning",
+      "layoutAlign",
+      "layoutGrow",
+      "constraints",
+      "fillBindings",
+      "strokeBindings",
+      "fieldVariableIds",
+      "textRangeBindings",
+      "pluginData"
+    ];
+    function view(record) {
+      return __spreadProps(__spreadValues({}, canonicalCoreRecord(record, ["legacy", "coreView", ...geometryLayoutPaintKeys])), {
+        layoutRegions: sortCoreRecords((record.layoutRegions || []).map((region) => canonicalCoreRecord(region, [...geometryLayoutPaintKeys, "childCount", "childIds"]))),
+        copyNodes: sortCoreRecords((record.copyNodes || []).map((copy) => canonicalCoreRecord(copy, ["role", "characters", ...geometryLayoutPaintKeys]))),
+        instances: sortCoreRecords((record.instances || []).map((instance) => __spreadProps(__spreadValues({}, canonicalCoreRecord(instance, [
+          "repeatedScreen",
+          "documentation",
+          "mainComponentId",
+          "componentSetId",
+          "componentSetName",
+          "variantName",
+          "labelValue",
+          "roleCopy",
+          "componentProperties",
+          "region",
+          ...geometryLayoutPaintKeys
+        ])), {
+          roleDescendants: sortCoreRecords((instance.roleDescendants || []).map((role) => canonicalCoreRecord(role, ["parentInstanceId", "role", "characters", ...geometryLayoutPaintKeys])))
+        }))),
+        standIns: sortCoreRecords((record.standIns || []).map((node) => canonicalCoreRecord(node, geometryLayoutPaintKeys)))
+      });
+    }
+    return {
+      targetPage: canonicalCoreRecord(inventory.targetPage || {}, geometryLayoutPaintKeys),
+      sections: sortCoreRecords((inventory.sections || []).map((section) => canonicalCoreRecord(section, geometryLayoutPaintKeys))),
+      overview: inventory.overview ? __spreadProps(__spreadValues({}, canonicalCoreRecord(inventory.overview, geometryLayoutPaintKeys)), {
+        lines: sortCoreRecords((inventory.overview.lines || []).map((line) => canonicalCoreRecord(line, ["characters", ...geometryLayoutPaintKeys]))),
+        standIns: sortCoreRecords((inventory.overview.standIns || []).map((node) => canonicalCoreRecord(node, geometryLayoutPaintKeys)))
+      }) : null,
+      views: sortCoreRecords((inventory.views || []).map(view)),
+      legacyViews: sortCoreRecords((inventory.legacyViews || []).map(view))
+    };
+  }
+  async function executeGuardedCoreViewCommand({ command, phases, preflight, requireContext, collectCurrentInventory, resolveInventoryNodes = async () => null, mutate }) {
+    const transition = validatePhaseTransition(command, phases);
+    if (!transition.ok) throw new Error(transition.warning);
+    const preflightInventory = await preflight();
+    const context = await requireContext();
+    if (typeof collectCurrentInventory !== "function") throw new Error("TOCTOU: zweite Core-View-Inventur fehlt.");
+    const currentInventory = await collectCurrentInventory(context);
+    const currentValidation = validateCoreViewMutationInventory(currentInventory);
+    if (!currentValidation.valid) throw new Error(`TOCTOU: aktuelles Core-View-Inventar ung\xFCltig.
+${currentValidation.errors.join("\n")}`);
+    if (JSON.stringify(canonicalCoreViewMutationSnapshot(preflightInventory)) !== JSON.stringify(canonicalCoreViewMutationSnapshot(currentInventory))) throw new Error("TOCTOU: Core-View-Inventar wurde nach Preflight ver\xE4ndert.");
+    const resolvedInventoryNodes = await resolveInventoryNodes(context, currentInventory);
+    const writeBarrierInventory = await collectCurrentInventory(context);
+    const writeBarrierValidation = validateCoreViewMutationInventory(writeBarrierInventory);
+    if (!writeBarrierValidation.valid) throw new Error(`TOCTOU: Core-View-Inventar an der Schreibbarriere ung\xFCltig.
+${writeBarrierValidation.errors.join("\n")}`);
+    if (JSON.stringify(canonicalCoreViewMutationSnapshot(currentInventory)) !== JSON.stringify(canonicalCoreViewMutationSnapshot(writeBarrierInventory))) throw new Error("TOCTOU: Core-View-Inventar wurde vor dem ersten Schreibzugriff ver\xE4ndert.");
+    return mutate(context, writeBarrierInventory, resolvedInventoryNodes);
+  }
+  function visiblePaintsAreGray(paints) {
+    return Array.isArray(paints) && paints.every((paint) => !(paint == null ? void 0 : paint.color) || isGrayColor(paint.color));
+  }
+  function rectanglesOverlap(left, right) {
+    if (!left || !right) return true;
+    return left.x < right.x + right.width && left.x + left.width > right.x && left.y < right.y + right.height && left.y + left.height > right.y;
+  }
+  function rectangleContains(outer, inner) {
+    if (!outer || !inner) return false;
+    return inner.x >= outer.x && inner.y >= outer.y && inner.x + inner.width <= outer.x + outer.width && inner.y + inner.height <= outer.y + outer.height;
+  }
+  function expectedCoreRegionBounds(definition2, region) {
+    const parent = region.parentName === definition2.name ? { layoutMode: definition2.layoutMode, itemSpacing: 0 } : definition2.regions.find((item) => item.name === region.parentName);
+    const siblings = definition2.regions.filter((item) => item.parentName === region.parentName);
+    const before = siblings.slice(0, siblings.indexOf(region));
+    return {
+      x: (parent == null ? void 0 : parent.layoutMode) === "HORIZONTAL" ? before.reduce((total, item) => total + item.width + (parent.itemSpacing || 0), 0) : 0,
+      y: (parent == null ? void 0 : parent.layoutMode) === "VERTICAL" ? before.reduce((total, item) => total + item.height + (parent.itemSpacing || 0), 0) : 0,
+      width: region.width,
+      height: region.height
+    };
+  }
+  function coreLocalContainerBounds(region) {
+    var _a, _b;
+    return { x: 0, y: 0, width: ((_a = region == null ? void 0 : region.bounds) == null ? void 0 : _a.width) || 0, height: ((_b = region == null ? void 0 : region.bounds) == null ? void 0 : _b.height) || 0 };
+  }
+  function validateCoreInstanceRoleEvidence(instance = {}, contract = {}, region = {}) {
+    const errors = [];
+    const roles = Array.isArray(instance.roleDescendants) ? instance.roleDescendants : [];
+    const expectedEntries = Object.entries(contract.roleCopy || {});
+    if (roles.length !== expectedEntries.length || new Set(roles.map((role) => role.nodeId)).size !== roles.length || new Set(roles.map((role) => role.role)).size !== roles.length) errors.push("Core-Role-Evidence: falsche Rollenanzahl");
+    for (const [roleName, characters] of expectedEntries) {
+      const matching = roles.filter((role2) => role2.role === roleName);
+      if (matching.length !== 1) {
+        errors.push(`Core-Role-Evidence: Rolle fehlt oder doppelt ${roleName}`);
+        continue;
+      }
+      const role = matching[0];
+      if (role.name !== `Role/${roleName}` || role.type !== "TEXT" || role.owner !== PLUGIN_ORIGIN || role.parentInstanceId !== instance.nodeId || role.characters !== characters || role.visible !== true || role.opacity !== 1 || !role.bounds || role.bounds.width < 0 || role.bounds.height <= 0 || !visiblePaintsAreGray(role.fills) || !visiblePaintsAreGray(role.strokes) || (role.effects || []).length !== 0 || !rectangleContains(instance.absoluteBounds, role.absoluteBounds) || !rectangleContains(region.absoluteBounds, role.absoluteBounds)) errors.push(`Core-Role-Evidence: ung\xFCltige Rolle ${roleName}`);
+    }
+    return errors;
+  }
+  function validateCoreViewEvidence(evidence = {}) {
+    var _a, _b, _c, _d;
+    const errors = [];
+    const targetPage = evidence.targetPage;
+    const sections = Array.isArray(evidence.sections) ? evidence.sections : [];
+    const views = Array.isArray(evidence.views) ? evidence.views : [];
+    const components = Array.isArray(evidence.components) ? evidence.components : [];
+    if (!targetPage || targetPage.type !== "PAGE" || targetPage.name !== TARGET_PAGE_NAME || !targetPage.id) errors.push("Core-Evidence: Zielseite ung\xFCltig");
+    const sectionByName = /* @__PURE__ */ new Map();
+    if (sections.length !== 3 || new Set(sections.map((section) => section.nodeId)).size !== sections.length) errors.push(`Core-Evidence: erwartet 3 Sections, gefunden ${sections.length}`);
+    for (const name of expectedCoreSectionNames()) {
+      const section = strictSingle(sections, (item) => item.name === name, errors, `Core-Section ${name}`);
+      if (!section) continue;
+      sectionByName.set(name, section);
+      if (section.type !== "SECTION" || section.owner !== PLUGIN_ORIGIN || section.parentId !== (targetPage == null ? void 0 : targetPage.id) || section.parentType !== "PAGE" || section.parentName !== TARGET_PAGE_NAME) errors.push(`Core-Section ung\xFCltig: ${name}`);
+    }
+    const componentById = /* @__PURE__ */ new Map();
+    for (const component of components) {
+      if (componentById.has(component.id)) errors.push(`Core-Komponentenindex doppelt: ${component.id}`);
+      componentById.set(component.id, component);
+      const definition2 = COMPONENT_DEFINITIONS.find((item) => item.id === component.id);
+      if (!definition2 || component.name !== definition2.name || component.type !== "COMPONENT_SET" || component.owner !== PLUGIN_ORIGIN || !component.nodeId) errors.push(`Core-Komponentenindex ung\xFCltig: ${component.id}`);
+    }
+    const expectedNames = new Set(CORE_VIEW_DEFINITIONS.map((definition2) => definition2.name));
+    if (views.length !== CORE_VIEW_DEFINITIONS.length) errors.push(`Core-Views: erwartet ${CORE_VIEW_DEFINITIONS.length}, gefunden ${views.length}`);
+    if (new Set(views.map((view) => view.nodeId)).size !== views.length || new Set(views.map((view) => view.name)).size !== views.length || views.some((view) => !expectedNames.has(view.name))) errors.push("Core-Views: falsche, doppelte oder zus\xE4tzliche Views");
+    for (const definition2 of CORE_VIEW_DEFINITIONS) {
+      const view = strictSingle(views, (item) => item.name === definition2.name, errors, `Core-View ${definition2.name}`);
+      if (!view) continue;
+      const section = sectionByName.get(definition2.sectionName);
+      if (view.type !== "FRAME" || view.owner !== PLUGIN_ORIGIN || view.parentId !== (section == null ? void 0 : section.nodeId) || view.parentType !== "SECTION" || view.parentName !== definition2.sectionName) errors.push(`Core-View Ancestry ung\xFCltig: ${definition2.name}`);
+      if (view.width !== 1440 || view.height !== definition2.height || view.cornerRadius !== 0 || (view.effects || []).length !== 0 || !visiblePaintsAreGray(view.fills) || !visiblePaintsAreGray(view.strokes) || view.layoutMode !== definition2.layoutMode || view.itemSpacing !== 0 || [view.paddingTop, view.paddingRight, view.paddingBottom, view.paddingLeft].some((value) => value !== 0) || !sameObject(view.coreView, { section: definition2.section, state: definition2.state, width: 1440, reviewRelation: ((_a = definition2.reviewContext) == null ? void 0 : _a.relation) || null })) errors.push(`Core-View Geometrie/Marker ung\xFCltig: ${definition2.name}`);
+      if (!view.bounds || view.bounds.width !== 1440 || view.bounds.height !== definition2.height) errors.push(`Core-View Bounds ung\xFCltig: ${definition2.name}`);
+      const layoutRegions = Array.isArray(view.layoutRegions) ? view.layoutRegions : [];
+      if (layoutRegions.length !== definition2.regions.length || new Set(layoutRegions.map((region) => region.nodeId)).size !== layoutRegions.length || new Set(layoutRegions.map((region) => region.name)).size !== layoutRegions.length) errors.push(`Core-View Layout-Anzahl ung\xFCltig: ${definition2.name}`);
+      const regionByName = new Map(layoutRegions.map((region) => [region.name, region]));
+      for (const expected of definition2.regions) {
+        const region = strictSingle(layoutRegions, (item) => item.name === expected.name, errors, `Core-Layout ${definition2.name}/${expected.name}`);
+        if (!region) continue;
+        const expectedParent = expected.parentName === definition2.name ? view : regionByName.get(expected.parentName);
+        const expectedChildCount = definition2.regions.filter((child) => child.parentName === expected.name).length + definition2.copyContracts.filter((copy) => copy.region === expected.name).length + definition2.instances.filter((instance) => instance.region === expected.name).length;
+        if (region.type !== "FRAME" || region.owner !== PLUGIN_ORIGIN || region.parentId !== (expectedParent == null ? void 0 : expectedParent.nodeId) || region.parentType !== "FRAME" || region.parentName !== expected.parentName || region.visible !== true || region.childCount !== expectedChildCount || region.layoutMode !== expected.layoutMode || region.itemSpacing !== expected.itemSpacing || region.paddingTop !== expected.padding.top || region.paddingRight !== expected.padding.right || region.paddingBottom !== expected.padding.bottom || region.paddingLeft !== expected.padding.left || region.cornerRadius !== 0 || (region.effects || []).length !== 0 || !visiblePaintsAreGray(region.fills) || !visiblePaintsAreGray(region.strokes) || !sameObject(region.bounds, expectedCoreRegionBounds(definition2, expected))) errors.push(`Core-Layout ung\xFCltig: ${definition2.name}/${expected.name}`);
+      }
+      const copyNodes = Array.isArray(view.copyNodes) ? view.copyNodes : [];
+      if (copyNodes.length !== definition2.copyContracts.length || new Set(copyNodes.map((copy) => copy.nodeId)).size !== copyNodes.length) errors.push(`Core-View Copy-Anzahl ung\xFCltig: ${definition2.name}`);
+      for (const contract of definition2.copyContracts) {
+        const { role, characters, region: regionName } = contract;
+        const copy = strictSingle(copyNodes, (item) => item.role === role, errors, `Core-Copy ${definition2.name}/${role}`);
+        const region = regionByName.get(regionName);
+        if (copy && (copy.name !== `Copy / ${role}` || copy.type !== "TEXT" || copy.owner !== PLUGIN_ORIGIN || copy.parentId !== (region == null ? void 0 : region.nodeId) || copy.parentType !== "FRAME" || copy.parentName !== regionName || copy.characters !== characters || copy.visible !== true || (copy.effects || []).length !== 0 || !visiblePaintsAreGray(copy.fills) || !visiblePaintsAreGray(copy.strokes) || !rectangleContains(coreLocalContainerBounds(region), copy.bounds))) errors.push(`Core-Copy ung\xFCltig: ${definition2.name}/${role}`);
+      }
+      const instances = Array.isArray(view.instances) ? view.instances : [];
+      if (instances.length !== definition2.instances.length || new Set(instances.map((instance) => instance.nodeId)).size !== instances.length || new Set(instances.map((instance) => instance.name)).size !== instances.length) errors.push(`Core-Instanzenanzahl ung\xFCltig: ${definition2.name}`);
+      for (const contract of definition2.instances) {
+        const instance = strictSingle(instances, (item) => item.name === contract.name, errors, `Core-Instanz ${definition2.name}/${contract.name}`);
+        if (!instance) continue;
+        const component = componentById.get(contract.setId);
+        const variant = ((component == null ? void 0 : component.variants) || []).find((item) => item.name === contract.variant);
+        const region = regionByName.get(contract.region);
+        if (instance.type !== "INSTANCE" || instance.owner !== PLUGIN_ORIGIN || instance.parentId !== (region == null ? void 0 : region.nodeId) || instance.parentType !== "FRAME" || instance.parentName !== contract.region || instance.region !== contract.region || !rectangleContains(coreLocalContainerBounds(region), instance.bounds) || ((_b = instance.bounds) == null ? void 0 : _b.width) !== contract.expectedWidth || ((_c = instance.bounds) == null ? void 0 : _c.height) !== contract.expectedHeight || instance.repeatedScreen !== true || instance.documentation !== false || (instance.effects || []).length !== 0 || !visiblePaintsAreGray(instance.fills) || !visiblePaintsAreGray(instance.strokes) || !component || component.name !== ((_d = COMPONENT_DEFINITIONS.find((item) => item.id === contract.setId)) == null ? void 0 : _d.name) || !variant || variant.type !== "COMPONENT" || variant.owner !== PLUGIN_ORIGIN || instance.componentSetId !== component.nodeId || instance.componentSetName !== component.name || instance.variantName !== contract.variant || instance.mainComponentId !== variant.nodeId || instance.labelValue !== contract.label || !sameObject(instance.roleCopy, contract.roleCopy)) errors.push(`Core-Instanzlink ung\xFCltig: ${definition2.name}/${contract.name}`);
+        errors.push(...validateCoreInstanceRoleEvidence(instance, contract, region).map((error) => `${definition2.name}/${contract.name}: ${error}`));
+      }
+      for (const expectedRegion of definition2.regions) {
+        const region = regionByName.get(expectedRegion.name);
+        const childBounds = [
+          ...layoutRegions.filter((child) => {
+            var _a2;
+            return ((_a2 = definition2.regions.find((item) => item.name === child.name)) == null ? void 0 : _a2.parentName) === expectedRegion.name;
+          }).map((child) => child.bounds),
+          ...copyNodes.filter((child) => child.parentId === (region == null ? void 0 : region.nodeId)).map((child) => child.bounds),
+          ...instances.filter((child) => child.parentId === (region == null ? void 0 : region.nodeId)).map((child) => child.bounds)
+        ];
+        if (childBounds.some((bounds) => !rectangleContains(coreLocalContainerBounds(region), bounds))) errors.push(`Core-Layout Overflow: ${definition2.name}/${expectedRegion.name}`);
+        for (let left = 0; left < childBounds.length; left += 1) for (let right = left + 1; right < childBounds.length; right += 1) {
+          if (rectanglesOverlap(childBounds[left], childBounds[right])) errors.push(`Core-Layout \xDCberlappung: ${definition2.name}/${expectedRegion.name}`);
+        }
+      }
+      if ((view.standIns || []).some((node) => node.visible !== false)) errors.push(`Core-View enth\xE4lt sichtbaren Ersatzknoten: ${definition2.name}`);
+    }
+    for (const sectionName of ["03 \xB7 Bibliothek", "04 \xB7 Editor"]) {
+      const sectionViews = views.filter((view) => view.parentName === sectionName);
+      for (let left = 0; left < sectionViews.length; left += 1) for (let right = left + 1; right < sectionViews.length; right += 1) {
+        if (rectanglesOverlap(sectionViews[left].bounds, sectionViews[right].bounds)) errors.push(`Core-Views \xFCberlappen: ${sectionViews[left].name}/${sectionViews[right].name}`);
+      }
+    }
+    const overview = evidence.overview;
+    const overviewSection = sectionByName.get("00 \xB7 \xDCbersicht");
+    if (!overview || overview.name !== CORE_OVERVIEW_DEFINITION.name || overview.type !== "FRAME" || overview.owner !== PLUGIN_ORIGIN || overview.parentId !== (overviewSection == null ? void 0 : overviewSection.nodeId) || overview.parentType !== "SECTION" || overview.parentName !== "00 \xB7 \xDCbersicht" || overview.width !== CORE_OVERVIEW_DEFINITION.width || overview.cornerRadius !== 6 || (overview.effects || []).length !== 0 || !visiblePaintsAreGray(overview.fills)) errors.push("Core-\xDCbersicht ung\xFCltig");
+    const lines = Array.isArray(overview == null ? void 0 : overview.lines) ? overview.lines : [];
+    if (lines.length !== CORE_OVERVIEW_DEFINITION.lines.length || lines.some((line, index) => line.name !== `Coverage / ${index + 1}` || line.type !== "TEXT" || line.owner !== PLUGIN_ORIGIN || line.parentId !== overview.nodeId || line.parentType !== "FRAME" || line.parentName !== CORE_OVERVIEW_DEFINITION.name || line.visible !== true || line.characters !== CORE_OVERVIEW_DEFINITION.lines[index])) errors.push("Core-\xDCbersicht Copy ung\xFCltig");
+    if (((overview == null ? void 0 : overview.standIns) || []).some((node) => node.visible !== false)) errors.push("Core-\xDCbersicht enth\xE4lt sichtbaren Ersatzknoten");
+    return { valid: errors.length === 0, errors };
+  }
   function exactComponentPaint(actual, variableId) {
     var _a, _b, _c, _d;
     return Array.isArray(actual) && actual.length === 1 && ((_a = actual[0]) == null ? void 0 : _a.index) === 0 && ((_b = actual[0]) == null ? void 0 : _b.type) === "SOLID" && sameArray((_c = actual[0]) == null ? void 0 : _c.variableIds, [variableId]) && isGrayColor((_d = actual[0]) == null ? void 0 : _d.color);
@@ -1914,7 +2639,7 @@ ${currentValidation.errors.join("\n")}`);
     return [...repeated].sort();
   }
   function buildVerificationReport(snapshot) {
-    var _a;
+    var _a, _b;
     const requiredNames = new Set(SECTION_DEFINITIONS.map((section) => section.name));
     const sections = snapshot.sections || (snapshot.sectionNames || []).map((name) => ({ name }));
     const sectionNames = sections.map((section) => section.name);
@@ -1942,6 +2667,8 @@ ${currentValidation.errors.join("\n")}`);
       var _a2;
       return ((_a2 = snapshot.phases[id]) == null ? void 0 : _a2.status) === "success";
     }) : true;
+    const hasModernCoreEvidence = snapshot.coreViews !== void 0;
+    const coreStrict = hasModernCoreEvidence ? validateCoreViewEvidence(snapshot.coreViews) : null;
     const report = {
       pageCount: Number(snapshot.pageCount || 0),
       sectionCount: sectionNames.length,
@@ -1980,8 +2707,15 @@ ${currentValidation.errors.join("\n")}`);
       baselineMismatches: snapshot.baselineMismatches || [],
       pageInvariant: hashBaselineRecords(snapshot.baselinePages || []) === hashBaselineRecords(snapshot.currentPages || [])
     };
+    if (hasModernCoreEvidence) {
+      const coreViews = Array.isArray((_b = snapshot.coreViews) == null ? void 0 : _b.views) ? snapshot.coreViews.views : [];
+      report.libraryViewCount = coreViews.filter((view) => view.parentName === "03 \xB7 Bibliothek").length;
+      report.editorViewCount = coreViews.filter((view) => view.parentName === "04 \xB7 Editor").length;
+      report.coreViewStructureValid = coreStrict.valid;
+      report.coreViewErrors = coreStrict.errors;
+    }
     const modern = Boolean(snapshot.sections);
-    report.hardPass = Boolean(snapshot.targetAuthorized) && report.pageCount === 1 && snapshot.pageName === TARGET_PAGE_NAME && report.sectionCount === SECTION_DEFINITIONS.length && report.missingSections.length === 0 && report.duplicateNames.length === 0 && sectionStructureValid && annotationViewsValid && dialogStatesValid && componentStructureValid && report.instanceCount >= COMPONENT_DEFINITIONS.length && report.documentationInstanceCount === COMPONENT_DEFINITIONS.length && report.repeatedScreenInstanceCount > 0 && foundationValid && report.intersections.length === 0 && report.clearance >= 2e3 && report.overflowNodes.length === 0 && report.undersizedHitTargets.length === 0 && report.requiredReactionCount > 0 && report.reactionCount >= report.requiredReactionCount && report.preservedBaselineHash && report.pageInvariant && phasesComplete;
+    report.hardPass = Boolean(snapshot.targetAuthorized) && report.pageCount === 1 && snapshot.pageName === TARGET_PAGE_NAME && report.sectionCount === SECTION_DEFINITIONS.length && report.missingSections.length === 0 && report.duplicateNames.length === 0 && sectionStructureValid && annotationViewsValid && dialogStatesValid && componentStructureValid && report.instanceCount >= COMPONENT_DEFINITIONS.length && report.documentationInstanceCount === COMPONENT_DEFINITIONS.length && report.repeatedScreenInstanceCount > 0 && foundationValid && report.intersections.length === 0 && report.clearance >= 2e3 && report.overflowNodes.length === 0 && report.undersizedHitTargets.length === 0 && report.requiredReactionCount > 0 && report.reactionCount >= report.requiredReactionCount && report.preservedBaselineHash && report.pageInvariant && phasesComplete && (!hasModernCoreEvidence || coreStrict.valid);
     if (!modern) delete report.hardPass;
     return report;
   }
@@ -3155,68 +3889,424 @@ ${result.errors.join("\n")}`);
     sample.setPluginData("ondaRepeatedScreenInstance", "");
     return { component: definition2.name, status: created ? "created" : "reused", variantCount: set.children.length, documentationInstanceCount: 1 };
   }
-  function componentSet(page, name) {
-    const section = page.children.find((node) => node.type === "SECTION" && node.name === "02 \xB7 Komponenten");
-    return (section == null ? void 0 : section.findOne((node) => node.type === "COMPONENT_SET" && node.name === name)) || null;
+  function componentSetById(page, componentId) {
+    const definition2 = COMPONENT_DEFINITIONS.find((component) => component.id === componentId);
+    const section = directChild(page, "02 \xB7 Komponenten", ["SECTION"]);
+    return ((section == null ? void 0 : section.children) || []).filter((node) => node.type === "COMPONENT_SET" && node.name === (definition2 == null ? void 0 : definition2.name) && node.getPluginData("ondaComponentId") === componentId);
   }
-  function placeInstance(parent, set, name) {
-    if (!set || !set.children.length) return null;
-    const existing = directChild(parent, name, ["INSTANCE"]);
-    if (existing) return existing;
-    const instance = set.children[0].createInstance();
-    instance.name = name;
-    parent.appendChild(instance);
+  function parseCoreMarker(node) {
+    const raw = node.getPluginData("ondaCoreView");
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw);
+    } catch (_error) {
+      return { invalid: true };
+    }
+  }
+  function coreBaseRecord(node) {
+    var _a, _b, _c;
+    return {
+      nodeId: node.id,
+      name: node.name,
+      type: node.type,
+      owner: node.getPluginData(CREATED_MARKER_KEY),
+      parentId: ((_a = node.parent) == null ? void 0 : _a.id) || null,
+      parentType: ((_b = node.parent) == null ? void 0 : _b.type) || null,
+      parentName: ((_c = node.parent) == null ? void 0 : _c.name) || null
+    };
+  }
+  function coreVisualRecord(node) {
+    const record = {
+      x: "x" in node ? node.x : null,
+      y: "y" in node ? node.y : null,
+      width: "width" in node ? node.width : null,
+      height: "height" in node ? node.height : null,
+      bounds: "x" in node ? { x: node.x, y: node.y, width: node.width, height: node.height } : null,
+      absoluteBounds: cloneSerializable(node.absoluteBoundingBox || node.absoluteRenderBounds || null),
+      fills: "fills" in node ? cloneSerializable(node.fills) : null,
+      strokes: "strokes" in node ? cloneSerializable(node.strokes) : null,
+      strokeWeight: "strokeWeight" in node ? node.strokeWeight : null,
+      effects: "effects" in node ? cloneSerializable(node.effects) : null,
+      opacity: "opacity" in node ? node.opacity : null,
+      visible: "visible" in node ? node.visible : null,
+      fillBindings: "fills" in node ? collectVisibleFillBindings(node.fills) : [],
+      strokeBindings: "strokes" in node ? collectVisibleFillBindings(node.strokes) : [],
+      fieldVariableIds: collectFieldVariableIds(node, [
+        "itemSpacing",
+        "paddingTop",
+        "paddingRight",
+        "paddingBottom",
+        "paddingLeft",
+        "topLeftRadius",
+        "topRightRadius",
+        "bottomLeftRadius",
+        "bottomRightRadius"
+      ]),
+      textRangeBindings: node.type === "TEXT" ? collectTextRangeBindings(node) : [],
+      pluginData: typeof node.getPluginData === "function" ? {
+        owner: node.getPluginData(CREATED_MARKER_KEY),
+        coreView: node.getPluginData("ondaCoreView"),
+        repeatedScreen: node.getPluginData("ondaRepeatedScreenInstance"),
+        documentation: node.getPluginData("ondaDocumentationInstance")
+      } : {}
+    };
+    if ("layoutMode" in node) Object.assign(record, {
+      layoutMode: node.layoutMode,
+      primaryAxisSizingMode: node.primaryAxisSizingMode,
+      counterAxisSizingMode: node.counterAxisSizingMode,
+      primaryAxisAlignItems: node.primaryAxisAlignItems,
+      counterAxisAlignItems: node.counterAxisAlignItems,
+      itemSpacing: node.itemSpacing,
+      paddingTop: node.paddingTop,
+      paddingRight: node.paddingRight,
+      paddingBottom: node.paddingBottom,
+      paddingLeft: node.paddingLeft,
+      layoutWrap: node.layoutWrap,
+      layoutSizingHorizontal: node.layoutSizingHorizontal,
+      layoutSizingVertical: node.layoutSizingVertical
+    });
+    if ("layoutPositioning" in node) Object.assign(record, {
+      layoutPositioning: node.layoutPositioning,
+      layoutAlign: node.layoutAlign,
+      layoutGrow: node.layoutGrow,
+      constraints: "constraints" in node ? cloneSerializable(node.constraints) : null
+    });
+    return record;
+  }
+  function coreLabelValue(instance) {
+    var _a, _b;
+    const entries = Object.entries(instance.componentProperties || {});
+    const label = entries.find(([key]) => key.split("#")[0] === "Label");
+    return label ? (_b = (_a = label[1]) == null ? void 0 : _a.value) != null ? _b : null : null;
+  }
+  async function coreInstanceRecord(instance, contract = null) {
+    var _a, _b;
+    let main = null;
+    try {
+      const identity = await readMainComponentIdentity(instance);
+      main = identity.id ? await figma.getNodeByIdAsync(identity.id) : null;
+    } catch (_error) {
+      main = null;
+    }
+    const set = ((_a = main == null ? void 0 : main.parent) == null ? void 0 : _a.type) === "COMPONENT_SET" ? main.parent : null;
+    const roleCopy = {};
+    const roleDescendants = [];
+    for (const role of Object.keys((contract == null ? void 0 : contract.roleCopy) || {})) {
+      const roleNode = instance.findOne((node) => node.type === "TEXT" && node.name === `Role/${role}`);
+      roleCopy[role] = (_b = roleNode == null ? void 0 : roleNode.characters) != null ? _b : null;
+      if (roleNode) roleDescendants.push(__spreadProps(__spreadValues(__spreadValues({}, coreBaseRecord(roleNode)), coreVisualRecord(roleNode)), {
+        parentInstanceId: instance.id,
+        role,
+        characters: roleNode.characters
+      }));
+    }
+    return __spreadProps(__spreadValues(__spreadValues({}, coreBaseRecord(instance)), coreVisualRecord(instance)), {
+      repeatedScreen: instance.getPluginData("ondaRepeatedScreenInstance") === "true",
+      documentation: instance.getPluginData("ondaDocumentationInstance") === "true",
+      mainComponentId: (main == null ? void 0 : main.id) || null,
+      componentSetId: (set == null ? void 0 : set.id) || null,
+      componentSetName: (set == null ? void 0 : set.name) || null,
+      variantName: (main == null ? void 0 : main.name) || null,
+      labelValue: coreLabelValue(instance),
+      componentProperties: cloneSerializable(instance.componentProperties || {}),
+      roleCopy,
+      roleDescendants
+    });
+  }
+  async function coreViewRecord(node, definition2, legacy = false) {
+    const copyRoles = new Set(((definition2 == null ? void 0 : definition2.copyContracts) || []).map((copy) => copy.role));
+    const instanceContracts = new Map(((definition2 == null ? void 0 : definition2.instances) || []).map((instance) => [instance.name, instance]));
+    const layoutNames = new Set(((definition2 == null ? void 0 : definition2.regions) || []).map((region) => region.name));
+    const layoutRegions = [];
+    const copyNodes = [];
+    const instances = [];
+    const standIns = [];
+    async function visit(child) {
+      const role = child.name.startsWith("Copy / ") ? child.name.slice("Copy / ".length) : null;
+      if (child.type === "FRAME" && layoutNames.has(child.name)) {
+        layoutRegions.push(__spreadProps(__spreadValues(__spreadValues({}, coreBaseRecord(child)), coreVisualRecord(child)), {
+          cornerRadius: child.cornerRadius,
+          childCount: child.children.length,
+          childIds: child.children.map((node2) => node2.id)
+        }));
+        for (const descendant of child.children) await visit(descendant);
+      } else if (child.type === "TEXT" && role && copyRoles.has(role)) {
+        copyNodes.push(__spreadProps(__spreadValues(__spreadValues({}, coreBaseRecord(child)), coreVisualRecord(child)), { role, characters: child.characters }));
+      } else if (child.type === "INSTANCE" && instanceContracts.has(child.name)) {
+        const contract = instanceContracts.get(child.name);
+        instances.push(__spreadProps(__spreadValues({}, await coreInstanceRecord(child, contract)), { region: contract.region }));
+      } else {
+        standIns.push(__spreadValues(__spreadValues({}, coreBaseRecord(child)), coreVisualRecord(child)));
+      }
+    }
+    for (const child of node.children) await visit(child);
+    return __spreadProps(__spreadValues(__spreadValues({}, coreBaseRecord(node)), coreVisualRecord(node)), {
+      legacy,
+      width: node.width,
+      height: node.height,
+      cornerRadius: node.cornerRadius,
+      coreView: parseCoreMarker(node),
+      layoutRegions,
+      copyNodes,
+      instances,
+      standIns
+    });
+  }
+  async function collectCoreViewMutationInventory(page = figma.currentPage) {
+    await figma.loadAllPagesAsync();
+    const sectionNames = /* @__PURE__ */ new Set(["00 \xB7 \xDCbersicht", "03 \xB7 Bibliothek", "04 \xB7 Editor"]);
+    const canonicalNames = new Set(CORE_VIEW_DEFINITIONS.map((definition2) => definition2.name));
+    const legacyNames = new Set(Object.keys(CORE_LEGACY_VIEW_NAMES));
+    const sections = [];
+    const candidates = [];
+    const overviewCandidates = [];
+    function visit(node) {
+      if (node.type === "SECTION" && sectionNames.has(node.name)) sections.push(__spreadValues(__spreadValues({}, coreBaseRecord(node)), coreVisualRecord(node)));
+      if (node.type === "FRAME") {
+        if (node.name === CORE_OVERVIEW_DEFINITION.name) overviewCandidates.push(node);
+        else if (canonicalNames.has(node.name) || legacyNames.has(node.name) || node.getPluginData("ondaCoreView")) candidates.push(node);
+      }
+      if ("children" in node) for (const child of node.children) visit(child);
+    }
+    for (const child of page.children) visit(child);
+    const views = [];
+    const legacyViews = [];
+    for (const node of candidates) {
+      const canonicalName = CORE_LEGACY_VIEW_NAMES[node.name] || node.name;
+      const definition2 = CORE_VIEW_DEFINITIONS.find((item) => item.name === canonicalName);
+      const legacy = !parseCoreMarker(node);
+      const record = await coreViewRecord(node, definition2, legacy);
+      if (legacy) legacyViews.push(record);
+      else views.push(record);
+    }
+    const overviewNode = overviewCandidates.length === 1 ? overviewCandidates[0] : null;
+    const overview = overviewNode ? __spreadProps(__spreadValues(__spreadValues({}, coreBaseRecord(overviewNode)), coreVisualRecord(overviewNode)), {
+      cornerRadius: overviewNode.cornerRadius,
+      lines: overviewNode.children.filter((child) => child.type === "TEXT" && child.name.startsWith("Coverage / ")).map((child) => __spreadProps(__spreadValues(__spreadValues({}, coreBaseRecord(child)), coreVisualRecord(child)), {
+        characters: child.characters
+      })),
+      standIns: overviewNode.children.filter((child) => !(child.type === "TEXT" && child.name.startsWith("Coverage / "))).map((child) => __spreadValues(__spreadValues({}, coreBaseRecord(child)), coreVisualRecord(child)))
+    }) : null;
+    if (overviewCandidates.length > 1) {
+      for (const duplicate of overviewCandidates) views.push(await coreViewRecord(duplicate, null, false));
+    }
+    return {
+      targetPage: __spreadProps(__spreadValues(__spreadValues({}, coreBaseRecord(page)), coreVisualRecord(page)), { id: page.id }),
+      sections,
+      overview,
+      views,
+      legacyViews
+    };
+  }
+  async function preflightCoreViewMutation() {
+    const inventory = await collectCoreViewMutationInventory(figma.currentPage);
+    const validation = validateCoreViewMutationInventory(inventory);
+    if (!validation.valid) throw new Error(validation.errors.join("\n"));
+    return inventory;
+  }
+  function ownedCoreVariant(page, contract) {
+    const definition2 = COMPONENT_DEFINITIONS.find((component) => component.id === contract.setId);
+    const sets = componentSetById(page, contract.setId);
+    if (sets.length !== 1 || sets[0].getPluginData(CREATED_MARKER_KEY) !== PLUGIN_ORIGIN) throw new Error(`Core-View Component Set fehlt oder ist mehrdeutig: ${(definition2 == null ? void 0 : definition2.name) || contract.setId}`);
+    const variants = sets[0].children.filter((node) => node.type === "COMPONENT" && node.name === contract.variant);
+    if (variants.length !== 1 || variants[0].getPluginData(CREATED_MARKER_KEY) !== PLUGIN_ORIGIN) throw new Error(`Core-View Variante fehlt oder ist mehrdeutig: ${definition2.name}/${contract.variant}`);
+    return variants[0];
+  }
+  async function ensureVariantInstance(parent, variant, contract, root = parent) {
+    let instance = root.findOne((node) => node.type === "INSTANCE" && node.name === contract.name);
+    if (!instance) {
+      instance = variant.createInstance();
+    }
+    if (instance.parent !== parent) parent.appendChild(instance);
+    const identity = await readMainComponentIdentity(instance);
+    if (identity.id !== variant.id) instance.swapComponent(variant);
+    instance.name = contract.name;
+    instance.visible = true;
+    instance.effects = [];
     instance.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN);
+    instance.setPluginData("ondaDocumentationInstance", "");
     instance.setPluginData("ondaRepeatedScreenInstance", "true");
+    const labelKey = Object.keys(instance.componentProperties || {}).find((key) => key.split("#")[0] === "Label");
+    if (!labelKey) throw new Error(`Label-Property fehlt: ${contract.name}`);
+    instance.setProperties({ [labelKey]: contract.label });
+    for (const [role, characters] of Object.entries(contract.roleCopy)) {
+      const roleNode = instance.findOne((node) => node.type === "TEXT" && node.name === `Role/${role}`);
+      if (!roleNode) throw new Error(`Textrolle fehlt: ${contract.name}/Role/${role}`);
+      roleNode.characters = characters;
+    }
     return instance;
   }
-  function createLibraryView(section, decision, state, x) {
-    const frame = autoFrame(section, `Bibliothek / ${state}`, { x, y: 180, width: 900, padding: 32, gap: 20, radius: 0 }).node;
-    textNode(frame, `Bibliothek / ${state} / Titel`, state, decision, { size: 21, weight: 700, width: 800 });
-    textNode(frame, `Bibliothek / ${state} / Suche`, "\u2315  Projekte und Dokumente durchsuchen", decision, { size: 15, width: 800 });
-    const rows = state.includes("Leer") ? ["Noch kein Projekt \xB7 Projekt anlegen"] : ["Buchprojekt \xB7 12 Dokumente", "Essay \xB7 4 Dokumente", "Notizen \xB7 21 Eintr\xE4ge"];
-    for (const [index, row] of rows.entries()) textNode(frame, `Bibliothek / ${state} / Zeile ${index + 1}`, `${index + 1}. ${row}`, decision, { size: 15, width: 800 });
-    return frame;
-  }
-  function createEditorView(section, decision, state, x, dark = false, width = 1440) {
-    const frame = autoFrame(section, `Editor / ${state}`, { x, y: 180, width, padding: 0, gap: 0, radius: 0, dark, direction: "HORIZONTAL" }).node;
-    frame.setPluginData("ondaResponsiveFrame", String(width));
-    const nav = autoFrame(frame, `Editor / ${state} / Navigation`, { width: Math.min(264, Math.round(width * 0.25)), padding: 24, gap: 16, radius: 0, dark, fill: dark ? "gray/900" : "gray/050" }).node;
-    textNode(nav, `Editor / ${state} / Navigation / Marke`, "ONDA", decision, { size: 21, weight: 700, dark, width: 210 });
-    for (const label of ["Struktur", "Projektverst\xE4ndnis", "Quellen", "Einstellungen"]) textNode(nav, `Editor / ${state} / Navigation / ${label}`, `\u25A1 ${label}`, decision, { size: 15, weight: 500, dark, width: 210 });
-    const document = autoFrame(frame, `Editor / ${state} / Schreibfl\xE4che`, { width: width - Math.min(264, Math.round(width * 0.25)), padding: width <= 320 ? 16 : 48, gap: 24, radius: 0, dark }).node;
-    textNode(document, `Editor / ${state} / Dokumenttitel`, "Die leise Architektur eines Arguments", decision, { size: width <= 320 ? 21 : 40, weight: 700, dark, width: Math.max(240, width - 400) });
-    textNode(document, `Editor / ${state} / Absatz 1`, "Ein guter Text zeigt nicht nur, was behauptet wird. Er macht sichtbar, wie Beobachtung, Beleg und Schlussfolgerung miteinander verbunden sind.", decision, { size: 15, dark, width: Math.max(240, width - 420) });
-    textNode(document, `Editor / ${state} / Status`, state.includes("Review") ? "\u25CE REVIEW OFFEN \xB7 3 Hinweise \xB7 N\xE4chster Hinweis" : "\u2713 DOKUMENT BEREIT \xB7 keine offenen Hinweise", decision, { size: 12, weight: 700, dark, width: Math.max(240, width - 420) });
-    return frame;
-  }
-  async function runCoreViews(page, ledger) {
-    await loadDecisionFonts(ledger.fontDecision);
-    const overview = ensureSection(page, ledger, "00 \xB7 \xDCbersicht", 1800).node;
-    const overviewDoc = autoFrame(overview, "\xDCbersicht / Coverage", { x: 80, y: 100, width: 1940, padding: 40, gap: 20, radius: 6 }).node;
-    heading(overviewDoc, "Onda Produktdesign", ledger.fontDecision, "Eine bestehende Figma-Seite \xB7 39 Sections \xB7 29 Anmerkungsarten \xB7 7 vollst\xE4ndige Dialogfamilien");
-    for (const line of ["39 / 39 Sections geplant", "29 / 29 Anmerkungsarten geplant", "7 / 7 Dialogfamilien vollst\xE4ndig benannt", "Light + Dark \xB7 ausschlie\xDFlich Graustufen", "Radien: 0 \xB7 4 \xB7 6 \xB7 8 \xB7 echte Kreise"]) {
-      textNode(overviewDoc, `\xDCbersicht / ${line}`, `\u2713 ${line}`, ledger.fontDecision, { size: 15, weight: 500, width: 1800 });
+  async function resolveCoreInventoryNodes(inventory, page) {
+    var _a, _b, _c, _d;
+    const records = [
+      ...inventory.sections || [],
+      ...inventory.overview ? [inventory.overview] : [],
+      ...((_a = inventory.overview) == null ? void 0 : _a.lines) || [],
+      ...((_b = inventory.overview) == null ? void 0 : _b.standIns) || [],
+      ...inventory.views || [],
+      ...inventory.legacyViews || [],
+      ...(inventory.views || []).flatMap((view) => [...view.layoutRegions || [], ...view.copyNodes || [], ...view.instances || [], ...view.standIns || []]),
+      ...(inventory.legacyViews || []).flatMap((view) => [...view.layoutRegions || [], ...view.copyNodes || [], ...view.instances || [], ...view.standIns || []])
+    ];
+    const resolved = /* @__PURE__ */ new Map();
+    for (const record of records) {
+      const node = await figma.getNodeByIdAsync(record.nodeId);
+      if (!node || node.type !== record.type || node.name !== record.name || ((_c = node.parent) == null ? void 0 : _c.id) !== record.parentId || node.getPluginData(CREATED_MARKER_KEY) !== record.owner) throw new Error(`TOCTOU: Core-Knoten ersetzt oder verschoben: ${record.name}`);
+      resolved.set(record.nodeId, node);
     }
-    const library = ensureSection(page, ledger, "03 \xB7 Bibliothek", 1700).node;
-    createLibraryView(library, ledger.fontDecision, "Leerzustand", 80);
-    createLibraryView(library, ledger.fontDecision, "Gef\xFCllte Bibliothek", 1080);
-    const editor = ensureSection(page, ledger, "04 \xB7 Editor", 2500).node;
-    const clean = createEditorView(editor, ledger.fontDecision, "Desktop \xB7 Bereit", 80);
-    const review = createEditorView(editor, ledger.fontDecision, "Desktop \xB7 Review offen", 80);
-    review.y = 1300;
-    const button = componentSet(page, "Onda/Button");
-    const iconButton = componentSet(page, "Onda/Icon Button");
-    const statusSymbol = componentSet(page, "Onda/Status Symbol");
-    const tag = componentSet(page, "Onda/Tag");
-    if (button) {
-      placeInstance(clean, button, "Editor / Bereit / Hauptaktion");
-      placeInstance(review, button, "Editor / Review / Hauptaktion");
+    if (page.id !== ((_d = inventory.targetPage) == null ? void 0 : _d.id)) throw new Error("TOCTOU: Core-Zielseite wurde gewechselt.");
+    return resolved;
+  }
+  function coreRegionFill(regionName) {
+    return regionName === "Layout / Rail" || regionName === "Layout / Review" ? "gray/050" : regionName === "Layout / Toolbar" ? "gray/025" : "gray/000";
+  }
+  function configureCoreLayoutRegions(frame, definition2) {
+    const regions = /* @__PURE__ */ new Map();
+    for (const regionDefinition of definition2.regions) {
+      const parent = regionDefinition.parentName === definition2.name ? frame : regions.get(regionDefinition.parentName);
+      if (!parent) throw new Error(`Layout-Elternregion fehlt: ${definition2.name}/${regionDefinition.name}`);
+      let region = frame.findOne((node) => node.type === "FRAME" && node.name === regionDefinition.name);
+      if (!region) {
+        region = figma.createFrame();
+        region.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN);
+      }
+      if (region.parent !== parent) parent.appendChild(region);
+      region.name = regionDefinition.name;
+      region.layoutMode = regionDefinition.layoutMode;
+      region.primaryAxisSizingMode = "FIXED";
+      region.counterAxisSizingMode = "FIXED";
+      region.primaryAxisAlignItems = "MIN";
+      region.counterAxisAlignItems = "MIN";
+      region.itemSpacing = regionDefinition.itemSpacing;
+      region.paddingTop = regionDefinition.padding.top;
+      region.paddingRight = regionDefinition.padding.right;
+      region.paddingBottom = regionDefinition.padding.bottom;
+      region.paddingLeft = regionDefinition.padding.left;
+      resizeNode(region, regionDefinition.width, regionDefinition.height);
+      region.fills = [solid(coreRegionFill(regionDefinition.name))];
+      region.strokes = [solid("gray/200")];
+      region.strokeWeight = 1;
+      region.cornerRadius = 0;
+      region.effects = [];
+      region.visible = true;
+      region.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN);
+      parent.appendChild(region);
+      regions.set(regionDefinition.name, region);
     }
-    if (iconButton) placeInstance(clean, iconButton, "Editor / Bereit / Icon-Aktion");
-    if (statusSymbol) placeInstance(clean, statusSymbol, "Editor / Bereit / Status");
-    if (tag) placeInstance(review, tag, "Editor / Review / Kennzeichnung");
-    return { sections: 3, libraryViews: 2, editorViews: 2, componentInstances: button ? 2 : 0 };
+    return regions;
+  }
+  function configureCoreCopy(frame, definition2, decision, regions) {
+    const nodes = [];
+    const indexes = /* @__PURE__ */ new Map();
+    for (const contract of definition2.copyContracts) {
+      const parent = regions.get(contract.region);
+      let copy = frame.findOne((node) => node.type === "TEXT" && node.name === `Copy / ${contract.role}`);
+      if (copy && copy.parent !== parent) parent.appendChild(copy);
+      copy = textNode(parent, `Copy / ${contract.role}`, contract.characters, decision, {
+        size: contract.kind === "title" || contract.role === "title" ? 21 : contract.kind === "heading" ? 15 : 15,
+        weight: contract.kind === "title" || contract.kind === "heading" || ["title", "status"].includes(contract.role) ? 700 : 400,
+        muted: ["body", "paragraph"].includes(contract.role) || contract.kind === "paragraph",
+        width: parent.width - parent.paddingLeft - parent.paddingRight
+      }).node;
+      copy.visible = true;
+      const index = indexes.get(contract.region) || 0;
+      parent.insertChild(index, copy);
+      indexes.set(contract.region, index + 1);
+      nodes.push(copy);
+    }
+    return nodes;
+  }
+  function positionCoreInstance(instance, contract, regions) {
+    const region = regions.get(contract.region);
+    const availableWidth = region.width - region.paddingLeft - region.paddingRight;
+    if (contract.expectedWidth > availableWidth) throw new Error(`Core-Instanz breiter als Region: ${contract.name}`);
+    resizeNode(instance, contract.expectedWidth, contract.expectedHeight);
+  }
+  async function runCoreViews(page, ledger, writeBarrierInventory, resolved) {
+    var _a;
+    const variants = /* @__PURE__ */ new Map();
+    for (const definition2 of CORE_VIEW_DEFINITIONS) for (const contract of definition2.instances) {
+      const key = `${contract.setId}\0${contract.variant}`;
+      if (!variants.has(key)) variants.set(key, ownedCoreVariant(page, contract));
+    }
+    const overviewRecord = writeBarrierInventory.overview;
+    const overviewSectionRecord = (writeBarrierInventory.sections || []).find((record) => record.name === "00 \xB7 \xDCbersicht");
+    const overviewSection = overviewSectionRecord ? resolved.get(overviewSectionRecord.nodeId) : ensureSection(page, ledger, "00 \xB7 \xDCbersicht", 1800).node;
+    const overviewFrame = overviewRecord ? resolved.get(overviewRecord.nodeId) : autoFrame(overviewSection, CORE_OVERVIEW_DEFINITION.name, { x: 80, y: 100, width: 1940, padding: 40, gap: 20, radius: 6 }).node;
+    overviewFrame.name = CORE_OVERVIEW_DEFINITION.name;
+    overviewFrame.effects = [];
+    overviewFrame.cornerRadius = CORE_OVERVIEW_DEFINITION.radius;
+    overviewFrame.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN);
+    for (const child of overviewFrame.children) if (!(child.type === "TEXT" && child.name.startsWith("Coverage / "))) child.visible = false;
+    for (const [index, line] of CORE_OVERVIEW_DEFINITION.lines.entries()) {
+      const node = textNode(overviewFrame, `Coverage / ${index + 1}`, line, ledger.fontDecision, { size: index === 0 ? 21 : 15, weight: index === 0 ? 700 : 500, width: 1860 }).node;
+      node.visible = true;
+      overviewFrame.insertChild(index, node);
+    }
+    const sectionRecords = new Map((writeBarrierInventory.sections || []).map((record) => [record.name, record]));
+    const allRecords = [...writeBarrierInventory.views || [], ...writeBarrierInventory.legacyViews || []];
+    const sectionIndexes = /* @__PURE__ */ new Map([["03 \xB7 Bibliothek", 0], ["04 \xB7 Editor", 0]]);
+    for (const definition2 of CORE_VIEW_DEFINITIONS) {
+      const sectionRecord = sectionRecords.get(definition2.sectionName);
+      const section = sectionRecord ? resolved.get(sectionRecord.nodeId) : ensureSection(page, ledger, definition2.sectionName, 1800).node;
+      const record = allRecords.find((candidate) => (CORE_LEGACY_VIEW_NAMES[candidate.name] || candidate.name) === definition2.name);
+      if (record) resolved.get(record.nodeId).name = definition2.name;
+      const index = sectionIndexes.get(definition2.sectionName);
+      sectionIndexes.set(definition2.sectionName, index + 1);
+      let frame = directChild(section, definition2.name, ["FRAME"]);
+      if (!frame) {
+        frame = figma.createFrame();
+        frame.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN);
+        section.appendChild(frame);
+      }
+      frame.name = definition2.name;
+      const expectedTopLevelNames = new Set(definition2.regions.filter((region) => region.parentName === definition2.name).map((region) => region.name));
+      reconcileLegacyCoreChildren(frame, expectedTopLevelNames);
+      frame.layoutMode = definition2.layoutMode;
+      frame.primaryAxisSizingMode = "FIXED";
+      frame.counterAxisSizingMode = "FIXED";
+      frame.primaryAxisAlignItems = "MIN";
+      frame.counterAxisAlignItems = "MIN";
+      frame.itemSpacing = 0;
+      frame.paddingTop = 0;
+      frame.paddingRight = 0;
+      frame.paddingBottom = 0;
+      frame.paddingLeft = 0;
+      frame.x = 80;
+      frame.y = 100 + index * 900;
+      resizeNode(frame, definition2.width, definition2.height);
+      frame.fills = [solid("gray/000")];
+      frame.strokes = [solid("gray/200")];
+      frame.strokeWeight = 1;
+      frame.effects = [];
+      frame.cornerRadius = 0;
+      frame.clipsContent = true;
+      frame.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN);
+      frame.setPluginData("ondaCoreView", JSON.stringify({ section: definition2.section, state: definition2.state, width: 1440, reviewRelation: ((_a = definition2.reviewContext) == null ? void 0 : _a.relation) || null }));
+      const regions = configureCoreLayoutRegions(frame, definition2);
+      const copyNodes = configureCoreCopy(frame, definition2, ledger.fontDecision, regions);
+      const copyCountByRegion = new Map(definition2.copyContracts.map((contract) => [contract.region, definition2.copyContracts.filter((item) => item.region === contract.region).length]));
+      const instanceCountByRegion = /* @__PURE__ */ new Map();
+      for (const [instanceIndex, contract] of definition2.instances.entries()) {
+        const variant = variants.get(`${contract.setId}\0${contract.variant}`);
+        const parent = regions.get(contract.region);
+        const instance = await ensureVariantInstance(parent, variant, contract, frame);
+        positionCoreInstance(instance, contract, regions);
+        const localIndex = instanceCountByRegion.get(contract.region) || 0;
+        parent.insertChild((copyCountByRegion.get(contract.region) || 0) + localIndex, instance);
+        instanceCountByRegion.set(contract.region, localIndex + 1);
+      }
+    }
+    const library = directChild(page, "03 \xB7 Bibliothek", ["SECTION"]);
+    const editor = directChild(page, "04 \xB7 Editor", ["SECTION"]);
+    resizeNode(library, SECTION_WIDTH, 100 + 8 * 900 + 100);
+    resizeNode(editor, SECTION_WIDTH, 100 + 10 * 900 + 100);
+    return {
+      sections: 3,
+      libraryViews: 8,
+      editorViews: 10,
+      componentInstances: CORE_VIEW_DEFINITIONS.reduce((count, definition2) => count + definition2.instances.length, 0)
+    };
   }
   function annotationStatus(viewName, operationAvailable) {
     if (viewName === "Open") return "\u25CB OFFEN \xB7 Entscheidung ausstehend";
@@ -3737,6 +4827,32 @@ ${result.errors.join("\n")}`);
       })
     };
   }
+  async function collectCoreViewEvidence(page) {
+    const inventory = await collectCoreViewMutationInventory(page);
+    const usedIds = new Set(CORE_VIEW_DEFINITIONS.flatMap((definition2) => definition2.instances.map((instance) => instance.setId)));
+    const definitionsByName = new Map(COMPONENT_DEFINITIONS.filter((definition2) => usedIds.has(definition2.id)).map((definition2) => [definition2.name, definition2]));
+    const componentSection = directChild(page, "02 \xB7 Komponenten", ["SECTION"]);
+    const components = ((componentSection == null ? void 0 : componentSection.children) || []).filter((node) => node.type === "COMPONENT_SET" && (usedIds.has(node.getPluginData("ondaComponentId")) || definitionsByName.has(node.name))).map((set) => ({
+      id: set.getPluginData("ondaComponentId"),
+      nodeId: set.id,
+      name: set.name,
+      type: set.type,
+      owner: set.getPluginData(CREATED_MARKER_KEY),
+      variants: [...set.children].filter((node) => node.type === "COMPONENT").map((variant) => ({
+        nodeId: variant.id,
+        name: variant.name,
+        type: variant.type,
+        owner: variant.getPluginData(CREATED_MARKER_KEY)
+      }))
+    }));
+    return {
+      targetPage: inventory.targetPage,
+      sections: inventory.sections,
+      overview: inventory.overview,
+      views: inventory.views,
+      components
+    };
+  }
   async function runVerify() {
     const inspection = await inspectCurrentTarget();
     const page = figma.currentPage;
@@ -3762,6 +4878,7 @@ ${result.errors.join("\n")}`);
       };
     }).filter((item) => item.family && item.state);
     const componentEvidence = await collectComponentEvidence(page);
+    const coreViewEvidence = await collectCoreViewEvidence(page);
     const componentSets = componentEvidence.componentSets;
     const baseline = await currentBaselineEvidence(page, ledger);
     const geometry = geometryEvidence(page, sections, allNodes, ledger, baseline.baselineRecords);
@@ -3795,6 +4912,7 @@ ${result.errors.join("\n")}`);
       componentSets,
       componentTargetPage: componentEvidence.targetPage,
       componentContainers: componentEvidence.containers,
+      coreViews: coreViewEvidence,
       instanceCount: allNodes.filter((node) => node.type === "INSTANCE" && node.getPluginData("ondaDocumentationInstance") !== "true").length,
       documentationInstanceCount: allNodes.filter((node) => node.type === "INSTANCE" && node.getPluginData("ondaDocumentationInstance") === "true").length,
       repeatedScreenInstanceCount: allNodes.filter((node) => node.type === "INSTANCE" && node.getPluginData("ondaRepeatedScreenInstance") === "true").length,
@@ -3841,7 +4959,7 @@ ${result.errors.join("\n")}`);
     figma.ui.postMessage({ type: "phase-result", command, ok, message, counts, unlockMutations });
   }
   async function handleCommand(command) {
-    var _a, _b, _c, _d, _e;
+    var _a, _b, _c, _d, _e, _f;
     if (command === "inspect") {
       const inspection = await inspectCurrentTarget();
       const authorization = authorizeMutation(inspection.target);
@@ -3865,12 +4983,12 @@ ${result.errors.join("\n")}`);
       postResult(command, hardPass, hardPass ? "Alle strukturellen Hard Gates bestanden." : "Verify hat offene Hard Gates gefunden.", report, true);
       return;
     }
-    async function runMutation({ page, ledger }, validatedInventory = null) {
+    async function runMutation({ page, ledger }, validatedInventory = null, resolvedInventoryNodes = null) {
       const transition = validatePhaseTransition(command, ledger.phases);
       if (!transition.ok) throw new Error(transition.warning);
       let counts;
       if (command === "foundations") counts = await runFoundations(page, ledger);
-      else if (command === "core-views") counts = await runCoreViews(page, ledger);
+      else if (command === "core-views") counts = await runCoreViews(page, ledger, validatedInventory, resolvedInventoryNodes);
       else if (command === "dialogs-and-secondary") counts = await runDialogsAndSecondary(page, ledger);
       else if (command.startsWith("component-")) counts = await runComponent(page, ledger, command.slice("component-".length), validatedInventory);
       else if (command.startsWith("annotations-")) counts = await runAnnotationBatch(page, ledger, Number(command.slice("annotations-".length)) - 1);
@@ -3895,6 +5013,22 @@ ${result.errors.join("\n")}`);
         preflight: () => preflightComponentMutation(componentId),
         requireContext: requireMutationContext,
         collectCurrentInventory: () => collectComponentMutationInventory(componentId),
+        mutate: runMutation
+      });
+      return;
+    }
+    if (command === "core-views") {
+      const phases = ((_f = readLedger(figma.currentPage)) == null ? void 0 : _f.phases) || {};
+      await executeGuardedCoreViewCommand({
+        command,
+        phases,
+        preflight: preflightCoreViewMutation,
+        requireContext: requireMutationContext,
+        collectCurrentInventory: ({ page }) => collectCoreViewMutationInventory(page),
+        resolveInventoryNodes: async ({ page, ledger }, inventory) => {
+          await loadDecisionFonts(ledger.fontDecision);
+          return resolveCoreInventoryNodes(inventory, page);
+        },
         mutate: runMutation
       });
       return;

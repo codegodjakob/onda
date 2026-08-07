@@ -1,6 +1,8 @@
 import {
   ANNOTATION_SECTIONS,
   COMPONENT_DEFINITIONS,
+  CORE_OVERVIEW_DEFINITION,
+  CORE_VIEW_DEFINITIONS,
   DIALOG_FAMILIES,
   FOUNDATION_EXPECTATIONS,
   PALETTE,
@@ -23,6 +25,7 @@ export function buildDesignPlan() {
     annotations: ANNOTATION_SECTIONS,
     dialogs: DIALOG_FAMILIES,
     components: COMPONENT_DEFINITIONS,
+    coreViews: CORE_VIEW_DEFINITIONS,
     phases: PHASE_DEFINITIONS,
     palette: PALETTE,
     radii: RADIUS_TOKENS,
@@ -634,6 +637,471 @@ export function buildComponentRecoveryActions(inventory = {}, componentId) {
     if (!defaultVariant || sample.mainComponentId !== defaultVariant.nodeId) actions.push({ type: 'relink-sample', variantName: defaultVariantName })
   }
   return actions
+}
+
+export const CORE_LEGACY_VIEW_NAMES = Object.freeze({
+  'Bibliothek / Gefüllte Bibliothek': 'Bibliothek / Projekte · Gefüllt',
+  'Bibliothek / Leerzustand': 'Bibliothek / Leerzustand',
+  'Editor / Desktop · Bereit': 'Editor / Textmodus · Bereit',
+  'Editor / Desktop · Review offen': 'Editor / Review · Offen',
+})
+
+export function reconcileLegacyCoreChildren(frame, expectedTopLevelNames = new Set()) {
+  const candidates = [...(frame?.children || [])].filter(child => !expectedTopLevelNames.has(child.name))
+  const ownerOf = node => node?.owner ?? (typeof node?.getPluginData === 'function' ? node.getPluginData('ondaOrigin') : '')
+  const unsafe = candidates.find(node => ownerOf(node) !== PLUGIN_ORIGIN)
+  if (unsafe) throw new Error(`Core-Views: fremdes oder ungeschütztes Legacy-Kind ${unsafe.name}`)
+  for (const child of candidates) {
+    child.visible = false
+    if ('layoutPositioning' in child) child.layoutPositioning = 'ABSOLUTE'
+  }
+  return candidates
+}
+
+function coreDefinitionForCandidate(name) {
+  const canonicalName = CORE_LEGACY_VIEW_NAMES[name] || name
+  return CORE_VIEW_DEFINITIONS.find(definition => definition.name === canonicalName) || null
+}
+
+function expectedCoreSectionNames() {
+  return ['00 · Übersicht', '03 · Bibliothek', '04 · Editor']
+}
+
+export function validateCoreViewMutationInventory(inventory = {}) {
+  const errors = []
+  const targetPage = inventory.targetPage
+  const sections = Array.isArray(inventory.sections) ? inventory.sections : []
+  const views = Array.isArray(inventory.views) ? inventory.views : []
+  const legacyViews = Array.isArray(inventory.legacyViews) ? inventory.legacyViews : []
+  const allViews = [...views, ...legacyViews]
+  if (!targetPage || targetPage.type !== 'PAGE' || targetPage.name !== TARGET_PAGE_NAME || !targetPage.id) errors.push('Core-Views: Zielseite ungültig')
+  const sectionNames = new Set(expectedCoreSectionNames())
+  if (new Set(sections.map(section => section.name)).size !== sections.length) errors.push('Core-Views: doppelte Sections')
+  for (const section of sections) {
+    if (!sectionNames.has(section.name)
+      || section.type !== 'SECTION'
+      || section.owner !== PLUGIN_ORIGIN
+      || section.parentId !== targetPage?.id
+      || section.parentType !== 'PAGE'
+      || section.parentName !== TARGET_PAGE_NAME) errors.push(`Core-Views: ungültige Section ${section.name}`)
+  }
+  const expectedNames = new Set(CORE_VIEW_DEFINITIONS.map(definition => definition.name))
+  const allowedLegacyNames = new Set(Object.keys(CORE_LEGACY_VIEW_NAMES))
+  for (const view of allViews) if (!expectedNames.has(view.name) && !allowedLegacyNames.has(view.name)) errors.push(`Core-Views: unerwarteter View-Kandidat ${view.name}`)
+  for (const definition of CORE_VIEW_DEFINITIONS) {
+    const matching = allViews.filter(view => (CORE_LEGACY_VIEW_NAMES[view.name] || view.name) === definition.name)
+    if (matching.length > 1) { errors.push(`Core-Views: doppelter View ${definition.name}`); continue }
+    if (!matching.length) continue
+    const view = matching[0]
+    if (!view.nodeId
+      || view.type !== 'FRAME'
+      || view.owner !== PLUGIN_ORIGIN
+      || view.parentType !== 'SECTION'
+      || view.parentName !== definition.sectionName
+      || !view.parentId) errors.push(`Core-Views: ungültiger View ${definition.name}`)
+    const allChildren = [...(view.layoutRegions || []), ...(view.copyNodes || []), ...(view.instances || []), ...(view.standIns || [])]
+    for (const child of allChildren) if (!child.nodeId || child.owner !== PLUGIN_ORIGIN || child.parentType !== 'FRAME') errors.push(`Core-Views: ungeschütztes View-Kind ${definition.name}/${child.name}`)
+    if (view.name !== definition.name || view.legacy === true) continue
+    const expectedRegions = new Map(definition.regions.map(region => [region.name, region]))
+    const layoutRegions = Array.isArray(view.layoutRegions) ? view.layoutRegions : []
+    if (new Set(layoutRegions.map(region => region.name)).size !== layoutRegions.length || layoutRegions.some(region => !expectedRegions.has(region.name))) errors.push(`Core-Views: ungültige Layout-Region ${definition.name}`)
+    const regionByName = new Map(layoutRegions.map(region => [region.name, region]))
+    for (const region of layoutRegions) {
+      const contract = expectedRegions.get(region.name)
+      const expectedParentId = contract?.parentName === definition.name ? view.nodeId : regionByName.get(contract?.parentName)?.nodeId
+      if (region.type !== 'FRAME'
+        || region.layoutMode === 'NONE'
+        || region.parentName !== contract?.parentName
+        || !expectedParentId
+        || region.parentId !== expectedParentId) errors.push(`Core-Views: Layout-Hierarchie ungültig ${definition.name}/${region.name}`)
+    }
+    const expectedCopyRoles = new Set(definition.copyContracts.map(copy => copy.role))
+    const copyNodes = Array.isArray(view.copyNodes) ? view.copyNodes : []
+    if (new Set(copyNodes.map(node => node.role)).size !== copyNodes.length || copyNodes.some(node => !expectedCopyRoles.has(node.role))) errors.push(`Core-Views: ungültige Copy ${definition.name}`)
+    for (const copy of copyNodes) {
+      const contract = definition.copyContracts.find(item => item.role === copy.role)
+      const parent = regionByName.get(contract?.region)
+      if (!copy.nodeId
+      || copy.type !== 'TEXT'
+      || copy.owner !== PLUGIN_ORIGIN
+      || copy.parentId !== parent?.nodeId
+      || copy.parentType !== 'FRAME'
+      || copy.parentName !== contract?.region) errors.push(`Core-Views: falsche Copy-Ancestry ${definition.name}/${copy.role}`)
+    }
+    const expectedInstances = new Map(definition.instances.map(instance => [instance.name, instance]))
+    const instances = Array.isArray(view.instances) ? view.instances : []
+    if (new Set(instances.map(instance => instance.name)).size !== instances.length || instances.some(instance => !expectedInstances.has(instance.name))) errors.push(`Core-Views: ungültiges Instanzinventar ${definition.name}`)
+    for (const instance of instances) {
+      const contract = expectedInstances.get(instance.name)
+      const parent = regionByName.get(contract?.region)
+      if (!instance.nodeId
+      || instance.type !== 'INSTANCE'
+      || instance.owner !== PLUGIN_ORIGIN
+      || instance.parentId !== parent?.nodeId
+      || instance.parentType !== 'FRAME'
+      || instance.parentName !== contract?.region) errors.push(`Core-Views: falsche Instanz-Ancestry ${definition.name}/${instance.name}`)
+      const roleDescendants = Array.isArray(instance.roleDescendants) ? instance.roleDescendants : []
+      if (new Set(roleDescendants.map(role => role.nodeId)).size !== roleDescendants.length
+        || new Set(roleDescendants.map(role => role.role)).size !== roleDescendants.length) errors.push(`Core-Views: doppelte Rollen ${definition.name}/${instance.name}`)
+      for (const role of roleDescendants) if (!role.nodeId
+        || role.type !== 'TEXT'
+        || role.owner !== PLUGIN_ORIGIN
+        || role.parentId !== instance.nodeId
+        || role.parentType !== 'INSTANCE'
+        || role.parentInstanceId !== instance.nodeId) errors.push(`Core-Views: ungeschützte oder verschobene Rolle ${definition.name}/${instance.name}/${role.name}`)
+    }
+    if ((view.standIns || []).some(node => node.visible !== false)) errors.push(`Core-Views: sichtbarer Ersatzknoten ${definition.name}`)
+  }
+  const overview = inventory.overview
+  if (overview && (!overview.nodeId
+    || overview.name !== CORE_OVERVIEW_DEFINITION.name
+    || overview.type !== 'FRAME'
+    || overview.owner !== PLUGIN_ORIGIN
+    || overview.parentType !== 'SECTION'
+    || overview.parentName !== '00 · Übersicht')) errors.push('Core-Views: Übersicht ungültig')
+  for (const child of [...(overview?.lines || []), ...(overview?.standIns || [])]) if (!child.nodeId
+    || child.owner !== PLUGIN_ORIGIN
+    || child.parentId !== overview.nodeId
+    || child.parentType !== 'FRAME'
+    || child.parentName !== CORE_OVERVIEW_DEFINITION.name) errors.push(`Core-Views: ungeschütztes oder verschobenes Übersichtskind ${child.name}`)
+  return { valid: errors.length === 0, errors }
+}
+
+export function buildCoreViewRecoveryActions(inventory = {}) {
+  const validation = validateCoreViewMutationInventory(inventory)
+  if (!validation.valid) throw new Error(validation.errors.join('\n'))
+  const actions = []
+  const allViews = [...(inventory.views || []), ...(inventory.legacyViews || [])]
+  if (!inventory.overview) actions.push({ type: 'overview' })
+  for (const definition of CORE_VIEW_DEFINITIONS) {
+    const view = allViews.find(candidate => (CORE_LEGACY_VIEW_NAMES[candidate.name] || candidate.name) === definition.name)
+    if (!view) { actions.push({ type: 'view', viewName: definition.name }); continue }
+    if (view.name !== definition.name) actions.push({ type: 'migrate-view', viewName: definition.name, legacyName: view.name })
+    const layoutRegions = view.layoutRegions || []
+    for (const region of definition.regions) if (!layoutRegions.some(candidate => candidate.name === region.name)) actions.push({ type: 'region', viewName: definition.name, regionName: region.name })
+    const copyNodes = view.copyNodes || []
+    for (const { role, characters } of definition.copyContracts) {
+      const copy = copyNodes.find(node => node.role === role)
+      if (!copy || copy.characters !== characters) actions.push({ type: 'copy', viewName: definition.name, role })
+    }
+    const instances = view.instances || []
+    for (const contract of definition.instances) {
+      const instance = instances.find(candidate => candidate.name === contract.name)
+      if (!instance) { actions.push({ type: 'instance', viewName: definition.name, instanceName: contract.name }); continue }
+      const setDefinition = COMPONENT_DEFINITIONS.find(component => component.id === contract.setId)
+      if (instance.componentSetName !== setDefinition?.name || instance.variantName !== contract.variant || !instance.mainComponentId) actions.push({ type: 'relink-instance', viewName: definition.name, instanceName: contract.name })
+      if (instance.labelValue !== contract.label) actions.push({ type: 'label-instance', viewName: definition.name, instanceName: contract.name })
+      if (JSON.stringify(instance.roleCopy || {}) !== JSON.stringify(contract.roleCopy)) actions.push({ type: 'copy-instance', viewName: definition.name, instanceName: contract.name })
+      if (instance.repeatedScreen !== true || instance.documentation === true) actions.push({ type: 'mark-instance', viewName: definition.name, instanceName: contract.name })
+    }
+  }
+  return actions
+}
+
+function canonicalCoreRecord(record = {}, extraKeys = []) {
+  const keys = ['nodeId', 'name', 'type', 'owner', 'parentId', 'parentType', 'parentName', ...extraKeys]
+  return Object.fromEntries(keys.map(key => [key, canonicalScalar(record[key] ?? null)]))
+}
+
+function sortCoreRecords(records) {
+  return [...records].sort((left, right) => `${left.name || ''}\u0000${left.nodeId || ''}`.localeCompare(`${right.name || ''}\u0000${right.nodeId || ''}`))
+}
+
+export function canonicalCoreViewMutationSnapshot(inventory = {}) {
+  const geometryLayoutPaintKeys = [
+    'x', 'y', 'width', 'height', 'bounds', 'absoluteBounds', 'cornerRadius', 'fills', 'strokes', 'strokeWeight', 'effects', 'opacity', 'visible',
+    'layoutMode', 'primaryAxisSizingMode', 'counterAxisSizingMode', 'primaryAxisAlignItems', 'counterAxisAlignItems',
+    'itemSpacing', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'layoutWrap', 'layoutSizingHorizontal',
+    'layoutSizingVertical', 'layoutPositioning', 'layoutAlign', 'layoutGrow', 'constraints', 'fillBindings', 'strokeBindings',
+    'fieldVariableIds', 'textRangeBindings', 'pluginData',
+  ]
+  function view(record) {
+    return {
+      ...canonicalCoreRecord(record, ['legacy', 'coreView', ...geometryLayoutPaintKeys]),
+      layoutRegions: sortCoreRecords((record.layoutRegions || []).map(region => canonicalCoreRecord(region, [...geometryLayoutPaintKeys, 'childCount', 'childIds']))),
+      copyNodes: sortCoreRecords((record.copyNodes || []).map(copy => canonicalCoreRecord(copy, ['role', 'characters', ...geometryLayoutPaintKeys]))),
+      instances: sortCoreRecords((record.instances || []).map(instance => ({
+        ...canonicalCoreRecord(instance, [
+          'repeatedScreen', 'documentation', 'mainComponentId', 'componentSetId', 'componentSetName', 'variantName', 'labelValue', 'roleCopy', 'componentProperties', 'region', ...geometryLayoutPaintKeys,
+        ]),
+        roleDescendants: sortCoreRecords((instance.roleDescendants || []).map(role => canonicalCoreRecord(role, ['parentInstanceId', 'role', 'characters', ...geometryLayoutPaintKeys]))),
+      }))),
+      standIns: sortCoreRecords((record.standIns || []).map(node => canonicalCoreRecord(node, geometryLayoutPaintKeys))),
+    }
+  }
+  return {
+    targetPage: canonicalCoreRecord(inventory.targetPage || {}, geometryLayoutPaintKeys),
+    sections: sortCoreRecords((inventory.sections || []).map(section => canonicalCoreRecord(section, geometryLayoutPaintKeys))),
+    overview: inventory.overview ? {
+      ...canonicalCoreRecord(inventory.overview, geometryLayoutPaintKeys),
+      lines: sortCoreRecords((inventory.overview.lines || []).map(line => canonicalCoreRecord(line, ['characters', ...geometryLayoutPaintKeys]))),
+      standIns: sortCoreRecords((inventory.overview.standIns || []).map(node => canonicalCoreRecord(node, geometryLayoutPaintKeys))),
+    } : null,
+    views: sortCoreRecords((inventory.views || []).map(view)),
+    legacyViews: sortCoreRecords((inventory.legacyViews || []).map(view)),
+  }
+}
+
+export async function executeGuardedCoreViewCommand({ command, phases, preflight, requireContext, collectCurrentInventory, resolveInventoryNodes = async () => null, mutate }) {
+  const transition = validatePhaseTransition(command, phases)
+  if (!transition.ok) throw new Error(transition.warning)
+  const preflightInventory = await preflight()
+  const context = await requireContext()
+  if (typeof collectCurrentInventory !== 'function') throw new Error('TOCTOU: zweite Core-View-Inventur fehlt.')
+  const currentInventory = await collectCurrentInventory(context)
+  const currentValidation = validateCoreViewMutationInventory(currentInventory)
+  if (!currentValidation.valid) throw new Error(`TOCTOU: aktuelles Core-View-Inventar ungültig.\n${currentValidation.errors.join('\n')}`)
+  if (JSON.stringify(canonicalCoreViewMutationSnapshot(preflightInventory)) !== JSON.stringify(canonicalCoreViewMutationSnapshot(currentInventory))) throw new Error('TOCTOU: Core-View-Inventar wurde nach Preflight verändert.')
+  const resolvedInventoryNodes = await resolveInventoryNodes(context, currentInventory)
+  const writeBarrierInventory = await collectCurrentInventory(context)
+  const writeBarrierValidation = validateCoreViewMutationInventory(writeBarrierInventory)
+  if (!writeBarrierValidation.valid) throw new Error(`TOCTOU: Core-View-Inventar an der Schreibbarriere ungültig.\n${writeBarrierValidation.errors.join('\n')}`)
+  if (JSON.stringify(canonicalCoreViewMutationSnapshot(currentInventory)) !== JSON.stringify(canonicalCoreViewMutationSnapshot(writeBarrierInventory))) throw new Error('TOCTOU: Core-View-Inventar wurde vor dem ersten Schreibzugriff verändert.')
+  return mutate(context, writeBarrierInventory, resolvedInventoryNodes)
+}
+
+function visiblePaintsAreGray(paints) {
+  return Array.isArray(paints) && paints.every(paint => !paint?.color || isGrayColor(paint.color))
+}
+
+function rectanglesOverlap(left, right) {
+  if (!left || !right) return true
+  return left.x < right.x + right.width
+    && left.x + left.width > right.x
+    && left.y < right.y + right.height
+    && left.y + left.height > right.y
+}
+
+function rectangleContains(outer, inner) {
+  if (!outer || !inner) return false
+  return inner.x >= outer.x
+    && inner.y >= outer.y
+    && inner.x + inner.width <= outer.x + outer.width
+    && inner.y + inner.height <= outer.y + outer.height
+}
+
+function expectedCoreRegionBounds(definition, region) {
+  const parent = region.parentName === definition.name
+    ? { layoutMode: definition.layoutMode, itemSpacing: 0 }
+    : definition.regions.find(item => item.name === region.parentName)
+  const siblings = definition.regions.filter(item => item.parentName === region.parentName)
+  const before = siblings.slice(0, siblings.indexOf(region))
+  return {
+    x: parent?.layoutMode === 'HORIZONTAL' ? before.reduce((total, item) => total + item.width + (parent.itemSpacing || 0), 0) : 0,
+    y: parent?.layoutMode === 'VERTICAL' ? before.reduce((total, item) => total + item.height + (parent.itemSpacing || 0), 0) : 0,
+    width: region.width,
+    height: region.height,
+  }
+}
+
+function coreLocalContainerBounds(region) {
+  return { x: 0, y: 0, width: region?.bounds?.width || 0, height: region?.bounds?.height || 0 }
+}
+
+export function validateCoreInstanceRoleEvidence(instance = {}, contract = {}, region = {}) {
+  const errors = []
+  const roles = Array.isArray(instance.roleDescendants) ? instance.roleDescendants : []
+  const expectedEntries = Object.entries(contract.roleCopy || {})
+  if (roles.length !== expectedEntries.length || new Set(roles.map(role => role.nodeId)).size !== roles.length || new Set(roles.map(role => role.role)).size !== roles.length) errors.push('Core-Role-Evidence: falsche Rollenanzahl')
+  for (const [roleName, characters] of expectedEntries) {
+    const matching = roles.filter(role => role.role === roleName)
+    if (matching.length !== 1) { errors.push(`Core-Role-Evidence: Rolle fehlt oder doppelt ${roleName}`); continue }
+    const role = matching[0]
+    if (role.name !== `Role/${roleName}`
+      || role.type !== 'TEXT'
+      || role.owner !== PLUGIN_ORIGIN
+      || role.parentInstanceId !== instance.nodeId
+      || role.characters !== characters
+      || role.visible !== true
+      || role.opacity !== 1
+      || !role.bounds
+      || role.bounds.width < 0
+      || role.bounds.height <= 0
+      || !visiblePaintsAreGray(role.fills)
+      || !visiblePaintsAreGray(role.strokes)
+      || (role.effects || []).length !== 0
+      || !rectangleContains(instance.absoluteBounds, role.absoluteBounds)
+      || !rectangleContains(region.absoluteBounds, role.absoluteBounds)) errors.push(`Core-Role-Evidence: ungültige Rolle ${roleName}`)
+  }
+  return errors
+}
+
+export function validateCoreViewEvidence(evidence = {}) {
+  const errors = []
+  const targetPage = evidence.targetPage
+  const sections = Array.isArray(evidence.sections) ? evidence.sections : []
+  const views = Array.isArray(evidence.views) ? evidence.views : []
+  const components = Array.isArray(evidence.components) ? evidence.components : []
+  if (!targetPage || targetPage.type !== 'PAGE' || targetPage.name !== TARGET_PAGE_NAME || !targetPage.id) errors.push('Core-Evidence: Zielseite ungültig')
+  const sectionByName = new Map()
+  if (sections.length !== 3 || new Set(sections.map(section => section.nodeId)).size !== sections.length) errors.push(`Core-Evidence: erwartet 3 Sections, gefunden ${sections.length}`)
+  for (const name of expectedCoreSectionNames()) {
+    const section = strictSingle(sections, item => item.name === name, errors, `Core-Section ${name}`)
+    if (!section) continue
+    sectionByName.set(name, section)
+    if (section.type !== 'SECTION'
+      || section.owner !== PLUGIN_ORIGIN
+      || section.parentId !== targetPage?.id
+      || section.parentType !== 'PAGE'
+      || section.parentName !== TARGET_PAGE_NAME) errors.push(`Core-Section ungültig: ${name}`)
+  }
+  const componentById = new Map()
+  for (const component of components) {
+    if (componentById.has(component.id)) errors.push(`Core-Komponentenindex doppelt: ${component.id}`)
+    componentById.set(component.id, component)
+    const definition = COMPONENT_DEFINITIONS.find(item => item.id === component.id)
+    if (!definition || component.name !== definition.name || component.type !== 'COMPONENT_SET' || component.owner !== PLUGIN_ORIGIN || !component.nodeId) errors.push(`Core-Komponentenindex ungültig: ${component.id}`)
+  }
+  const expectedNames = new Set(CORE_VIEW_DEFINITIONS.map(definition => definition.name))
+  if (views.length !== CORE_VIEW_DEFINITIONS.length) errors.push(`Core-Views: erwartet ${CORE_VIEW_DEFINITIONS.length}, gefunden ${views.length}`)
+  if (new Set(views.map(view => view.nodeId)).size !== views.length || new Set(views.map(view => view.name)).size !== views.length || views.some(view => !expectedNames.has(view.name))) errors.push('Core-Views: falsche, doppelte oder zusätzliche Views')
+  for (const definition of CORE_VIEW_DEFINITIONS) {
+    const view = strictSingle(views, item => item.name === definition.name, errors, `Core-View ${definition.name}`)
+    if (!view) continue
+    const section = sectionByName.get(definition.sectionName)
+    if (view.type !== 'FRAME'
+      || view.owner !== PLUGIN_ORIGIN
+      || view.parentId !== section?.nodeId
+      || view.parentType !== 'SECTION'
+      || view.parentName !== definition.sectionName) errors.push(`Core-View Ancestry ungültig: ${definition.name}`)
+    if (view.width !== 1440
+      || view.height !== definition.height
+      || view.cornerRadius !== 0
+      || (view.effects || []).length !== 0
+      || !visiblePaintsAreGray(view.fills)
+      || !visiblePaintsAreGray(view.strokes)
+      || view.layoutMode !== definition.layoutMode
+      || view.itemSpacing !== 0
+      || [view.paddingTop, view.paddingRight, view.paddingBottom, view.paddingLeft].some(value => value !== 0)
+      || !sameObject(view.coreView, { section: definition.section, state: definition.state, width: 1440, reviewRelation: definition.reviewContext?.relation || null })) errors.push(`Core-View Geometrie/Marker ungültig: ${definition.name}`)
+    if (!view.bounds || view.bounds.width !== 1440 || view.bounds.height !== definition.height) errors.push(`Core-View Bounds ungültig: ${definition.name}`)
+    const layoutRegions = Array.isArray(view.layoutRegions) ? view.layoutRegions : []
+    if (layoutRegions.length !== definition.regions.length || new Set(layoutRegions.map(region => region.nodeId)).size !== layoutRegions.length || new Set(layoutRegions.map(region => region.name)).size !== layoutRegions.length) errors.push(`Core-View Layout-Anzahl ungültig: ${definition.name}`)
+    const regionByName = new Map(layoutRegions.map(region => [region.name, region]))
+    for (const expected of definition.regions) {
+      const region = strictSingle(layoutRegions, item => item.name === expected.name, errors, `Core-Layout ${definition.name}/${expected.name}`)
+      if (!region) continue
+      const expectedParent = expected.parentName === definition.name ? view : regionByName.get(expected.parentName)
+      const expectedChildCount = definition.regions.filter(child => child.parentName === expected.name).length
+        + definition.copyContracts.filter(copy => copy.region === expected.name).length
+        + definition.instances.filter(instance => instance.region === expected.name).length
+      if (region.type !== 'FRAME'
+        || region.owner !== PLUGIN_ORIGIN
+        || region.parentId !== expectedParent?.nodeId
+        || region.parentType !== 'FRAME'
+        || region.parentName !== expected.parentName
+        || region.visible !== true
+        || region.childCount !== expectedChildCount
+        || region.layoutMode !== expected.layoutMode
+        || region.itemSpacing !== expected.itemSpacing
+        || region.paddingTop !== expected.padding.top
+        || region.paddingRight !== expected.padding.right
+        || region.paddingBottom !== expected.padding.bottom
+        || region.paddingLeft !== expected.padding.left
+        || region.cornerRadius !== 0
+        || (region.effects || []).length !== 0
+        || !visiblePaintsAreGray(region.fills)
+        || !visiblePaintsAreGray(region.strokes)
+        || !sameObject(region.bounds, expectedCoreRegionBounds(definition, expected))) errors.push(`Core-Layout ungültig: ${definition.name}/${expected.name}`)
+    }
+    const copyNodes = Array.isArray(view.copyNodes) ? view.copyNodes : []
+    if (copyNodes.length !== definition.copyContracts.length || new Set(copyNodes.map(copy => copy.nodeId)).size !== copyNodes.length) errors.push(`Core-View Copy-Anzahl ungültig: ${definition.name}`)
+    for (const contract of definition.copyContracts) {
+      const { role, characters, region: regionName } = contract
+      const copy = strictSingle(copyNodes, item => item.role === role, errors, `Core-Copy ${definition.name}/${role}`)
+      const region = regionByName.get(regionName)
+      if (copy && (copy.name !== `Copy / ${role}`
+        || copy.type !== 'TEXT'
+        || copy.owner !== PLUGIN_ORIGIN
+        || copy.parentId !== region?.nodeId
+        || copy.parentType !== 'FRAME'
+        || copy.parentName !== regionName
+        || copy.characters !== characters
+        || copy.visible !== true
+        || (copy.effects || []).length !== 0
+        || !visiblePaintsAreGray(copy.fills)
+        || !visiblePaintsAreGray(copy.strokes)
+        || !rectangleContains(coreLocalContainerBounds(region), copy.bounds))) errors.push(`Core-Copy ungültig: ${definition.name}/${role}`)
+    }
+    const instances = Array.isArray(view.instances) ? view.instances : []
+    if (instances.length !== definition.instances.length || new Set(instances.map(instance => instance.nodeId)).size !== instances.length || new Set(instances.map(instance => instance.name)).size !== instances.length) errors.push(`Core-Instanzenanzahl ungültig: ${definition.name}`)
+    for (const contract of definition.instances) {
+      const instance = strictSingle(instances, item => item.name === contract.name, errors, `Core-Instanz ${definition.name}/${contract.name}`)
+      if (!instance) continue
+      const component = componentById.get(contract.setId)
+      const variant = (component?.variants || []).find(item => item.name === contract.variant)
+      const region = regionByName.get(contract.region)
+      if (instance.type !== 'INSTANCE'
+        || instance.owner !== PLUGIN_ORIGIN
+        || instance.parentId !== region?.nodeId
+        || instance.parentType !== 'FRAME'
+        || instance.parentName !== contract.region
+        || instance.region !== contract.region
+        || !rectangleContains(coreLocalContainerBounds(region), instance.bounds)
+        || instance.bounds?.width !== contract.expectedWidth
+        || instance.bounds?.height !== contract.expectedHeight
+        || instance.repeatedScreen !== true
+        || instance.documentation !== false
+        || (instance.effects || []).length !== 0
+        || !visiblePaintsAreGray(instance.fills)
+        || !visiblePaintsAreGray(instance.strokes)
+        || !component
+        || component.name !== COMPONENT_DEFINITIONS.find(item => item.id === contract.setId)?.name
+        || !variant
+        || variant.type !== 'COMPONENT'
+        || variant.owner !== PLUGIN_ORIGIN
+        || instance.componentSetId !== component.nodeId
+        || instance.componentSetName !== component.name
+        || instance.variantName !== contract.variant
+        || instance.mainComponentId !== variant.nodeId
+        || instance.labelValue !== contract.label
+        || !sameObject(instance.roleCopy, contract.roleCopy)) errors.push(`Core-Instanzlink ungültig: ${definition.name}/${contract.name}`)
+      errors.push(...validateCoreInstanceRoleEvidence(instance, contract, region).map(error => `${definition.name}/${contract.name}: ${error}`))
+    }
+    for (const expectedRegion of definition.regions) {
+      const region = regionByName.get(expectedRegion.name)
+      const childBounds = [
+        ...layoutRegions.filter(child => definition.regions.find(item => item.name === child.name)?.parentName === expectedRegion.name).map(child => child.bounds),
+        ...copyNodes.filter(child => child.parentId === region?.nodeId).map(child => child.bounds),
+        ...instances.filter(child => child.parentId === region?.nodeId).map(child => child.bounds),
+      ]
+      if (childBounds.some(bounds => !rectangleContains(coreLocalContainerBounds(region), bounds))) errors.push(`Core-Layout Overflow: ${definition.name}/${expectedRegion.name}`)
+      for (let left = 0; left < childBounds.length; left += 1) for (let right = left + 1; right < childBounds.length; right += 1) {
+        if (rectanglesOverlap(childBounds[left], childBounds[right])) errors.push(`Core-Layout Überlappung: ${definition.name}/${expectedRegion.name}`)
+      }
+    }
+    if ((view.standIns || []).some(node => node.visible !== false)) errors.push(`Core-View enthält sichtbaren Ersatzknoten: ${definition.name}`)
+  }
+  for (const sectionName of ['03 · Bibliothek', '04 · Editor']) {
+    const sectionViews = views.filter(view => view.parentName === sectionName)
+    for (let left = 0; left < sectionViews.length; left += 1) for (let right = left + 1; right < sectionViews.length; right += 1) {
+      if (rectanglesOverlap(sectionViews[left].bounds, sectionViews[right].bounds)) errors.push(`Core-Views überlappen: ${sectionViews[left].name}/${sectionViews[right].name}`)
+    }
+  }
+  const overview = evidence.overview
+  const overviewSection = sectionByName.get('00 · Übersicht')
+  if (!overview
+    || overview.name !== CORE_OVERVIEW_DEFINITION.name
+    || overview.type !== 'FRAME'
+    || overview.owner !== PLUGIN_ORIGIN
+    || overview.parentId !== overviewSection?.nodeId
+    || overview.parentType !== 'SECTION'
+    || overview.parentName !== '00 · Übersicht'
+    || overview.width !== CORE_OVERVIEW_DEFINITION.width
+    || overview.cornerRadius !== 6
+    || (overview.effects || []).length !== 0
+    || !visiblePaintsAreGray(overview.fills)) errors.push('Core-Übersicht ungültig')
+  const lines = Array.isArray(overview?.lines) ? overview.lines : []
+  if (lines.length !== CORE_OVERVIEW_DEFINITION.lines.length || lines.some((line, index) => line.name !== `Coverage / ${index + 1}`
+    || line.type !== 'TEXT'
+    || line.owner !== PLUGIN_ORIGIN
+    || line.parentId !== overview.nodeId
+    || line.parentType !== 'FRAME'
+    || line.parentName !== CORE_OVERVIEW_DEFINITION.name
+    || line.visible !== true
+    || line.characters !== CORE_OVERVIEW_DEFINITION.lines[index])) errors.push('Core-Übersicht Copy ungültig')
+  if ((overview?.standIns || []).some(node => node.visible !== false)) errors.push('Core-Übersicht enthält sichtbaren Ersatzknoten')
+  return { valid: errors.length === 0, errors }
 }
 
 function exactComponentPaint(actual, variableId) {
@@ -1258,6 +1726,8 @@ export function buildVerificationReport(snapshot) {
   const phasesComplete = snapshot.phases
     ? REQUIRED_PHASES.every(id => snapshot.phases[id]?.status === 'success')
     : true
+  const hasModernCoreEvidence = snapshot.coreViews !== undefined
+  const coreStrict = hasModernCoreEvidence ? validateCoreViewEvidence(snapshot.coreViews) : null
   const report = {
     pageCount: Number(snapshot.pageCount || 0),
     sectionCount: sectionNames.length,
@@ -1298,6 +1768,13 @@ export function buildVerificationReport(snapshot) {
     baselineMismatches: snapshot.baselineMismatches || [],
     pageInvariant: hashBaselineRecords(snapshot.baselinePages || []) === hashBaselineRecords(snapshot.currentPages || []),
   }
+  if (hasModernCoreEvidence) {
+    const coreViews = Array.isArray(snapshot.coreViews?.views) ? snapshot.coreViews.views : []
+    report.libraryViewCount = coreViews.filter(view => view.parentName === '03 · Bibliothek').length
+    report.editorViewCount = coreViews.filter(view => view.parentName === '04 · Editor').length
+    report.coreViewStructureValid = coreStrict.valid
+    report.coreViewErrors = coreStrict.errors
+  }
   const modern = Boolean(snapshot.sections)
   report.hardPass = Boolean(snapshot.targetAuthorized)
     && report.pageCount === 1
@@ -1322,6 +1799,7 @@ export function buildVerificationReport(snapshot) {
     && report.preservedBaselineHash
     && report.pageInvariant
     && phasesComplete
+    && (!hasModernCoreEvidence || coreStrict.valid)
   if (!modern) delete report.hardPass
   return report
 }

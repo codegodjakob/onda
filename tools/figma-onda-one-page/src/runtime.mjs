@@ -1,6 +1,8 @@
 import {
   ANNOTATION_SECTIONS,
   COMPONENT_DEFINITIONS,
+  CORE_OVERVIEW_DEFINITION,
+  CORE_VIEW_DEFINITIONS,
   DIALOG_FAMILIES,
   FOUNDATION_EXPECTATIONS,
   LEDGER_KEY,
@@ -21,6 +23,7 @@ import {
   authorizeMutation,
   buildBaselineShards,
   buildComponentRecoveryActions,
+  CORE_LEGACY_VIEW_NAMES,
   buildVerificationReport,
   canReuseOwnedNode,
   collectFieldVariableIds,
@@ -32,6 +35,7 @@ import {
   collectComponentCandidateLocations,
   executeComponentMutation,
   executeGuardedComponentCommand,
+  executeGuardedCoreViewCommand,
   executeStagingAssembly,
   executeFoundationMutation,
   hashBaselineRecords,
@@ -41,6 +45,7 @@ import {
   protectedChildIds,
   readEffectStyleId,
   readMainComponentIdentity,
+  reconcileLegacyCoreChildren,
   revalidateComponentNodeRecords,
   restoreBaselineShards,
   selectOwnedEntity,
@@ -49,6 +54,7 @@ import {
   foundationSwatchLabelToken,
   validateDesignPlan,
   validateComponentMutationInventory,
+  validateCoreViewMutationInventory,
   validateFoundationMutationInventory,
   validatePhaseTransition,
   validateTargetContext,
@@ -1226,72 +1232,440 @@ async function runComponent(page, ledger, componentId, validatedInventory) {
   return { component: definition.name, status: created ? 'created' : 'reused', variantCount: set.children.length, documentationInstanceCount: 1 }
 }
 
-function componentSet(page, name) {
-  const section = page.children.find(node => node.type === 'SECTION' && node.name === '02 · Komponenten')
-  return section?.findOne(node => node.type === 'COMPONENT_SET' && node.name === name) || null
+function componentSetById(page, componentId) {
+  const definition = COMPONENT_DEFINITIONS.find(component => component.id === componentId)
+  const section = directChild(page, '02 · Komponenten', ['SECTION'])
+  return (section?.children || []).filter(node => node.type === 'COMPONENT_SET'
+    && node.name === definition?.name
+    && node.getPluginData('ondaComponentId') === componentId)
 }
 
-function placeInstance(parent, set, name) {
-  if (!set || !set.children.length) return null
-  const existing = directChild(parent, name, ['INSTANCE'])
-  if (existing) return existing
-  const instance = set.children[0].createInstance()
-  instance.name = name
-  parent.appendChild(instance)
+function parseCoreMarker(node) {
+  const raw = node.getPluginData('ondaCoreView')
+  if (!raw) return null
+  try { return JSON.parse(raw) } catch (_error) { return { invalid: true } }
+}
+
+function coreBaseRecord(node) {
+  return {
+    nodeId: node.id,
+    name: node.name,
+    type: node.type,
+    owner: node.getPluginData(CREATED_MARKER_KEY),
+    parentId: node.parent?.id || null,
+    parentType: node.parent?.type || null,
+    parentName: node.parent?.name || null,
+  }
+}
+
+function coreVisualRecord(node) {
+  const record = {
+    x: 'x' in node ? node.x : null,
+    y: 'y' in node ? node.y : null,
+    width: 'width' in node ? node.width : null,
+    height: 'height' in node ? node.height : null,
+    bounds: 'x' in node ? { x: node.x, y: node.y, width: node.width, height: node.height } : null,
+    absoluteBounds: cloneSerializable(node.absoluteBoundingBox || node.absoluteRenderBounds || null),
+    fills: 'fills' in node ? cloneSerializable(node.fills) : null,
+    strokes: 'strokes' in node ? cloneSerializable(node.strokes) : null,
+    strokeWeight: 'strokeWeight' in node ? node.strokeWeight : null,
+    effects: 'effects' in node ? cloneSerializable(node.effects) : null,
+    opacity: 'opacity' in node ? node.opacity : null,
+    visible: 'visible' in node ? node.visible : null,
+    fillBindings: 'fills' in node ? collectVisibleFillBindings(node.fills) : [],
+    strokeBindings: 'strokes' in node ? collectVisibleFillBindings(node.strokes) : [],
+    fieldVariableIds: collectFieldVariableIds(node, [
+      'itemSpacing', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',
+      'topLeftRadius', 'topRightRadius', 'bottomLeftRadius', 'bottomRightRadius',
+    ]),
+    textRangeBindings: node.type === 'TEXT' ? collectTextRangeBindings(node) : [],
+    pluginData: typeof node.getPluginData === 'function' ? {
+      owner: node.getPluginData(CREATED_MARKER_KEY),
+      coreView: node.getPluginData('ondaCoreView'),
+      repeatedScreen: node.getPluginData('ondaRepeatedScreenInstance'),
+      documentation: node.getPluginData('ondaDocumentationInstance'),
+    } : {},
+  }
+  if ('layoutMode' in node) Object.assign(record, {
+    layoutMode: node.layoutMode,
+    primaryAxisSizingMode: node.primaryAxisSizingMode,
+    counterAxisSizingMode: node.counterAxisSizingMode,
+    primaryAxisAlignItems: node.primaryAxisAlignItems,
+    counterAxisAlignItems: node.counterAxisAlignItems,
+    itemSpacing: node.itemSpacing,
+    paddingTop: node.paddingTop,
+    paddingRight: node.paddingRight,
+    paddingBottom: node.paddingBottom,
+    paddingLeft: node.paddingLeft,
+    layoutWrap: node.layoutWrap,
+    layoutSizingHorizontal: node.layoutSizingHorizontal,
+    layoutSizingVertical: node.layoutSizingVertical,
+  })
+  if ('layoutPositioning' in node) Object.assign(record, {
+    layoutPositioning: node.layoutPositioning,
+    layoutAlign: node.layoutAlign,
+    layoutGrow: node.layoutGrow,
+    constraints: 'constraints' in node ? cloneSerializable(node.constraints) : null,
+  })
+  return record
+}
+
+function coreLabelValue(instance) {
+  const entries = Object.entries(instance.componentProperties || {})
+  const label = entries.find(([key]) => key.split('#')[0] === 'Label')
+  return label ? label[1]?.value ?? null : null
+}
+
+async function coreInstanceRecord(instance, contract = null) {
+  let main = null
+  try {
+    const identity = await readMainComponentIdentity(instance)
+    main = identity.id ? await figma.getNodeByIdAsync(identity.id) : null
+  } catch (_error) {
+    main = null
+  }
+  const set = main?.parent?.type === 'COMPONENT_SET' ? main.parent : null
+  const roleCopy = {}
+  const roleDescendants = []
+  for (const role of Object.keys(contract?.roleCopy || {})) {
+    const roleNode = instance.findOne(node => node.type === 'TEXT' && node.name === `Role/${role}`)
+    roleCopy[role] = roleNode?.characters ?? null
+    if (roleNode) roleDescendants.push({
+      ...coreBaseRecord(roleNode),
+      ...coreVisualRecord(roleNode),
+      parentInstanceId: instance.id,
+      role,
+      characters: roleNode.characters,
+    })
+  }
+  return {
+    ...coreBaseRecord(instance),
+    ...coreVisualRecord(instance),
+    repeatedScreen: instance.getPluginData('ondaRepeatedScreenInstance') === 'true',
+    documentation: instance.getPluginData('ondaDocumentationInstance') === 'true',
+    mainComponentId: main?.id || null,
+    componentSetId: set?.id || null,
+    componentSetName: set?.name || null,
+    variantName: main?.name || null,
+    labelValue: coreLabelValue(instance),
+    componentProperties: cloneSerializable(instance.componentProperties || {}),
+    roleCopy,
+    roleDescendants,
+  }
+}
+
+async function coreViewRecord(node, definition, legacy = false) {
+  const copyRoles = new Set((definition?.copyContracts || []).map(copy => copy.role))
+  const instanceContracts = new Map((definition?.instances || []).map(instance => [instance.name, instance]))
+  const layoutNames = new Set((definition?.regions || []).map(region => region.name))
+  const layoutRegions = []
+  const copyNodes = []
+  const instances = []
+  const standIns = []
+  async function visit(child) {
+    const role = child.name.startsWith('Copy / ') ? child.name.slice('Copy / '.length) : null
+    if (child.type === 'FRAME' && layoutNames.has(child.name)) {
+      layoutRegions.push({
+        ...coreBaseRecord(child),
+        ...coreVisualRecord(child),
+        cornerRadius: child.cornerRadius,
+        childCount: child.children.length,
+        childIds: child.children.map(node => node.id),
+      })
+      for (const descendant of child.children) await visit(descendant)
+    } else if (child.type === 'TEXT' && role && copyRoles.has(role)) {
+      copyNodes.push({ ...coreBaseRecord(child), ...coreVisualRecord(child), role, characters: child.characters })
+    } else if (child.type === 'INSTANCE' && instanceContracts.has(child.name)) {
+      const contract = instanceContracts.get(child.name)
+      instances.push({ ...await coreInstanceRecord(child, contract), region: contract.region })
+    } else {
+      standIns.push({ ...coreBaseRecord(child), ...coreVisualRecord(child) })
+    }
+  }
+  for (const child of node.children) await visit(child)
+  return {
+    ...coreBaseRecord(node),
+    ...coreVisualRecord(node),
+    legacy,
+    width: node.width,
+    height: node.height,
+    cornerRadius: node.cornerRadius,
+    coreView: parseCoreMarker(node),
+    layoutRegions,
+    copyNodes,
+    instances,
+    standIns,
+  }
+}
+
+async function collectCoreViewMutationInventory(page = figma.currentPage) {
+  await figma.loadAllPagesAsync()
+  const sectionNames = new Set(['00 · Übersicht', '03 · Bibliothek', '04 · Editor'])
+  const canonicalNames = new Set(CORE_VIEW_DEFINITIONS.map(definition => definition.name))
+  const legacyNames = new Set(Object.keys(CORE_LEGACY_VIEW_NAMES))
+  const sections = []
+  const candidates = []
+  const overviewCandidates = []
+  function visit(node) {
+    if (node.type === 'SECTION' && sectionNames.has(node.name)) sections.push({ ...coreBaseRecord(node), ...coreVisualRecord(node) })
+    if (node.type === 'FRAME') {
+      if (node.name === CORE_OVERVIEW_DEFINITION.name) overviewCandidates.push(node)
+      else if (canonicalNames.has(node.name) || legacyNames.has(node.name) || node.getPluginData('ondaCoreView')) candidates.push(node)
+    }
+    if ('children' in node) for (const child of node.children) visit(child)
+  }
+  for (const child of page.children) visit(child)
+  const views = []
+  const legacyViews = []
+  for (const node of candidates) {
+    const canonicalName = CORE_LEGACY_VIEW_NAMES[node.name] || node.name
+    const definition = CORE_VIEW_DEFINITIONS.find(item => item.name === canonicalName)
+    const legacy = !parseCoreMarker(node)
+    const record = await coreViewRecord(node, definition, legacy)
+    if (legacy) legacyViews.push(record)
+    else views.push(record)
+  }
+  const overviewNode = overviewCandidates.length === 1 ? overviewCandidates[0] : null
+  const overview = overviewNode ? {
+    ...coreBaseRecord(overviewNode),
+    ...coreVisualRecord(overviewNode),
+    cornerRadius: overviewNode.cornerRadius,
+    lines: overviewNode.children.filter(child => child.type === 'TEXT' && child.name.startsWith('Coverage / ')).map(child => ({
+      ...coreBaseRecord(child), ...coreVisualRecord(child), characters: child.characters,
+    })),
+    standIns: overviewNode.children.filter(child => !(child.type === 'TEXT' && child.name.startsWith('Coverage / '))).map(child => ({
+      ...coreBaseRecord(child), ...coreVisualRecord(child),
+    })),
+  } : null
+  if (overviewCandidates.length > 1) {
+    for (const duplicate of overviewCandidates) views.push(await coreViewRecord(duplicate, null, false))
+  }
+  return {
+    targetPage: { ...coreBaseRecord(page), ...coreVisualRecord(page), id: page.id },
+    sections,
+    overview,
+    views,
+    legacyViews,
+  }
+}
+
+async function preflightCoreViewMutation() {
+  const inventory = await collectCoreViewMutationInventory(figma.currentPage)
+  const validation = validateCoreViewMutationInventory(inventory)
+  if (!validation.valid) throw new Error(validation.errors.join('\n'))
+  return inventory
+}
+
+function ownedCoreVariant(page, contract) {
+  const definition = COMPONENT_DEFINITIONS.find(component => component.id === contract.setId)
+  const sets = componentSetById(page, contract.setId)
+  if (sets.length !== 1 || sets[0].getPluginData(CREATED_MARKER_KEY) !== PLUGIN_ORIGIN) throw new Error(`Core-View Component Set fehlt oder ist mehrdeutig: ${definition?.name || contract.setId}`)
+  const variants = sets[0].children.filter(node => node.type === 'COMPONENT' && node.name === contract.variant)
+  if (variants.length !== 1 || variants[0].getPluginData(CREATED_MARKER_KEY) !== PLUGIN_ORIGIN) throw new Error(`Core-View Variante fehlt oder ist mehrdeutig: ${definition.name}/${contract.variant}`)
+  return variants[0]
+}
+
+async function ensureVariantInstance(parent, variant, contract, root = parent) {
+  let instance = root.findOne(node => node.type === 'INSTANCE' && node.name === contract.name)
+  if (!instance) {
+    instance = variant.createInstance()
+  }
+  if (instance.parent !== parent) parent.appendChild(instance)
+  const identity = await readMainComponentIdentity(instance)
+  if (identity.id !== variant.id) instance.swapComponent(variant)
+  instance.name = contract.name
+  instance.visible = true
+  instance.effects = []
   instance.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN)
+  instance.setPluginData('ondaDocumentationInstance', '')
   instance.setPluginData('ondaRepeatedScreenInstance', 'true')
+  const labelKey = Object.keys(instance.componentProperties || {}).find(key => key.split('#')[0] === 'Label')
+  if (!labelKey) throw new Error(`Label-Property fehlt: ${contract.name}`)
+  instance.setProperties({ [labelKey]: contract.label })
+  for (const [role, characters] of Object.entries(contract.roleCopy)) {
+    const roleNode = instance.findOne(node => node.type === 'TEXT' && node.name === `Role/${role}`)
+    if (!roleNode) throw new Error(`Textrolle fehlt: ${contract.name}/Role/${role}`)
+    roleNode.characters = characters
+  }
   return instance
 }
 
-function createLibraryView(section, decision, state, x) {
-  const frame = autoFrame(section, `Bibliothek / ${state}`, { x, y: 180, width: 900, padding: 32, gap: 20, radius: 0 }).node
-  textNode(frame, `Bibliothek / ${state} / Titel`, state, decision, { size: 21, weight: 700, width: 800 })
-  textNode(frame, `Bibliothek / ${state} / Suche`, '⌕  Projekte und Dokumente durchsuchen', decision, { size: 15, width: 800 })
-  const rows = state.includes('Leer') ? ['Noch kein Projekt · Projekt anlegen'] : ['Buchprojekt · 12 Dokumente', 'Essay · 4 Dokumente', 'Notizen · 21 Einträge']
-  for (const [index, row] of rows.entries()) textNode(frame, `Bibliothek / ${state} / Zeile ${index + 1}`, `${index + 1}. ${row}`, decision, { size: 15, width: 800 })
-  return frame
+async function resolveCoreInventoryNodes(inventory, page) {
+  const records = [
+    ...(inventory.sections || []),
+    ...(inventory.overview ? [inventory.overview] : []),
+    ...(inventory.overview?.lines || []),
+    ...(inventory.overview?.standIns || []),
+    ...(inventory.views || []),
+    ...(inventory.legacyViews || []),
+    ...(inventory.views || []).flatMap(view => [...(view.layoutRegions || []), ...(view.copyNodes || []), ...(view.instances || []), ...(view.standIns || [])]),
+    ...(inventory.legacyViews || []).flatMap(view => [...(view.layoutRegions || []), ...(view.copyNodes || []), ...(view.instances || []), ...(view.standIns || [])]),
+  ]
+  const resolved = new Map()
+  for (const record of records) {
+    const node = await figma.getNodeByIdAsync(record.nodeId)
+    if (!node || node.type !== record.type || node.name !== record.name || node.parent?.id !== record.parentId || node.getPluginData(CREATED_MARKER_KEY) !== record.owner) throw new Error(`TOCTOU: Core-Knoten ersetzt oder verschoben: ${record.name}`)
+    resolved.set(record.nodeId, node)
+  }
+  if (page.id !== inventory.targetPage?.id) throw new Error('TOCTOU: Core-Zielseite wurde gewechselt.')
+  return resolved
 }
 
-function createEditorView(section, decision, state, x, dark = false, width = 1440) {
-  const frame = autoFrame(section, `Editor / ${state}`, { x, y: 180, width, padding: 0, gap: 0, radius: 0, dark, direction: 'HORIZONTAL' }).node
-  frame.setPluginData('ondaResponsiveFrame', String(width))
-  const nav = autoFrame(frame, `Editor / ${state} / Navigation`, { width: Math.min(264, Math.round(width * .25)), padding: 24, gap: 16, radius: 0, dark, fill: dark ? 'gray/900' : 'gray/050' }).node
-  textNode(nav, `Editor / ${state} / Navigation / Marke`, 'ONDA', decision, { size: 21, weight: 700, dark, width: 210 })
-  for (const label of ['Struktur', 'Projektverständnis', 'Quellen', 'Einstellungen']) textNode(nav, `Editor / ${state} / Navigation / ${label}`, `□ ${label}`, decision, { size: 15, weight: 500, dark, width: 210 })
-  const document = autoFrame(frame, `Editor / ${state} / Schreibfläche`, { width: width - Math.min(264, Math.round(width * .25)), padding: width <= 320 ? 16 : 48, gap: 24, radius: 0, dark }).node
-  textNode(document, `Editor / ${state} / Dokumenttitel`, 'Die leise Architektur eines Arguments', decision, { size: width <= 320 ? 21 : 40, weight: 700, dark, width: Math.max(240, width - 400) })
-  textNode(document, `Editor / ${state} / Absatz 1`, 'Ein guter Text zeigt nicht nur, was behauptet wird. Er macht sichtbar, wie Beobachtung, Beleg und Schlussfolgerung miteinander verbunden sind.', decision, { size: 15, dark, width: Math.max(240, width - 420) })
-  textNode(document, `Editor / ${state} / Status`, state.includes('Review') ? '◎ REVIEW OFFEN · 3 Hinweise · Nächster Hinweis' : '✓ DOKUMENT BEREIT · keine offenen Hinweise', decision, { size: 12, weight: 700, dark, width: Math.max(240, width - 420) })
-  return frame
+function coreRegionFill(regionName) {
+  return regionName === 'Layout / Rail' || regionName === 'Layout / Review' ? 'gray/050' : regionName === 'Layout / Toolbar' ? 'gray/025' : 'gray/000'
 }
 
-async function runCoreViews(page, ledger) {
-  await loadDecisionFonts(ledger.fontDecision)
-  const overview = ensureSection(page, ledger, '00 · Übersicht', 1800).node
-  const overviewDoc = autoFrame(overview, 'Übersicht / Coverage', { x: 80, y: 100, width: 1940, padding: 40, gap: 20, radius: 6 }).node
-  heading(overviewDoc, 'Onda Produktdesign', ledger.fontDecision, 'Eine bestehende Figma-Seite · 39 Sections · 29 Anmerkungsarten · 7 vollständige Dialogfamilien')
-  for (const line of ['39 / 39 Sections geplant', '29 / 29 Anmerkungsarten geplant', '7 / 7 Dialogfamilien vollständig benannt', 'Light + Dark · ausschließlich Graustufen', 'Radien: 0 · 4 · 6 · 8 · echte Kreise']) {
-    textNode(overviewDoc, `Übersicht / ${line}`, `✓ ${line}`, ledger.fontDecision, { size: 15, weight: 500, width: 1800 })
+function configureCoreLayoutRegions(frame, definition) {
+  const regions = new Map()
+  for (const regionDefinition of definition.regions) {
+    const parent = regionDefinition.parentName === definition.name ? frame : regions.get(regionDefinition.parentName)
+    if (!parent) throw new Error(`Layout-Elternregion fehlt: ${definition.name}/${regionDefinition.name}`)
+    let region = frame.findOne(node => node.type === 'FRAME' && node.name === regionDefinition.name)
+    if (!region) {
+      region = figma.createFrame()
+      region.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN)
+    }
+    if (region.parent !== parent) parent.appendChild(region)
+    region.name = regionDefinition.name
+    region.layoutMode = regionDefinition.layoutMode
+    region.primaryAxisSizingMode = 'FIXED'
+    region.counterAxisSizingMode = 'FIXED'
+    region.primaryAxisAlignItems = 'MIN'
+    region.counterAxisAlignItems = 'MIN'
+    region.itemSpacing = regionDefinition.itemSpacing
+    region.paddingTop = regionDefinition.padding.top
+    region.paddingRight = regionDefinition.padding.right
+    region.paddingBottom = regionDefinition.padding.bottom
+    region.paddingLeft = regionDefinition.padding.left
+    resizeNode(region, regionDefinition.width, regionDefinition.height)
+    region.fills = [solid(coreRegionFill(regionDefinition.name))]
+    region.strokes = [solid('gray/200')]
+    region.strokeWeight = 1
+    region.cornerRadius = 0
+    region.effects = []
+    region.visible = true
+    region.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN)
+    parent.appendChild(region)
+    regions.set(regionDefinition.name, region)
   }
-  const library = ensureSection(page, ledger, '03 · Bibliothek', 1700).node
-  createLibraryView(library, ledger.fontDecision, 'Leerzustand', 80)
-  createLibraryView(library, ledger.fontDecision, 'Gefüllte Bibliothek', 1080)
-  const editor = ensureSection(page, ledger, '04 · Editor', 2500).node
-  const clean = createEditorView(editor, ledger.fontDecision, 'Desktop · Bereit', 80)
-  const review = createEditorView(editor, ledger.fontDecision, 'Desktop · Review offen', 80)
-  review.y = 1300
-  const button = componentSet(page, 'Onda/Button')
-  const iconButton = componentSet(page, 'Onda/Icon Button')
-  const statusSymbol = componentSet(page, 'Onda/Status Symbol')
-  const tag = componentSet(page, 'Onda/Tag')
-  if (button) {
-    placeInstance(clean, button, 'Editor / Bereit / Hauptaktion')
-    placeInstance(review, button, 'Editor / Review / Hauptaktion')
+  return regions
+}
+
+function configureCoreCopy(frame, definition, decision, regions) {
+  const nodes = []
+  const indexes = new Map()
+  for (const contract of definition.copyContracts) {
+    const parent = regions.get(contract.region)
+    let copy = frame.findOne(node => node.type === 'TEXT' && node.name === `Copy / ${contract.role}`)
+    if (copy && copy.parent !== parent) parent.appendChild(copy)
+    copy = textNode(parent, `Copy / ${contract.role}`, contract.characters, decision, {
+      size: contract.kind === 'title' || contract.role === 'title' ? 21 : contract.kind === 'heading' ? 15 : 15,
+      weight: contract.kind === 'title' || contract.kind === 'heading' || ['title', 'status'].includes(contract.role) ? 700 : 400,
+      muted: ['body', 'paragraph'].includes(contract.role) || contract.kind === 'paragraph',
+      width: parent.width - parent.paddingLeft - parent.paddingRight,
+    }).node
+    copy.visible = true
+    const index = indexes.get(contract.region) || 0
+    parent.insertChild(index, copy)
+    indexes.set(contract.region, index + 1)
+    nodes.push(copy)
   }
-  if (iconButton) placeInstance(clean, iconButton, 'Editor / Bereit / Icon-Aktion')
-  if (statusSymbol) placeInstance(clean, statusSymbol, 'Editor / Bereit / Status')
-  if (tag) placeInstance(review, tag, 'Editor / Review / Kennzeichnung')
-  return { sections: 3, libraryViews: 2, editorViews: 2, componentInstances: button ? 2 : 0 }
+  return nodes
+}
+
+function positionCoreInstance(instance, contract, regions) {
+  const region = regions.get(contract.region)
+  const availableWidth = region.width - region.paddingLeft - region.paddingRight
+  if (contract.expectedWidth > availableWidth) throw new Error(`Core-Instanz breiter als Region: ${contract.name}`)
+  resizeNode(instance, contract.expectedWidth, contract.expectedHeight)
+}
+
+async function runCoreViews(page, ledger, writeBarrierInventory, resolved) {
+  const variants = new Map()
+  for (const definition of CORE_VIEW_DEFINITIONS) for (const contract of definition.instances) {
+    const key = `${contract.setId}\u0000${contract.variant}`
+    if (!variants.has(key)) variants.set(key, ownedCoreVariant(page, contract))
+  }
+
+  const overviewRecord = writeBarrierInventory.overview
+  const overviewSectionRecord = (writeBarrierInventory.sections || []).find(record => record.name === '00 · Übersicht')
+  const overviewSection = overviewSectionRecord ? resolved.get(overviewSectionRecord.nodeId) : ensureSection(page, ledger, '00 · Übersicht', 1800).node
+  const overviewFrame = overviewRecord ? resolved.get(overviewRecord.nodeId) : autoFrame(overviewSection, CORE_OVERVIEW_DEFINITION.name, { x: 80, y: 100, width: 1940, padding: 40, gap: 20, radius: 6 }).node
+  overviewFrame.name = CORE_OVERVIEW_DEFINITION.name
+  overviewFrame.effects = []
+  overviewFrame.cornerRadius = CORE_OVERVIEW_DEFINITION.radius
+  overviewFrame.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN)
+  for (const child of overviewFrame.children) if (!(child.type === 'TEXT' && child.name.startsWith('Coverage / '))) child.visible = false
+  for (const [index, line] of CORE_OVERVIEW_DEFINITION.lines.entries()) {
+    const node = textNode(overviewFrame, `Coverage / ${index + 1}`, line, ledger.fontDecision, { size: index === 0 ? 21 : 15, weight: index === 0 ? 700 : 500, width: 1860 }).node
+    node.visible = true
+    overviewFrame.insertChild(index, node)
+  }
+
+  const sectionRecords = new Map((writeBarrierInventory.sections || []).map(record => [record.name, record]))
+  const allRecords = [...(writeBarrierInventory.views || []), ...(writeBarrierInventory.legacyViews || [])]
+  const sectionIndexes = new Map([['03 · Bibliothek', 0], ['04 · Editor', 0]])
+  for (const definition of CORE_VIEW_DEFINITIONS) {
+    const sectionRecord = sectionRecords.get(definition.sectionName)
+    const section = sectionRecord ? resolved.get(sectionRecord.nodeId) : ensureSection(page, ledger, definition.sectionName, 1800).node
+    const record = allRecords.find(candidate => (CORE_LEGACY_VIEW_NAMES[candidate.name] || candidate.name) === definition.name)
+    if (record) resolved.get(record.nodeId).name = definition.name
+    const index = sectionIndexes.get(definition.sectionName)
+    sectionIndexes.set(definition.sectionName, index + 1)
+    let frame = directChild(section, definition.name, ['FRAME'])
+    if (!frame) {
+      frame = figma.createFrame()
+      frame.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN)
+      section.appendChild(frame)
+    }
+    frame.name = definition.name
+    const expectedTopLevelNames = new Set(definition.regions.filter(region => region.parentName === definition.name).map(region => region.name))
+    reconcileLegacyCoreChildren(frame, expectedTopLevelNames)
+    frame.layoutMode = definition.layoutMode
+    frame.primaryAxisSizingMode = 'FIXED'
+    frame.counterAxisSizingMode = 'FIXED'
+    frame.primaryAxisAlignItems = 'MIN'
+    frame.counterAxisAlignItems = 'MIN'
+    frame.itemSpacing = 0
+    frame.paddingTop = 0
+    frame.paddingRight = 0
+    frame.paddingBottom = 0
+    frame.paddingLeft = 0
+    frame.x = 80
+    frame.y = 100 + index * 900
+    resizeNode(frame, definition.width, definition.height)
+    frame.fills = [solid('gray/000')]
+    frame.strokes = [solid('gray/200')]
+    frame.strokeWeight = 1
+    frame.effects = []
+    frame.cornerRadius = 0
+    frame.clipsContent = true
+    frame.setPluginData(CREATED_MARKER_KEY, PLUGIN_ORIGIN)
+    frame.setPluginData('ondaCoreView', JSON.stringify({ section: definition.section, state: definition.state, width: 1440, reviewRelation: definition.reviewContext?.relation || null }))
+    const regions = configureCoreLayoutRegions(frame, definition)
+    const copyNodes = configureCoreCopy(frame, definition, ledger.fontDecision, regions)
+    const copyCountByRegion = new Map(definition.copyContracts.map(contract => [contract.region, definition.copyContracts.filter(item => item.region === contract.region).length]))
+    const instanceCountByRegion = new Map()
+    for (const [instanceIndex, contract] of definition.instances.entries()) {
+      const variant = variants.get(`${contract.setId}\u0000${contract.variant}`)
+      const parent = regions.get(contract.region)
+      const instance = await ensureVariantInstance(parent, variant, contract, frame)
+      positionCoreInstance(instance, contract, regions)
+      const localIndex = instanceCountByRegion.get(contract.region) || 0
+      parent.insertChild((copyCountByRegion.get(contract.region) || 0) + localIndex, instance)
+      instanceCountByRegion.set(contract.region, localIndex + 1)
+    }
+  }
+  const library = directChild(page, '03 · Bibliothek', ['SECTION'])
+  const editor = directChild(page, '04 · Editor', ['SECTION'])
+  resizeNode(library, SECTION_WIDTH, 100 + 8 * 900 + 100)
+  resizeNode(editor, SECTION_WIDTH, 100 + 10 * 900 + 100)
+  return {
+    sections: 3,
+    libraryViews: 8,
+    editorViews: 10,
+    componentInstances: CORE_VIEW_DEFINITIONS.reduce((count, definition) => count + definition.instances.length, 0),
+  }
 }
 
 function annotationStatus(viewName, operationAvailable) {
@@ -1831,6 +2205,35 @@ async function collectComponentEvidence(page) {
   }
 }
 
+async function collectCoreViewEvidence(page) {
+  const inventory = await collectCoreViewMutationInventory(page)
+  const usedIds = new Set(CORE_VIEW_DEFINITIONS.flatMap(definition => definition.instances.map(instance => instance.setId)))
+  const definitionsByName = new Map(COMPONENT_DEFINITIONS.filter(definition => usedIds.has(definition.id)).map(definition => [definition.name, definition]))
+  const componentSection = directChild(page, '02 · Komponenten', ['SECTION'])
+  const components = (componentSection?.children || [])
+    .filter(node => node.type === 'COMPONENT_SET' && (usedIds.has(node.getPluginData('ondaComponentId')) || definitionsByName.has(node.name)))
+    .map(set => ({
+      id: set.getPluginData('ondaComponentId'),
+      nodeId: set.id,
+      name: set.name,
+      type: set.type,
+      owner: set.getPluginData(CREATED_MARKER_KEY),
+      variants: [...set.children].filter(node => node.type === 'COMPONENT').map(variant => ({
+        nodeId: variant.id,
+        name: variant.name,
+        type: variant.type,
+        owner: variant.getPluginData(CREATED_MARKER_KEY),
+      })),
+    }))
+  return {
+    targetPage: inventory.targetPage,
+    sections: inventory.sections,
+    overview: inventory.overview,
+    views: inventory.views,
+    components,
+  }
+}
+
 async function runVerify() {
   const inspection = await inspectCurrentTarget()
   const page = figma.currentPage
@@ -1848,6 +2251,7 @@ async function runVerify() {
     family: node.getPluginData?.('ondaDialogFamily'), state: node.getPluginData?.('ondaDialogState'),
   })).filter(item => item.family && item.state)
   const componentEvidence = await collectComponentEvidence(page)
+  const coreViewEvidence = await collectCoreViewEvidence(page)
   const componentSets = componentEvidence.componentSets
   const baseline = await currentBaselineEvidence(page, ledger)
   const geometry = geometryEvidence(page, sections, allNodes, ledger, baseline.baselineRecords)
@@ -1877,6 +2281,7 @@ async function runVerify() {
     componentSets,
     componentTargetPage: componentEvidence.targetPage,
     componentContainers: componentEvidence.containers,
+    coreViews: coreViewEvidence,
     instanceCount: allNodes.filter(node => node.type === 'INSTANCE' && node.getPluginData('ondaDocumentationInstance') !== 'true').length,
     documentationInstanceCount: allNodes.filter(node => node.type === 'INSTANCE' && node.getPluginData('ondaDocumentationInstance') === 'true').length,
     repeatedScreenInstanceCount: allNodes.filter(node => node.type === 'INSTANCE' && node.getPluginData('ondaRepeatedScreenInstance') === 'true').length,
@@ -1949,12 +2354,12 @@ async function handleCommand(command) {
     postResult(command, hardPass, hardPass ? 'Alle strukturellen Hard Gates bestanden.' : 'Verify hat offene Hard Gates gefunden.', report, true)
     return
   }
-  async function runMutation({ page, ledger }, validatedInventory = null) {
+  async function runMutation({ page, ledger }, validatedInventory = null, resolvedInventoryNodes = null) {
     const transition = validatePhaseTransition(command, ledger.phases)
     if (!transition.ok) throw new Error(transition.warning)
     let counts
     if (command === 'foundations') counts = await runFoundations(page, ledger)
-    else if (command === 'core-views') counts = await runCoreViews(page, ledger)
+    else if (command === 'core-views') counts = await runCoreViews(page, ledger, validatedInventory, resolvedInventoryNodes)
     else if (command === 'dialogs-and-secondary') counts = await runDialogsAndSecondary(page, ledger)
     else if (command.startsWith('component-')) counts = await runComponent(page, ledger, command.slice('component-'.length), validatedInventory)
     else if (command.startsWith('annotations-')) counts = await runAnnotationBatch(page, ledger, Number(command.slice('annotations-'.length)) - 1)
@@ -1979,6 +2384,22 @@ async function handleCommand(command) {
       preflight: () => preflightComponentMutation(componentId),
       requireContext: requireMutationContext,
       collectCurrentInventory: () => collectComponentMutationInventory(componentId),
+      mutate: runMutation,
+    })
+    return
+  }
+  if (command === 'core-views') {
+    const phases = readLedger(figma.currentPage)?.phases || {}
+    await executeGuardedCoreViewCommand({
+      command,
+      phases,
+      preflight: preflightCoreViewMutation,
+      requireContext: requireMutationContext,
+      collectCurrentInventory: ({ page }) => collectCoreViewMutationInventory(page),
+      resolveInventoryNodes: async ({ page, ledger }, inventory) => {
+        await loadDecisionFonts(ledger.fontDecision)
+        return resolveCoreInventoryNodes(inventory, page)
+      },
       mutate: runMutation,
     })
     return

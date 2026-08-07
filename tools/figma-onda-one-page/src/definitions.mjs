@@ -529,6 +529,418 @@ export const COMPONENT_DEFINITIONS = Object.freeze([
   }),
 ])
 
+export function componentRenderedHeight(definition) {
+  if (!definition) return 0
+  const roleHeights = definition.roles.map(role => role.type === 'ELLIPSE' || role.name === 'Description' ? 16 : 22)
+  const contentHeight = definition.direction === 'VERTICAL'
+    ? roleHeights.reduce((total, height) => total + height, 0) + Math.max(0, roleHeights.length - 1) * definition.gap
+    : Math.max(0, ...roleHeights)
+  return Math.max(definition.targetHeight, contentHeight + definition.padding.top + definition.padding.bottom)
+}
+
+export function estimateCoreTextWidth(characters, roleName = '') {
+  const size = roleName === 'Description' ? 12 : 15
+  return Math.ceil([...String(characters || '')].reduce((width, character) => {
+    if (/\s/.test(character)) return width + size * .32
+    if (/[ilI1.,:;!|'`]/.test(character)) return width + size * .3
+    if (/[MW@%&]/.test(character)) return width + size * .82
+    return width + size * .54
+  }, 0))
+}
+
+export function componentMinimumWidth(definition, roleCopy = {}) {
+  if (!definition) return 0
+  const roleWidths = definition.roles.map(role => role.type === 'ELLIPSE' ? 16 : estimateCoreTextWidth(roleCopy[role.name], role.name))
+  const contentWidth = definition.direction === 'VERTICAL'
+    ? Math.max(0, ...roleWidths)
+    : roleWidths.reduce((total, width) => total + width, 0) + Math.max(0, roleWidths.length - 1) * definition.gap
+  return Math.ceil(contentWidth + definition.padding.left + definition.padding.right)
+}
+
+function coreRoleCopy(name, setId, variantName, label, overrides = {}) {
+  const definition = COMPONENT_DEFINITIONS.find(component => component.id === setId)
+  const variant = definition?.variants.find(item => item.name === variantName)
+  const copy = Object.fromEntries((definition?.roles || []).filter(role => role.type === 'TEXT').map(role => [role.name, variant?.copy?.[role.name] || '']))
+  if (definition?.labelRole) copy[definition.labelRole] = label
+  if (setId === 'select') Object.assign(copy, { Label: 'Sortieren nach', Value: label })
+  if (setId === 'list-row') Object.assign(copy, {
+    Title: label,
+    Meta: name.startsWith('Nutzer /') ? 'Persönlicher Arbeitsbereich' : name.startsWith('Verlauf /') ? 'Zuletzt bearbeitet · heute' : 'Calm Technology',
+  })
+  if (setId === 'nav-item') {
+    const count = name.endsWith('Projekte') ? '1' : name.endsWith('Dokumente') ? '12' : name.endsWith('Papierkorb') ? '2' : '1'
+    Object.assign(copy, { Label: label, Count: count })
+    if (name === 'Navigation / Dokument') copy.Count = '1'
+    if (variantName === 'State=Collapsed') Object.assign(copy, { Label: '', Count: '', Status: '' })
+  }
+  Object.assign(copy, overrides)
+  for (const [role, characters] of Object.entries(copy)) copy[role] = String(characters).replaceAll('Projekt Nordstern', 'Calm Technology').replace(/\bEssay\b/g, 'Dokument')
+  return Object.freeze(copy)
+}
+
+function coreInstance(name, setId, variant, label, options = {}) {
+  const definition = COMPONENT_DEFINITIONS.find(component => component.id === setId)
+  const roleCopy = coreRoleCopy(name, setId, variant, label, options.roleCopy)
+  const minimumWidth = componentMinimumWidth(definition, roleCopy)
+  const preferredWidths = { search: 520, select: 300, 'icon-button': 208, 'mode-toggle': 280, 'status-symbol': 200, button: 240 }
+  return Object.freeze({
+    name, setId, variant, label,
+    region: options.region || null,
+    roleCopy,
+    expectedHeight: componentRenderedHeight(definition),
+    minimumWidth,
+    expectedWidth: Math.max(minimumWidth, options.width || preferredWidths[setId] || 0),
+  })
+}
+
+function coreRegion(name, parentName, width, height, layoutMode, options = {}) {
+  return Object.freeze({
+    name, parentName, width, height, layoutMode,
+    itemSpacing: options.itemSpacing ?? 16,
+    padding: Object.freeze({ ...(options.padding || { top: 16, right: 16, bottom: 16, left: 16 }) }),
+  })
+}
+
+function libraryRegions(viewName) {
+  return Object.freeze([
+    coreRegion('Layout / Rail', viewName, 360, 800, 'VERTICAL', { itemSpacing: 8, padding: { top: 24, right: 16, bottom: 24, left: 16 } }),
+    coreRegion('Layout / Main', viewName, 1080, 800, 'VERTICAL', { itemSpacing: 0, padding: { top: 0, right: 0, bottom: 0, left: 0 } }),
+    coreRegion('Layout / Header', 'Layout / Main', 1080, 168, 'VERTICAL', { itemSpacing: 8, padding: { top: 20, right: 32, bottom: 20, left: 32 } }),
+    coreRegion('Layout / Toolbar', 'Layout / Main', 1080, 176, 'HORIZONTAL', { itemSpacing: 16, padding: { top: 20, right: 32, bottom: 20, left: 32 } }),
+    coreRegion('Layout / Content', 'Layout / Main', 1080, 456, 'VERTICAL', { itemSpacing: 16, padding: { top: 24, right: 32, bottom: 24, left: 32 } }),
+  ])
+}
+
+function editorRegions(viewName, compact = false) {
+  const railWidth = compact ? 96 : 240
+  const mainWidth = 1440 - railWidth
+  const reviewWidth = 640
+  return Object.freeze([
+    coreRegion('Layout / Rail', viewName, railWidth, 800, 'VERTICAL', { itemSpacing: 8, padding: compact ? { top: 24, right: 8, bottom: 24, left: 8 } : { top: 24, right: 16, bottom: 24, left: 16 } }),
+    coreRegion('Layout / Main', viewName, mainWidth, 800, 'VERTICAL', { itemSpacing: 0, padding: { top: 0, right: 0, bottom: 0, left: 0 } }),
+    coreRegion('Layout / Toolbar', 'Layout / Main', mainWidth, 104, 'HORIZONTAL', { itemSpacing: 16, padding: { top: 20, right: 24, bottom: 20, left: 24 } }),
+    coreRegion('Layout / Body', 'Layout / Main', mainWidth, 696, 'HORIZONTAL', { itemSpacing: 0, padding: { top: 0, right: 0, bottom: 0, left: 0 } }),
+    coreRegion('Layout / Document', 'Layout / Body', mainWidth - reviewWidth, 696, 'VERTICAL', { itemSpacing: 12, padding: { top: 40, right: 48, bottom: 40, left: 48 } }),
+    coreRegion('Layout / Review', 'Layout / Body', reviewWidth, 696, 'VERTICAL', { itemSpacing: 16, padding: { top: 24, right: 24, bottom: 24, left: 24 } }),
+  ])
+}
+
+export const CORE_EDITOR_DOCUMENT_FIXTURE = Object.freeze({
+  title: 'Calm Technology',
+  blocks: Object.freeze([
+    Object.freeze({ kind: 'paragraph', text: 'Calm Technology beschreibt Technik, die in der Peripherie bleibt und Aufmerksamkeit nur beansprucht, wenn sie wirklich gebraucht wird.' }),
+    Object.freeze({ kind: 'heading', text: 'Prinzipien' }),
+    Object.freeze({ kind: 'paragraph', text: 'Weiser und Brown formulierten: Technik soll sich an den Rändern der Aufmerksamkeit bewegen und nahtlos zwischen Zentrum und Peripherie wechseln.' }),
+    Object.freeze({ kind: 'heading', text: 'Beispiele' }),
+    Object.freeze({ kind: 'paragraph', text: 'Die Teekanne pfeift erst, wenn es relevant ist. Eine Statusleuchte informiert, ohne zu unterbrechen.' }),
+    Object.freeze({ kind: 'heading', text: 'Übertragung aufs Schreiben' }),
+    Object.freeze({ kind: 'paragraph', text: 'Für Schreibsoftware heißt das: Werkzeuge erscheinen im Kontext, Hinweise sammeln sich leise, nichts drängt sich in den Fluss.' }),
+    Object.freeze({ kind: 'paragraph', text: 'Ruhige Technik ist kein Verzicht auf Funktionen, sondern eine Haltung: volle Kraft, leise Präsentation.' }),
+  ]),
+})
+
+function libraryRailInstances(state) {
+  const active = state.startsWith('Dokumente') || state.startsWith('Sortierung') ? 'Dokumente' : state.startsWith('Papierkorb') ? 'Papierkorb' : state.startsWith('Projekte') || state === 'Leerzustand' || state.startsWith('Fehler') ? 'Projekte' : ''
+  const empty = state === 'Leerzustand'
+  return [
+    coreInstance('Navigation / Projekte', 'nav-item', active === 'Projekte' ? 'State=Active' : 'State=Default', 'Projekte', { region: 'Layout / Rail', roleCopy: empty ? { Count: '0' } : undefined }),
+    coreInstance('Navigation / Dokumente', 'nav-item', active === 'Dokumente' ? 'State=Active' : 'State=Default', 'Dokumente', { region: 'Layout / Rail', roleCopy: empty ? { Count: '0' } : undefined }),
+    coreInstance('Navigation / Papierkorb', 'nav-item', active === 'Papierkorb' ? 'State=Active' : 'State=Default', 'Papierkorb', { region: 'Layout / Rail', roleCopy: empty ? { Count: '0' } : undefined }),
+    empty
+      ? coreInstance('Verlauf / Leer', 'nav-item', 'State=Default', 'Noch kein Verlauf', { region: 'Layout / Rail', roleCopy: { Icon: '↺', Count: '0', Status: 'Leer' } })
+      : coreInstance('Verlauf / Calm Technology', 'nav-item', 'State=Default', 'Calm Technology', { region: 'Layout / Rail', roleCopy: { Icon: '↺', Count: '1', Status: 'Verlauf' } }),
+    coreInstance('Nutzer / Jakob', 'nav-item', 'State=Default', 'Jakob', { region: 'Layout / Rail', roleCopy: { Icon: '○', Count: '1', Status: 'Angemeldet' } }),
+  ]
+}
+
+function coreRegionForInstance(section, setId) {
+  if (setId === 'nav-item') return 'Layout / Rail'
+  if (section === 'Bibliothek') return ['search', 'select'].includes(setId) ? 'Layout / Toolbar' : 'Layout / Content'
+  return ['review-bar', 'annotation-anchor', 'empty-state'].includes(setId) ? 'Layout / Review' : 'Layout / Toolbar'
+}
+
+function coreView({ name, section, state, copy, instances }) {
+  const regions = section === 'Bibliothek' ? libraryRegions(name) : editorRegions(name, ['Seitenleiste · Eingeklappt', 'Fokusmodus'].includes(state))
+  const screenInstances = section === 'Bibliothek'
+    ? [...libraryRailInstances(state), ...instances.filter(instance => instance.setId !== 'nav-item')]
+    : instances
+  const screenCopyContracts = Object.entries(copy).map(([role, characters]) => Object.freeze({
+    role,
+    characters,
+    region: section === 'Bibliothek' ? 'Layout / Header' : ['title', 'body'].includes(role) ? 'Layout / Document' : 'Layout / Review',
+  }))
+  const documentCopyContracts = section === 'Editor' ? [
+    Object.freeze({ role: 'document-title', characters: CORE_EDITOR_DOCUMENT_FIXTURE.title, region: 'Layout / Document', kind: 'title' }),
+    ...CORE_EDITOR_DOCUMENT_FIXTURE.blocks.map((block, index) => Object.freeze({ role: `document-${index + 1}`, characters: block.text, region: 'Layout / Document', kind: block.kind })),
+  ] : []
+  const copyContracts = Object.freeze([...screenCopyContracts, ...documentCopyContracts])
+  return Object.freeze({
+    name,
+    section,
+    sectionName: section === 'Bibliothek' ? '03 · Bibliothek' : '04 · Editor',
+    state,
+    width: 1440,
+    height: 800,
+    radius: 0,
+    layoutMode: 'HORIZONTAL',
+    effects: Object.freeze([]),
+    regions,
+    copy: Object.freeze({ ...copy }),
+    copyContracts,
+    document: section === 'Editor' ? CORE_EDITOR_DOCUMENT_FIXTURE : null,
+    reviewContext: section === 'Editor' ? Object.freeze({ state, relation: `${state} ↔ Calm Technology` }) : null,
+    instances: Object.freeze(screenInstances.map(instance => Object.freeze({
+      ...instance,
+      region: instance.region || coreRegionForInstance(section, instance.setId),
+    }))),
+  })
+}
+
+export const CORE_OVERVIEW_DEFINITION = Object.freeze({
+  name: 'Übersicht / Coverage',
+  width: 1940,
+  radius: 6,
+  effects: Object.freeze([]),
+  lines: Object.freeze([
+    'Onda Write · Produktübersicht',
+    'Bibliothek · 8 Produktansichten',
+    'Editor · 10 Produktansichten',
+    'Komponenten · 27 Component Sets',
+  ]),
+})
+
+export const CORE_VIEW_DEFINITIONS = Object.freeze([
+  coreView({
+    name: 'Bibliothek / Projekte · Gefüllt', section: 'Bibliothek', state: 'Projekte · Gefüllt',
+    copy: { title: 'Onda Write · Projekte', body: 'Projekt „Beispiel: Calm Technology“ mit 12 Dokumenten.', status: 'Projekte sind bereit.', action: 'Projekt öffnen' },
+    instances: [
+      coreInstance('Navigation / Projekte', 'nav-item', 'State=Active', 'Projekte'),
+      coreInstance('Suche / Projekte', 'search', 'State=Empty', 'Projekte und Dokumente durchsuchen'),
+      coreInstance('Sortierung / Projekte', 'select', 'State=Selected', 'Zuletzt bearbeitet'),
+      coreInstance('Projekt / Calm Technology', 'list-row', 'State=Selected', 'Beispiel: Calm Technology'),
+      coreInstance('Aktion / Projekt öffnen', 'button', 'Kind=Primary, State=Default', 'Projekt öffnen'),
+    ],
+  }),
+  coreView({
+    name: 'Bibliothek / Dokumente · Gefüllt', section: 'Bibliothek', state: 'Dokumente · Gefüllt',
+    copy: { title: 'Onda Write · Dokumente', body: '„Beispiel: Calm Technology“ · 12 Dokumente, zuletzt „Die leise Architektur eines Arguments“.', status: 'Nach „Zuletzt bearbeitet“ sortiert.', action: 'Dokument öffnen' },
+    instances: [
+      coreInstance('Navigation / Dokumente', 'nav-item', 'State=Active', 'Dokumente'),
+      coreInstance('Suche / Dokumente', 'search', 'State=Empty', 'Dokumente durchsuchen'),
+      coreInstance('Sortierung / Dokumente', 'select', 'State=Selected', 'Zuletzt bearbeitet'),
+      coreInstance('Dokument / Leise Architektur', 'list-row', 'State=Selected', 'Die leise Architektur eines Arguments'),
+      coreInstance('Dokument / Quellen', 'list-row', 'State=Default', 'Quellen und Belege'),
+    ],
+  }),
+  coreView({
+    name: 'Bibliothek / Papierkorb · Gefüllt', section: 'Bibliothek', state: 'Papierkorb · Gefüllt',
+    copy: { title: 'Onda Write · Papierkorb', body: 'Zwei Dokumente können wiederhergestellt oder bewusst endgültig gelöscht werden.', status: 'Papierkorb · 2 Dokumente', action: 'Auswahl wiederherstellen oder endgültig löschen' },
+    instances: [
+      coreInstance('Navigation / Papierkorb', 'nav-item', 'State=Active', 'Papierkorb'),
+      coreInstance('Suche / Papierkorb', 'search', 'State=Empty', 'Papierkorb durchsuchen'),
+      coreInstance('Sortierung / Papierkorb', 'select', 'State=Selected', 'Zuletzt bearbeitet'),
+      coreInstance('Dokument / Alte Fassung', 'list-row', 'State=Trash', 'Alte Fassung'),
+      coreInstance('Aktion / Wiederherstellen', 'button', 'Kind=Primary, State=Default', 'Wiederherstellen'),
+      coreInstance('Aktion / Endgültig löschen', 'button', 'Kind=Destructive, State=Default', 'Endgültig löschen'),
+    ],
+  }),
+  coreView({
+    name: 'Bibliothek / Suche · Treffer', section: 'Bibliothek', state: 'Suche · Treffer',
+    copy: { title: 'Onda Write · Suche', body: 'Suchbegriff „calm“ findet das Projekt „Beispiel: Calm Technology“.', status: '3 Treffer', action: 'Treffer öffnen' },
+    instances: [
+      coreInstance('Navigation / Suche', 'nav-item', 'State=Active', 'Suche'),
+      coreInstance('Suche / Calm', 'search', 'State=Results', 'calm', { roleCopy: { Count: '3 Treffer' } }),
+      coreInstance('Sortierung / Treffer', 'select', 'State=Selected', 'Zuletzt bearbeitet'),
+      coreInstance('Treffer / Calm Technology', 'list-row', 'State=Selected', 'Beispiel: Calm Technology'),
+      coreInstance('Status / Treffer', 'status-symbol', 'Status=Ready', '3 Treffer'),
+    ],
+  }),
+  coreView({
+    name: 'Bibliothek / Suche · Keine Treffer', section: 'Bibliothek', state: 'Suche · Keine Treffer',
+    copy: { title: 'Onda Write · Suche', body: 'Für den Suchbegriff „unruhe“ wurden keine Projekte oder Dokumente gefunden.', status: 'Keine Treffer', action: 'Suche löschen' },
+    instances: [
+      coreInstance('Navigation / Suche', 'nav-item', 'State=Active', 'Suche'),
+      coreInstance('Suche / Ohne Treffer', 'search', 'State=No Results', 'unruhe'),
+      coreInstance('Sortierung / Ohne Treffer', 'select', 'State=Selected', 'Titel'),
+      coreInstance('Leerzustand / Suche', 'empty-state', 'Context=Library', 'Keine Treffer', { roleCopy: { Symbol: '○', Description: 'Suchbegriff ändern', Action: 'Suche löschen' } }),
+      coreInstance('Aktion / Suche löschen', 'button', 'Kind=Secondary, State=Default', 'Suche löschen'),
+    ],
+  }),
+  coreView({
+    name: 'Bibliothek / Sortierung · Menü offen', section: 'Bibliothek', state: 'Sortierung · Menü offen',
+    copy: { title: 'Onda Write · Sortierung', body: 'Sortieroptionen: Zuletzt bearbeitet, Titel oder Erstellt.', status: 'Menü geöffnet', action: 'Sortierung auswählen' },
+    instances: [
+      coreInstance('Navigation / Dokumente', 'nav-item', 'State=Active', 'Dokumente'),
+      coreInstance('Suche / Sortierung', 'search', 'State=Empty', 'Dokumente durchsuchen'),
+      coreInstance('Sortierung / Geöffnet', 'select', 'State=Open', 'Sortierung geöffnet'),
+      coreInstance('Option / Zuletzt bearbeitet', 'menu-item', 'State=Selected', 'Zuletzt bearbeitet'),
+      coreInstance('Option / Titel', 'menu-item', 'State=Default', 'Titel'),
+      coreInstance('Option / Erstellt', 'menu-item', 'State=Default', 'Erstellt'),
+    ],
+  }),
+  coreView({
+    name: 'Bibliothek / Leerzustand', section: 'Bibliothek', state: 'Leerzustand',
+    copy: { title: 'Onda Write · Projekte', body: 'Noch keine Projekte. Ein neues Projekt bündelt Dokumente und Quellen.', status: 'Bibliothek ist leer', action: 'Projekt erstellen' },
+    instances: [
+      coreInstance('Navigation / Projekte', 'nav-item', 'State=Active', 'Projekte'),
+      coreInstance('Leerzustand / Projekte', 'empty-state', 'Context=Library', 'Noch keine Projekte'),
+      coreInstance('Aktion / Projekt erstellen', 'button', 'Kind=Primary, State=Default', 'Projekt erstellen'),
+    ],
+  }),
+  coreView({
+    name: 'Bibliothek / Fehler · Wiederholen', section: 'Bibliothek', state: 'Fehler · Wiederholen',
+    copy: { title: 'Onda Write · Bibliothek', body: 'Projekte konnten nicht geladen werden. Sucheingabe und bereits sichtbare Daten bleiben erhalten.', status: 'Laden fehlgeschlagen', action: 'Erneut versuchen' },
+    instances: [
+      coreInstance('Navigation / Projekte', 'nav-item', 'State=Active', 'Projekte'),
+      coreInstance('Fehler / Bibliothek', 'empty-state', 'Context=Recoverable Error', 'Projekte konnten nicht geladen werden'),
+      coreInstance('Status / Fehler', 'status-symbol', 'Status=Error', 'Laden fehlgeschlagen'),
+      coreInstance('Aktion / Wiederholen', 'button', 'Kind=Primary, State=Default', 'Erneut versuchen'),
+    ],
+  }),
+  coreView({
+    name: 'Editor / Textmodus · Bereit', section: 'Editor', state: 'Textmodus · Bereit',
+    copy: { title: 'Onda Write · Textmodus', body: '„Die leise Architektur eines Arguments“ ist als Fließtext geöffnet.', status: 'Textmodus · Bereit', action: 'Text prüfen' },
+    instances: [
+      coreInstance('Navigation / Dokument', 'nav-item', 'State=Active', 'Dokument'),
+      coreInstance('Modus / Text', 'mode-toggle', 'Mode=Text, State=Active', 'Text'),
+      coreInstance('Anmerkungen / Text', 'annotation-anchor', 'Kind=Text, State=Idle', 'Textanmerkungen'),
+      coreInstance('Aktion / Text prüfen', 'button', 'Kind=Primary, State=Default', 'Text prüfen'),
+      coreInstance('Aktion / Hinzufügen', 'icon-button', 'State=Default', 'Hinzufügen'),
+    ],
+  }),
+  coreView({
+    name: 'Editor / Notizmodus · Bereit', section: 'Editor', state: 'Notizmodus · Bereit',
+    copy: { title: 'Onda Write · Notizmodus', body: 'Notizen bleiben vom Dokumenttext getrennt und können gezielt ergänzt werden.', status: 'Notizmodus · Bereit', action: 'Notiz hinzufügen' },
+    instances: [
+      coreInstance('Navigation / Dokument', 'nav-item', 'State=Active', 'Dokument'),
+      coreInstance('Modus / Notiz', 'mode-toggle', 'Mode=Notiz, State=Active', 'Text'),
+      coreInstance('Anmerkungen / Notiz', 'annotation-anchor', 'Kind=Note, State=Active', 'Notizen'),
+      coreInstance('Aktion / Notiz hinzufügen', 'button', 'Kind=Primary, State=Default', 'Notiz hinzufügen'),
+      coreInstance('Aktion / Hinzufügen', 'icon-button', 'State=Default', 'Hinzufügen'),
+    ],
+  }),
+  coreView({
+    name: 'Editor / Review · Offen', section: 'Editor', state: 'Review · Offen',
+    copy: { title: 'Onda Write · Review', body: 'Drei Hinweise warten auf eine bewusste redaktionelle Entscheidung.', status: 'Review offen · 3 Hinweise', action: 'Nächsten Hinweis prüfen' },
+    instances: [
+      coreInstance('Navigation / Dokument', 'nav-item', 'State=Active', 'Dokument'),
+      coreInstance('Modus / Text', 'mode-toggle', 'Mode=Text, State=Active', 'Text'),
+      coreInstance('Review / Offen', 'review-bar', 'Status=Open', '3 Hinweise zur Prüfung'),
+      coreInstance('Anmerkungen / Aktiv', 'annotation-anchor', 'Kind=Text, State=Active', 'Textanmerkungen'),
+      coreInstance('Aktion / Nächster Hinweis', 'button', 'Kind=Primary, State=Default', 'Nächsten Hinweis prüfen'),
+    ],
+  }),
+  coreView({
+    name: 'Editor / Ruhig · Anmerkungen verborgen', section: 'Editor', state: 'Ruhig · Anmerkungen verborgen',
+    copy: { title: 'Onda Write · Ruhiger Modus', body: 'Anmerkungen sind nur verborgen; der Text und alle Entscheidungen bleiben erhalten.', status: 'Anmerkungen verborgen', action: 'Anmerkungen wieder anzeigen' },
+    instances: [
+      coreInstance('Navigation / Dokument', 'nav-item', 'State=Active', 'Dokument'),
+      coreInstance('Modus / Text', 'mode-toggle', 'Mode=Text, State=Active', 'Text'),
+      coreInstance('Review / Ruhig', 'review-bar', 'Status=Quiet', 'Anmerkungen sind verborgen'),
+      coreInstance('Anmerkungen / Verborgen', 'annotation-anchor', 'Kind=Text, State=Idle', 'Textanmerkungen'),
+      coreInstance('Aktion / Anmerkungen zeigen', 'button', 'Kind=Secondary, State=Default', 'Anmerkungen wieder anzeigen'),
+    ],
+  }),
+  coreView({
+    name: 'Editor / Seitenleiste · Eingeklappt', section: 'Editor', state: 'Seitenleiste · Eingeklappt',
+    copy: { title: 'Onda Write · Editor', body: 'Die linke Navigation ist eingeklappt und die Schreibfläche bleibt vollständig nutzbar.', status: 'Seitenleiste eingeklappt', action: 'Seitenleiste öffnen' },
+    instances: [
+      coreInstance('Navigation / Eingeklappt', 'nav-item', 'State=Collapsed', ''),
+      coreInstance('Modus / Text', 'mode-toggle', 'Mode=Text, State=Active', 'Text'),
+      coreInstance('Anmerkungen / Text', 'annotation-anchor', 'Kind=Text, State=Idle', 'Textanmerkungen'),
+      coreInstance('Aktion / Seitenleiste öffnen', 'icon-button', 'State=Default', 'Seitenleiste öffnen', { roleCopy: { Icon: '☰' } }),
+    ],
+  }),
+  coreView({
+    name: 'Editor / Fokusmodus', section: 'Editor', state: 'Fokusmodus',
+    copy: { title: 'Onda Write · Fokusmodus', body: 'Navigation und Hinweise treten zurück, damit die breite Schreibfläche im Mittelpunkt steht.', status: 'Fokusmodus aktiv', action: 'Fokusmodus verlassen' },
+    instances: [
+      coreInstance('Navigation / Eingeklappt', 'nav-item', 'State=Collapsed', ''),
+      coreInstance('Modus / Text', 'mode-toggle', 'Mode=Text, State=Active', 'Text'),
+      coreInstance('Anmerkungen / Ruhig', 'annotation-anchor', 'Kind=Text, State=Idle', 'Textanmerkungen'),
+      coreInstance('Aktion / Fokus verlassen', 'button', 'Kind=Secondary, State=Default', 'Fokusmodus verlassen'),
+    ],
+  }),
+  coreView({
+    name: 'Editor / Speichern · Läuft', section: 'Editor', state: 'Speichern · Läuft',
+    copy: { title: 'Onda Write · Speichern', body: 'Die aktuelle Fassung wird gespeichert; der Inhalt bleibt währenddessen sichtbar.', status: 'Speichern läuft …', action: 'Weiter schreiben' },
+    instances: [
+      coreInstance('Navigation / Dokument', 'nav-item', 'State=Active', 'Dokument'),
+      coreInstance('Modus / Text', 'mode-toggle', 'Mode=Text, State=Active', 'Text'),
+      coreInstance('Review / Speichern', 'review-bar', 'Status=Saving', 'Änderungen werden gespeichert …'),
+      coreInstance('Status / Speichern', 'status-symbol', 'Status=Working', 'Speichert'),
+      coreInstance('Aktion / Weiter schreiben', 'button', 'Kind=Secondary, State=Default', 'Weiter schreiben'),
+    ],
+  }),
+  coreView({
+    name: 'Editor / Speichern · Gespeichert', section: 'Editor', state: 'Speichern · Gespeichert',
+    copy: { title: 'Onda Write · Gespeichert', body: 'Die aktuelle Fassung wurde gespeichert.', status: 'Gespeichert', action: 'Weiter schreiben' },
+    instances: [
+      coreInstance('Navigation / Dokument', 'nav-item', 'State=Active', 'Dokument'),
+      coreInstance('Modus / Text', 'mode-toggle', 'Mode=Text, State=Active', 'Text'),
+      coreInstance('Review / Gespeichert', 'review-bar', 'Status=Saved', 'Änderungen gespeichert'),
+      coreInstance('Status / Gespeichert', 'status-symbol', 'Status=Ready', 'Gespeichert'),
+      coreInstance('Aktion / Weiter schreiben', 'button', 'Kind=Secondary, State=Default', 'Weiter schreiben'),
+    ],
+  }),
+  coreView({
+    name: 'Editor / Speichern · Fehler', section: 'Editor', state: 'Speichern · Fehler',
+    copy: { title: 'Onda Write · Speichern', body: 'Speichern ist fehlgeschlagen. Der Inhalt bleibt lokal sichtbar und erhalten.', status: 'Speichern fehlgeschlagen', action: 'Erneut versuchen' },
+    instances: [
+      coreInstance('Navigation / Dokument', 'nav-item', 'State=Active', 'Dokument'),
+      coreInstance('Modus / Text', 'mode-toggle', 'Mode=Text, State=Active', 'Text'),
+      coreInstance('Review / Fehler', 'review-bar', 'Status=Error', 'Speichern fehlgeschlagen'),
+      coreInstance('Status / Fehler', 'status-symbol', 'Status=Error', 'Speichern fehlgeschlagen'),
+      coreInstance('Aktion / Wiederholen', 'button', 'Kind=Primary, State=Default', 'Erneut versuchen'),
+    ],
+  }),
+  coreView({
+    name: 'Editor / Keine aktive Anmerkung', section: 'Editor', state: 'Keine aktive Anmerkung',
+    copy: { title: 'Onda Write · Editor', body: 'Keine Anmerkung ist ausgewählt. Der Dokumenttext bleibt bearbeitbar.', status: 'Keine aktive Anmerkung', action: 'Anmerkungen anzeigen' },
+    instances: [
+      coreInstance('Navigation / Dokument', 'nav-item', 'State=Active', 'Dokument'),
+      coreInstance('Modus / Text', 'mode-toggle', 'Mode=Text, State=Active', 'Text'),
+      coreInstance('Leerzustand / Anmerkung', 'empty-state', 'Context=No Active Annotation', 'Keine aktive Anmerkung'),
+      coreInstance('Anmerkungen / Text', 'annotation-anchor', 'Kind=Text, State=Idle', 'Textanmerkungen'),
+      coreInstance('Aktion / Anmerkungen zeigen', 'button', 'Kind=Secondary, State=Default', 'Anmerkungen anzeigen'),
+    ],
+  }),
+])
+
+export function validateCoreRoleCopySemantics(views = CORE_VIEW_DEFINITIONS) {
+  const errors = []
+  let checked = 0
+  for (const view of views) for (const instance of view.instances || []) {
+    checked += 1
+    const component = COMPONENT_DEFINITIONS.find(item => item.id === instance.setId)
+    const textRoles = (component?.roles || []).filter(role => role.type === 'TEXT').map(role => role.name).sort()
+    const actualRoles = Object.keys(instance.roleCopy || {}).sort()
+    if (JSON.stringify(textRoles) !== JSON.stringify(actualRoles)) errors.push(`${view.name}/${instance.name}: unvollständige Textrollen`)
+    const collapsed = instance.setId === 'nav-item' && instance.variant === 'State=Collapsed'
+    for (const [role, characters] of Object.entries(instance.roleCopy || {})) {
+      if (!collapsed && !characters) errors.push(`${view.name}/${instance.name}/${role}: leere sichtbare Rolle`)
+      if (/Projekt Nordstern|\bEssay\b|Generisch|12 Treffer/.test(characters)) errors.push(`${view.name}/${instance.name}/${role}: generische oder widersprüchliche Copy`)
+    }
+    if (!collapsed && component?.labelRole && instance.setId !== 'select' && instance.roleCopy?.[component.labelRole] !== instance.label) errors.push(`${view.name}/${instance.name}: Label stimmt nicht mit Screen-Vertrag überein`)
+    if (instance.setId === 'select' && instance.roleCopy?.Value !== instance.label) errors.push(`${view.name}/${instance.name}: Select-Wert stimmt nicht mit Screen-Vertrag überein`)
+  }
+  const results = views.find(view => view.name === 'Bibliothek / Suche · Treffer')?.instances.find(instance => instance.setId === 'search')
+  if (results?.roleCopy?.Count !== '3 Treffer') errors.push('Bibliothek / Suche · Treffer: Count muss exakt 3 Treffer sein')
+  const noResults = views.find(view => view.name === 'Bibliothek / Suche · Keine Treffer')
+  const empty = noResults?.instances.find(instance => instance.setId === 'empty-state')
+  if (JSON.stringify(empty?.roleCopy) !== JSON.stringify({ Symbol: '○', Title: 'Keine Treffer', Description: 'Suchbegriff ändern', Action: 'Suche löschen' })) errors.push('Bibliothek / Suche · Keine Treffer: Empty-State-Copy widersprüchlich')
+  const emptyLibrary = views.find(view => view.name === 'Bibliothek / Leerzustand')
+  for (const name of ['Navigation / Projekte', 'Navigation / Dokumente', 'Navigation / Papierkorb']) {
+    if (emptyLibrary?.instances.find(instance => instance.name === name)?.roleCopy?.Count !== '0') errors.push(`Bibliothek / Leerzustand: ${name} muss Count 0 zeigen`)
+  }
+  const emptyHistory = emptyLibrary?.instances.find(instance => instance.region === 'Layout / Rail' && instance.name.startsWith('Verlauf /'))
+  if (emptyHistory?.name !== 'Verlauf / Leer'
+    || JSON.stringify(emptyHistory.roleCopy) !== JSON.stringify({ Icon: '↺', Label: 'Noch kein Verlauf', Count: '0', Status: 'Leer' })) errors.push('Bibliothek / Leerzustand: Verlauf muss ehrlich leer sein')
+  const collapsedEditor = views.find(view => view.name === 'Editor / Seitenleiste · Eingeklappt')
+  if (collapsedEditor?.instances.find(instance => instance.name === 'Aktion / Seitenleiste öffnen')?.roleCopy?.Icon !== '☰') errors.push('Editor / Seitenleiste · Eingeklappt: Sidebar-Öffnen-Icon muss semantisch sein')
+  return { valid: errors.length === 0, errors, checked }
+}
+
 const fixedSections = [
   Object.freeze({ name: '00 · Übersicht', kind: 'overview' }),
   Object.freeze({ name: '01 · Foundations', kind: 'foundations' }),
