@@ -101,6 +101,10 @@ export async function versucheQuellenlauf({
   quellen = [],
   bestehendeThemen = [],
   verstaendnis = null,
+  // Textsorte, Aussagen-Speicher und Gedaechtnis. Wird nur durchgereicht: was daraus wird,
+  // entscheidet baueQuellenKontext. Ohne diesen Durchreicher waere der Quellenlauf der
+  // einzige Kanal, der das Projektwissen nicht saehe.
+  onda = null,
   vonHand = false,
   sperreSetzen,
   hatSchluessel,
@@ -125,7 +129,7 @@ export async function versucheQuellenlauf({
       return { gestartet: false, grund: kostenfreigabe?.grund || 'kostenfreigabe-fehlt' }
     }
 
-    const kontext = baueQuellenKontext({ verstaendnis, quellen, bestehendeThemen })
+    const kontext = baueQuellenKontext({ verstaendnis, quellen, bestehendeThemen, onda })
     setzeAgentStatus({ zustand: 'laeuft' })
     const { daten } = await runTask('quellenthemen', kontext)
     setzeAgentStatus({ zustand: 'bereit' })

@@ -857,6 +857,17 @@ body.zen #title:focus { opacity: 1; }
   width: 100%;
   min-height: 44px;
   min-width: 0;
+  /* Ohne diese Zeile kann keine Karte je aufklappen. Seit dem 8.8.2026 ist die
+     Struktur-Liste ein eigener Rollbereich fester Hoehe (onda-shell.css,
+     „Jetzt rollt nicht mehr die Spalte, sondern der BAUM in ihr"). Darin ist jede
+     Karte ein Flex-Kind und darf schrumpfen — und weil oben min-height AUSDRUECKLICH
+     auf 44px steht statt auf auto, faellt die Untergrenze weg, die den Inhalt sonst
+     schuetzt. 25 Karten zu je 44px in einem Kasten von 492px hiessen: alle werden auf
+     genau 44px gestaucht. Gemessen am aufgeklappten Baustein: Hoehe 44px, Inhalt 85px
+     — der Auszug stand ausserhalb seiner Karte und malte ueber die naechste.
+     flex-shrink: 0 gibt jeder Karte ihre Inhaltshoehe zurueck; zu viele Karten laesst
+     die Liste dann rollen, wozu sie ihr overflow-y: auto ja hat. */
+  flex-shrink: 0;
   flex-direction: column;
   gap: var(--space-1);
   padding: var(--space-3) var(--space-4);

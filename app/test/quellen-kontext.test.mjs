@@ -6,6 +6,7 @@ import assert from 'node:assert/strict'
 
 import { QUELLEN_ANFANG_ZEICHEN, anfangsText, baueQuellenKontext, quellenTitel } from '../src/quellen-kontext.mjs'
 import { QUELLENTHEMEN_ANWEISUNG } from '../src/agent-prompts.mjs'
+import { updateLanguageProfile } from '../src/language-profile.mjs'
 
 const quelle = (id, titel, rest = {}) => ({
   id,
@@ -97,4 +98,34 @@ test('Die Anweisung verbietet Formatrubriken und Sammelgruppen', () => {
   assert.match(QUELLENTHEMEN_ANWEISUNG, /Dateityp/)
   assert.match(QUELLENTHEMEN_ANWEISUNG, /Sonstiges/)
   assert.match(QUELLENTHEMEN_ANWEISUNG, /leere Liste/)
+})
+
+// Der Anschluss an die zweite Haelfte. Bis zum 8.8.2026 war dieser Kanal der einzige, der
+// das Projektwissen nicht sah — die Bauweisen-Pruefung (evals/pruefungen/kontext-alle-
+// kanaele.mjs) nannte ihn einen blinden Kanal. Sie prueft, DASS baueOndaBloecke vorkommt;
+// hier steht, dass das Wissen auch wirklich ankommt und wo.
+test('Das Projektwissen erreicht den Kontext — und steht hinten', () => {
+  const languageProfile = updateLanguageProfile({
+    profile: null,
+    projectId: 'p1',
+    changes: { genre: 'scientific', domain: 'MARKANTES-FACH-3c7e' },
+    at: 1000,
+  })
+  const onda = { project: { id: 'p1', name: 'Pr\u00fcfprojekt', languageProfile }, doc: null, docs: [] }
+
+  const ohne = baueQuellenKontext({ quellen: [quelle('q1', 'Eins')] })
+  const mit = baueQuellenKontext({ quellen: [quelle('q1', 'Eins')], onda })
+
+  assert.ok(
+    mit.volatiles.join('\n').includes('MARKANTES-FACH-3c7e'),
+    'die Textsorte erreicht den Kontext nicht',
+  )
+  // Gegenprobe: ohne das Buendel darf die Marke nicht dastehen, sonst kaeme sie von
+  // woanders her und die Suche oben bewiese nichts.
+  assert.equal(ohne.volatiles.join('\n').includes('MARKANTES-FACH-3c7e'), false)
+
+  // Hinten, nicht vorn: verstaendnis und docText tragen cache_control (agent-tasks.mjs).
+  // Ein Wissensblock weiter vorn entwertete den Zwischenspeicher bei jeder Projektaenderung.
+  assert.deepEqual(mit.volatiles.slice(0, ohne.volatiles.length), ohne.volatiles)
+  assert.ok(mit.volatiles.length > ohne.volatiles.length)
 })

@@ -5041,6 +5041,9 @@ async function fuehreQuellenlaufAus({ vonHand = false } = {}) {
     quellen,
     bestehendeThemen,
     verstaendnis,
+    // Wie bei Hinweis- und Erweiterungslauf, nur direkt statt ueber einen runTask-Umschlag:
+    // dieser Kanal baut seinen Kontext im Modell, also nimmt er das Wissen als Parameter.
+    onda: ondaQuellen(doc, project),
     vonHand,
     sperreSetzen: wert => { quellenlaufAktiv = wert },
     hatSchluessel,

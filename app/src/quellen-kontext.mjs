@@ -3,6 +3,7 @@
 // ausschliesslich {verstaendnis, docText, volatiles, verlauf, anfrage}; eigene Feldnamen
 // wuerden still verschluckt.
 import { QUELLENTHEMEN_ANWEISUNG } from './agent-prompts.mjs'
+import { baueOndaBloecke } from './onda-kontext.mjs'
 
 // KEIN docText, und das ist eine Entscheidung: nach welchen Themen die Quellen eines
 // Projekts stehen, ist eine Frage des Projekts und nicht des gerade offenen Textes.
@@ -72,7 +73,20 @@ function quelleFuerPrompt(quelle) {
 //     ein Prompt ist eine Bitte, kein Riegel,
 //   - die vom Agenten gebildeten sind nur ein Vorschlag von letztem Mal. Sie stehen
 //     ebenfalls da, damit dieselbe Ordnung nicht bei jedem Lauf neue Namen bekommt.
-export function baueQuellenKontext({ verstaendnis = null, quellen = [], bestehendeThemen = [] } = {}) {
+//
+// onda: {project, doc, docs, memoryStore} — Textsorte, Aussagen-Speicher und Gedaechtnis
+// (onda-kontext.mjs), ganz hinten in den volatiles und damit hinter dem gecachten Praefix.
+// Dass es hier hingehoert, sagt schon die Begruendung oben zum Verstaendnis: dieselben
+// zwanzig Quellen ordnen sich fuer eine Seminararbeit anders als fuer einen Werbetext.
+// Genau diese Angabe steht aber nicht im Verstaendnis, sondern im Stilprofil — ohne die
+// Bloecke bliebe der Satz eine Absicht. Der Aussagen-Speicher wirkt in dieselbe Richtung:
+// wofuer die Quellen im Projekt einstehen sollen, ordnet sie besser als jeder Titel.
+export function baueQuellenKontext({
+  verstaendnis = null,
+  quellen = [],
+  bestehendeThemen = [],
+  onda = null,
+} = {}) {
   const volatiles = [QUELLENTHEMEN_ANWEISUNG]
 
   const liste = (Array.isArray(quellen) ? quellen : []).filter(quelle => quelle?.id).map(quelleFuerPrompt)
@@ -93,6 +107,8 @@ export function baueQuellenKontext({ verstaendnis = null, quellen = [], bestehen
       + JSON.stringify(eigene.map(thema => ({ name: thema.name, warum: String(thema.warum || '') }))),
     )
   }
+
+  if (onda) volatiles.push(...baueOndaBloecke(onda))
 
   return { verstaendnis, volatiles }
 }
