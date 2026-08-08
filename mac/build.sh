@@ -26,34 +26,77 @@ test -f ../app/dist/editor.bundle.js || { echo "FEHLER: Bundle fehlt"; exit 1; }
 # Der Bau bringt seinen Pruefserver deshalb selbst mit — so wie es der Pruef-Lauf
 # auf GitHub seit dem 7. August tut (.github/workflows/pruefung.yml).
 echo "— starte Pruefserver …"
+# Zwischen „nc sagt: frei" und „node bindet wirklich" liegt eine Luecke. Bauen zwei
+# Arbeitskopien gleichzeitig, waehlen beide denselben Port — wer die Luecke verliert,
+# stirbt an EADDRINUSE, und der Bau waere rot aus einem Grund, der nichts mit dem
+# Code zu tun hat. Am 8. August 2026 ist genau das passiert: ein Bau hielt Port 4200,
+# waehrend ein zweiter starten wollte.
+# Deshalb bis zu drei Anlaeufe, jeder mit frisch gesuchtem Port. Ein Port, der einen
+# Anlauf gekostet hat, wird nicht noch einmal genommen — sonst liefe der Bau bei einem
+# Port, der frei aussieht und es nicht ist, dreimal in dieselbe Wand.
+PRUEFANLAEUFE=3
 PRUEFPORT=""
-for kandidat in $(seq 4200 4260); do
-	if ! nc -z 127.0.0.1 "$kandidat" >/dev/null 2>&1; then PRUEFPORT="$kandidat"; break; fi
-done
-[ -n "$PRUEFPORT" ] || { echo "FEHLER: kein freier Port zwischen 4200 und 4260."; exit 1; }
+PRUEFSERVER=""
+VERBRAUCHTE_PORTS=" "
 
-# Genommen wird der Server des Projekts (app/scripts/dev-server.mjs) und nicht
-# irgendein Fremdwerkzeug: er liefert dieselben MIME-Typen wie beim Entwickeln und
-# baut mit denselben esbuild-Einstellungen wie `npm run build` — er kann das eben
-# gebaute Bundle also nicht durch ein anderes ersetzen. Der Port MUSS als
-# `--port=…` uebergeben werden; ein nacktes Argument verwirft cliPort() still.
-node ../app/scripts/dev-server.mjs --port="$PRUEFPORT" > /tmp/onda-bau-server.log 2>&1 &
-PRUEFSERVER=$!
+# Jeder Bau fuehrt sein eigenes Serverprotokoll. Bei einem festen Pfad ueberschriebe
+# der eine Bau das Protokoll des anderen — und gaebe im Fehlerfall das fremde aus.
+PRUEFLOG="/tmp/onda-bau-server-$$.log"
+: > "$PRUEFLOG"
+
 # Der Server muss auch dann sterben, wenn ein Tor weiter unten fehlschlaegt.
-trap 'kill "$PRUEFSERVER" 2>/dev/null || true' EXIT
+aufraeumen() {
+	if [ -n "${PRUEFSERVER:-}" ]; then kill "$PRUEFSERVER" 2>/dev/null || true; fi
+	rm -f "$PRUEFLOG"
+}
+trap aufraeumen EXIT
 
-# Warten, bis er wirklich antwortet. Ohne das rennt der erste Test gegen eine
-# geschlossene Tuer, und der Bau ist aus einem Grund rot, der nichts mit dem Code
-# zu tun hat — genau die Sorte Fehlalarm, die hier schon Tage gekostet hat.
-for _ in $(seq 1 60); do
-	if curl -sf -o /dev/null "http://127.0.0.1:${PRUEFPORT}/index.html"; then break; fi
-	sleep 1
+# Ein Anlauf: freien Port suchen, Server starten, auf seine erste Antwort warten.
+# Rueckgabe 0 heisst „laeuft auf $PRUEFPORT", Rueckgabe 1 heisst „dieser Anlauf ist
+# gescheitert" — dann ist der naechste dran.
+pruefserver_anlauf() {
+	PRUEFPORT=""
+	for kandidat in $(seq 4200 4260); do
+		case "$VERBRAUCHTE_PORTS" in *" $kandidat "*) continue ;; esac
+		if ! nc -z 127.0.0.1 "$kandidat" >/dev/null 2>&1; then PRUEFPORT="$kandidat"; break; fi
+	done
+	[ -n "$PRUEFPORT" ] || { echo "FEHLER: kein freier Port zwischen 4200 und 4260."; exit 1; }
+	VERBRAUCHTE_PORTS="${VERBRAUCHTE_PORTS}${PRUEFPORT} "
+
+	# Genommen wird der Server des Projekts (app/scripts/dev-server.mjs) und nicht
+	# irgendein Fremdwerkzeug: er liefert dieselben MIME-Typen wie beim Entwickeln und
+	# baut mit denselben esbuild-Einstellungen wie `npm run build` — er kann das eben
+	# gebaute Bundle also nicht durch ein anderes ersetzen. Der Port MUSS als
+	# `--port=…` uebergeben werden; ein nacktes Argument verwirft cliPort() still.
+	printf '=== Anlauf auf Port %s ===\n' "$PRUEFPORT" >> "$PRUEFLOG"
+	node ../app/scripts/dev-server.mjs --port="$PRUEFPORT" >> "$PRUEFLOG" 2>&1 &
+	PRUEFSERVER=$!
+
+	# Warten, bis er wirklich antwortet. Ohne das rennt der erste Test gegen eine
+	# geschlossene Tuer, und der Bau ist aus einem Grund rot, der nichts mit dem Code
+	# zu tun hat — genau die Sorte Fehlalarm, die hier schon Tage gekostet hat.
+	for _ in $(seq 1 60); do
+		if curl -sf -o /dev/null "http://127.0.0.1:${PRUEFPORT}/index.html"; then return 0; fi
+		# Ist der Server schon gestorben, bringt weiteres Warten nichts. Der belegte Port
+		# faellt so nach gut einer Sekunde auf, nicht erst nach einer Minute.
+		kill -0 "$PRUEFSERVER" 2>/dev/null || return 1
+		sleep 1
+	done
+	return 1
+}
+
+for anlauf in $(seq 1 "$PRUEFANLAEUFE"); do
+	if pruefserver_anlauf; then break; fi
+	# Haengt der Server statt zu sterben, muss er trotzdem weg, bevor der naechste startet.
+	kill "$PRUEFSERVER" 2>/dev/null || true
+	PRUEFSERVER=""
+	if [ "$anlauf" -ge "$PRUEFANLAEUFE" ]; then
+		echo "FEHLER: Pruefserver kam in ${PRUEFANLAEUFE} Anlaeufen nicht hoch. Sein Protokoll:"
+		cat "$PRUEFLOG"
+		exit 1
+	fi
+	echo "  Port ${PRUEFPORT} kam nicht hoch — naechster Anlauf mit einem anderen Port."
 done
-if ! curl -sf -o /dev/null "http://127.0.0.1:${PRUEFPORT}/index.html"; then
-	echo "FEHLER: Pruefserver kam in 60 Sekunden nicht hoch. Sein Protokoll:"
-	cat /tmp/onda-bau-server.log
-	exit 1
-fi
 echo "  Pruefserver antwortet auf Port ${PRUEFPORT}."
 
 echo "— Pflicht-Tor 1: Testsuite …"
@@ -62,7 +105,10 @@ echo "— Pflicht-Tor 1: Testsuite …"
 (cd ../app && AIWT_URL="http://127.0.0.1:${PRUEFPORT}/" npm test)
 
 kill "$PRUEFSERVER" 2>/dev/null || true
-trap - EXIT
+# Die Nummer vergessen, damit das Aufraeumen am Ende nicht einen fremden Prozess trifft,
+# der sie inzwischen bekommen hat. Das Protokoll raeumt es weiterhin weg — auch dann,
+# wenn ein Tor weiter unten fehlschlaegt.
+PRUEFSERVER=""
 
 # Erst jetzt wird das App-Paket angefasst: schlägt oben ein Tor fehl,
 # liegt die bisherige App noch unverändert da.
