@@ -15,6 +15,7 @@ const indexUrl = new URL('../index.html', import.meta.url)
 const styleUrl = new URL('../src/style.css', import.meta.url)
 const shellUrl = new URL('../src/onda-shell.css', import.meta.url)
 const workspaceUrl = new URL('../src/workspace.js', import.meta.url)
+const uiUrl = new URL('../src/ui.js', import.meta.url)
 const contractUrl = new URL('../src/annotation-contract.mjs', import.meta.url)
 
 test('Beim Schreiben wird kein Absatz hervorgehoben', async () => {
@@ -96,7 +97,32 @@ test('Das Plus am Absatz ist fort, das Einfüge-Menü bleibt für die Struktur',
   assert.match(workspace, /function insertBlock\(|const insertBlock/, 'Das Einfügen selbst wurde mit dem Plus gelöscht')
 })
 
-test('Unten links stehen nur noch Erscheinung und Einstellungen', async () => {
+test('Das Dokumentmenü hat einen Knopf, der es auch öffnet', async () => {
+  const [html, ui] = await Promise.all([readFile(indexUrl, 'utf8'), readFile(uiUrl, 'utf8')])
+
+  // buildGearPanel war seit dem V2-Grundstand fertig gebaut und trotzdem tot: sein
+  // einziger Verweis war das eigene `refresh`. Der Knopf dazu ist mit der alten
+  // Werkzeugleiste beim Onda-Umbau verschwunden, und mit ihm Rechtschreibung,
+  // Wortzahl, Fokus-Modus, Exportieren, Drucken sowie „Erscheinung: Auto" — das
+  // sonst nirgends erreichbar ist. Monatelang hat das niemand bemerkt, weil ein
+  // Bereich ohne Knopf keinen Test scheitern lässt (Jakob, 8.8.2026: „mach den
+  // knopf für das zahnrad-menü wieder rein").
+  const fusszeile = html.match(/<div class="onda-side-footer">([\s\S]*?)<\/div>/)?.[1] || ''
+  assert.match(fusszeile, /id="docMenu"/, 'Der Knopf für das Dokumentmenü fehlt in der Fußzeile')
+
+  // Der Knopf allein genügt nicht — er muss den Bereich auch aufbauen.
+  assert.match(ui, /makeDropdown\(dokumentKnopf,\s*buildGearPanel\)/, 'Der Knopf ist nicht mit dem Bereich verbunden')
+  assert.match(ui, /bindDokumentmenue\(\)/, 'bindDokumentmenue wird nirgends aufgerufen')
+
+  // Die eigentliche Lehre: ein Aufbau, den nur sein eigenes refresh ruft, ist tot.
+  // Diese Prüfung zählt die Verweise auf buildGearPanel — es müssen mindestens drei
+  // sein (Definition, refresh, Verdrahtung). Fällt die Verdrahtung wieder weg, sind
+  // es zwei, und hier wird es rot statt erst in einem Jahr jemandem aufzufallen.
+  const verweise = (ui.match(/buildGearPanel/g) || []).length
+  assert.ok(verweise >= 3, `buildGearPanel wird nur ${verweise}-mal erwähnt — der Bereich ist wieder unerreichbar`)
+})
+
+test('Unten links stehen nur Zeichen ohne Wortlaut — kein Name, kein Projektname', async () => {
   const html = await readFile(indexUrl, 'utf8')
   // Direkt an der Fußzeile schneiden. Ein Schnitt von <section id="editorView"> bis zum
   // nächsten </section> endet zu früh: die Seitenleiste enthält selbst <section>-Blöcke.

@@ -132,9 +132,17 @@
 
         <!-- Unten links stand erst der eigene Name, dann der Weg zurück. Beides ist fort:
              wer allein an seinem Rechner schreibt, muss nicht daran erinnert werden, wer
-             er ist, und der Weg zurück steht jetzt oben. Übrig bleiben zwei Zeichen ohne
-             Wortlaut — an ihnen kann nichts abgeschnitten werden. -->
+             er ist, und der Weg zurück steht jetzt oben. Drei Zeichen ohne Wortlaut —
+             an ihnen kann nichts abgeschnitten werden.
+
+             Das erste öffnet das Dokumentmenü: Rechtschreibung, Wortzahl, Fokus-Modus,
+             Exportieren, Drucken. Der Bereich dafür (buildGearPanel in ui.js) war seit
+             dem V2-Grundstand gebaut, aber unerreichbar — er rief sich nur selbst auf.
+             „Erscheinung: Auto" steht ebenfalls nur dort; der Knopf daneben schaltet
+             bloß zwischen Hell und Dunkel um (Jakob, 8.8.2026: „mach den knopf für das
+             zahnrad-menü wieder rein"). -->
         <div class="onda-side-footer">
+          <button id="docMenu" class="onda-icon-btn" type="button" title="Menü" aria-label="Menü öffnen" aria-haspopup="menu" aria-expanded="false"></button>
           <button id="themeToggle" class="onda-icon-btn" title="Erscheinung wechseln" aria-label="Erscheinung wechseln"></button>
           <button id="kiSettings" class="onda-icon-btn" title="KI-Anschluss" aria-label="KI-Anschluss einrichten" aria-haspopup="dialog" aria-controls="kiModal"></button>
         </div>

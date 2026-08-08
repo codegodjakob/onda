@@ -54,6 +54,7 @@ function closeAllPanels() {
   // aussen geschlossen (Klick daneben, Escape), muss dessen aria-expanded mitgehen —
   // sonst meldet das Vorlesegeraet ein Menue, das gar nicht mehr offen ist.
   meldeFormatmenue()
+  meldeDokumentmenue()
 }
 function positionPanel(panel, anchorRect, alignRight) {
   panel.style.visibility = 'hidden'
@@ -157,6 +158,30 @@ function setSetting(key, value) {
 
 let counterEl = null
 // Einstellungen: bleibt beim Ausprobieren offen, Segmente aktualisieren sich an Ort und Stelle.
+// Das Dokumentmenue unten links. buildGearPanel stand seit dem V2-Grundstand fertig
+// da, aber niemand rief es: der einzige Verweis darauf war sein eigenes `refresh`.
+// Der Knopf dazu ist beim Umbau auf Onda mit der alten Werkzeugleiste verschwunden,
+// und mit ihm Rechtschreibung, Wortzahl, Fokus-Modus, Exportieren, Drucken — und
+// „Erscheinung: Auto", das sonst nirgends erreichbar ist (toggleTheme in workspace.js
+// kennt nur Hell und Dunkel). Jakob am 8.8.2026: „mach den knopf für das zahnrad-menü
+// wieder rein."
+let dokumentKnopf = null, dokumentMenue = null
+
+function meldeDokumentmenue() {
+  if (!dokumentKnopf || !dokumentMenue) return
+  dokumentKnopf.setAttribute('aria-expanded', String(dokumentMenue.classList.contains('open')))
+}
+
+function bindDokumentmenue() {
+  dokumentKnopf = document.getElementById('docMenu')
+  if (!dokumentKnopf) return
+  dokumentKnopf.replaceChildren(ondaIcon('text', { size: 18 }))
+  dokumentMenue = makeDropdown(dokumentKnopf, buildGearPanel)
+  // Nach makeDropdown, damit der Zustand steht, wenn dieser Horcher laeuft: die
+  // Reihenfolge der Klick-Horcher am selben Knopf ist die ihrer Anmeldung.
+  dokumentKnopf.addEventListener('click', () => meldeDokumentmenue())
+}
+
 function buildGearPanel(panel) {
   panel.classList.add('settings')
   const s = ctx.state.settings
@@ -915,6 +940,7 @@ export function initUI(context) {
   bindTitle()
   bindKeys()
   bindAuswahlLeiste()
+  bindDokumentmenue()
   updateToolbarState()
   ctx.editor.on('selectionUpdate', () => { updateToolbarState(); markZenBlock(); planeAuswahlLeiste() })
   ctx.editor.on('update', () => { updateToolbarState(); markZenBlock(); planeAuswahlLeiste() })
