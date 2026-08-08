@@ -12,6 +12,7 @@ import {
   normalizeSettings,
   verbucheUsage,
 } from '../src/settings-model.mjs'
+import { HISTORIE_DECKEL } from '../src/lauf-bilanz.mjs'
 
 test('defaults: accent sky, sidebar not collapsed, existing fields intact', () => {
   const s = normalizeSettings(undefined)
@@ -224,4 +225,118 @@ test('Monatsbudget: frische Einstellungen bremsen Automatik, sobald die Voreinst
   const ergebnis = beansprucheAutomatiklauf(settings, '2026-07')
   assert.equal(ergebnis.erlaubt, false, 'an der Voreinstellung ist Schluss')
   assert.notEqual(ergebnis.grund, 'kein-budget', 'es gibt jetzt ein Budget')
+})
+
+// Monatsgrenze bei 2026-07 aus Sicht der monatVor()-Faelle unten: monatVor(1) == '2026-06',
+// monatVor(2) == '2026-05' usw. Hilfsfunktion, weil Monatsstrings nicht einfach hochzaehlen
+// (nach '2026-01' kommt '2025-12', kein '2026-00').
+function monatVor(n) {
+  const datum = new Date(2026, 6 - n, 1)
+  return `${datum.getFullYear()}-${String(datum.getMonth() + 1).padStart(2, '0')}`
+}
+
+test('usageHistorie (a): verbucheUsage archiviert den alten nicht-leeren Monat und beginnt frisch', () => {
+  const s = normalizeSettings({}, '2026-07')
+  verbucheUsage(s, { input_tokens: 100 }, 1.25, '2026-07')
+  assert.deepEqual(s.usageHistorie, [], 'noch kein Wechsel, noch keine Historie')
+  verbucheUsage(s, { input_tokens: 7 }, 0.01, '2026-08')
+  assert.equal(s.usage.monat, '2026-08')
+  assert.equal(s.usage.inputTokens, 7, 'der neue Monat beginnt frisch bei null')
+  assert.equal(s.usageHistorie.length, 1)
+  assert.equal(s.usageHistorie[0].monat, '2026-07')
+  assert.equal(s.usageHistorie[0].inputTokens, 100)
+  assert.ok(Math.abs(s.usageHistorie[0].kostenCents - 1.25) < 1e-9)
+})
+
+test('usageHistorie (b): normalizeSettings archiviert einen Vormonats-Stand aus dem Rohzustand', () => {
+  const s = normalizeSettings({
+    usage: { monat: '2026-06', inputTokens: 50, outputTokens: 8, kostenCents: 3 },
+  }, '2026-07')
+  assert.deepEqual(s.usage, leereUsage('2026-07'), 'der Zaehler beginnt frisch')
+  assert.equal(s.usageHistorie.length, 1)
+  assert.equal(s.usageHistorie[0].monat, '2026-06')
+  assert.equal(s.usageHistorie[0].inputTokens, 50)
+  assert.equal(s.usageHistorie[0].outputTokens, 8)
+  assert.equal(s.usageHistorie[0].kostenCents, 3)
+})
+
+test('usageHistorie (c): derselbe Monat landet nie zweimal, egal ob beim Buchen oder beim Laden bemerkt', () => {
+  // Buchen bemerkt den Wechsel zuerst und archiviert Juni.
+  const gebucht = normalizeSettings({}, '2026-06')
+  verbucheUsage(gebucht, { input_tokens: 40 }, 2, '2026-06')
+  verbucheUsage(gebucht, { input_tokens: 1 }, 0.01, '2026-07')
+  assert.equal(gebucht.usageHistorie.length, 1)
+  assert.equal(gebucht.usageHistorie[0].monat, '2026-06')
+
+  // Ein veralteter Speicherstand zeigt usage noch auf Juni, obwohl usageHistorie Juni
+  // (aus dem Buchen-Pfad oben) schon enthaelt. normalizeSettings (der Lade-Pfad) darf
+  // Juni deshalb kein zweites Mal anhaengen.
+  const raw = {
+    usage: { monat: '2026-06', inputTokens: 40, kostenCents: 2 },
+    usageHistorie: gebucht.usageHistorie,
+  }
+  const geladen = normalizeSettings(raw, '2026-07')
+  assert.equal(geladen.usageHistorie.length, 1, 'Juni darf nicht doppelt in der Historie stehen')
+  assert.equal(geladen.usageHistorie[0].monat, '2026-06')
+})
+
+test('usageHistorie (d): ein leerer Monat wird nicht archiviert', () => {
+  // Buchen-Pfad: der Julimonat bleibt bei lauter Nullen, der Wechsel nach August
+  // darf trotzdem keinen leeren Eintrag anhaengen.
+  const s = normalizeSettings({}, '2026-07')
+  verbucheUsage(s, {}, 0, '2026-08')
+  assert.deepEqual(s.usageHistorie, [])
+  assert.equal(s.usage.monat, '2026-08')
+
+  // Lade-Pfad: ein leerer Vormonat im Rohzustand wandert ebenfalls nicht in die Historie.
+  const s2 = normalizeSettings({ usage: leereUsage('2026-06') }, '2026-07')
+  assert.deepEqual(s2.usageHistorie, [])
+})
+
+test('usageHistorie (e): der Deckel haelt bei HISTORIE_DECKEL, der aelteste Eintrag fliegt', () => {
+  // HISTORIE_DECKEL bereits volle, nicht-leere Vormonate, aeltester zuerst.
+  const volleHistorie = []
+  for (let i = HISTORIE_DECKEL; i >= 1; i--) {
+    volleHistorie.push({ ...leereUsage(monatVor(i + 1)), inputTokens: i })
+  }
+  const raw = {
+    usageHistorie: volleHistorie,
+    usage: { monat: monatVor(1), inputTokens: 5, kostenCents: 1 },
+  }
+  const s = normalizeSettings(raw, '2026-07')
+  assert.equal(s.usageHistorie.length, HISTORIE_DECKEL, '25 Monate werden auf den Deckel gekappt')
+  assert.equal(
+    s.usageHistorie.some(e => e.monat === monatVor(HISTORIE_DECKEL + 1)),
+    false,
+    'der urspruenglich aelteste Monat ist rausgeflogen',
+  )
+  assert.equal(
+    s.usageHistorie[s.usageHistorie.length - 1].monat,
+    monatVor(1),
+    'der frisch archivierte Monat steht als juengster ganz hinten',
+  )
+})
+
+test('usageHistorie (f): kaputte Rohdaten werden bereinigt, nie geworfen', () => {
+  assert.doesNotThrow(() => normalizeSettings({ usageHistorie: 'nicht-array' }, '2026-07'))
+  assert.deepEqual(normalizeSettings({ usageHistorie: 'nicht-array' }, '2026-07').usageHistorie, [])
+  assert.deepEqual(normalizeSettings({ usageHistorie: null }, '2026-07').usageHistorie, [])
+  assert.doesNotThrow(() =>
+    normalizeSettings({ usageHistorie: [null, 42, 'x', {}, { monat: 99 }] }, '2026-07'),
+  )
+  const s = normalizeSettings({
+    usageHistorie: [
+      null,
+      42,
+      'x',
+      {},
+      { monat: 99 },
+      { monat: '2026-07', inputTokens: 5 }, // aktueller Monat: gehoert NICHT in die Historie
+      { monat: '2026-06', inputTokens: 5, kostenCents: 1 },
+    ],
+  }, '2026-07')
+  assert.equal(s.usageHistorie.length, 1, 'nur der gueltige Vormonats-Eintrag ueberlebt')
+  assert.equal(s.usageHistorie[0].monat, '2026-06')
+  assert.equal(s.usageHistorie[0].inputTokens, 5)
+  assert.equal(s.usageHistorie[0].kostenCents, 1)
 })
