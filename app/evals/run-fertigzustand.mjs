@@ -18,6 +18,7 @@ import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { flattenEvals, ladeEvalKatalog, validiereEvalErgebnisse } from '../src/eval-catalog.mjs'
 import { runQualityRubric } from './run-quality-rubric.mjs'
+import { urteileJeEval } from '../src/bindungs-urteil.mjs'
 import {
   belegartAusVollzug,
   formatiereMassstabAenderungen,
@@ -41,27 +42,26 @@ const { bindungen, _ungebunden_begruendung: ungebunden, _live_gates: liveGates }
 const evals = flattenEvals(katalog)
 const liveIds = new Set(katalog.externalLiveGateIds)
 
-// --- Maßstabs-Wächter: Womit misst dieser Lauf, und womit maß der letzte? ----
-// Jeder Lauf hinterlegt seinen Maßstab (Katalog samt Bindungen) im Ergebnis.
-// Weicht der aktuelle davon ab, erscheint das unten als eigener Abschnitt
-// „Maßstab geändert" — niemals stumm. Fehlt der Vergleichsstand (erster Lauf,
-// gelöschte Ergebnisdatei), wird auch DAS gesagt, statt „unverändert" zu raten.
-const massstab = massstabSchnappschuss(katalog, bindungen)
+// Der Vergleichsstand des letzten Laufs. Der Maßstab dieses Laufs steht erst nach
+// dem Lauf fest, weil zu ihm gehört, WIE jede Prüfung geurteilt hat — siehe unten.
 let vorherigerLauf = null
 try {
   vorherigerLauf = JSON.parse(await readFile(ergebnisPfad, 'utf8'))
 } catch {
   vorherigerLauf = null
 }
-const massstabAenderungen = vergleicheMassstab(vorherigerLauf?.massstab, massstab)
-const massstabVergleich = massstabAenderungen === null
-  ? { status: 'kein-vergleichsstand', aenderungen: [] }
-  : { status: massstabAenderungen.length ? 'geaendert' : 'unveraendert', aenderungen: massstabAenderungen }
 
 // Jede Prüfdatei einmal bewerten, auch wenn mehrere Evals sie teilen. Ein abgestürzter
 // Playwright-Prozess ist kein Produkturteil: genau dieser klar erkennbare Infrastrukturfehler
 // darf einmal in einem frischen Prozess wiederholt werden. Assertions und Timeouts nie.
 const pruefungen = [...new Set(Object.values(bindungen).flat())]
+
+// Welche Evals hängen an welcher Datei? Umgekehrte Bindung — sie sagt jeder Prüfung,
+// über welche Kennungen sie überhaupt zu urteilen hat.
+const evalsProDatei = new Map()
+for (const [id, dateien] of Object.entries(bindungen)) {
+  for (const datei of dateien) evalsProDatei.set(datei, [...(evalsProDatei.get(datei) || []), id])
+}
 await mkdir(protokollOrdner, { recursive: true })
 
 process.stdout.write(`Führe ${pruefungen.length} Prüfungen aus …\n`)
@@ -84,6 +84,9 @@ for (const [index, datei] of pruefungen.entries()) {
   const start = Date.now()
   let ok = false
   let ausgabe = ''
+  // Beurteilt wird immer nur der LETZTE Versuch. Sonst zaehlte bei einem
+  // Wiederholungslauf die Ausgabe des abgestuerzten Versuchs mit.
+  let letzteAusgabe = ''
   for (let versuch = 1; versuch <= 2; versuch += 1) {
     try {
       const { stdout, stderr } = await ausfuehren('node', argumente, {
@@ -91,22 +94,46 @@ for (const [index, datei] of pruefungen.entries()) {
         maxBuffer: 32 * 1024 * 1024,
         timeout: 300_000,
       })
-      ausgabe += `${versuch > 1 ? '\n--- frischer Infrastruktur-Wiederholungslauf ---\n' : ''}${stdout}\n${stderr}`
+      letzteAusgabe = `${stdout}\n${stderr}`
+      ausgabe += `${versuch > 1 ? '\n--- frischer Infrastruktur-Wiederholungslauf ---\n' : ''}${letzteAusgabe}`
       // Exit 0 ist die Grundbedingung (sonst wirft execFile). Bei --test zusaetzlich
       // die TAP-Ausgabe pruefen, weil der Laeufer einzelne Fehlschlaege sammelt.
       ok = !istTestDatei || !/^not ok /m.test(stdout)
       break
     } catch (ursache) {
       const fehlAusgabe = `${ursache.stdout || ''}\n${ursache.stderr || ''}\n${ursache.message}`
+      letzteAusgabe = fehlAusgabe
       ausgabe += `${versuch > 1 ? '\n--- frischer Infrastruktur-Wiederholungslauf ---\n' : ''}${fehlAusgabe}`
       const browserProzessAbgestuerzt = datei === 'test/v2-smoke.mjs'
         && /Target page, context or browser has been closed/.test(fehlAusgabe)
       if (!browserProzessAbgestuerzt || versuch === 2) break
     }
   }
+  // Eine Pruefung, die mehrere Zusagen misst, darf mehrere Urteile abgeben — aber nur,
+  // wenn sie das selbst ankuendigt. Ohne Ankuendigung gilt ihr Urteil wie bisher fuer
+  // alle ihre Evals. Siehe src/bindungs-urteil.mjs.
+  const stand = urteileJeEval({
+    gebundeneIds: evalsProDatei.get(datei) || [],
+    ausgabe: letzteAusgabe,
+    dateiOk: ok,
+  })
   await writeFile(protokoll, ausgabe, 'utf8')
-  laufErgebnis.set(datei, { ok, belegart, protokoll: `evals/results/laeufe/${name}.log`, dauerMs: Date.now() - start })
-  process.stdout.write(`  [${index + 1}/${pruefungen.length}] ${ok ? '✓' : '✗'} ${datei}\n`)
+  laufErgebnis.set(datei, {
+    ok,
+    modus: stand.modus,
+    urteile: stand.urteile,
+    belegart,
+    protokoll: `evals/results/laeufe/${name}.log`,
+    dauerMs: Date.now() - start,
+  })
+  // Bei „je-eval" sagt die Zeile, WIE VIELE Zusagen halten — nicht nur, dass die Datei
+  // als Ganzes rot ist. Genau diese Auskunft fehlte, solange fuenf Gestalt-Zusagen
+  // hinter einem einzigen Kreuz verschwanden.
+  const kennungen = Object.values(stand.urteile)
+  const anteilText = stand.modus === 'je-eval'
+    ? `  (${kennungen.filter(u => u.ok).length}/${kennungen.length} Kennungen)`
+    : ''
+  process.stdout.write(`  [${index + 1}/${pruefungen.length}] ${ok ? '✓' : '✗'} ${datei}${anteilText}\n`)
 }
 
 // Separater Qualitätsrichter: Goldfälle, Kontraste und vollständige Ausgaben. Diese Werte
@@ -114,16 +141,47 @@ for (const [index, datei] of pruefungen.entries()) {
 // zusätzlich als frischer, protokollierter Beleg für jedes bewertete Gate.
 const qualitaet = runQualityRubric()
 
+// --- Maßstabs-Wächter: Womit misst dieser Lauf, und womit maß der letzte? ----
+// Jeder Lauf hinterlegt seinen Maßstab (Katalog, Bindungen und die Urteilsweise
+// jeder Prüfung) im Ergebnis. Weicht der aktuelle davon ab, erscheint das unten
+// als eigener Abschnitt „Maßstab geändert" — niemals stumm. Fehlt der
+// Vergleichsstand (erster Lauf, gelöschte Ergebnisdatei), wird auch DAS gesagt,
+// statt „unverändert" zu raten.
+const urteilsweise = Object.fromEntries([...laufErgebnis].map(([datei, lauf]) => [datei, lauf.modus]))
+const massstab = massstabSchnappschuss(katalog, bindungen, urteilsweise)
+const massstabAenderungen = vergleicheMassstab(vorherigerLauf?.massstab, massstab)
+const massstabVergleich = massstabAenderungen === null
+  ? { status: 'kein-vergleichsstand', aenderungen: [] }
+  : { status: massstabAenderungen.length ? 'geaendert' : 'unveraendert', aenderungen: massstabAenderungen }
+
+// Was ist gebrochen? Wo die Prüfung ihren Befund selbst nennt, steht er hier — sonst
+// bleibt es beim alten Wortlaut, der nur die Datei benennen kann. „Eval X ist rot, weil
+// irgendein Skript fehlschlug" war die Auskunft, die niemandem half.
+function gebrochenText(urteile) {
+  const gebrochen = urteile.filter(urteil => !urteil.ok)
+  const ohneBefund = gebrochen.filter(urteil => !urteil.hinweis).map(urteil => urteil.datei)
+  return [
+    ohneBefund.length ? `Gebundene Prüfung in diesem Lauf fehlgeschlagen: ${ohneBefund.join(', ')}` : null,
+    ...gebrochen.filter(urteil => urteil.hinweis).map(urteil => `${urteil.datei} meldet: ${urteil.hinweis}`),
+  ].filter(Boolean).join(' · ')
+}
+
 // --- Jedes Eval bewerten -----------------------------------------------------
 const ergebnisEvals = evals.map(eintrag => {
   const gebunden = bindungen[eintrag.id]
 
   if (gebunden?.length) {
     const laeufe = gebunden.map(datei => laufErgebnis.get(datei))
+    // Das Urteil dieser Datei ÜBER DIESES Eval — je nach Prüfung ihr Sammelurteil
+    // oder ihr eigenes Urteil zu genau dieser Kennung.
+    const urteile = gebunden.map((datei, i) => ({
+      datei,
+      ...(laeufe[i]?.urteile?.[eintrag.id] ?? { ok: Boolean(laeufe[i]?.ok) }),
+    }))
     const score = qualitaet.scoredEvalScores[eintrag.id]
     const scoreOk = eintrag.gate !== 'scored'
       || (Number.isFinite(score) && score >= katalog.thresholds.minimumDimensionScore)
-    const allesOk = laeufe.every(lauf => lauf?.ok) && scoreOk
+    const allesOk = urteile.every(urteil => urteil.ok) && scoreOk
     const belege = gebunden.map((datei, i) => ({
       kind: laeufe[i]?.belegart ?? belegartAusVollzug(datei, ''),
       path: laeufe[i]?.protokoll || datei,
@@ -143,9 +201,7 @@ const ergebnisEvals = evals.map(eintrag => {
         id: eintrag.id,
         status: 'failed',
         evidence: belege,
-        note: scoreOk
-          ? `Gebundene Prüfung in diesem Lauf fehlgeschlagen: ${gebunden.filter((d, i) => !laeufe[i]?.ok).join(', ')}`
-          : `Qualitätsrubrik ${score ?? 'ohne Wert'} liegt unter ${katalog.thresholds.minimumDimensionScore}.`,
+        note: scoreOk ? gebrochenText(urteile) : `Qualitätsrubrik ${score ?? 'ohne Wert'} liegt unter ${katalog.thresholds.minimumDimensionScore}.`,
       }
   }
 

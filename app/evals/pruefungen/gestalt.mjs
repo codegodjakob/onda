@@ -343,6 +343,17 @@ try {
 }
 
 // --- Bericht -----------------------------------------------------------------
+// Diese Datei misst fuenf Zusagen und faellt sie einzeln. Die Ankuendigungszeile sagt
+// dem Fertigzustand-Laeufer, dass er die Zeilen darunter als fuenf eigene Urteile lesen
+// darf — statt alle fuenf Evals am Ausgang des ganzen Skripts zu messen. Vorher
+// verschwanden drei bestandene Zusagen hinter zwei gebrochenen, und am Ergebnisstand
+// war nicht zu sehen, WELCHE Zusage gebrochen war.
+//
+// Die Ankuendigung ist zugleich die Sicherung: Wer hier eine Kennung nennt und ihre
+// Ergebniszeile nicht drucken laesst — weil der Abschnitt fehlt oder der Lauf vorher
+// abbricht —, bekommt ein Rot, kein stilles Gruen. Kommt eine DESIGN-Zusage dazu,
+// gehoert sie in DIESE Zeile; sonst faellt sie mit einem lauten Hinweis durch.
+process.stdout.write(`# je-eval: ${ergebnisse.map(e => e.id).join(' ')}\n`)
 let fehlgeschlagen = 0
 for (const e of ergebnisse) {
   process.stdout.write(`${e.bestanden ? 'ok' : 'not ok'} ${e.id} — ${e.titel}\n`)

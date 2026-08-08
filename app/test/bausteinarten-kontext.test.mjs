@@ -82,36 +82,37 @@ test('baueAnfrage nimmt diesen Kontext ohne Verlust an', () => {
   assert.ok(texte.some(text => text.includes('<dokument>Text</dokument>')))
 })
 
-// Issue #36, Entscheidung 2: Es gibt EINE Wahrheit zur Textsorte — die von Hand gesetzte.
-// Der Bausteinlauf soll die Arten daraus ableiten, statt selbst eine zu erfinden. Der Weg
-// dorthin ist das Projektwissen: baueOndaBloecke trägt die Textsorte in den Auftrag.
+// Der Anschluss ans Projektwissen. Dieser Kanal entstand, bevor die Regel galt, und war
+// beim Einsammeln (#33) ein BLINDER Kanal: er baute eine Anfrage, ohne Textsorte,
+// Aussagen-Speicher, Gedaechtnis oder Erkanntes anzuhaengen. Gemeldet hat es nicht ein
+// Unit-Test, sondern die Eigenschafts-Pruefung ueber alle Kanaele (KONTEXT-01, baulich) —
+// dieselbe Lehre wie beim Quellen-Kanal. Ab hier haelt es auch ein Test hier fest.
 //
-// Ohne diesen Block wäre der Kanal blind — er würde als einziger von sechs ohne
-// Projektwissen laufen (evals/pruefungen/kontext-alle-kanaele.mjs).
-test('das Projektwissen reist mit — sonst raet der Lauf die Textsorte selbst', () => {
-  // project.id ist Pflicht: Ohne Kennung liefert textsorteBlock nichts (onda-kontext.mjs:144).
-  const onda = {
-    project: {
-      id: 'p-test',
-      languageProfile: updateLanguageProfile({
-        profile: null,
-        projectId: 'p-test',
-        changes: { genre: 'scientific' },
-        at: 1000,
-      }),
-    },
+// Fixture aus der ECHTEN Quelle (updateLanguageProfile), nicht handgeschrieben: sonst
+// bliebe diese Pruefung gruen, waehrend die echte Datenform daneben weiterlaeuft.
+test('das Projektwissen erreicht den Kanal — und steht ganz hinten', () => {
+  const project = {
+    id: 'projekt-baustein',
+    languageProfile: updateLanguageProfile({
+      profile: null,
+      projectId: 'projekt-baustein',
+      changes: { genre: 'scientific', domain: 'MARKANTES-FACH-4e8b' },
+      at: 1000,
+    }),
   }
-  const mit = baueBausteinKontext({ docText: 'Text', blocks: BLOCKS, onda })
   const ohne = baueBausteinKontext({ docText: 'Text', blocks: BLOCKS })
-  assert.ok(
-    mit.volatiles.length > ohne.volatiles.length,
-    'mit Projektwissen entsteht kein einziger zusaetzlicher Block',
-  )
-  const text = mit.volatiles.join('\n')
-  assert.match(text, /Wissenschaftliche Arbeit|Textsorte/, 'die gesetzte Textsorte erreicht das Modell nicht')
+  const mit = baueBausteinKontext({ docText: 'Text', blocks: BLOCKS, onda: { project, doc: { id: 'doc-1' } } })
+
+  assert.ok(mit.volatiles.length > ohne.volatiles.length, 'ohne Wissensblock waere dies ein blinder Kanal')
+  assert.ok(mit.volatiles.some(block => /MARKANTES-FACH-4e8b/.test(block)), 'die Textsorte erreicht das Modell nicht')
+  // Reihenfolge: Auftrag und Absatzverzeichnis bleiben vorn, das Wissen kommt dahinter.
+  assert.deepEqual(mit.volatiles.slice(0, ohne.volatiles.length), ohne.volatiles)
 })
 
-test('ohne Projektwissen bleibt der Auftrag unveraendert', () => {
-  const kontext = baueBausteinKontext({ docText: 'Text', blocks: BLOCKS, onda: null })
-  assert.equal(kontext.volatiles[0], BAUSTEINARTEN_ANWEISUNG)
+// Regel 3 aus onda-kontext.mjs gilt auch hier: ohne Wissen entsteht GAR KEIN Block —
+// nicht einer, auch kein leerer und kein "unbekannt".
+test('ohne Projektwissen entsteht kein leerer Wissensblock', () => {
+  const leer = baueBausteinKontext({ docText: 'Text', blocks: BLOCKS, onda: { project: { id: 'projekt-leer' } } })
+  const ohne = baueBausteinKontext({ docText: 'Text', blocks: BLOCKS })
+  assert.deepEqual(leer.volatiles, ohne.volatiles)
 })

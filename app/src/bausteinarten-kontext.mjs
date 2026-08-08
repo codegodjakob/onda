@@ -42,6 +42,19 @@ function bisherigerStand(bestand) {
     + 'Behalte diese Namen bei, wo sie weiter passen — benenne nur um, wenn der alte Name falsch geworden ist.'
 }
 
+// onda: {project, doc, docs, memoryStore} — Textsorte, Aussagen-Speicher, Nachbartexte und
+// Gedaechtnis (onda-kontext.mjs), ganz hinten in den volatilen Bloecken.
+//
+// Dieser Kanal entstand, bevor die Regel „jeder Kanal haengt das Projektwissen an" galt, und
+// war beim Einsammeln (#33) ein BLINDER Kanal. Kein Unit-Test hat es gemerkt — sie belegen
+// jede Quelle einzeln. Gemeldet hat es die Eigenschafts-Pruefung ueber ALLE Kanaele
+// (evals/pruefungen/kontext-alle-kanaele.mjs, KONTEXT-01 baulich); derselbe Fall wie zuvor
+// beim Quellen-Kanal.
+//
+// Fuer die Bausteinarten zaehlt vor allem die TEXTSORTE, und zwar staerker als bei jedem
+// anderen Kanal: Schritt 1 des Auftrags oben ist woertlich „bestimme zuerst, was fuer ein
+// Text das ist". Weiss Onda das bereits aus dem Sprachprofil, muss das Modell nicht raten —
+// und eine wissenschaftliche Arbeit bekommt Methode und Befund statt Anekdote und Pointe.
 export function baueBausteinKontext({
   verstaendnis = null,
   docText = '',
@@ -55,16 +68,6 @@ export function baueBausteinKontext({
   if (stand) volatiles.push(stand)
   const verzeichnis = absatzVerzeichnis(blocks, offene)
   if (verzeichnis) volatiles.push(verzeichnis)
-
-  // Das Projektwissen, wie in jedem anderen Kanal auch (evals/pruefungen/kontext-alle-kanaele.mjs
-  // haelt zu, dass keiner blind laeuft). Hier traegt es mehr als anderswo: Darin steht die von
-  // Hand gesetzte Textsorte.
-  //
-  // Issue #36, Entscheidung 2: Es gibt EINE Wahrheit zur Textsorte, und das ist die gesetzte.
-  // Der Lauf leitet die Arten daraus ab, statt selbst eine zu erfinden -- eine geratene
-  // Textsorte wuerde sonst neben einer stehen, von der dem Modell ausdruecklich gesagt wird,
-  // sie sei "selbst gesetzt, nicht geraten" (onda-kontext.mjs).
   if (onda) volatiles.push(...baueOndaBloecke(onda))
-
   return { verstaendnis, docText, volatiles }
 }

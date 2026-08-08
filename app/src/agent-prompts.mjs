@@ -233,6 +233,7 @@ Was du nicht tust:
 - Vom Menschen gesetzte Namen übernimmst du wörtlich, Zeichen für Zeichen. Ihn zu verbessern hieße, eine Entscheidung zu widerrufen.
 
 Findest du keine tragende Gemeinsamkeit, gib eine leere Liste zurück. Das ist ein gültiges Ergebnis.`
+
 // Der Auftrag für den Bausteinlauf. Zwei Dinge in einem Zug: erst erkennen, was für ein
 // Text das ist, DANN daraus die Arten ableiten. Die Reihenfolge steht ausdrücklich im
 // Auftrag, weil sie den ganzen Unterschied macht: Wer zuerst Absätze sortiert, greift zu

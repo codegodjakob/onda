@@ -21,11 +21,32 @@ on:
   push:
     branches: [main]
 
-# Wer zweimal hintereinander pusht, braucht den ersten Lauf nicht mehr.
-# Spart Wartezeit und Rechenminuten.
+# WARUM das Abbrechen am Ausloeser haengt und nicht fuer alle gleich gilt:
+#
+# Am Pull Request ist Abbrechen richtig. Wer zweimal hintereinander auf denselben
+# Zweig pusht, braucht den ersten Lauf nicht mehr — beurteilt wird ohnehin der
+# neueste Stand. Das spart Wartezeit und Rechenminuten. Alle Laeufe eines Pull
+# Requests liegen in derselben Gruppe (github.ref ist dort refs/pull/<Nr>/merge),
+# der neue raeumt den alten weg.
+#
+# Auf main ist Abbrechen falsch. Dort soll JEDER gelandete Stand seinen eigenen
+# Beleg bekommen. Sonst steht ein Commit in der Historie, fuer den nie eine
+# Pruefung lief — und wenn spaeter etwas rot wird, weiss niemand mehr, welcher
+# Stand es gebrochen hat. Genau das ist am 8. August 2026 passiert: von fuenf
+# main-Laeufen hintereinander wurden VIER abgebrochen, darunter der zu 116d6de
+# nach 1m43s, weil Parallelsitzungen kurz hintereinander nachschoben.
+#
+# Darum bekommt auf main jeder Commit seine EIGENE Gruppe (github.sha). Zwei
+# main-Laeufe treffen sich damit nie in derselben Gruppe, also kann auch keiner
+# den anderen abbrechen oder aufhalten.
+#
+# `cancel-in-progress: false` allein haette NICHT gereicht: GitHub haelt je Gruppe
+# hoechstens EINEN wartenden Lauf. Beim dritten Push waere der wartende zweite
+# weggeraeumt worden — und dem mittleren Commit fehlte wieder der Beleg. Der
+# Schalter steuert nur den laufenden Lauf, nicht den wartenden.
 concurrency:
-  group: pruefung-${{ github.ref }}
-  cancel-in-progress: true
+  group: pruefung-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Der Lauf liest nur. Er braucht kein Recht, irgendetwas am Projekt zu aendern —
 # also bekommt er auch keines.

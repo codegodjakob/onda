@@ -149,9 +149,9 @@ const KANAELE = Object.freeze({
       onda,
     }),
   },
-  // Der Bausteinlauf braucht das Projektwissen dringender als jeder andere Kanal: Darin steht
-  // die von Hand gesetzte Textsorte, aus der er die Bausteinarten ableiten soll, statt selbst
-  // eine zu raten (Issue #36, Entscheidung 2).
+  // Der Bausteinarten-Kanal kam mit dem Einsammeln der Zweig-Inventur (#33) dazu und war
+  // dabei zunaechst blind — genau der Befund von #30, nur eine Runde spaeter. Er fuehrt
+  // Projektverstaendnis UND Dokumenttext, also zwei gecachte Bloecke.
   bausteinarten: {
     gecacht: 2,
     baue: onda => baueBausteinKontext({

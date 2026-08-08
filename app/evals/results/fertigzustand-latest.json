@@ -3,8 +3,8 @@
   "catalogVersion": "2026-08-05.3",
   "stage": "FERTIGZUSTAND",
   "iteration": 1,
-  "generatedAt": "2026-08-08T13:40:29.042Z",
-  "gitCommit": "ddc1b2e70437a1e3a6cbebc4f07d28d8b7b5a0fc",
+  "generatedAt": "2026-08-08T13:52:19.711Z",
+  "gitCommit": "eb067aef82b57efe8e08618caa3bf279241d4566",
   "rubricScores": {
     "truth": 5,
     "authorship": 5,
@@ -2959,6 +2959,10 @@
       "ONDA-UI-22": [
         "evals/run-onda-ui-quality.mjs"
       ]
+    },
+    "urteilsweise": {
+      "evals/pruefungen/gestalt.mjs": "je-eval",
+      "evals/run-onda-ui-quality.mjs": "je-eval"
     }
   },
   "evals": [

@@ -2,14 +2,17 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   MODELLE, TASK_TABLE, PREISE, HINWEISE_SCHEMA, VERSTAENDNIS_SCHEMA, ERWEITERUNGEN_SCHEMA,
-  BAUSTEINARTEN_SCHEMA, QUELLENTHEMEN_SCHEMA,
+  QUELLENTHEMEN_SCHEMA, BAUSTEINARTEN_SCHEMA,
   API_URL, baueAnfrage, schaetzeKostenCents,
 } from '../src/agent-tasks.mjs'
 import { SYSTEM_COACH } from '../src/agent-prompts.mjs'
 import { FUNKTIONEN } from '../src/bausteinarten-vertrag.mjs'
 
 test('TASK_TABLE ist vollstaendig und zeigt auf gueltige Modelle', () => {
-  const tasks = ['verstaendnis', 'hinweise', 'erweiterungen', 'bausteinarten', 'quellenthemen', 'chat', 'titel', 'zusammenfassung']
+  const tasks = [
+    'verstaendnis', 'hinweise', 'erweiterungen', 'quellenthemen', 'bausteinarten',
+    'chat', 'titel', 'zusammenfassung',
+  ]
   assert.deepEqual(Object.keys(TASK_TABLE).sort(), tasks.slice().sort())
   for (const name of tasks) {
     const eintrag = TASK_TABLE[name]
