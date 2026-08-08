@@ -520,6 +520,27 @@ test('fuehreChatVorgangAus: Sperre wird in JEDEM Pfad zurueckgesetzt (Erfolg, Fe
   assert.deepEqual(sperrenVerlauf, [true, false, true, false, true, false], 'jeder Vorgang muss die Sperre setzen und wieder loesen')
 })
 
+// Task 6 (Chat-Kanal durchs Tor): fuehreChatVorgangAus reichte den Rueckgabewert von
+// chatte() bisher NICHT durch (der try-Block endete immer mit dem festen { gestartet: true }).
+// Das Lauf-Tor (lauf-tor.mjs) liest genau dieses laufFn-Ergebnis, um im Journal zwischen
+// 'geliefert' und 'fehler' zu unterscheiden (bewerteLaufErgebnis prueft ergebnis.erfolg ===
+// false) -- chatte() (in workspace.js: fuehreChatLauf) faengt Chat-Fehler intern ab und
+// kehrt normal (nicht werfend) mit { erfolg: false, fehler } zurueck. Ohne Durchreichen saehe
+// das Tor JEDEN Chat-Lauf als 'geliefert', auch einen, der an einem Gateway-Fehler scheiterte.
+test('fuehreChatVorgangAus reicht ein Fehlschlag-Ergebnis von chatte() durch', async () => {
+  const ergebnis = await fuehreChatVorgangAus(chatVorgangEingabe({
+    chatte: async () => ({ erfolg: false, fehler: 'schema' }),
+  }))
+  assert.deepEqual(ergebnis, { gestartet: true, erfolg: false, fehler: 'schema' })
+})
+
+test('fuehreChatVorgangAus bleibt bei { gestartet: true }, wenn chatte() nichts zurueckgibt', async () => {
+  const ergebnis = await fuehreChatVorgangAus(chatVorgangEingabe({
+    chatte: async () => {},
+  }))
+  assert.deepEqual(ergebnis, { gestartet: true })
+})
+
 test('fuehreChatVorgangAus: bereits laufender Vorgang blockiert sofort, ohne Sperre/Status/Callbacks anzufassen', async () => {
   let sperreAufrufe = 0
   let statusAufrufe = 0
@@ -558,7 +579,20 @@ test('fuehreChatVorgangAus: setzt Status fehler, wenn chatte/verdichte selbst wi
     chatte: async () => { throw { typ: 'ueberlastet' } },
   }))
   assert.deepEqual(statusVerlauf, [['laeuft', undefined], ['fehler', 'ueberlastet']])
-  assert.deepEqual(ergebnis, { gestartet: true, erfolg: false })
+  // Branch-Review-Nacharbeit (Finding 4): das Sicherheitsnetz trug den Fehlertyp bisher nicht
+  // im Rueckgabewert -- ein geworfener Fehler aus chatte()/verdichte() waere im Lauf-Tor-Journal
+  // (bewerteLaufErgebnis liest ergebnis.fehler) als 'unbekannt' gelandet statt als 'ueberlastet'.
+  assert.deepEqual(ergebnis, { gestartet: true, erfolg: false, fehler: 'ueberlastet' })
+})
+
+// Branch-Review-Nacharbeit (Finding 4): eigener Test je Fehlertyp reicht nicht aus, um zu
+// beweisen, dass IRGENDEIN geworfener typ durchgereicht wird und nicht nur zufaellig
+// 'ueberlastet' -- 'offline' als zweiter, unabhaengiger Beleg.
+test('fuehreChatVorgangAus: ein geworfenes { typ: "offline" } aus chatte() traegt fehler: "offline" im Ergebnis', async () => {
+  const ergebnis = await fuehreChatVorgangAus(chatVorgangEingabe({
+    chatte: async () => { throw { typ: 'offline' } },
+  }))
+  assert.deepEqual(ergebnis, { gestartet: true, erfolg: false, fehler: 'offline' })
 })
 
 // Fix-Runde 2, Finding 6 (hochgestuft): sperreSetzen(true) stand vorher AUSSERHALB von
@@ -592,6 +626,14 @@ test('fuehreChatVorgangAus: ein einmaliger Wurf beim Setzen der Sperre (true) wi
     laeuftBereits: () => sperre,
     sperreSetzen,
   }))
-  assert.deepEqual(ergebnis, { gestartet: true, erfolg: false }, 'catch faengt den Wurf aus sperreSetzen(true) als Sicherheitsnetz ab')
+  // fehler: undefined explizit erwartet (Finding 4): der geworfene Fehler ist hier ein blankes
+  // Error-Objekt ohne .typ, also ist fehler?.typ undefined -- die Eigenschaft EXISTIERT trotzdem
+  // im Rueckgabeobjekt (fehler: fehler?.typ), und deepEqual (node:assert/strict, also
+  // deepStrictEqual) unterscheidet "Schluessel fehlt" von "Schluessel mit Wert undefined".
+  assert.deepEqual(
+    ergebnis,
+    { gestartet: true, erfolg: false, fehler: undefined },
+    'catch faengt den Wurf aus sperreSetzen(true) als Sicherheitsnetz ab',
+  )
   assert.equal(sperre, false, 'die Sperre muss danach wieder frei sein -- ein Folge-Vorgang darf nicht faelschlich blockiert bleiben')
 })

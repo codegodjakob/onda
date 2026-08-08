@@ -26,6 +26,7 @@ import { baueHinweisKontext } from '../../src/hinweis-kontext.mjs'
 import { baueErweiterungKontext } from '../../src/erweiterung-kontext.mjs'
 import { baueChatKontext } from '../../src/chat-kontext.mjs'
 import { baueVerstaendnisKontext } from '../../src/verstaendnis-kontext.mjs'
+import { baueQuellenKontext } from '../../src/quellen-kontext.mjs'
 import { baueAnfrage } from '../../src/agent-tasks.mjs'
 import { updateLanguageProfile } from '../../src/language-profile.mjs'
 import { synchronizeClaimLedger } from '../../src/claim-ledger.mjs'
@@ -100,21 +101,53 @@ function vollesWissen() {
   }
 }
 
+// Je Kanal zwei Angaben: wie sein Kontext gebaut wird, und WIE VIELE Blöcke seines
+// Anfragekörpers cache_control tragen dürfen. Der Schlüssel ist der Task-Name, mit dem
+// baueAnfrage aufgerufen wird — nicht frei gewählt.
+//
+// Warum `gecacht` nicht überall zwei ist: baueAnfrage legt cache_control auf
+// Projektverständnis UND Dokumenttext, aber jeweils nur, wenn es sie gibt. Der
+// Quellen-Kanal schickt bewusst KEINEN Dokumenttext mit — wonach die Quellen eines
+// Projekts sich ordnen, ist eine Frage des Projekts und nicht des gerade offenen Textes
+// (quellen-kontext.mjs). Er hat deshalb genau einen gecachten Block.
+//
+// Die Zahl steht hier ausgeschrieben und wird nicht gezählt: ein Kanal, der seinen
+// Dokumenttext still verliert, soll auffliegen, statt dass die Prüfung sich ihm anpasst.
 const KANAELE = Object.freeze({
-  hinweise: onda => baueHinweisKontext({ verstaendnis: { task: 'Aufsatz' }, docText: 'Dokumenttext', onda }),
-  erweiterungen: onda => baueErweiterungKontext({ verstaendnis: { task: 'Aufsatz' }, docText: 'Dokumenttext', onda }),
-  chat: onda => baueChatKontext({
-    verstaendnis: { task: 'Aufsatz' },
-    docText: 'Dokumenttext',
-    anfrage: 'Was meinst du?',
-    onda,
-  }),
-  verstaendnis: onda => baueVerstaendnisKontext({
-    modus: 'entwurf',
-    verstaendnis: { task: 'Aufsatz' },
-    docText: 'Dokumenttext',
-    onda,
-  }),
+  hinweise: {
+    gecacht: 2,
+    baue: onda => baueHinweisKontext({ verstaendnis: { task: 'Aufsatz' }, docText: 'Dokumenttext', onda }),
+  },
+  erweiterungen: {
+    gecacht: 2,
+    baue: onda => baueErweiterungKontext({ verstaendnis: { task: 'Aufsatz' }, docText: 'Dokumenttext', onda }),
+  },
+  chat: {
+    gecacht: 2,
+    baue: onda => baueChatKontext({
+      verstaendnis: { task: 'Aufsatz' },
+      docText: 'Dokumenttext',
+      anfrage: 'Was meinst du?',
+      onda,
+    }),
+  },
+  verstaendnis: {
+    gecacht: 2,
+    baue: onda => baueVerstaendnisKontext({
+      modus: 'entwurf',
+      verstaendnis: { task: 'Aufsatz' },
+      docText: 'Dokumenttext',
+      onda,
+    }),
+  },
+  quellenthemen: {
+    gecacht: 1,
+    baue: onda => baueQuellenKontext({
+      verstaendnis: { task: 'Aufsatz' },
+      quellen: [{ id: 'q1', type: 'web', metadata: { title: { value: 'Eine Quelle' } } }],
+      onda,
+    }),
+  },
 })
 
 // --- Gegenprobe zuerst: trägt der Prüfstand überhaupt Wissen? -----------------
@@ -153,12 +186,12 @@ for (const block of bloeckeVoll) {
 // --- 01 und 02: je Kanal am tatsächlichen Anfragekörper ----------------------
 // Nicht am Zwischenwert: baueAnfrage konsumiert ausschliesslich bestimmte Felder, ein
 // Block an falscher Stelle wird stillschweigend verschluckt.
-for (const [name, baue] of Object.entries(KANAELE)) {
+for (const [name, kanal] of Object.entries(KANAELE)) {
   let mit = null
   let ohne = null
   try {
-    mit = baueAnfrage(name, baue(vollesWissen()))
-    ohne = baueAnfrage(name, baue(null))
+    mit = baueAnfrage(name, kanal.baue(vollesWissen()))
+    ohne = baueAnfrage(name, kanal.baue(null))
   } catch (ursache) {
     fehler.push(`Kanal ${name}: die Anfrage lässt sich nicht bauen (${ursache.message}).`)
     continue
@@ -184,10 +217,10 @@ for (const [name, baue] of Object.entries(KANAELE)) {
     continue
   }
   const gecacht = inhalt.filter(block => block && typeof block === 'object' && 'cache_control' in block)
-  if (gecacht.length !== 2) {
+  if (gecacht.length !== kanal.gecacht) {
     fehler.push(
-      `KONTEXT-02, Kanal ${name}: ${gecacht.length} Blöcke tragen cache_control, erwartet sind genau zwei `
-      + '(Projektverständnis und Dokumenttext).',
+      `KONTEXT-02, Kanal ${name}: ${gecacht.length} Blöcke tragen cache_control, erwartet sind genau `
+      + `${kanal.gecacht} (Projektverständnis${kanal.gecacht > 1 ? ' und Dokumenttext' : ' allein — dieser Kanal führt keinen Dokumenttext'}).`,
     )
   }
   for (const block of gecacht) {
@@ -213,6 +246,15 @@ const dateien = (await readdir(fileURLToPath(srcOrdner)))
 if (dateien.length < 4) {
   fehler.push(`Baulich: nur ${dateien.length} Kanal-Module gefunden, erwartet mindestens vier — die Prüfung misst zu wenig.`)
 }
+// Und jedes gefundene Modul muss oben auch am VERHALTEN geprüft sein. Genau diese Lücke war
+// der Befund von Issue #30: der Quellen-Kanal entstand, die bauliche Prüfung sah ihn, die
+// Verhaltensprüfung nicht — ein Kanal, den nur die halbe Prüfung kennt, ist halb geprüft.
+if (dateien.length !== Object.keys(KANAELE).length) {
+  fehler.push(
+    `Baulich: ${dateien.length} Kanal-Module liegen in src/, aber ${Object.keys(KANAELE).length} stehen in der `
+    + 'Verhaltensprüfung. Trage den neuen Kanal in KANAELE ein, sonst prüft ihn nur die Textsuche.',
+  )
+}
 for (const datei of dateien) {
   const quelltext = (await lies(datei))
     .split('\n')
@@ -221,7 +263,7 @@ for (const datei of dateien) {
   if (!quelltext.includes('baueOndaBloecke')) {
     fehler.push(
       `KONTEXT-01, baulich: src/${datei} baut einen Anfragekontext, hängt aber kein Projektwissen an. `
-      + 'Ein blinder Kanal ist Wissen, das in einem Viertel der Fälle fehlt.',
+      + `Ein blinder Kanal ist Wissen, das in einem von ${dateien.length} Fällen fehlt.`,
     )
   }
 }

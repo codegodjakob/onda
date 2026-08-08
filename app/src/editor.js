@@ -17,11 +17,13 @@ import { DEFAULT_SETTINGS, normalizeSettings } from './settings-model.mjs'
 import { BlockIdentity, ensureTopLevelBlockIds, getActiveBlockId, getEditorBlocks, insertSemanticBlock, replaceAnchoredText, replaceAnchoredTexts, replaceFindingTarget } from './block-identity.js'
 import { buildExampleStructure, buildExampleNarrative, buildExampleCoach, buildExampleLane, buildExampleBody, buildExampleMaterial, buildExampleUnderstanding, buildExampleAgentMessages } from './example.js'
 import { EXAMPLE_PROJECT_ID, migrateExampleSeed } from './example-seed.mjs'
-import { initGateway, runTask, hatSchluessel, setzeSchluessel, loescheSchluessel } from './agent-gateway.mjs'
+import { initGateway, hatSchluessel, setzeSchluessel, loescheSchluessel } from './agent-gateway.mjs'
 import { ensureProjectEvidenceShape } from './source-model.mjs'
 import { ensureQuellenThemen } from './quellen-thema-model.mjs'
 import { ensureProjectResearchShape } from './research-run.mjs'
 import { ensureMemoryStore, ensureProjectMemoryShape } from './memory-model.mjs'
+import { normalisiereLaufJournal } from './lauf-journal.mjs'
+import { initLaufTor } from './lauf-tor.mjs'
 import { synchronizeProjectMemory } from './memory-dossier.mjs'
 import { ensureArgumentModel } from './argument-model.mjs'
 import { ensureLanguageProfile } from './language-profile.mjs'
@@ -92,6 +94,12 @@ export const state = {
   activeProject: null,
   settings: { ...DEFAULTS },
   memoryStore: ensureMemoryStore(null),
+  // Eigener Top-Level-Bereich in data.json, NICHT im memoryStore: die Maschinen-Buchführung
+  // über bezahlte KI-Läufe (Issue #12) gehört nicht in den Consent-gebundenen Ereignisspeicher
+  // des Gedächtnisses — das würde eine zweite Bedeutung in denselben Speicher mischen.
+  // `laufJournal` folgt stattdessen exakt dem Muster von `settings`/`memoryStore`, bleibt aber
+  // IN data.json (Leitplanke: keine neue Wahrheit neben data.json).
+  laufJournal: normalisiereLaufJournal(null),
   editor: null,
   native: NATIVE,
 }
@@ -210,6 +218,7 @@ function load() {
   state.active = d ? d.active : null
   state.settings = normalizeSettings(d && d.settings)
   state.memoryStore = ensureMemoryStore(d && d.memoryStore)
+  state.laufJournal = normalisiereLaufJournal(d && d.laufJournal)
   // Projekte: bestehende Texte wandern in ein Standard-Projekt (Migration).
   state.projects = (d && Array.isArray(d.projects) && d.projects.length) ? d.projects : []
   if (!state.projects.length) {
@@ -288,6 +297,7 @@ function baueSpeicherlast() {
     projects: state.projects, activeProject: state.activeProject,
     settings: state.settings,
     memoryStore: state.memoryStore,
+    laufJournal: state.laufJournal,
   })
 }
 
@@ -669,12 +679,16 @@ export function boot() {
   // Der Transport wird je Aufruf gewählt (Mac-Brücke, sonst Browser-Direktweg).
   initGateway({ getSettings: () => state.settings, persist })
 
+  // Das Lauf-Tor: der einzige Weg zu runTask (Issue #12). Liest/schreibt state.laufJournal,
+  // löst Speicherungen über persist bzw. den debounced scheduleSave aus.
+  initLaufTor({ getJournal: () => state.laufJournal, persist, scheduleSave })
+
   const ctx = {
     editor: state.editor, state,
     ops: { newDoc, openDoc, duplicateDoc, trashDoc, restoreDoc, deleteForever, newProject, renameProject, openProject },
     persist, scheduleSave, flushSave, exportMd, downloadFile, importLocalState, deleteAllLocalData,
     docTitle, activeDoc, autoGrowTitle, activeProjectObj, showHomeView,
-    gateway: { runTask, hatSchluessel, setzeSchluessel, loescheSchluessel },
+    gateway: { hatSchluessel, setzeSchluessel, loescheSchluessel },
   }
   initUI(ctx)
   initOndaShell(ctx)

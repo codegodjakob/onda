@@ -27,7 +27,15 @@ import {
 import { Plugin, PluginKey } from '@tiptap/pm/state'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import { applySettings } from './ui.js'
-import { hatSchluessel, setzeSchluessel, loescheSchluessel, runTask } from './agent-gateway.mjs'
+import { hatSchluessel, setzeSchluessel, loescheSchluessel } from './agent-gateway.mjs'
+// Das Lauf-Tor (Issue #12): Sperre, Signatur, Buchung und Journal fuer jeden bezahlten
+// Lauf. Alle vier Kanaele (Interview, Chat, Hinweis, Erweiterung, Task 8 schliesst die
+// Reihe) laufen jetzt ausschliesslich hierueber — kein Kanal importiert runTask mehr
+// direkt aus agent-gateway.mjs, jeder bekommt es als Parameter von fuehreLaufAus'
+// laufFn (siehe starteVerstaendnisEntwurf/sendeInterviewAntwort, sendeAgentenChat/
+// sendeLocalChat, fuehreHinweislaufAus, fuehreErweiterungslaufAus).
+import { fuehreLaufAus, kanalGesperrt, merkeKarteGezeigt, torJournal } from './lauf-tor.mjs'
+import { letzteBezahlteSignatur } from './lauf-journal.mjs'
 import { aktuellerAgentStatus, beiAgentStatus, setzeAgentStatus, statuszeileFuer } from './agent-status.mjs'
 import { EXAMPLE_PROJECT_ID, seedBodySignature } from './example-seed.mjs'
 import { MODELLE, TASK_TABLE } from './agent-tasks.mjs'
@@ -177,19 +185,24 @@ let localSummaryFocusRequest = null
 // Anmerkung von vorhin zurueckholen — und genau das erwartet niemand.
 let letzteAenderungWarAnmerkung = false
 let agentInitiativeTimer = null
-// Echter Hinweislauf (Etappe A, Spec §5): genau ein Lauf gleichzeitig; hinweislaufTimer ist
-// der Zeitgeber-Griff fuer den Pausen-Ausloeser (planeHinweislauf/clearHinweislaufTimer, H-3).
-let hinweislaufAktiv = false
+// Echter Hinweislauf (Etappe A, Spec §5): genau ein Lauf gleichzeitig. Die Lauf-Sperre selbst
+// (frueher hier als hinweislaufAktiv) lebt jetzt im Lauf-Tor (lauf-tor.mjs, Task 7) —
+// kanalGesperrt('hinweis') fragt sie ab, fuehreLaufAus setzt/loest sie synchron. Hier bleibt nur
+// noch hinweislaufTimer, der Zeitgeber-Griff fuer den Pausen-Ausloeser (planeHinweislauf/
+// clearHinweislaufTimer, H-3).
 let hinweislaufTimer = null
 // Zweiter Kanal (Erweiterungen): eigene Sperre, damit ein Erweiterungslauf und ein
 // Hinweislauf einander nicht ausschliessen -- es sind zwei verschiedene Fragen an
 // denselben Text, und der Cache-Praefix ist derselbe, also kostet der zweite wenig.
-let erweiterungslaufAktiv = false
+// Die Sperre selbst (frueher hier als erweiterungslaufAktiv) lebt jetzt im Lauf-Tor
+// (lauf-tor.mjs, Task 8) — kanalGesperrt('erweiterung') fragt sie ab, fuehreLaufAus
+// setzt/loest sie synchron. Hier bleibt nur noch erweiterungslaufTimer, der
+// Zeitgeber-Griff fuer den Aufschauen-Ausloeser (planeErweiterungslauf/
+// clearErweiterungslaufTimer).
 let erweiterungslaufTimer = null
 // Dritter Lauf (Quellenthemen): wieder eine eigene Sperre. Er fragt etwas ganz anderes
 // als die beiden ueber ihm -- nicht nach dem Text, sondern nach dem Material des
 // Projekts -- und darf deshalb auch neben ihnen laufen.
-let quellenlaufAktiv = false
 let letzteQuellenSignatur = null
 // Zeitgeber fuer den Momentwechsel: wenn genug Ruhe vergangen ist, darf mehr sichtbar
 // werden. Ohne diesen Zeitgeber erschiene das Zurueckgehaltene erst beim naechsten
@@ -209,9 +222,15 @@ let momentVonHand = false
 // gerade liest, sobald man wieder tippt. Wird mit dem Dokument zurueckgesetzt.
 let gezeigteHinweise = { docId: null, ids: new Set() }
 
-function merkeGezeigt(docId, findingId) {
+function merkeGezeigt(docId, findingId, { art, moment } = {}) {
   if (gezeigteHinweise.docId !== docId) gezeigteHinweise = { docId, ids: new Set() }
-  if (findingId) gezeigteHinweise.ids.add(findingId)
+  if (!findingId) return
+  const istErstesMal = !gezeigteHinweise.ids.has(findingId)
+  gezeigteHinweise.ids.add(findingId)
+  // Erstes Erscheinen je Karte wandert zusaetzlich ins Journal (Messpunkt fuer die
+  // spaetere Momente-Kalibrierung, Issue #12-Kommentar) -- das fluechtige Set hier
+  // bleibt unveraendert die Anzeige-Wahrheit, der Journal-Eintrag ist rein additiv.
+  if (istErstesMal) merkeKarteGezeigt({ findingId, art, moment })
 }
 
 function schonGezeigt(docId, findingId) {
@@ -233,14 +252,20 @@ let evidenceFocusRequest = false
 let evidenceReturnFindingId = null
 let riskConfirmationFocusRequest = false
 let ondaDialog = null
-// Verständnis-Interview: einmal je Projekt+Dokument prüfen, genau ein Lauf gleichzeitig.
+// Verständnis-Interview: einmal je Projekt+Dokument prüfen. Die Lauf-Sperre selbst
+// (frueher hier als interviewLaufAktiv) lebt jetzt im Lauf-Tor (lauf-tor.mjs) —
+// kanalGesperrt('interview') fragt sie ab, fuehreLaufAus setzt/loest sie synchron.
 let interviewPruefKey = null
-let interviewLaufAktiv = false
 let interviewStatus = null // null | 'laeuft' | ruhiger Fehlertext für die Statuszeile
 let pausierterAutomatiklauf = null
-// Echter Chat (Etappe A, Bereich C): genau ein Lauf gleichzeitig, app-weit (Panel und,
-// ab Task C-3, auch die Randkarten-Gespraeche teilen sich dieses Feld ueber fuehreChatLauf).
-let laufenderChatLauf = null
+// Echter Chat (Etappe A, Bereich C; Tor-Anschluss Task 6): die SPERRE wohnt jetzt im Tor
+// (lauf-tor.mjs, kanalGesperrt('chat')/fuehreLaufAus) — hier lebt nur noch der
+// Stream-Zustand, app-weit EIN Feld (Panel und Randkarten-Gespraeche teilen es sich
+// weiterhin ueber fuehreChatLauf).
+//
+// Das Akzent-Menue, das der Zweig hier noch mitbrachte, kommt NICHT zurueck: main hat
+// es abgeschafft, Sky ist der einzige Akzent (onda-design-contract.test.mjs).
+let chatStream = null
 
 const AGENT_IDLE_MS = 3000
 const AGENT_BOUNDARY_IDLE_MS = 300
@@ -1858,7 +1883,7 @@ function openProjectSourcesModal(opener, gewuenschterEintrag = null) {
     const ordnen = createNode('button', 'onda-blaetter__eintrag', 'Nach Thema ordnen')
     ordnen.id = 'quellenOrdnen'
     ordnen.type = 'button'
-    ordnen.disabled = quellenlaufAktiv
+    ordnen.disabled = kanalGesperrt('quellen')
     ordnen.addEventListener('click', async () => {
       melde('Onda ordnet die Quellen …')
       ordnen.disabled = true
@@ -2649,79 +2674,101 @@ function pruefeVerstaendnisInterview() {
   persistWorkspace()
 }
 
-async function starteVerstaendnisEntwurf(projectId, docId) {
-  if (interviewLaufAktiv) return
-  interviewLaufAktiv = true
-  interviewStatus = 'laeuft'
-  // Ausserhalb des try deklariert, damit der catch-Zweig bei einem fehlgeschlagenen
-  // Lauf noch weiss, fuer welches Projekt/welche Nachricht der Fehlertext sichtbar
-  // gemacht werden muss (Fix-Runde 1, Finding 1).
-  let project = null
-  try {
-    const schluesselDa = await hatSchluessel()
-    if (!ctx || ctx.activeDoc()?.id !== docId) { interviewStatus = null; return }
-    project = ctx.state.projects.find(candidate => candidate.id === projectId)
-    const workspace = activeWorkspace()
-    if (!project || !workspace) { interviewStatus = null; return }
-    if (!schluesselDa) {
-      // Offline-Würde: kein Entwurf möglich — die feste Eröffnungsfrage steht
-      // trotzdem bereit; die Antwort darauf scheitert später ruhig per Statuszeile.
-      interviewStatus = null
-      const message = ensureInterviewMessage(workspace, project)
-      if (!message.text) message.text = INTERVIEW_EROEFFNUNG
-      persistWorkspace()
-      return
-    }
-    const kostenfreigabe = beansprucheAutomatikKosten('verstaendnis', { projectId, docId })
-    if (!kostenfreigabe.erlaubt) {
-      interviewStatus = BUDGET_PAUSE_TEXT
-      const message = ensureInterviewMessage(workspace, project)
-      message.text = BUDGET_PAUSE_TEXT
-      persistWorkspace()
-      return
-    }
-    // Projektweite Kostenbremse (Fix-Runde 1, Finding 2): VOR dem bezahlten Aufruf
-    // setzen und sofort persistieren, damit sie auch bei einem Fehlschlag gilt —
-    // kein zweiter bezahlter Versuch über weitere Dokumente desselben Projekts.
-    markiereEntwurfVersucht(ensureProjectUnderstanding(project))
-    persistWorkspace()
-    // Bereich W (Aura/Statuszeile) atmet ausschliesslich am echten Gateway-Zustand
-    // (applyAuraState liest aktuellerAgentStatus().zustand === 'laeuft') — dieser
-    // Aufruf ist der erste echte runTask-Aufruf im Panel, darum wird er hier gesetzt.
-    setzeAgentStatus({ zustand: 'laeuft' })
-    const { daten } = await runTask('verstaendnis', verstaendnisEingabe('entwurf'))
-    setzeAgentStatus({ zustand: 'bereit' })
-    if (!ctx) return
-    uebernimmVerstaendnis(project, daten)
-    interviewStatus = null
-    const antwort = String(daten.antwortText || '').trim()
-    if (antwort && ctx.activeDoc()?.id === docId) {
-      const message = ensureInterviewMessage(activeWorkspace(), project)
-      message.text = antwort
-      appendThreadMessage(message.thread, 'agent', antwort, Date.now())
-      announceAgentStatus(antwort)
-    }
-    ctx.persist()
-    refreshProjectUnderstandingModal()
-  } catch (fehler) {
-    interviewStatus = interviewFehlerText(fehler)
-    setzeAgentStatus({ zustand: 'fehler', fehlerTyp: fehler?.typ })
-    // Sichtbarkeit erzwingen (Fix-Runde 1, Finding 1): ohne eine existierende
-    // Nachricht kehrt renderAgentWidget vor dem interviewStatus-Absatz zurück, und
-    // der Fehlertext bliebe unsichtbar — bei bereits gesetztem Prüf-Gate ohne jede
-    // Wiederholmöglichkeit. Der Nutzer bekommt so den ruhigen Fehlertext UND das
-    // Eingabefeld; kein automatischer Retry, kein Kosten-Risiko.
-    if (ctx && project && ctx.activeDoc()?.id === docId) {
-      const workspace = activeWorkspace()
-      if (workspace) {
-        ensureInterviewMessage(workspace, project)
-        persistWorkspace()
-      }
-    }
-  } finally {
-    interviewLaufAktiv = false
-    if (ctx) refreshWorkspace()
+// Kleiner FNV-1a-Hash fuer Signaturen aus freiem Nutzertext — Muster wie einfacherHash
+// in erweiterungslauf-model.mjs, hier lokal, weil auch der Chat-Kanal (Task 6) ihn
+// braucht. Dient nur der Journal-Kennzeichnung, nicht einer Doppelbezahl-Sperre
+// (der Interview-Kanal laeuft ohne einmalJeSignatur — siehe unten).
+function fnvSignatur(text) {
+  let hash = 2166136261
+  const value = String(text || '')
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index)
+    hash = Math.imul(hash, 16777619)
   }
+  return (hash >>> 0).toString(36)
+}
+
+async function starteVerstaendnisEntwurf(projectId, docId) {
+  // Sperre, Buchung und Journal laufen jetzt durchs Lauf-Tor (lauf-tor.mjs) — hier
+  // bleibt nur noch der fachliche Rumpf. kanalGesperrt/fuehreLaufAus ersetzen das
+  // frühere interviewLaufAktiv; die Signatur wird SYNCHRON hier gebildet (vor jedem
+  // await), weil docPlainText() den gerade aktiven Doc liest und das an dieser Stelle
+  // im Aufruf noch derselbe Doc ist, fuer den der Lauf gedacht ist.
+  if (kanalGesperrt('interview')) return
+  interviewStatus = 'laeuft'
+  const signatur = `${docId}:${seedBodySignature(docPlainText())}`
+  await fuehreLaufAus({ kanal: 'interview', ausloeser: 'entwurf', signatur }, async ({ runTask }) => {
+    // Ausserhalb des try deklariert, damit der catch-Zweig bei einem fehlgeschlagenen
+    // Lauf noch weiss, fuer welches Projekt/welche Nachricht der Fehlertext sichtbar
+    // gemacht werden muss (Fix-Runde 1, Finding 1).
+    let project = null
+    try {
+      const schluesselDa = await hatSchluessel()
+      if (!ctx || ctx.activeDoc()?.id !== docId) { interviewStatus = null; return }
+      project = ctx.state.projects.find(candidate => candidate.id === projectId)
+      const workspace = activeWorkspace()
+      if (!project || !workspace) { interviewStatus = null; return }
+      if (!schluesselDa) {
+        // Offline-Würde: kein Entwurf möglich — die feste Eröffnungsfrage steht
+        // trotzdem bereit; die Antwort darauf scheitert später ruhig per Statuszeile.
+        interviewStatus = null
+        const message = ensureInterviewMessage(workspace, project)
+        if (!message.text) message.text = INTERVIEW_EROEFFNUNG
+        persistWorkspace()
+        return
+      }
+      const kostenfreigabe = beansprucheAutomatikKosten('verstaendnis', { projectId, docId })
+      if (!kostenfreigabe.erlaubt) {
+        interviewStatus = BUDGET_PAUSE_TEXT
+        const message = ensureInterviewMessage(workspace, project)
+        message.text = BUDGET_PAUSE_TEXT
+        persistWorkspace()
+        return
+      }
+      // Projektweite Kostenbremse (Fix-Runde 1, Finding 2): VOR dem bezahlten Aufruf
+      // setzen und sofort persistieren, damit sie auch bei einem Fehlschlag gilt —
+      // kein zweiter bezahlter Versuch über weitere Dokumente desselben Projekts.
+      markiereEntwurfVersucht(ensureProjectUnderstanding(project))
+      persistWorkspace()
+      // Bereich W (Aura/Statuszeile) atmet ausschliesslich am echten Gateway-Zustand
+      // (applyAuraState liest aktuellerAgentStatus().zustand === 'laeuft') — dieser
+      // Aufruf ist der erste echte runTask-Aufruf im Panel, darum wird er hier gesetzt.
+      setzeAgentStatus({ zustand: 'laeuft' })
+      const { daten } = await runTask('verstaendnis', verstaendnisEingabe('entwurf'))
+      setzeAgentStatus({ zustand: 'bereit' })
+      if (!ctx) return { erfolg: true }
+      uebernimmVerstaendnis(project, daten)
+      interviewStatus = null
+      const antwort = String(daten.antwortText || '').trim()
+      if (antwort && ctx.activeDoc()?.id === docId) {
+        const message = ensureInterviewMessage(activeWorkspace(), project)
+        message.text = antwort
+        appendThreadMessage(message.thread, 'agent', antwort, Date.now())
+        announceAgentStatus(antwort)
+      }
+      ctx.persist()
+      refreshProjectUnderstandingModal()
+      return { erfolg: true }
+    } catch (fehler) {
+      interviewStatus = interviewFehlerText(fehler)
+      setzeAgentStatus({ zustand: 'fehler', fehlerTyp: fehler?.typ })
+      // Sichtbarkeit erzwingen (Fix-Runde 1, Finding 1): ohne eine existierende
+      // Nachricht kehrt renderAgentWidget vor dem interviewStatus-Absatz zurück, und
+      // der Fehlertext bliebe unsichtbar — bei bereits gesetztem Prüf-Gate ohne jede
+      // Wiederholmöglichkeit. Der Nutzer bekommt so den ruhigen Fehlertext UND das
+      // Eingabefeld; kein automatischer Retry, kein Kosten-Risiko.
+      if (ctx && project && ctx.activeDoc()?.id === docId) {
+        const workspace = activeWorkspace()
+        if (workspace) {
+          ensureInterviewMessage(workspace, project)
+          persistWorkspace()
+        }
+      }
+      return { erfolg: false, fehler: fehler?.typ }
+    } finally {
+      if (ctx) refreshWorkspace()
+    }
+  })
 }
 
 // Composer-Routing: solange istInterviewAktiv() wahr ist, gehört jede Eingabe im
@@ -2733,41 +2780,49 @@ async function sendeInterviewAntwort(message, text) {
   // Projekt VOR jedem await ueber das Dokument aufloesen: die Antwort gehoert dem
   // Projekt, fuer das sie gestellt wurde — auch wenn danach umgeblaettert wird.
   const project = dokumentProjekt()
-  if (!project || interviewLaufAktiv) return
+  if (!project || kanalGesperrt('interview')) return
   appendThreadMessage(message.thread, 'user', text, Date.now())
-  interviewLaufAktiv = true
+  // Kein await zwischen dem Anhaengen und fuehreLaufAus: die Sperre selbst setzt
+  // das Tor synchron beim Aufruf (lauf-tor.mjs) — hier bleibt nur noch die
+  // sichtbare "laeuft"-Statuszeile, wie zuvor ohne Luecke.
   interviewStatus = 'laeuft'
   announceAgentStatus('Agent denkt nach …')
   persistWorkspace()
   refreshWorkspace()
-  try {
-    // Bereich W (Aura/Statuszeile) atmet ausschliesslich am echten Gateway-Zustand
-    // (applyAuraState liest aktuellerAgentStatus().zustand === 'laeuft') — wie in
-    // starteVerstaendnisEntwurf muss jeder echte runTask-Aufruf ihn setzen (U-5-Aura).
-    setzeAgentStatus({ zustand: 'laeuft' })
-    const { daten } = await runTask('verstaendnis', verstaendnisEingabe('antwort', text))
-    setzeAgentStatus({ zustand: 'bereit' })
-    if (!ctx) return
-    uebernimmVerstaendnis(project, daten)
-    interviewStatus = null
-    const antwort = String(daten.antwortText || '').trim()
-    if (antwort) {
-      appendThreadMessage(message.thread, 'agent', antwort, Date.now())
-      message.text = antwort
-      announceAgentStatus(antwort)
-    }
-    // Sind task + audience + desiredEffect jetzt gefüllt, ist das Interview
-    // abgeschlossen — der nächste Composer-Beitrag geht in den normalen Chat.
-    ctx.persist()
-    refreshProjectUnderstandingModal()
-  } catch (fehler) {
-    interviewStatus = interviewFehlerText(fehler)
-    setzeAgentStatus({ zustand: 'fehler', fehlerTyp: fehler?.typ })
-    announceAgentStatus(interviewStatus)
-  } finally {
-    interviewLaufAktiv = false
-    if (ctx) refreshWorkspace()
-  }
+  await fuehreLaufAus(
+    { kanal: 'interview', ausloeser: 'antwort', signatur: fnvSignatur(text) },
+    async ({ runTask }) => {
+      try {
+        // Bereich W (Aura/Statuszeile) atmet ausschliesslich am echten Gateway-Zustand
+        // (applyAuraState liest aktuellerAgentStatus().zustand === 'laeuft') — wie in
+        // starteVerstaendnisEntwurf muss jeder echte runTask-Aufruf ihn setzen (U-5-Aura).
+        setzeAgentStatus({ zustand: 'laeuft' })
+        const { daten } = await runTask('verstaendnis', verstaendnisEingabe('antwort', text))
+        setzeAgentStatus({ zustand: 'bereit' })
+        if (!ctx) return { erfolg: true }
+        uebernimmVerstaendnis(project, daten)
+        interviewStatus = null
+        const antwort = String(daten.antwortText || '').trim()
+        if (antwort) {
+          appendThreadMessage(message.thread, 'agent', antwort, Date.now())
+          message.text = antwort
+          announceAgentStatus(antwort)
+        }
+        // Sind task + audience + desiredEffect jetzt gefüllt, ist das Interview
+        // abgeschlossen — der nächste Composer-Beitrag geht in den normalen Chat.
+        ctx.persist()
+        refreshProjectUnderstandingModal()
+        return { erfolg: true }
+      } catch (fehler) {
+        interviewStatus = interviewFehlerText(fehler)
+        setzeAgentStatus({ zustand: 'fehler', fehlerTyp: fehler?.typ })
+        announceAgentStatus(interviewStatus)
+        return { erfolg: false, fehler: fehler?.typ }
+      } finally {
+        if (ctx) refreshWorkspace()
+      }
+    },
+  )
 }
 
 // Hier schwebte ein Plus am linken Rand des Absatzes, in dem gerade geschrieben wurde.
@@ -3062,7 +3117,10 @@ function visiblePassageFindingRecords(doc, blocks) {
     const placement = resolveFindingPlacement(finding, blocks)
     if (placement.kind !== 'anchored' && placement.kind !== 'stale') continue
     const migrated = !hadBlockId && Boolean(finding.blockId)
-    merkeGezeigt(doc?.id, finding.id)
+    // Das Etikett {art, moment} stammt aus dem Lauf-Tor-Zweig (#12): das erste Erscheinen
+    // einer Karte wandert ins Journal, damit die Momente spaeter kalibriert werden koennen.
+    // HEADs Sammelform bleibt — main zeigt mehrere Anmerkungen, nicht mehr genau eine.
+    merkeGezeigt(doc?.id, finding.id, { art: artVon(finding), moment })
     records.push({ finding, block: placement.block, placementKind: placement.kind, migrated })
   }
   return records
@@ -3160,12 +3218,12 @@ function renderLocalDialogue(finding) {
   send.type = 'submit'
   send.title = 'Senden'
   send.setAttribute('aria-label', 'Nachricht senden')
-  send.disabled = Boolean(laufenderChatLauf)
+  send.disabled = kanalGesperrt('chat') // Sperre wohnt im Tor (Task 6), nicht mehr in einem lokalen Feld
   form.append(input, send)
   form.addEventListener('submit', event => {
     event.preventDefault()
     const text = input.value.trim()
-    if (!text || laufenderChatLauf) return
+    if (!text || kanalGesperrt('chat')) return
     // Echter, gestreamter Chat mit Finding-Kontext (Bereich C, Task C-3) — die Kulisse ist weg.
     input.value = ''
     appendThreadMessage(finding.thread, 'user', text, Date.now())
@@ -3791,7 +3849,7 @@ function acceptSemanticFinding(finding) {
 }
 
 function replyToAnnotation(finding, text) {
-  if (!text || laufenderChatLauf) return
+  if (!text || kanalGesperrt('chat')) return
   ensureLocalThread(finding)
   appendThreadMessage(finding.thread, 'user', text, Date.now())
   ctx.persist()
@@ -4102,13 +4160,21 @@ function chatNachrichtenTextKnoten(messageId) {
 // modulintern fuer Task C-3 (Randkarten-Gespräch, keine Verdichtung dort).
 //
 // Fix-Runde 1, Finding 1 (Critical): erzeugt KEIN eigenes Sperr-Objekt mehr, sondern
-// uebernimmt ein von sendeAgentenChat bereits gesetztes (laufenderChatLauf ist zu diesem
+// uebernimmt ein von sendeAgentenChat bereits gesetztes (chatStream ist zu diesem
 // Zeitpunkt schon non-null, siehe dort) — bei einem direkten Aufruf (C-3) erzeugt es weiterhin
 // selbst eins. Zwei verschiedene Sperr-Objekte fuer denselben Lauf waren die Ueberschreib-
 // Luecke, durch die ein dritter Submit moeglich wurde.
-async function fuehreChatLauf(thread, kontext) {
-  const lauf = laufenderChatLauf || { agentMessage: null, puffer: '', flushTimer: null }
-  laufenderChatLauf = lauf
+//
+// Tor-Anschluss (Task 6): runTask kommt jetzt als DRITTER Parameter vom Lauf-Tor
+// (fuehreLaufAus' laufFn, siehe sendeAgentenChat/sendeLocalChat) statt aus dem modulweiten
+// Import — die Sperre selbst wohnt im Tor (kanalGesperrt('chat')), hier bleibt chatStream nur
+// noch fuer den Streaming-Zustand. Der Rueckgabewert ({erfolg:true} bzw. {erfolg:false,
+// fehler}) reicht bis zu fuehreChatVorgangAus (chat-kontext.mjs) und von dort als
+// laufFn-Ergebnis ins Tor, das daraus den Journal-Eintrag 'geliefert'/'fehler' bildet
+// (bewerteLaufErgebnis, lauf-tor.mjs).
+async function fuehreChatLauf(thread, kontext, runTask) {
+  const lauf = chatStream || { agentMessage: null, puffer: '', flushTimer: null }
+  chatStream = lauf
   const flush = () => {
     lauf.flushTimer = null
     if (!lauf.agentMessage) return
@@ -4161,31 +4227,37 @@ async function fuehreChatLauf(thread, kontext) {
     setzeAgentStatus({ zustand: 'bereit' })
     if (lauf.flushTimer) clearTimeout(lauf.flushTimer)
     const antwort = typeof daten === 'string' && daten.trim() ? daten : lauf.puffer
-    if (!antwort.trim()) return
+    if (!antwort.trim()) return { erfolg: true }
     if (lauf.agentMessage) lauf.agentMessage.text = antwort
     else appendThreadMessage(thread, 'agent', antwort)
     announceAgentStatus(antwort)
+    return { erfolg: true }
   } catch (fehler) {
     if (lauf.flushTimer) clearTimeout(lauf.flushTimer)
     setzeAgentStatus({ zustand: 'fehler', fehlerTyp: fehler?.typ })
-    if (fehler?.typ === 'abgebrochen') return
+    if (fehler?.typ === 'abgebrochen') return { erfolg: false, fehler: 'abgebrochen' }
     const meldung = chatFehlerText(fehler)
     if (lauf.agentMessage) lauf.agentMessage.text = meldung
     else appendThreadMessage(thread, 'agent', meldung)
     announceAgentStatus(meldung)
+    return { erfolg: false, fehler: fehler?.typ }
   } finally {
-    laufenderChatLauf = null
+    chatStream = null
     ctx?.persist()
     refreshWorkspace()
   }
 }
 
 // Baut den Chat-Kontext aus dem Live-Zustand und startet fuehreChatLauf — orchestriert ueber
-// fuehreChatVorgangAus (chat-kontext.mjs, Fix-Runde 1), das die Sperre SYNCHRON vor jedem
-// await setzt (Finding 1) und den ganzen Vorgang inklusive Verdichtung als 'laeuft' meldet
-// (Finding 2). doc/project werden VOR der Sperre gelesen (reiner, synchroner Zugriff ohne
-// Risiko) und in den Callbacks weiterverwendet, damit chatte() IMMER fuehreChatLauf erreicht
-// — kein frueher Return mehr, der die Sperre/den Status haengen lassen koennte.
+// fuehreChatVorgangAus (chat-kontext.mjs, Fix-Runde 1) UND, aussenherum, ueber das Lauf-Tor
+// (lauf-tor.mjs, Task 6): fuehreLaufAus prueft/setzt kanalGesperrt('chat') SYNCHRON vor jedem
+// await und reicht dem laufFn das einzig legale runTask — fuehreChatVorgangAus'
+// laeuftBereits gibt darum nur noch konstant false zurueck (das Tor hat den Kanal bereits
+// geprueft und gesperrt), sperreSetzen pflegt nur noch chatStream (Streaming-Zustand) +
+// refreshWorkspace. doc/project werden VOR dem Tor-Aufruf gelesen (reiner, synchroner Zugriff
+// ohne Risiko) und in den Callbacks weiterverwendet, damit chatte() IMMER fuehreChatLauf
+// erreicht — kein frueher Return mehr, der die Sperre/den Status haengen lassen koennte.
+// Kein einmalJeSignatur: jede Chat-Frage ist gewollt, auch eine wortgleiche Wiederholung.
 //
 // Der Chat selbst ist ueberall echt, auch im Beispielprojekt (Spec) — istBeispielProjekt
 // sperrt hier NUR den automatischen Hinweislauf, den eine Chat-Bitte sonst ausloesen wuerde
@@ -4197,84 +4269,107 @@ async function sendeAgentenChat(message, anfrage) {
   const project = dokumentProjekt(doc)
   if (!doc || !project) return
 
-  await fuehreChatVorgangAus({
-    laeuftBereits: () => Boolean(laufenderChatLauf),
-    sperreSetzen: wert => {
-      laufenderChatLauf = wert ? (laufenderChatLauf || { agentMessage: null, puffer: '', flushTimer: null }) : null
-      refreshWorkspace() // Senden-Knopf sofort sichtbar deaktivieren (schliesst die Luecke aus Finding 1)
-    },
-    setzeStatus: setzeAgentStatus,
-    verdichte: async () => {
-      const plan = planVerlaufVerdichtung(message.thread, message.verlaufsNotiz || null)
-      if (!plan) return
-      try {
-        const { daten } = await runTask('zusammenfassung', { anfrage: plan.verdichtungsEingabe })
-        if (typeof daten === 'string' && daten.trim()) {
-          message.verlaufsNotiz = { text: daten.trim(), bisMessageId: plan.bisMessageId, erstelltAt: Date.now() }
-          ctx?.persist()
+  await fuehreLaufAus(
+    { kanal: 'chat', ausloeser: 'gespraech', signatur: fnvSignatur(anfrage) },
+    ({ runTask }) => fuehreChatVorgangAus({
+      laeuftBereits: () => false, // die Kanal-Sperre prueft und haelt das Tor (fuehreLaufAus)
+      sperreSetzen: wert => {
+        chatStream = wert ? (chatStream || { agentMessage: null, puffer: '', flushTimer: null }) : null
+        refreshWorkspace() // Senden-Knopf sofort sichtbar deaktivieren (schliesst die Luecke aus Finding 1)
+      },
+      setzeStatus: setzeAgentStatus,
+      verdichte: async () => {
+        const plan = planVerlaufVerdichtung(message.thread, message.verlaufsNotiz || null)
+        if (!plan) return
+        try {
+          const { daten } = await runTask('zusammenfassung', { anfrage: plan.verdichtungsEingabe })
+          if (typeof daten === 'string' && daten.trim()) {
+            message.verlaufsNotiz = { text: daten.trim(), bisMessageId: plan.bisMessageId, erstelltAt: Date.now() }
+            ctx?.persist()
+          }
+        } catch {
+          // Die Verdichtung ist Komfort: scheitert sie, läuft der Chat mit vollem Verlauf weiter.
         }
-      } catch {
-        // Die Verdichtung ist Komfort: scheitert sie, läuft der Chat mit vollem Verlauf weiter.
-      }
-    },
-    chatte: async () => {
-      const hinweisBitte = !istBeispielProjekt(project) && erkenneHinweisBitte(anfrage)
-      if (hinweisBitte) starteHinweislauf({ grund: 'chat' })
+      },
+      chatte: async () => {
+        const hinweisBitte = !istBeispielProjekt(project) && erkenneHinweisBitte(anfrage)
+        if (hinweisBitte) starteHinweislauf({ grund: 'chat' })
 
-      const kontext = baueChatKontext({
-        verstaendnis: ensureProjectUnderstanding(project),
-        docText: dokumentText(),
-        findings: doc.findings,
-        doc,
-        thread: message.thread.slice(0, -1), // der aktuelle Nutzer-Turn geht separat als `anfrage` mit
-        verlaufsNotiz: message.verlaufsNotiz || null,
-        anfrage,
-        zusatzAnweisung: hinweisBitte
-          ? 'Der Nutzer hat um eine Durchsicht gebeten. Ein Hinweislauf über den Text wurde soeben gestartet — erwähne kurz, dass du den Text jetzt durchgehst und dass Hinweise am Rand erscheinen, sobald etwas Belastbares dabei ist.'
-          : null,
-        onda: ondaQuellen(doc, project),
-      })
-      await fuehreChatLauf(message.thread, kontext)
-    },
-  })
+        const kontext = baueChatKontext({
+          verstaendnis: ensureProjectUnderstanding(project),
+          docText: dokumentText(),
+          findings: doc.findings,
+          doc,
+          thread: message.thread.slice(0, -1), // der aktuelle Nutzer-Turn geht separat als `anfrage` mit
+          verlaufsNotiz: message.verlaufsNotiz || null,
+          anfrage,
+          zusatzAnweisung: hinweisBitte
+            ? 'Der Nutzer hat um eine Durchsicht gebeten. Ein Hinweislauf über den Text wurde soeben gestartet — erwähne kurz, dass du den Text jetzt durchgehst und dass Hinweise am Rand erscheinen, sobald etwas Belastbares dabei ist.'
+            : null,
+          // Aus main: das Projektwissen (Textsorte, Aussagen-Speicher, Nachbartexte,
+          // Gedaechtnis). Der Zweig kannte es noch nicht — es darf beim Tor-Anschluss
+          // nicht verlorengehen, sonst waere der Chat wieder ein blinder Kanal.
+          onda: ondaQuellen(doc, project),
+        })
+        return await fuehreChatLauf(message.thread, kontext, runTask)
+      },
+    }),
+  )
+  // Das Tor loest kanalGesperrt('chat') in SEINEM EIGENEN finally (lauf-tor.mjs) — das laeuft
+  // NACH sperreSetzen(false) oben, das noch waehrend der Sperre rendert. Ohne diesen
+  // Nachrender bliebe der Senden-Knopf (send.disabled = kanalGesperrt('chat')) optisch UND
+  // funktional deaktiviert: ein Formular mit nur einem deaktivierten Submit-Button feuert kein
+  // implizites Submit mehr auf Enter — die Eingabe wirkt eingefroren, bis irgendein anderes
+  // Ereignis zufaellig neu rendert.
+  if (ctx) refreshWorkspace()
 }
 
 // Startet den echten Chat-Lauf FÜR EIN FINDING an der Randkarte (Task C-3) — dieselbe
-// Sperr-/Status-Disziplin wie sendeAgentenChat: fuehreChatVorgangAus setzt die Sperre SYNCHRON
-// vor jedem await (kein zweiter, ungesicherter Pfad, kein doppelter bezahlter Lauf — siehe
-// Fix-Runde 1 zu C-2, chat-kontext.mjs). laufenderChatLauf ist app-weit EIN Feld (siehe
-// Deklaration oben) — ein laufendes Panel-Gespräch blockiert ein Randkarten-Gespräch und
-// umgekehrt. Anders als sendeAgentenChat: keine Verlaufs-Verdichtung (Randkarten-Gespräche
-// bleiben kurz, Findings kennen kein verlaufsNotiz-Feld) und keine Hinweisbitte-Erkennung —
-// das Gespräch soll bei GENAU dieser Stelle bleiben (baueFindingZusatzAnweisung weist das
-// Modell entsprechend an).
+// Sperr-/Status-Disziplin wie sendeAgentenChat: das Lauf-Tor (Task 6) prueft/setzt
+// kanalGesperrt('chat') SYNCHRON vor jedem await (kein zweiter, ungesicherter Pfad, kein
+// doppelter bezahlter Lauf — siehe Fix-Runde 1 zu C-2, chat-kontext.mjs). chatStream ist
+// app-weit EIN Feld (siehe Deklaration oben) — ein laufendes Panel-Gespräch blockiert ein
+// Randkarten-Gespräch und umgekehrt (derselbe Kanal 'chat' im Tor). Anders als
+// sendeAgentenChat: keine Verlaufs-Verdichtung (Randkarten-Gespräche bleiben kurz, Findings
+// kennen kein verlaufsNotiz-Feld) und keine Hinweisbitte-Erkennung — das Gespräch soll bei
+// GENAU dieser Stelle bleiben (baueFindingZusatzAnweisung weist das Modell entsprechend an).
 async function sendeLocalChat(finding, anfrage) {
   const doc = ctx.activeDoc()
   const project = dokumentProjekt(doc)
   if (!doc || !project) return
 
-  await fuehreChatVorgangAus({
-    laeuftBereits: () => Boolean(laufenderChatLauf),
-    sperreSetzen: wert => {
-      laufenderChatLauf = wert ? (laufenderChatLauf || { agentMessage: null, puffer: '', flushTimer: null }) : null
-      refreshWorkspace() // Senden-Knopf an der Randkarte sofort sichtbar deaktivieren
-    },
-    setzeStatus: setzeAgentStatus,
-    verdichte: async () => {},
-    chatte: async () => {
-      const kontext = baueChatKontext({
-        verstaendnis: ensureProjectUnderstanding(project),
-        docText: dokumentText(),
-        findings: doc.findings,
-        doc,
-        thread: finding.thread.slice(0, -1), // der aktuelle Nutzer-Turn geht separat als `anfrage` mit
-        anfrage,
-        zusatzAnweisung: baueFindingZusatzAnweisung(finding),
-        onda: ondaQuellen(doc, project),
-      })
-      await fuehreChatLauf(finding.thread, kontext)
-    },
-  })
+  await fuehreLaufAus(
+    { kanal: 'chat', ausloeser: 'randkarte', signatur: fnvSignatur(anfrage) },
+    ({ runTask }) => fuehreChatVorgangAus({
+      laeuftBereits: () => false, // die Kanal-Sperre prueft und haelt das Tor (fuehreLaufAus)
+      sperreSetzen: wert => {
+        chatStream = wert ? (chatStream || { agentMessage: null, puffer: '', flushTimer: null }) : null
+        refreshWorkspace() // Senden-Knopf an der Randkarte sofort sichtbar deaktivieren
+      },
+      setzeStatus: setzeAgentStatus,
+      verdichte: async () => {},
+      chatte: async () => {
+        const kontext = baueChatKontext({
+          verstaendnis: ensureProjectUnderstanding(project),
+          docText: dokumentText(),
+          findings: doc.findings,
+          doc,
+          thread: finding.thread.slice(0, -1), // der aktuelle Nutzer-Turn geht separat als `anfrage` mit
+          anfrage,
+          zusatzAnweisung: baueFindingZusatzAnweisung(finding),
+          // Aus main, siehe sendeAgentenChat: ohne das Projektwissen waere auch das
+          // Randkarten-Gespraech ein blinder Kanal.
+          onda: ondaQuellen(doc, project),
+        })
+        return await fuehreChatLauf(finding.thread, kontext, runTask)
+      },
+    }),
+  )
+  // Siehe sendeAgentenChat: das Tor loest kanalGesperrt('chat') NACH dem letzten Rendern
+  // innerhalb von fuehreChatVorgangAus/fuehreChatLauf — ohne diesen Nachrender bliebe der
+  // Senden-Knopf an der Randkarte deaktiviert stehen und Enter faende kein aktives Submit
+  // mehr (implizite Formularabsendung verlangt einen aktivierten Submit-Button).
+  if (ctx) refreshWorkspace()
 }
 
 // Echte Initiative-Quelle, additiv zum bestehenden Aura-/Pausen-Mechanismus: eine Nachricht
@@ -4484,14 +4579,14 @@ function renderAgentWidget() {
   send.type = 'submit'
   send.title = 'Senden'
   send.setAttribute('aria-label', 'Nachricht senden')
-  send.disabled = Boolean(laufenderChatLauf)
+  send.disabled = kanalGesperrt('chat') // Sperre wohnt im Tor (Task 6), nicht mehr in einem lokalen Feld
   form.append(input, send)
   form.addEventListener('submit', event => {
     event.preventDefault()
     const text = input.value.trim()
-    if (!text || laufenderChatLauf) return
+    if (!text || kanalGesperrt('chat')) return
     if (istInterviewAktiv()) {
-      if (interviewLaufAktiv) return // ein Lauf zur Zeit; die Eingabe bleibt stehen
+      if (kanalGesperrt('interview')) return // ein Lauf zur Zeit; die Eingabe bleibt stehen
       input.value = ''
       sendeInterviewAntwort(message, text)
       return
@@ -4831,49 +4926,63 @@ async function fuehreHinweislaufAus({ grund = 'pause' } = {}) {
   // deshalb hier und nicht in versucheHinweislauf, das nur das aktuelle Dokument sieht.
   const rueckkopplung = synchronisiereRueckkopplungsvorschlag()
 
-  const ergebnis = await versucheHinweislauf({
-    hatDokument: Boolean(doc && workspace),
-    istBeispielprojekt: istBeispielDokument(doc),
-    verstaendnisOffen: verstaendnis ? istInterviewOffen(verstaendnis) : false,
-    laeuftBereits: hinweislaufAktiv,
-    docText,
-    signatur,
-    letzteSignatur: protokoll?.signatur ?? null,
-    sperreSetzen: wert => { hinweislaufAktiv = wert },
-    hatSchluessel,
-    istNochDasselbeDokument: () => ctx.activeDoc()?.id === docId,
-    // Fix-Runde 2, Finding 2b (Important): der Chat-Auslöser umging bisher die Monatsbremse
-    // komplett (beansprucheKostenfreigabe:null -> versucheHinweislauf nimmt dann {erlaubt:true}
-    // an, siehe hinweislauf-model.mjs). Die Oberfläche behauptet aber "Automatische Läufe sind
-    // pausiert" OHNE Ausnahme für den Chat-Hinweislauf -- das war schlicht nicht wahr. Der
-    // reine Chat (die Antwort des Agenten, sendeAgentenChat/fuehreChatLauf) ist davon NICHT
-    // betroffen: das hier ist ausschliesslich der zusätzliche Hintergrund-Hinweislauf, den eine
-    // Chat-Bitte ("schau mal drüber") zusätzlich anstößt (siehe starteHinweislauf-Aufruf in
-    // sendeAgentenChat) -- genau der soll wie jeder andere automatische Lauf der Bremse
-    // unterliegen; die Chat-Antwort selbst läuft unabhängig davon immer weiter.
-    beansprucheKostenfreigabe: () => beansprucheAutomatikKosten('hinweis', { docId, grund }),
-    verstaendnis,
-    blocks,
-    findings: doc?.findings,
-    decisions: doc?.decisions,
-    annotationMode: workspace?.annotationMode || 'text',
-    // Die Textart entscheidet, welche Hinweisarten Integritaetsfragen sind
-    // (textart-regeln.mjs). Bei einem Plakattext ist eine fehlende Quellenangabe keine
-    // Frage der Wahrhaftigkeit, und ihr Verwerfen kein "bewusst angenommenes Risiko".
-    // Fehlt das Profil, bleibt es beim vorsichtigen Fall: alle vier binden.
-    textart: project?.languageProfile?.genre || '',
-    rueckkopplung,
-    // Textsorte, Aussagen-Speicher und Gedaechtnis (onda-kontext.mjs) kommen hier eine Ebene
-    // spaeter dazu als bei Interview und Chat: den Kontext dieses Kanals baut
-    // versucheHinweislauf selbst (hinweislauf-model.mjs), und diese Datei kann ihm nichts
-    // durchreichen. ergaenzeOndaKontext haengt die Bloecke HINTEN an kontext.volatiles — also
-    // hinter Anweisung und Entscheidungsliste und weit hinter den gecachten Praefix, dessen
-    // Stabilitaet damit unberuehrt bleibt. versucheHinweislauf ruft runTask genau einmal, mit
-    // genau diesem Kontext; sobald hinweislauf-model.mjs einen onda-Parameter durchreicht,
-    // faellt diese Klammer ersatzlos weg (baueHinweisKontext kennt ihn bereits).
-    runTask: (task, kontext, optionen) => runTask(task, ergaenzeOndaKontext(kontext, ondaWissen), optionen),
-    setzeAgentStatus,
-  })
+  // Kanal-Sperre und Signatur wandern ins Lauf-Tor (lauf-tor.mjs, Task 7): laeuftBereits/
+  // sperreSetzen an versucheHinweislauf werden darum reine No-ops -- die Kanal-Sperre prueft
+  // und haelt das Tor (fuehreLaufAus); das Modell behaelt seine Parameter fuer die Modell-Tests
+  // (hinweislauf-model.test.mjs). Das Signatur-Doppel bleibt ABSICHTLICH zweistufig: die
+  // Tor-Signatur unten ist docId-praefixiert und vergleicht gegen den letzten BEZAHLTEN Lauf
+  // dieses Kanals im Journal (struktureller Backstop, kanalweit, einmalJeSignatur); die
+  // unpraefixierte `signatur`/`letzteSignatur` unten bleibt versucheHinweislaufs eigene,
+  // unveraenderte Pruefung gegen protokoll.signatur (je Workspace, wie vor Task 7).
+  //
+  // Aus main mitgenommen und NICHT verloren: annotationMode, textart, rueckkopplung und das
+  // Projektwissen. Der Zweig kannte diese vier noch nicht — sie sind nach seiner Abzweigung
+  // dazugekommen.
+  const ergebnis = await fuehreLaufAus(
+    { kanal: 'hinweis', ausloeser: grund, signatur: `${docId}:${signatur}`, einmalJeSignatur: true },
+    ({ runTask: torRunTask }) => versucheHinweislauf({
+      hatDokument: Boolean(doc && workspace),
+      istBeispielprojekt: istBeispielDokument(doc),
+      verstaendnisOffen: verstaendnis ? istInterviewOffen(verstaendnis) : false,
+      laeuftBereits: false, // die Kanal-Sperre prueft und haelt das Tor (fuehreLaufAus)
+      sperreSetzen: () => {}, // das Modell behaelt seine Parameter fuer die Modell-Tests
+      docText,
+      signatur,
+      letzteSignatur: protokoll?.signatur ?? null,
+      hatSchluessel,
+      istNochDasselbeDokument: () => ctx.activeDoc()?.id === docId,
+      // Fix-Runde 2, Finding 2b (Important): der Chat-Auslöser umging bisher die Monatsbremse
+      // komplett (beansprucheKostenfreigabe:null -> versucheHinweislauf nimmt dann {erlaubt:true}
+      // an, siehe hinweislauf-model.mjs). Die Oberfläche behauptet aber "Automatische Läufe sind
+      // pausiert" OHNE Ausnahme für den Chat-Hinweislauf -- das war schlicht nicht wahr. Der
+      // reine Chat (die Antwort des Agenten, sendeAgentenChat/fuehreChatLauf) ist davon NICHT
+      // betroffen: das hier ist ausschliesslich der zusätzliche Hintergrund-Hinweislauf, den eine
+      // Chat-Bitte ("schau mal drüber") zusätzlich anstößt (siehe starteHinweislauf-Aufruf in
+      // sendeAgentenChat) -- genau der soll wie jeder andere automatische Lauf der Bremse
+      // unterliegen; die Chat-Antwort selbst läuft unabhängig davon immer weiter.
+      beansprucheKostenfreigabe: () => beansprucheAutomatikKosten('hinweis', { docId, grund }),
+      verstaendnis,
+      blocks,
+      findings: doc?.findings,
+      decisions: doc?.decisions,
+      annotationMode: workspace?.annotationMode || 'text',
+      // Die Textart entscheidet, welche Hinweisarten Integritaetsfragen sind
+      // (textart-regeln.mjs). Bei einem Plakattext ist eine fehlende Quellenangabe keine
+      // Frage der Wahrhaftigkeit, und ihr Verwerfen kein "bewusst angenommenes Risiko".
+      // Fehlt das Profil, bleibt es beim vorsichtigen Fall: alle vier binden.
+      textart: project?.languageProfile?.genre || '',
+      rueckkopplung,
+      // Textsorte, Aussagen-Speicher und Gedaechtnis (onda-kontext.mjs) kommen hier eine Ebene
+      // spaeter dazu als bei Interview und Chat: den Kontext dieses Kanals baut
+      // versucheHinweislauf selbst (hinweislauf-model.mjs), und diese Datei kann ihm nichts
+      // durchreichen. ergaenzeOndaKontext haengt die Bloecke HINTEN an kontext.volatiles — also
+      // hinter Anweisung und Entscheidungsliste und weit hinter den gecachten Praefix, dessen
+      // Stabilitaet damit unberuehrt bleibt. Die Klammer sitzt jetzt um das RunTask DES TORS,
+      // damit Buchung und Journal denselben Weg nehmen wie bei jedem anderen Kanal.
+      runTask: (task, kontext, optionen) => torRunTask(task, ergaenzeOndaKontext(kontext, ondaWissen), optionen),
+      setzeAgentStatus,
+    }),
+  )
 
   if (!ergebnis.gestartet) {
     if (ergebnis.grund === 'monatsbudget-erreicht') {
@@ -4937,35 +5046,55 @@ async function fuehreErweiterungslaufAus({ vonHand = false } = {}) {
   const verstaendnis = project ? ensureProjectUnderstanding(project) : null
   const ondaWissen = ondaQuellen(doc, project)
 
-  const ergebnis = await versucheErweiterungslauf({
-    hatDokument: Boolean(doc && workspace),
-    istBeispielprojekt: istBeispielDokument(doc),
-    verstaendnisOffen: verstaendnis ? istInterviewOffen(verstaendnis) : false,
-    laeuftBereits: erweiterungslaufAktiv,
-    docText,
-    vonHand,
-    sperreSetzen: wert => { erweiterungslaufAktiv = wert },
-    hatSchluessel,
-    istNochDasselbeDokument: () => ctx.activeDoc()?.id === docId,
-    beansprucheKostenfreigabe: () => beansprucheAutomatikKosten('erweiterung', { docId, grund: vonHand ? 'hand' : 'aufschauen' }),
-    verstaendnis,
-    blocks,
-    doc,
-    // Dasselbe Buendel zweimal, mit Absicht und in beide Richtungen:
-    //   - hier als onda, damit versucheErweiterungslauf daraus die Geschwistertexte ableitet
-    //     und einen Anker, der in einem von ihnen steht, wiederfindet statt ihn zu verwerfen,
-    //   - unten im runTask-Umschlag, damit dieselben Texte auch im Prompt stehen.
-    // Beides muss aus DERSELBEN Quelle kommen: sonst zeigte der Prompt andere Texte, als die
-    // Pruefung durchsucht, und jede Querverbindung fiele stillschweigend heraus.
-    onda: ondaWissen,
-    // Dieselbe Klammer wie im Hinweislauf: den Kontext baut versucheErweiterungslauf selbst
-    // (erweiterungslauf-model.mjs), die Wissensbloecke kommen an der Uebergabestelle zum
-    // Gateway hinten an die volatiles. Fuer diesen Kanal ist vor allem der Aussagen-Speicher
-    // wichtig — eine Weiterfuehrung, die in einem anderen Text des Projekts schon steht, ist
-    // keine Erweiterung, sondern eine Doppelung.
-    runTask: (task, kontext, optionen) => runTask(task, ergaenzeOndaKontext(kontext, ondaWissen), optionen),
-    setzeAgentStatus,
-  })
+  // Kanal-Sperre und Signatur wandern ins Lauf-Tor (lauf-tor.mjs, Task 8): laeuftBereits/
+  // sperreSetzen an versucheErweiterungslauf werden darum reine No-ops -- die Kanal-Sperre
+  // prueft und haelt das Tor (fuehreLaufAus); das Modell behaelt seine Parameter fuer die
+  // Modell-Tests (erweiterungslauf-model.test.mjs). BEWUSSTE VERHALTENSSCHAERFUNG (der Kern
+  // von Issue #12, KEIN Momente-Verhalten): bisher lebte die Merkliste "wofuer wurde schon
+  // bezahlt" nur in der Modul-Variable letzteErweiterungsSignatur und vergass sie beim
+  // Neustart -- die App bezahlte denselben Text danach ein zweites Mal. Jetzt liegt die
+  // Merkliste im Journal (data.json) und ueberlebt den Neustart -- genau die Fehlerklasse
+  // aus fuenf Fixes in neun Tagen.
+  //
+  // Aus main mitgenommen: das onda-Buendel. Es steht zweimal da, mit Absicht und in beide
+  // Richtungen — einmal als Parameter, damit versucheErweiterungslauf die Geschwistertexte
+  // ableitet und einen Anker darin wiederfindet statt ihn zu verwerfen, und einmal im
+  // runTask-Umschlag, damit dieselben Texte auch im Prompt stehen. Beides MUSS aus derselben
+  // Quelle kommen: sonst zeigte der Prompt andere Texte, als die Pruefung durchsucht, und jede
+  // Querverbindung fiele stillschweigend heraus.
+  const ergebnis = await fuehreLaufAus(
+    {
+      kanal: 'erweiterung',
+      ausloeser: vonHand ? 'hand' : 'aufschauen',
+      signatur: erweiterungsSignatur(docId, docText),
+      einmalJeSignatur: !vonHand,
+    },
+    ({ runTask: torRunTask }) => versucheErweiterungslauf({
+      hatDokument: Boolean(doc && workspace),
+      istBeispielprojekt: istBeispielDokument(doc),
+      verstaendnisOffen: verstaendnis ? istInterviewOffen(verstaendnis) : false,
+      laeuftBereits: false, // die Kanal-Sperre prueft und haelt das Tor (fuehreLaufAus)
+      docText,
+      vonHand,
+      sperreSetzen: () => {}, // das Modell behaelt seine Parameter fuer die Modell-Tests
+      hatSchluessel,
+      istNochDasselbeDokument: () => ctx.activeDoc()?.id === docId,
+      beansprucheKostenfreigabe: () => beansprucheAutomatikKosten('erweiterung', { docId, grund: vonHand ? 'hand' : 'aufschauen' }),
+      verstaendnis,
+      blocks,
+      doc,
+      onda: ondaWissen,
+      runTask: (task, kontext, optionen) => torRunTask(task, ergaenzeOndaKontext(kontext, ondaWissen), optionen),
+      setzeAgentStatus,
+    }),
+  )
+
+  // Das Tor loest kanalGesperrt('erweiterung') in SEINEM EIGENEN finally (lauf-tor.mjs) --
+  // das laeuft NACH dem letzten Rendern innerhalb dieser Funktion. Ohne diesen Nachrender
+  // bliebe ein Bedienelement, das an kanalGesperrt('erweiterung') haengt, optisch UND
+  // funktional deaktiviert, auf allen Pfaden -- gestartet:false, Fehler UND Erfolg
+  // (siehe sendeAgentenChat fuer dasselbe Muster).
+  if (ctx) refreshWorkspace()
 
   if (!ergebnis.gestartet) {
     if (ergebnis.grund === 'monatsbudget-erreicht') {
@@ -4977,12 +5106,10 @@ async function fuehreErweiterungslaufAus({ vonHand = false } = {}) {
   }
   if (!ergebnis.erfolg) return ergebnis
 
-  // Nach JEDEM erfolgreichen Lauf, gleich welcher Ausloeser ihn startete -- genau wie
-  // beim Hinweislauf, wo protokoll.signatur in fuehreHinweislaufAus selbst gesetzt wird.
-  // Vorher stand die Fortschreibung nur im automatischen Zweig, und ein Lauf von Hand
-  // setzte sie sogar auf null zurueck: dann sah der Zeitgeber 24 ms spaeter einen
-  // unveraenderten Text mit unbekannter Signatur und bezahlte ihn ein zweites Mal.
-  letzteErweiterungsSignatur = erweiterungsSignatur(docId, docText)
+  // Die Fortschreibung der alten Modul-Variable entfaellt: der Journal-Eintrag IST die
+  // Merkliste jetzt (das Tor schreibt ihn in schliesseLauf, BEVOR fuehreLaufAus zurueckkehrt --
+  // siehe planeErweiterungslauf, dessen darfAutomatischLaufen-Check direkt danach bereits den
+  // frischen Eintrag sieht, keine Luecke).
   ergebnis.uebernommen.forEach(erweiterung => doc.erweiterungen.push(erweiterung))
   // Bewusst KEIN ergaenzeEchteInitiative und keine Zahl irgendwo: eine Erweiterung
   // klopft nicht an. Sie liegt in der Seitenspalte, bis jemand hinschaut.
@@ -4998,9 +5125,10 @@ function clearErweiterungslaufTimer() {
 // Der Erweiterungslauf gehoert zum Moment des Aufschauens (momente-model.mjs).
 // Er wird deshalb genau dann geplant, wenn die lange Ruhe erreicht ist -- nicht bei
 // jeder Schreibpause. Ein Lauf je Textstand: die Signatur merkt sich, wozu schon
-// gefragt wurde, damit dieselbe Ruhe nicht zweimal bezahlt wird.
-let letzteErweiterungsSignatur = null
-
+// gefragt wurde, damit dieselbe Ruhe nicht zweimal bezahlt wird. Die Merkliste selbst
+// (frueher hier als letzteErweiterungsSignatur) lebt jetzt im Journal (lauf-tor.mjs/
+// lauf-journal.mjs, Task 8) und ueberlebt damit den Neustart -- siehe die
+// Verhaltensschaerfung oben in fuehreErweiterungslaufAus.
 function erweiterungsSignatur(docId, docText) {
   return `${docId}:${seedBodySignature(docText)}`
 }
@@ -5010,7 +5138,7 @@ function planeErweiterungslauf() {
   const docId = ctx?.activeDoc()?.id || null
   const inputState = initiativeInputState(docId)
   if (!docId || !inputState || !Number.isFinite(inputState.lastInputAt)) return
-  if (erweiterungslaufAktiv || isComposing || !editorViewIsVisibleFor(docId)) return
+  if (kanalGesperrt('erweiterung') || isComposing || !editorViewIsVisibleFor(docId)) return
 
   const restzeit = AUFSCHAUEN_MS - (Date.now() - inputState.lastInputAt)
   const generation = inputState.generation
@@ -5020,7 +5148,11 @@ function planeErweiterungslauf() {
     if (!aktuell || aktuell.generation !== generation) return
     if (!editorViewIsVisibleFor(docId) || isComposing) return
     const signatur = erweiterungsSignatur(docId, baueDocText(getEditorBlocks(ctx.editor)))
-    if (!darfAutomatischLaufen(signatur, letzteErweiterungsSignatur)) return
+    // Gegen letzteBezahlteSignatur aus dem JOURNAL, nicht mehr gegen eine fluechtige
+    // Modul-Variable: das Tor schreibt den Journal-Eintrag in schliesseLauf VOR dem
+    // Rueckkehren aus fuehreLaufAus (lauf-tor.mjs), darum sieht dieser Check nach einem
+    // Lauf immer schon den frischen Stand -- keine Luecke zwischen Bezahlen und Merken.
+    if (!darfAutomatischLaufen(signatur, letzteBezahlteSignatur(torJournal(), 'erweiterung'))) return
     fuehreErweiterungslaufAus({ vonHand: false })
   }, Math.max(24, restzeit))
 }
@@ -5055,22 +5187,43 @@ async function fuehreQuellenlaufAus({ vonHand = false } = {}) {
   // Klammer hier gar nicht erst.
   const ondaWissen = ondaQuellen(doc, project)
 
-  const ergebnis = await versucheQuellenlauf({
-    hatProjekt: Boolean(project),
-    istBeispielprojekt: istBeispielDokument(doc) || (project ? istBeispielProjekt(project) : false),
-    laeuftBereits: quellenlaufAktiv,
-    quellen,
-    bestehendeThemen,
-    verstaendnis,
-    onda: ondaWissen,
-    vonHand,
-    sperreSetzen: wert => { quellenlaufAktiv = wert },
-    hatSchluessel,
-    istNochDasselbeProjekt: () => dokumentProjekt()?.id === projectId,
-    beansprucheKostenfreigabe: () => beansprucheAutomatikKosten('quellenthemen', { projectId, grund: vonHand ? 'hand' : 'oeffnen' }),
-    runTask,
-    setzeAgentStatus,
-  })
+  // DER FUENFTE KANAL LAEUFT DURCHS TOR. Genau darum ging es bei Issue #12: die
+  // Kopiervorlage "eigene Sperr-Variable + eigene Signatur-Merkliste" war zum fuenften Mal
+  // abgeschrieben worden, und system/LEITSTAND.md hat es benannt — dieser Kanal entstand am
+  // 8.8., drei Tage NACHDEM der Zweig fertig war, der die vier anderen ablöste.
+  //
+  // Wie bei den anderen: laeuftBereits/sperreSetzen werden No-ops, die Kanal-Sperre prueft
+  // und haelt das Tor. einmalJeSignatur nur bei automatischen Laeufen — von Hand darf man
+  // dieselben Quellen erneut ordnen lassen, etwa nachdem man Gruppennamen geaendert hat.
+  const ergebnis = await fuehreLaufAus(
+    {
+      kanal: 'quellen',
+      ausloeser: vonHand ? 'hand' : 'oeffnen',
+      signatur: `${projectId}:${signatur}`,
+      einmalJeSignatur: !vonHand,
+    },
+    ({ runTask: torRunTask }) => versucheQuellenlauf({
+      hatProjekt: Boolean(project),
+      istBeispielprojekt: istBeispielDokument(doc) || (project ? istBeispielProjekt(project) : false),
+      laeuftBereits: false, // die Kanal-Sperre prueft und haelt das Tor (fuehreLaufAus)
+      quellen,
+      bestehendeThemen,
+      verstaendnis,
+      onda: ondaWissen,
+      vonHand,
+      sperreSetzen: () => {}, // das Modell behaelt seine Parameter fuer die Modell-Tests
+      hatSchluessel,
+      istNochDasselbeProjekt: () => dokumentProjekt()?.id === projectId,
+      beansprucheKostenfreigabe: () => beansprucheAutomatikKosten('quellenthemen', { projectId, grund: vonHand ? 'hand' : 'oeffnen' }),
+      runTask: torRunTask,
+      setzeAgentStatus,
+    }),
+  )
+
+  // Wie bei Chat und Erweiterung: das Tor loest kanalGesperrt('quellen') in seinem eigenen
+  // finally, also NACH dem letzten Rendern hier. Ohne diesen Nachrender bliebe der
+  // Ordnen-Knopf deaktiviert stehen.
+  if (ctx) refreshWorkspace()
 
   if (!ergebnis.gestartet) {
     if (ergebnis.grund === 'monatsbudget-erreicht') {
@@ -5179,7 +5332,7 @@ function planeHinweislauf() {
   const entscheidung = pruefePausenAusloeser({
     hatDokument: Boolean(doc && workspace),
     istBeispielprojekt: istBeispielDokument(doc),
-    laeuftBereits: hinweislaufAktiv,
+    laeuftBereits: kanalGesperrt('hinweis'), // Sperre wohnt im Tor (Task 7), nicht mehr in einem lokalen Feld
     hatEingabeStatus: Boolean(inputState),
     lastInputAt: inputState?.lastInputAt,
     editorSichtbar: editorViewIsVisibleFor(docId),
@@ -5581,8 +5734,8 @@ export function initWorkspace(context) {
     cleanups.splice(0).reverse().forEach(cleanup => cleanup())
 
     clearTimeout(typingTimer)
-    if (laufenderChatLauf?.flushTimer) clearTimeout(laufenderChatLauf.flushTimer)
-    laufenderChatLauf = null
+    if (chatStream?.flushTimer) clearTimeout(chatStream.flushTimer)
+    chatStream = null
     if (localPositionFrame) cancelAnimationFrame(localPositionFrame)
     if (agentLiveFrame) cancelAnimationFrame(agentLiveFrame)
 
@@ -5627,7 +5780,9 @@ export function initWorkspace(context) {
     agentLiveFrame = null
     agentPresenceFocusRequest = false
     interviewPruefKey = null
-    interviewLaufAktiv = false
+    // Keine interviewLaufAktiv-Rueckstellung mehr: die Sperre lebt im Lauf-Tor
+    // (lauf-tor.mjs), dessen eigenes finally sie freigibt, sobald der laufende
+    // Aufruf zurueckkehrt — auch wenn dieser Workspace vorher zerstoert wurde.
     interviewStatus = null
     pausierterAutomatiklauf = null
   }
