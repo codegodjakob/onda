@@ -10,6 +10,11 @@ const PERSISTED_KEYS = Object.freeze([
   'activeProject',
   'settings',
   'memoryStore',
+  // laufJournal (Issue #12): muss ins Voll-Exportpaket, sonst verliert „Alle Daten
+  // exportieren" die Lauf-Chronik still. emptyLocalState() bleibt bewusst OHNE dieses
+  // Feld -- ein Alles-loeschen soll das Journal wegwerfen; normalisiereLaufJournal
+  // defaultet beim naechsten Laden ohnehin auf ein leeres Journal.
+  'laufJournal',
 ])
 
 function isObject(value) {
