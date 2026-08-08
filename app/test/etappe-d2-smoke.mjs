@@ -172,12 +172,32 @@ async function seedD2Project(page) {
   })
 }
 
+// openOndaDialog haengt das Fenster ins Dokument und setzt den Fokus erst einen Frame
+// spaeter (requestAnimationFrame, workspace.js). „Sichtbar" ist also frueher da als
+// „fokussiert". Wer nur auf sichtbar wartet, misst einen Zeitpunkt vor dem Fokus — unter
+// Last kippt das: am 8. August 2026 starb ein build.sh-Lauf im Firefox-Durchgang genau
+// hier. Deshalb auf die Bedingung warten, nicht auf den Moment.
+// Die zehn Sekunden sind gemessen, nicht geraten: die groesste beobachtete Luecke lag
+// bei 242 ms (Lastmittel 200), und selbst ein kuenstlich auf 1200 ms ausgehungerter
+// Frame kam noch durch. Bleibt der Fokus wirklich aus, soll der Bau es in Klartext
+// sagen statt „Timeout 30000ms exceeded" — Vorbild: onda-ui-smoke.mjs.
+async function warteAufDialogFokus(page, kennung) {
+  await page.waitForFunction(
+    id => Boolean(document.activeElement?.closest(`#${id}`)),
+    kennung,
+    { timeout: 10000 },
+  ).catch(() => {
+    assert.fail(`Das Fenster #${kennung} nimmt den Fokus beim Öffnen nicht mit`)
+  })
+}
+
 async function openAudit(page) {
   await ensureProjectSidebarOpen(page)
   await page.locator('#pvCard').click()
   await page.locator('#pvModal').waitFor({ state: 'visible' })
   await page.getByRole('button', { name: 'Schlussaudit und Export öffnen' }).click()
   await page.locator('#auditModal').waitFor({ state: 'visible' })
+  await warteAufDialogFokus(page, 'auditModal')
 }
 
 async function runCoreFlow(browser) {
@@ -188,6 +208,9 @@ async function runCoreFlow(browser) {
   const ids = await seedD2Project(page)
   await page.keyboard.press('Control+e')
   await page.locator('#auditModal').waitFor({ state: 'visible' })
+  // Erst den Fokus abwarten, dann schliessen: sonst laeuft der rAF-Fokus ins Leere und
+  // greift nach einem Knopf, den es nicht mehr gibt.
+  await warteAufDialogFokus(page, 'auditModal')
   await page.keyboard.press('Escape')
   assert.equal(await page.locator('#auditModal').count(), 0)
   await openAudit(page)
@@ -302,6 +325,7 @@ async function runKeyboardAndZoomFlow(browser) {
   await seedD2Project(page)
   await page.keyboard.press('Control+e')
   await page.locator('#auditModal').waitFor({ state: 'visible' })
+  await warteAufDialogFokus(page, 'auditModal')
   assert.equal(await page.getByRole('button', { name: 'Schließen', exact: true }).evaluate(node => (
     document.activeElement === node
   )), true)
