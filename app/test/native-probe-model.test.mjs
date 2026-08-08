@@ -19,6 +19,7 @@ test('die lokale Live-Prüfung validiert das vollständige geschlossene Antworts
     vorschlag: { bisher: 'Ergebniss', neu: 'Ergebnis' },
     istGrundursache: false,
     integritaet: true,
+    gewinn: 'schaerft',
   }
 
   assert.equal(entsprichtJsonSchema({ hinweise: [hinweis] }, HINWEISE_SCHEMA), true)
@@ -100,6 +101,7 @@ test('die echte Probe sendet genau eine kurze Hinweise-Anfrage und gibt nur sich
           vorschlag: { bisher: 'Ergebniss', neu: 'Ergebnis' },
           istGrundursache: false,
           integritaet: true,
+          gewinn: 'schaerft',
         }] }),
         usage: { input_tokens: 41, output_tokens: 67 },
         stopReason: 'end_turn',

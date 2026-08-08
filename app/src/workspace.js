@@ -131,7 +131,7 @@ import {
   createAnnotationController,
 } from './annotation-controller.mjs'
 import { renderAnnotation } from './annotation-components.mjs'
-import { ANNOTATION_DEFINITIONS, resolveAnnotationPresentation } from './annotation-contract.mjs'
+import { gestaltFuerFinding, resolveAnnotationPresentation } from './annotation-contract.mjs'
 import {
   invertAnnotationOperation,
   planAnnotationOperation,
@@ -185,6 +185,8 @@ let localDecoratedFindingId = null
 let localDecoratedBlockId = null
 let localDecoratedSpacing = 0
 let localDecoratedAbsatzweit = false
+let localDecoratedGestalt = 'keine'
+let localDecoratedZiel = ''
 let localFeedbackError = null
 let localPositionFrame = null
 let localSummaryFocusRequest = null
@@ -233,6 +235,9 @@ let momentTimer = null
 // Seitenleiste ("N Hinweise warten aufs Aufschauen — jetzt zeigen"); die zaehlte
 // Anmerkungen und ist mit der Flaeche gefallen.
 let momentVonHand = false
+// Wann zuletzt ueber einen Hinweis entschieden wurde. Steuert, ab wann die Ruhe fuer
+// den naechsten Moment zaehlt (momente-model.mjs, aktuellerMoment).
+let letzteEntscheidungAt = null
 // Was einmal auf dem Schirm stand, bleibt stehen. Der Moment entscheidet ueber das
 // ERSTE Erscheinen, nicht ueber das Bleiben — sonst verschwindet eine Karte, die man
 // gerade liest, sobald man wieder tippt. Wird mit dem Dokument zurueckgesetzt.
@@ -249,8 +254,27 @@ function merkeGezeigt(docId, findingId, { art, moment } = {}) {
   if (istErstesMal) merkeKarteGezeigt({ findingId, art, moment })
 }
 
+// Was WIRKLICH auf dem Schirm stand — getrennt von gezeigteHinweise darueber.
+//
+// Der Unterschied ist der Grund fuer diese zweite Menge. gezeigteHinweise sammelt jeden
+// Hinweis, der gerade erscheinen DUERFTE, und speist damit das Journal (welche Karten
+// waren dran). Auf dem Schirm steht aber immer nur einer (currentPassageFinding). Wer
+// beides in einen Topf wirft, erklaert alle uebrigen fuer gezeigt, ohne dass sie je
+// jemand gesehen haette — und weil „was einmal stand, bleibt stehen" die Moment-Regel
+// aushebelt, wurde daraus „was einmal durfte, darf immer". Genau daran lief die Kette
+// weiter, die nach jedem Wegklicken sofort den naechsten Hinweis brachte.
+//
+// Das Journal bleibt unangetastet: es misst weiter, was dran war. Die Anzeige-Wahrheit
+// steht hier.
+let sichtbareHinweise = { docId: null, ids: new Set() }
+
+function merkeSichtbar(docId, findingId) {
+  if (sichtbareHinweise.docId !== docId) sichtbareHinweise = { docId, ids: new Set() }
+  if (findingId) sichtbareHinweise.ids.add(findingId)
+}
+
 function schonGezeigt(docId, findingId) {
-  return gezeigteHinweise.docId === docId && gezeigteHinweise.ids.has(findingId)
+  return sichtbareHinweise.docId === docId && sichtbareHinweise.ids.has(findingId)
 }
 let agentLiveFrame = null
 let agentPresenceFocusRequest = false
@@ -337,6 +361,23 @@ function localFindingPlugin() {
               ? 'has-local-finding hat-absatzweite-anmerkung'
               : 'has-local-finding'
             local.push(Decoration.node(offset, offset + node.nodeSize, { class: klassen }))
+
+            // Die Geste an den WOERTERN. Bis zum 8.8.2026 gab es sie nicht: der Absatz
+            // trug einen Punkt im Rand, die Stelle selbst blieb unberuehrt — man musste
+            // die Anmerkung lesen, um zu wissen, worauf sie zeigt.
+            //
+            // Fail-closed: Findet sich der Wortlaut nicht mehr (der Text wurde seit dem
+            // Lauf geaendert), entsteht KEINE Markierung. Lieber kein Strich als einer
+            // unter den falschen Woertern — der Punkt im Rand sagt weiterhin, dass hier
+            // etwas offen ist, und die Anmerkung selbst nennt den Wortlaut.
+            if (findingState.gestalt === 'wort' || findingState.gestalt === 'satz') {
+              const stelle = stelleImBaustein(node, offset, findingState.ziel)
+              if (stelle) {
+                local.push(Decoration.inline(stelle.von, stelle.bis, {
+                  class: `onda-stelle onda-stelle--${findingState.gestalt}`,
+                }))
+              }
+            }
             if (findingState.spacing > 0) {
               local.push(Decoration.widget(offset + node.nodeSize, () => {
                 const spacer = document.createElement('div')
@@ -362,36 +403,82 @@ function localFindingPlugin() {
   })
 }
 
-// Welche Anmerkungsarten gelten dem ganzen Absatz? Die Antwort steht schon im Vertrag:
-// ANNOTATION_DEFINITIONS gibt jeder Art einen scope — Wort, Satz, Absatz, Abschnitt.
-// Nur die letzten beiden meinen den Absatz als Ganzes und duerfen ihn andeuten.
-const ABSATZWEITE_REICHWEITEN = new Set(['Absatz', 'Abschnitt'])
-
+// Welche Gestalt traegt die Markierung im Text? Die Antwort steht seit jeher im
+// Vertrag (annotation-contract.mjs, markierungsGestalt): jede Art hat einen scope,
+// und aus ihm folgt die Geste — Kontur ums Wort, Strich unter den Satz, Klammer am
+// Absatz. 'keine' heisst: es gibt keine einzelne Stelle (der ganze Text, der Titel,
+// eine Notiz), dann bleibt es beim Punkt im Rand.
 function istAbsatzweit(finding) {
-  if (!finding) return false
-  const art = ANNOTATION_DEFINITIONS[finding.anmerkungsart]
-  return ABSATZWEITE_REICHWEITEN.has(art?.scope)
+  return gestaltFuerFinding(finding) === 'absatz'
 }
 
-// Die Reichweite gehoert zur gerade gezeigten Anmerkung, nicht zum Aufruf. Sie hier zu
-// merken statt sie durch vier Aufrufstellen zu reichen, haelt die Aufrufe schlank —
-// und keine von ihnen kennt die Anmerkung ueberhaupt.
+// Die Gestalt und die Stelle gehoeren zur gerade gezeigten Anmerkung, nicht zum
+// Aufruf. Sie hier zu merken statt sie durch vier Aufrufstellen zu reichen, haelt die
+// Aufrufe schlank — und keine von ihnen kennt die Anmerkung ueberhaupt.
 let aktuelleAnmerkungIstAbsatzweit = false
+let aktuelleAnmerkungGestalt = 'keine'
+let aktuelleAnmerkungZiel = ''
+
+// Wo genau im Baustein steht die Stelle? Gesucht wird im ZUSAMMENGESETZTEN Text und
+// dann zurueckgerechnet — nicht mit textContent.indexOf auf dem Absatz.
+//
+// Der Unterschied ist kein Feinschliff: textContent klebt den Text ueber
+// Knotengrenzen hinweg zusammen, waehrend jede dieser Grenzen im Dokument eine
+// Position kostet. Bei einem Zitat oder einer Liste liegt die Stelle deshalb um
+// jede durchquerte Grenze zu weit links — die Markierung saesse auf den falschen
+// Zeichen, und zwar nur dort, wo der Text verschachtelt ist.
+function stelleImBaustein(node, bausteinStart, ziel) {
+  const gesucht = String(ziel || '')
+  if (!gesucht) return null
+
+  const stuecke = []
+  let volltext = ''
+  node.descendants((kind, pos) => {
+    if (!kind.isText) return true
+    // pos ist relativ zum Inhalt des Bausteins; +1 ueberspringt seine oeffnende Marke.
+    stuecke.push({ ab: volltext.length, position: bausteinStart + 1 + pos, laenge: kind.text.length })
+    volltext += kind.text
+    return false
+  })
+
+  const treffer = volltext.indexOf(gesucht)
+  if (treffer < 0) return null
+
+  const position = zeichen => {
+    for (const stueck of stuecke) {
+      if (zeichen >= stueck.ab && zeichen <= stueck.ab + stueck.laenge) {
+        return stueck.position + (zeichen - stueck.ab)
+      }
+    }
+    return null
+  }
+  const von = position(treffer)
+  const bis = position(treffer + gesucht.length)
+  return von != null && bis != null && bis > von ? { von, bis } : null
+}
 
 function setLocalFindingDecoration(blockId, spacing = 0, force = false) {
   const absatzweit = Boolean(blockId) && aktuelleAnmerkungIstAbsatzweit
+  const gestalt = blockId ? aktuelleAnmerkungGestalt : 'keine'
+  const ziel = blockId ? aktuelleAnmerkungZiel : ''
   const nextSpacing = blockId ? Math.max(0, Math.ceil(spacing)) : 0
   if (!force
     && localDecoratedBlockId === blockId
     && localDecoratedSpacing === nextSpacing
-    && localDecoratedAbsatzweit === absatzweit) return false
+    && localDecoratedAbsatzweit === absatzweit
+    && localDecoratedGestalt === gestalt
+    && localDecoratedZiel === ziel) return false
   localDecoratedBlockId = blockId
   localDecoratedSpacing = nextSpacing
   localDecoratedAbsatzweit = absatzweit
+  localDecoratedGestalt = gestalt
+  localDecoratedZiel = ziel
   ctx.editor.view.dispatch(ctx.editor.state.tr.setMeta(localFindingKey, {
     blockId,
     spacing: nextSpacing,
     absatzweit,
+    gestalt,
+    ziel,
   }))
   return true
 }
@@ -3097,6 +3184,7 @@ function momentJetzt(docId = ctx?.activeDoc()?.id) {
     anGrenze,
     editorSichtbar: editorViewIsVisibleFor(docId),
     vonHand: momentVonHand,
+    letzteEntscheidungAt,
   })
 }
 
@@ -3113,8 +3201,13 @@ function planeMomentwechsel() {
   if (!docId || !inputState || !Number.isFinite(inputState.lastInputAt)) return
   if (!editorViewIsVisibleFor(docId)) return
 
-  const ruhe = Date.now() - inputState.lastInputAt
-  const anGrenze = inputState.boundaryGeneration === inputState.generation
+  // Ab derselben Regung rechnen wie aktuellerMoment, sonst plant der Zeitgeber die
+  // Neuzeichnung auf einen Moment, der noch gar nicht erreicht ist — und der naechste
+  // Hinweis bliebe liegen, bis zufaellig etwas anderes neu zeichnet.
+  const entschieden = Number.isFinite(letzteEntscheidungAt) && letzteEntscheidungAt > inputState.lastInputAt
+  const ruhe = Date.now() - (entschieden ? letzteEntscheidungAt : inputState.lastInputAt)
+  const anGrenze = !entschieden
+    && inputState.boundaryGeneration === inputState.generation
     && Number.isFinite(inputState.boundaryAt)
   const schwellen = [anGrenze ? INNEHALTEN_AN_GRENZE_MS : INNEHALTEN_MS, AUFSCHAUEN_MS]
   const naechste = schwellen.find(schwelle => schwelle > ruhe)
@@ -3191,6 +3284,10 @@ function currentPassageFinding(doc, blocks) {
   const records = visiblePassageFindingRecords(doc, blocks)
   const chosen = annotationController?.current(momentJetzt(doc?.id)) || records[0]?.finding || null
   const record = records.find(candidate => candidate.finding.id === chosen?.id)
+  // Erst hier steht fest, welcher Hinweis wirklich auf den Schirm kommt — und nur der
+  // darf als gezeigt gelten. Der Vermerk sorgt dafuer, dass eine Karte, die man gerade
+  // liest, nicht verschwindet, sobald man wieder tippt (siehe darfErscheinen).
+  if (record?.finding?.id) merkeSichtbar(doc?.id, record.finding.id)
   return record || { finding: null, block: null, placementKind: null, migrated: records.some(item => item.migrated) }
 }
 
@@ -3442,11 +3539,13 @@ function targetDocumentRange(blockId, target) {
 function decideAndAdvance(finding, decision, { refresh = true, restoreFocus = true } = {}) {
   const doc = ctx.activeDoc()
   const workspace = activeWorkspace()
-  // Ueber einen Hinweis zu entscheiden IST ein Aufschauen. Wer gerade Rueckmeldung
-  // durcharbeitet, schreibt nicht — der naechste Hinweis darf sofort folgen, statt
-  // 45 Sekunden Ruhe abzuwarten. Gilt bis zum naechsten Tastendruck; sobald wieder
-  // getippt wird, setzt recordRealEditorInput es zurueck.
-  momentVonHand = true
+  // Ueber einen Hinweis zu entscheiden ist eine Regung wie ein Tastendruck — und
+  // beginnt die Wartezeit von vorn. Bis zum 8.8.2026 stand hier `momentVonHand =
+  // true`, was den Moment sofort auf 'aufschauen' hob: jedes Wegklicken gab damit
+  // den naechsten Hinweis frei, und es entstand eine Kette, die lief, solange offene
+  // Hinweise da waren. Ein Zuruecksetzen ist nicht noetig — sobald wieder getippt
+  // wird, ist lastInputAt juenger und der Zeitpunkt hier ohne Wirkung.
+  letzteEntscheidungAt = Date.now()
   // Angenommen heisst: das hat gestimmt. Dann traegt auch das Prinzip dahinter.
   // Verworfenes wandert NICHT in den Speicher -- ein zurueckgewiesener Hinweis ist
   // keine Erkenntnis, und ihn trotzdem zu behalten waere das Gegenteil von
@@ -4095,7 +4194,9 @@ function renderLocalFinding() {
   if (localFeedbackError && localFeedbackError.findingId !== finding?.id) localFeedbackError = null
 
   // Vor jeder Entscheidung ueber die Verzierung: gilt die Anmerkung dem ganzen Absatz?
-  aktuelleAnmerkungIstAbsatzweit = istAbsatzweit(finding)
+  aktuelleAnmerkungGestalt = finding ? gestaltFuerFinding(finding) : 'keine'
+  aktuelleAnmerkungIstAbsatzweit = aktuelleAnmerkungGestalt === 'absatz'
+  aktuelleAnmerkungZiel = String(finding?.target || '')
 
   if (
     localDecoratedDocId !== doc.id

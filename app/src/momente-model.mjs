@@ -66,10 +66,18 @@ export const AUFSCHAUEN_MS = 45000
 export const AUSLOESER = Object.freeze({
   sofort: 'Immer. Sobald etwas da ist, ist es zu sehen.',
   innehalten: `Satz- oder Absatzende und ${INNEHALTEN_AN_GRENZE_MS} ms Ruhe — oder ${INNEHALTEN_MS / 1000} s Ruhe an beliebiger Stelle.`,
-  // „von Hand" heisst NICHT: es gibt einen Knopf dafuer. Es heisst: wer gerade ueber
-  // einen Hinweis entschieden hat, schaut ohnehin auf — dann muss der naechste nicht
-  // erst 45 Sekunden warten. Abgeholt wird nichts (docs/PHILOSOPHIE.md §1).
-  aufschauen: `${AUFSCHAUEN_MS / 1000} s Ruhe, die Schreibansicht verlassen — oder gerade über einen Hinweis entschieden.`,
+  // „von Hand" heisst NICHT: es gibt einen Knopf dafuer. Es heisst: jemand hat
+  // ausdruecklich hingesehen. Abgeholt wird nichts (docs/PHILOSOPHIE.md §1).
+  //
+  // Bis zum 8.8.2026 stand hier auch „oder gerade ueber einen Hinweis entschieden".
+  // Der erste Halbsatz der damaligen Begruendung stimmte — wer entscheidet, schaut
+  // auf —, der Schluss daraus war falsch: die Grenze, die eine Entscheidung schafft,
+  // ist das ENDE dieser Rueckmeldung, nicht der Beginn eines Rechts auf die naechste.
+  // In der Praxis erzeugte jedes Wegklicken sofort die naechste Anmerkung, und die
+  // Kette lief, solange offene Hinweise da waren (Jakob: „wenn ich eins wegklick,
+  // dann kommt direkt das Naechste. Das soll nicht so sein.").
+  // Siehe docs/research/2026-08-08-rhythmus-der-anmerkungen.md, Abschnitt 3.
+  aufschauen: `${AUFSCHAUEN_MS / 1000} s Ruhe oder die Schreibansicht verlassen.`,
 })
 
 // Ein Satzende ist ein EREIGNIS: das Zeichen, das gerade getippt wurde. Nicht der
@@ -91,6 +99,9 @@ export function momentFuerArt(art) {
 export function aktuellerMoment({
   jetzt = Date.now(),
   lastInputAt = null,
+  // Wann zuletzt ueber einen Hinweis entschieden wurde. Seit dem 8.8.2026 zaehlt das
+  // als Regung wie ein Tastendruck — siehe die lange Begruendung unten.
+  letzteEntscheidungAt = null,
   anGrenze = false,
   editorSichtbar = true,
   vonHand = false,
@@ -102,10 +113,26 @@ export function aktuellerMoment({
   if (!editorSichtbar) return 'aufschauen'
   if (!Number.isFinite(lastInputAt)) return 'aufschauen'
 
-  const ruhe = jetzt - lastInputAt
+  // EINE ENTSCHEIDUNG SCHLIESST EINEN DURCHGANG, SIE OEFFNET KEINEN.
+  //
+  // Vorher setzte eine Entscheidung den Moment direkt auf 'aufschauen'. Dadurch gab
+  // jedes Wegklicken sofort den naechsten Hinweis frei, und es entstand eine Kette,
+  // die lief, solange offene Hinweise da waren.
+  //
+  // Jetzt zaehlt die Ruhe ab der letzten REGUNG, und Entscheiden ist eine. Wer
+  // gerade entschieden hat, faengt die Wartezeit von vorn an — genau wie jemand, der
+  // gerade getippt hat. Das ist keine kuenstliche Sperre, sondern dieselbe Regel fuer
+  // beide Arten von Taetigkeit.
+  const entschieden = Number.isFinite(letzteEntscheidungAt) && letzteEntscheidungAt > lastInputAt
+  const letzteRegung = entschieden ? letzteEntscheidungAt : lastInputAt
+  const ruhe = jetzt - letzteRegung
+
   if (ruhe >= AUFSCHAUEN_MS) return 'aufschauen'
   if (ruhe >= INNEHALTEN_MS) return 'innehalten'
-  if (anGrenze && ruhe >= INNEHALTEN_AN_GRENZE_MS) return 'innehalten'
+  // Eine Satz- oder Absatzgrenze, die VOR der Entscheidung lag, ist verbraucht. Ohne
+  // diese Bedingung genuegten 300 ms nach dem Wegklicken, und die Kette waere nur
+  // kuerzer geworden statt unterbrochen.
+  if (anGrenze && !entschieden && ruhe >= INNEHALTEN_AN_GRENZE_MS) return 'innehalten'
   return 'sofort'
 }
 

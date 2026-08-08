@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Onda · Anmerkungs-Varianten</title>
+<link rel="stylesheet" href="src/onda-tokens.css" />
+<style>
+/* ===========================================================================
+   ENTWURF, nicht Programm. Diese Seite gehoert zu keinem Testlauf; sie dient
+   allein dazu, vier Anmerkungsformen anzusehen und zu vergleichen.
+
+   Die eine Idee dahinter: Markierung und Notiz liegen in DERSELBEN RASTERZEILE.
+   Heute schwebt die Notiz absolut positioniert ueber der Seite und muss ihre
+   Lage bei jedem Zeichnen neu ausrechnen — daher das Umspringen. Im Raster
+   koennen sie sich nicht ueberlappen, sie stehen von selbst auf gleicher Hoehe,
+   und die Notizspalte darf schrumpfen, ohne dass die Markierung sich bewegt.
+   =========================================================================== */
+
+* { box-sizing: border-box; }
+html { background: var(--bg-app); color: var(--text-primary); font-family: var(--font-sans); }
+body { margin: 0; }
+button { font: inherit; }
+
+.kopf { width: min(100%, 1100px); margin-inline: auto; padding: var(--space-8) var(--space-6) var(--space-6); }
+.kopf__aura { width: 48px; height: 18px; margin-bottom: var(--space-5); border-radius: var(--radius-full); background: var(--bg-sunken); border: 1px solid var(--border-strong); }
+.kopf h1 { margin: 0; font: var(--type-display); letter-spacing: var(--tracking-tighter); }
+.kopf p { max-width: 62ch; margin: var(--space-4) 0 0; color: var(--text-secondary); font: var(--type-body); line-height: var(--leading-relaxed); }
+
+.steuer { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center;
+  padding: var(--space-4) var(--space-6); border-bottom: 1px solid var(--border-subtle); background: var(--bg-app); }
+.steuer__gruppe { display: flex; gap: var(--space-2); align-items: center; }
+.steuer__label { color: var(--text-tertiary); font: var(--type-rubrik); }
+.knopf { min-height: 44px; padding: 0 var(--space-4); border: 1px solid var(--border-default); border-radius: var(--radius-control);
+  background: var(--bg-surface); color: var(--text-primary); cursor: pointer; font: var(--type-label); }
+.knopf[aria-pressed="true"] { border-color: var(--text-primary); background: var(--bg-sunken); }
+.knopf:hover { background: var(--bg-hover); }
+.masz { margin-left: auto; color: var(--text-tertiary); font: var(--type-caption); font-variant-numeric: tabular-nums; }
+
+/* --- Der Rahmen, in dem die Schreibansicht steckt ------------------------- */
+.buehne { padding: var(--space-6); }
+.rahmen { margin-inline: auto; border: 1px solid var(--border-default); border-radius: var(--radius-overlay);
+  background: var(--bg-surface); overflow: hidden; transition: width var(--dur-normal) var(--ease-out); }
+.rahmen__leiste { display: flex; align-items: center; gap: var(--space-2); height: 52px; padding-inline: var(--space-5);
+  border-bottom: 1px solid var(--border-subtle); color: var(--text-tertiary); font: var(--type-caption); }
+.rahmen__punkt { width: 9px; height: 9px; border-radius: var(--radius-full); background: var(--border-strong); }
+
+/* --- Die Schreibfläche ---------------------------------------------------- */
+/* Jede Stelle ist EINE Rasterzeile: links der Text, rechts die Notiz.
+   --spur ist die einzige Zahl, die sich mit der Breite aendert. */
+.blatt { --spur: 340px; --spalt: 40px; padding: var(--space-8) var(--space-6) var(--space-10); }
+.blatt h2 { margin: 0 0 var(--space-6); font: var(--type-display); letter-spacing: var(--tracking-tighter); }
+
+.stelle { display: grid; grid-template-columns: minmax(0, 680px) var(--spur); column-gap: var(--spalt);
+  align-items: start; margin-bottom: var(--space-5); }
+.stelle__text { grid-column: 1; min-width: 0; font: var(--type-body); line-height: var(--leading-relaxed); }
+.stelle__notiz { grid-column: 2; min-width: 0; }
+
+/* SCHMAL: die Spur faellt weg. Die Notiz rutscht unter ihren eigenen Absatz —
+   nicht ueber die ganze Breite, sondern in dieselbe Spalte wie der Text, und
+   zugeklappt. Sie ist damit immer da; nur die Ausfuehrlichkeit wartet auf einen
+   Klick. Kein Overlay, und nichts erscheint von allein neu. */
+[data-lage="schmal"] .blatt { --spur: 0px; --spalt: 0px; }
+[data-lage="schmal"] .stelle { grid-template-columns: minmax(0, 680px); }
+[data-lage="schmal"] .stelle__notiz { grid-column: 1; margin-top: var(--space-3); }
+[data-lage="mittel"] .blatt { --spur: 260px; --spalt: 28px; }
+
+/* ===========================================================================
+   DIE VIER MARKIERUNGEN. Jede sagt durch ihre Form, welchen Umfang sie meint.
+   =========================================================================== */
+
+/* 1 · WORT — das Wort selbst, mit der Alternative direkt dahinter. */
+.mark-wort { border-radius: var(--radius-sm); background: var(--bg-sunken); border: 1px solid var(--border-strong); padding: 0 3px;
+  box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+.mark-wort__neu { margin-left: 6px; color: var(--text-secondary); font-style: italic; opacity: 0; }
+.zeigt .mark-wort__neu { animation: einblenden var(--dur-normal) var(--ease-out) 520ms both; }
+
+/* 2 · SATZ — ein Strich, der sich unter den Satz zieht. Als Hintergrundbild,
+   damit er ueber Zeilenumbrueche hinweg auf JEDER Zeile erscheint; ein
+   Pseudo-Element waere ein einziger Kasten und liefe quer durch den Absatz. */
+.mark-satz { background-image: linear-gradient(var(--text-primary), var(--text-primary));
+  background-repeat: no-repeat; background-position: 0 100%; background-size: 0% 2px;
+  padding-bottom: 3px; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+.zeigt .mark-satz { animation: strich-ziehen 620ms var(--ease-out) 120ms both; }
+
+/* 3 · ABSATZ — eine Klammer am linken Rand, ueber die volle Absatzhoehe. */
+.mark-absatz { position: relative; padding-left: var(--space-4); }
+.mark-absatz::before { content: ""; position: absolute; left: 0; top: 2px; bottom: 2px; width: 8px;
+  border: 2px solid var(--text-primary); border-right: 0; border-radius: 3px 0 0 3px;
+  transform-origin: 50% 0; transform: scaleY(0); }
+.zeigt .mark-absatz::before { animation: klammer-wachsen 460ms var(--ease-out) 120ms both; }
+
+/* 4 · ORTSWECHSEL — zwei Stellen: die Flaeche, um die es geht, und die Marke,
+   wohin sie soll. Ohne das sichtbare Wohin waere es eine halbe Aussage. */
+.mark-block { position: relative; border-radius: var(--radius-panel); background: var(--bg-sunken);
+  padding: var(--space-3) var(--space-4); opacity: 0; }
+.zeigt .mark-block { animation: einblenden var(--dur-slow) var(--ease-out) 120ms both; }
+.mark-ziel { display: flex; align-items: center; gap: var(--space-2); height: 0; overflow: hidden; color: var(--text-secondary); font: var(--type-caption); }
+.zeigt .mark-ziel { animation: ziel-oeffnen 420ms var(--ease-out) 460ms both; }
+.mark-ziel__linie { flex: 1; height: 2px; border-radius: var(--radius-full);
+  background: repeating-linear-gradient(90deg, var(--text-secondary) 0 6px, transparent 6px 12px); }
+
+@keyframes strich-ziehen { from { background-size: 0% 2px; } to { background-size: 100% 2px; } }
+@keyframes klammer-wachsen { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+@keyframes einblenden { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+@keyframes ziel-oeffnen { from { height: 0; opacity: 0; } to { height: 20px; opacity: 1; } }
+
+/* ===========================================================================
+   DIE NOTIZ. Kommt IMMER nach ihrer Markierung — der Versatz ist die Aussage:
+   erst zeichnet der Stift, dann tritt die Erklaerung daneben.
+   =========================================================================== */
+.notiz { opacity: 0; }
+.zeigt .notiz { animation: einblenden var(--dur-normal) var(--ease-out) 760ms both; }
+
+.notiz__kopf { display: flex; align-items: baseline; gap: var(--space-2); color: var(--text-tertiary); font: var(--type-rubrik); }
+.notiz__umfang { color: var(--text-primary); font-weight: var(--fw-medium); }
+.notiz__satz { margin: var(--space-2) 0 0; color: var(--text-secondary); font: var(--type-body); line-height: var(--leading-normal); }
+.notiz__gesten { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-3); }
+.geste { min-height: 36px; padding: 0 var(--space-3); border: 1px solid transparent; border-radius: var(--radius-control);
+  background: var(--bg-sunken); color: var(--text-primary); cursor: pointer; font: var(--type-caption); }
+.geste--ja { background: var(--text-primary); color: var(--bg-app); }
+.geste:hover { border-color: var(--border-strong); }
+
+/* Zugeklappt: eine ruhige Zeile, die nur sagt, worum es geht. Sie steht immer
+   da — dadurch entsteht beim Aufklappen kein Erscheinen, nur ein Oeffnen. */
+.notiz__kurz { display: none; }
+[data-lage="schmal"] .notiz__lang { display: none; }
+[data-lage="schmal"] .notiz__kurz { display: block; }
+.notiz__kurz summary { display: flex; align-items: center; gap: var(--space-2); min-height: 36px;
+  color: var(--text-tertiary); font: var(--type-caption); cursor: pointer; list-style: none; }
+.notiz__kurz summary::-webkit-details-marker { display: none; }
+.notiz__kurz summary::before { content: "›"; color: var(--text-tertiary); transition: transform var(--dur-fast) var(--ease-out); }
+.notiz__kurz[open] summary::before { transform: rotate(90deg); }
+.notiz__kurz > div { padding: var(--space-3) 0 0; }
+
+.legende { width: min(100%, 1100px); margin: 0 auto; padding: 0 var(--space-6) var(--space-12); color: var(--text-secondary); font: var(--type-body); line-height: var(--leading-relaxed); }
+.legende h3 { margin: var(--space-7) 0 var(--space-2); color: var(--text-primary); font: var(--type-title); }
+.legende ul { margin: 0; padding-left: 1.2em; }
+.legende li { margin-bottom: var(--space-2); }
+
+@media (prefers-reduced-motion: reduce) {
+  .zeigt * { animation-duration: 1ms !important; animation-delay: 0ms !important; }
+}
+</style>
+</head>
+<body>
+
+<header class="kopf">
+  <div class="kopf__aura" aria-hidden="true"></div>
+  <h1>Vier Umfänge, vier Gesten</h1>
+  <p>
+    Entwurf zum Ansehen, kein fertiges Programm. Die Frage dahinter: Woran erkennt man
+    <em>sofort</em>, welche Stelle gemeint ist — ohne erst lesen und zuordnen zu müssen?
+    Der Vorschlag: Die Markierung trägt die Bedeutung, nicht die Notiz. Ihre Form sagt
+    schon, um welchen Umfang es geht.
+  </p>
+</header>
+
+<div class="steuer">
+  <div class="steuer__gruppe">
+    <span class="steuer__label">Fenster</span>
+    <button class="knopf" data-breite="520" aria-pressed="false">Drittel</button>
+    <button class="knopf" data-breite="1000" aria-pressed="false">Zwei Drittel</button>
+    <button class="knopf" data-breite="1512" aria-pressed="true">Vollbild</button>
+  </div>
+  <div class="steuer__gruppe">
+    <button class="knopf" id="nochmal">Ankunft nochmal zeigen</button>
+  </div>
+  <span class="masz" id="masz"></span>
+</div>
+
+<div class="buehne">
+  <div class="rahmen" id="rahmen">
+    <div class="rahmen__leiste">
+      <span class="rahmen__punkt" aria-hidden="true"></span>
+      <span class="rahmen__punkt" aria-hidden="true"></span>
+      <span class="rahmen__punkt" aria-hidden="true"></span>
+      <span id="lageName">Vollbild</span>
+    </div>
+
+    <div class="blatt" id="blatt">
+      <h2>Calm Technology</h2>
+
+      <!-- 1 · WORT -->
+      <div class="stelle">
+        <p class="stelle__text">
+          Calm Technology beschreibt Technik, die in der Peripherie bleibt und Aufmerksamkeit
+          nur beansprucht, wenn sie wirklich <span class="mark-wort">gebraucht<span class="mark-wort__neu">→ benötigt</span></span>
+          wird. Der Gedanke ist über dreißig Jahre alt; die Erfahrung, die ihn nötig macht, ist täglich neu.
+        </p>
+        <div class="stelle__notiz">
+          <div class="notiz">
+            <div class="notiz__lang">
+              <div class="notiz__kopf"><span class="notiz__umfang">Wort</span><span>dritte Wiederholung</span></div>
+              <p class="notiz__satz">„gebraucht" steht im Absatz zum dritten Mal. „benötigt" trägt dieselbe Aussage.</p>
+              <div class="notiz__gesten"><button class="geste geste--ja">Ersetzen</button><button class="geste">Lassen</button></div>
+            </div>
+            <details class="notiz__kurz">
+              <summary>Wort · dritte Wiederholung</summary>
+              <div>
+                <p class="notiz__satz">„gebraucht" steht im Absatz zum dritten Mal. „benötigt" trägt dieselbe Aussage.</p>
+                <div class="notiz__gesten"><button class="geste geste--ja">Ersetzen</button><button class="geste">Lassen</button></div>
+              </div>
+            </details>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2 · SATZ -->
+      <div class="stelle">
+        <p class="stelle__text">
+          <span class="mark-satz">Ständige Benachrichtigungen fragmentieren die Konzentration und zerreißen den Denkfluss.</span>
+          Der eigentliche Schaden ist nicht die einzelne Meldung, sondern die Summe der kleinen
+          Unterbrechungen über den Tag.
+        </p>
+        <div class="stelle__notiz">
+          <div class="notiz">
+            <div class="notiz__lang">
+              <div class="notiz__kopf"><span class="notiz__umfang">Satz</span><span>zwei Bilder</span></div>
+              <p class="notiz__satz">„fragmentieren" und „zerreißen" sagen dasselbe zweimal. Eins davon trägt allein weiter.</p>
+              <div class="notiz__gesten"><button class="geste geste--ja">Fassung ansehen</button><button class="geste">Lassen</button></div>
+            </div>
+            <details class="notiz__kurz">
+              <summary>Satz · zwei Bilder</summary>
+              <div>
+                <p class="notiz__satz">„fragmentieren" und „zerreißen" sagen dasselbe zweimal. Eins davon trägt allein weiter.</p>
+                <div class="notiz__gesten"><button class="geste geste--ja">Fassung ansehen</button><button class="geste">Lassen</button></div>
+              </div>
+            </details>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3 · ABSATZ -->
+      <div class="stelle">
+        <p class="stelle__text mark-absatz">
+          Aufmerksamkeit ist die eigentliche Währung dieser Jahre. Wer Aufmerksamkeit verliert,
+          verliert nicht nur Zeit, sondern den Faden; und wer den Faden verliert, muss
+          Aufmerksamkeit noch einmal aufbringen, um ihn wiederzufinden. Man merkt erst, dass
+          diese Rechnung nicht aufgeht, wenn der Nachmittag vorbei ist.
+        </p>
+        <div class="stelle__notiz">
+          <div class="notiz">
+            <div class="notiz__lang">
+              <div class="notiz__kopf"><span class="notiz__umfang">Absatz</span><span>Kern steht hinten</span></div>
+              <p class="notiz__satz">Der Absatz führt zur Rechnung hin und nennt sie erst im letzten Satz. Vorn gestellt trägt er schneller.</p>
+              <div class="notiz__gesten"><button class="geste geste--ja">Umstellen zeigen</button><button class="geste">Lassen</button></div>
+            </div>
+            <details class="notiz__kurz">
+              <summary>Absatz · Kern steht hinten</summary>
+              <div>
+                <p class="notiz__satz">Der Absatz führt zur Rechnung hin und nennt sie erst im letzten Satz. Vorn gestellt trägt er schneller.</p>
+                <div class="notiz__gesten"><button class="geste geste--ja">Umstellen zeigen</button><button class="geste">Lassen</button></div>
+              </div>
+            </details>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4 · ORTSWECHSEL -->
+      <div class="stelle">
+        <div class="stelle__text">
+          <div class="mark-block">
+            Mark Weiser prägte am Xerox PARC den Begriff Ubiquitous Computing. Gemeinsam mit
+            John Seely Brown beschrieb er 1996, wie Technik zwischen Zentrum und Randbereich
+            der Aufmerksamkeit wechseln kann.
+          </div>
+        </div>
+        <div class="stelle__notiz">
+          <div class="notiz">
+            <div class="notiz__lang">
+              <div class="notiz__kopf"><span class="notiz__umfang">Ortswechsel</span><span>gehört nach vorn</span></div>
+              <p class="notiz__satz">Die Herkunft des Begriffs erklärt, wovon der erste Absatz schon spricht. Dort steht sie früher richtig.</p>
+              <div class="notiz__gesten"><button class="geste geste--ja">Verschieben</button><button class="geste">Lassen</button></div>
+            </div>
+            <details class="notiz__kurz">
+              <summary>Ortswechsel · gehört nach vorn</summary>
+              <div>
+                <p class="notiz__satz">Die Herkunft des Begriffs erklärt, wovon der erste Absatz schon spricht. Dort steht sie früher richtig.</p>
+                <div class="notiz__gesten"><button class="geste geste--ja">Verschieben</button><button class="geste">Lassen</button></div>
+              </div>
+            </details>
+          </div>
+        </div>
+      </div>
+
+      <div class="stelle">
+        <div class="stelle__text">
+          <div class="mark-ziel"><span>hierher</span><span class="mark-ziel__linie"></span></div>
+          <p style="margin: var(--space-2) 0 0;">
+            Amber Case hat den Ansatz zwei Jahrzehnte später in zwölf Prinzipien übersetzt.
+          </p>
+        </div>
+        <div class="stelle__notiz"></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<section class="legende">
+  <h3>Was hier anders ist als heute</h3>
+  <ul>
+    <li><strong>Die Markierung trägt die Bedeutung.</strong> Ihre Form sagt den Umfang, bevor man ein Wort gelesen hat: ein Wort ist umrandet, ein Satz unterstrichen, ein Absatz geklammert, ein Ortswechsel hat zwei Enden.</li>
+    <li><strong>Erst der Stift, dann die Erklärung.</strong> Die Notiz kommt rund eine halbe Sekunde nach der Markierung. Der Versatz ist die Aussage — man sieht zuerst <em>wo</em>, dann <em>was</em>.</li>
+    <li><strong>Markierung und Notiz liegen in einer Rasterzeile.</strong> Sie können sich nicht überlappen und stehen von selbst auf gleicher Höhe. Heute schwebt die Notiz frei und rechnet ihre Lage bei jedem Zeichnen neu aus — daher das Umspringen.</li>
+    <li><strong>Nur die Ausführlichkeit passt sich an, nie die Markierung.</strong> Bei schmalem Fenster fällt die Notizspalte weg und die Notiz wird zu einer ruhigen Zeile unter ihrem Absatz. Sie ist immer da — deshalb entsteht beim Aufklappen kein Erscheinen, nur ein Öffnen.</li>
+    <li><strong>Der Ortswechsel hat ein sichtbares Wohin.</strong> Ein „das gehört woanders hin" ohne Ziel ist eine halbe Aussage.</li>
+  </ul>
+
+  <h3>Was noch offen ist</h3>
+  <ul>
+    <li>Hier stehen vier Anmerkungen gleichzeitig, damit man sie vergleichen kann. Im Programm ist immer nur <em>eine</em> sichtbar.</li>
+    <li><strong>Keine Farbe.</strong> Die vier Gesten unterscheiden sich allein durch ihre Form: geschlossene Kontur beim Wort, Strich beim Satz, Klammer beim Absatz, Fläche mit Ziel beim Ortswechsel. Damit bleibt Farbe für später frei — und die Formen müssen von sich aus tragen, statt sich auf einen Farbton zu verlassen.</li>
+    <li>Ob eine weggelegte Anmerkung ihre Markierung behalten darf, hängt daran, ob sie sagen kann, wann sie wiederkommt (siehe <code>docs/research/2026-08-08-rhythmus-der-anmerkungen.md</code>).</li>
+  </ul>
+</section>
+
+<script>
+const rahmen = document.getElementById('rahmen')
+const blatt = document.getElementById('blatt')
+const masz = document.getElementById('masz')
+const lageName = document.getElementById('lageName')
+const knoepfe = [...document.querySelectorAll('[data-breite]')]
+
+// Die Lage haengt an der Breite des Rahmens, nicht an der des Fensters. Nur so
+// laesst sie sich hier ueberhaupt vorfuehren — und im Programm waere es dieselbe
+// Rechnung, weil der Text ja auch dort in einer Spalte neben der Leiste sitzt.
+function setzeLage() {
+  const breite = rahmen.clientWidth
+  const lage = breite >= 1140 ? 'breit' : breite >= 860 ? 'mittel' : 'schmal'
+  document.body.dataset.lage = lage
+  const namen = { breit: 'Vollbild', mittel: 'Zwei Drittel', schmal: 'Drittel' }
+  lageName.textContent = namen[lage]
+  // Gemessen, nicht behauptet: die Textspalte ist minmax(0, 680px) und wird bei
+  // engem Rahmen wirklich schmaler. Eine Anzeige, die stur 680 sagt, waere falsch.
+  const textBreite = Math.round(document.querySelector('.stelle__text').getBoundingClientRect().width)
+  const spurBreite = Math.round(document.querySelector('.stelle__notiz')?.getBoundingClientRect().width || 0)
+  masz.textContent = `Rahmen ${breite}px · Textspalte ${textBreite}px · Notizspur ${spurBreite}px`
+}
+
+function waehleBreite(wert) {
+  const platz = document.querySelector('.buehne').clientWidth - 48
+  rahmen.style.width = Math.min(wert, platz) + 'px'
+  knoepfe.forEach(k => k.setAttribute('aria-pressed', String(Number(k.dataset.breite) === wert)))
+  requestAnimationFrame(setzeLage)
+}
+
+function zeigeAnkunft() {
+  blatt.classList.remove('zeigt')
+  void blatt.offsetWidth            // Neuzeichnen erzwingen, sonst startet nichts neu
+  blatt.classList.add('zeigt')
+}
+
+knoepfe.forEach(k => k.addEventListener('click', () => { waehleBreite(Number(k.dataset.breite)); zeigeAnkunft() }))
+document.getElementById('nochmal').addEventListener('click', zeigeAnkunft)
+new ResizeObserver(setzeLage).observe(rahmen)
+
+waehleBreite(1512)
+zeigeAnkunft()
+</script>
+</body>
+</html>
