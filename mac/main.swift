@@ -179,24 +179,35 @@ enum Store {
         // (Zeitstempel, Zähler) über die Reihenfolge, und eine später geschriebene
         // Generation ohne Zähler galt als älter.
         //
-        // Der Zähler zählt außerdem HINTER dem höchsten weiter, der zu dieser
-        // Millisekunde schon vergeben ist. Finge er wieder bei 1 an, wäre der
-        // Schlüssel erneut gelogen: die Rotation räumt die kleinsten Zähler zuerst
-        // weg, und die frei gewordene Nummer machte aus der jüngsten Sicherung die
-        // vermeintlich älteste — derselbe Fehler durch die Hintertür. Sichtbar wird
-        // das erst, wenn eine ganze Rotationsrunde in eine Millisekunde fällt;
+        // Der Zähler zählt außerdem HINTER dem höchsten weiter, der schon vergeben
+        // ist. Finge er wieder bei 1 an, wäre der Schlüssel erneut gelogen: die
+        // Rotation räumt die kleinsten Zähler zuerst weg, und die frei gewordene
+        // Nummer machte aus der jüngsten Sicherung die vermeintlich älteste —
+        // derselbe Fehler durch die Hintertür. Sichtbar wird das erst, wenn eine
+        // ganze Rotationsrunde in eine Millisekunde fällt;
         // `rotation-generationen-neueste-zuerst` prüft genau diesen Ausgang.
+        //
+        // Verglichen wird dabei der höchste SCHLÜSSEL, nicht nur der höchste Zähler
+        // dieser Millisekunde. Sonst reicht ein Rückwärtssprung der Systemuhr
+        // (Zeitabgleich), und die neue Stufe trägt einen früheren Zeitstempel mit
+        // Zähler 1 — zu dieser Millisekunde gibt es ja noch keinen —, reiht sich
+        // damit unter die älteren ein und wird als vermeintlich älteste weggeräumt.
+        // Springt die Uhr zurück, bleibt deshalb der höhere Zeitstempel stehen und
+        // bekommt die nächste Nummer. Der Name sagt dann nicht mehr genau, wann
+        // gesichert wurde; die Reihenfolge stimmt, und die entscheidet, welcher Text
+        // zurückkommt. `rueckwaerts-uhr-neueste-zuerst` prüft diesen Ausgang.
         let zeit = stamp()
-        let hoechsterZaehler = backupGenerationen()
-            .map { generationsSchluessel($0.lastPathComponent) }
-            .filter { $0.0 == zeit }
-            .map { $0.1 }
-            .max() ?? 0
-        var lauf = hoechsterZaehler + 1
-        var ziel = generationsURL(zeit: zeit, lauf: lauf)
-        while fm.fileExists(atPath: ziel.path) { // gleiche Millisekunde — Namen nie überschreiben
+        var stempel = zeit
+        var lauf = 1
+        if let hoechster = backupGenerationen().first.map({ generationsSchluessel($0.lastPathComponent) }),
+           hoechster >= (zeit, 1) {
+            stempel = hoechster.0
+            lauf = hoechster.1 + 1
+        }
+        var ziel = generationsURL(zeit: stempel, lauf: lauf)
+        while fm.fileExists(atPath: ziel.path) { // Namen nie überschreiben
             lauf += 1
-            ziel = generationsURL(zeit: zeit, lauf: lauf)
+            ziel = generationsURL(zeit: stempel, lauf: lauf)
         }
         try? fm.copyItem(at: dataURL, to: ziel)
 
@@ -465,6 +476,47 @@ func runSelfTest() -> Never {
     check("rueckfall-auf-generation", Store.load() == rotStaende[7])
     Store.backupAbstandSekunden = 60
 
+    // 10a) Und jetzt laeuft die Uhr RUECKWAERTS. Das kommt nicht aus dem Programm,
+    //      sondern von aussen: ein Zeitabgleich kann die Systemuhr zurueckstellen.
+    //      Traegt die naechste Sicherung dann einen frueheren Zeitstempel, sortiert
+    //      sie sich unter die aelteren ein — der Rueckfall liefert einen ueberholten
+    //      Stand, und die Rotation raeumt am falschen Ende ab. Das ist derselbe
+    //      Schaden wie bei der Millisekunden-Kollision, nur mit einem anderen
+    //      Ausloeser, und der Zaehler allein faengt ihn nicht: er zaehlt hinter dem
+    //      hoechsten Zaehler DIESER Millisekunde weiter, und bei einem
+    //      Rueckwaertssprung gibt es zu dieser Millisekunde noch gar keinen.
+    //      Die Reihenfolge darf nicht davon abhaengen, dass die Uhr sich benimmt.
+    let rueckVorher = Store.dir
+    Store.dir = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("aiwt-selftest-rueckwaerts-\(UUID().uuidString)", isDirectory: true)
+    Store.ensureDir()
+    Store.backupAbstandSekunden = 0
+    var rueckUhr = Date()
+    Store.stempelUhr = { rueckUhr }
+    var rueckStaende: [String] = []
+    var rueckOk = true
+    for i in 0..<6 {
+        let s = "{\"docs\":[{\"id\":\"z\",\"title\":\"zurueck\(i)\",\"body\":\"<p>Zurueck \(i)</p>\",\"updated\":\(i)}],\"active\":\"z\"}"
+        rueckStaende.append(s)
+        if Store.save(s) != .ok { rueckOk = false }
+        rueckUhr = rueckUhr.addingTimeInterval(-1) // die Uhr geht zurueck
+    }
+    Store.stempelUhr = { Date() }
+    check("rueckwaerts-uhr-speichert", rueckOk)
+    check("rueckwaerts-uhr-max-generationen",
+          Store.backupGenerationen().count == Store.maxBackupGenerationen)
+    // Auch hier sagt die Anzahl nichts: es kommt darauf an, WELCHE fuenf liegen
+    // blieben und in welcher Reihenfolge sie stehen.
+    check("rueckwaerts-uhr-neueste-zuerst",
+          Store.backupGenerationen().compactMap { try? String(contentsOf: $0, encoding: .utf8) }
+          == [4, 3, 2, 1, 0].map { rueckStaende[$0] })
+    try? "{kaputt!!".data(using: .utf8)!.write(to: Store.dataURL)
+    try? "{kaputt!!".data(using: .utf8)!.write(to: Store.backupURL)
+    check("rueckwaerts-uhr-rueckfall-nimmt-juengste", Store.load() == rueckStaende[4])
+    try? FileManager.default.removeItem(at: Store.dir)
+    Store.dir = rueckVorher
+    Store.backupAbstandSekunden = 60
+
     // 10b) Zwei Sicherungen in DERSELBEN Millisekunde. sichereVorstufe haengt dann
     //      ein "-2" an, damit keine Stufe ueberschrieben wird. Die Reihenfolge muss
     //      trotzdem stimmen: die zweite ist die juengere und gehoert nach vorn.
@@ -520,7 +572,17 @@ func runSelfTest() -> Never {
     check("fehlertyp-0-unbekannt", AppDelegate.fehlerTyp(fuerStatus: 0) == "unbekannt")
 
     // 13) Schlüsselbund-Helfer (eigener Selbsttest-Eintrag — der echte bleibt unberührt)
-    let tService = "Onda-Selbsttest"
+    //
+    // Der Name traegt eine Zufallskennung, so wie der Datenordner oben auch. Vorher
+    // hiess der Eintrag bei JEDEM Lauf gleich ("Onda-Selbsttest"). Der Schluesselbund
+    // ist aber, anders als der Datenordner, allen Laeufen gemeinsam: bauen mehrere
+    // Arbeitskopien gleichzeitig — hier der Normalfall —, dann legt der eine Lauf den
+    // Eintrag an, waehrend der andere gerade geprueft hat, dass keiner da ist. Beide
+    // Laeufe pruefen dann nicht mehr ihre eigene Arbeit. Gemessen am 8. August, 300
+    // Laeufe neben zwei fremden Bauten: 14 rot, alle fuenf Schluesselbund-Pruefungen
+    // betroffen — ein Pflicht-Tor, das aus einem Grund sperrt, der nichts mit dem
+    // Code zu tun hat. Mit Zufallskennung 0 von 300.
+    let tService = "Onda-Selbsttest-\(UUID().uuidString)"
     _ = Keychain.loeschen(service: tService)
     check("keychain-anfangs-leer", Keychain.vorhanden(service: tService) == false)
     check("keychain-setzen", Keychain.setzen("test-schluessel-123", service: tService))
