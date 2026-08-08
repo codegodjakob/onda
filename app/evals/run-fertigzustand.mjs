@@ -7,9 +7,11 @@
 // bauartbedingt blind gegen spätere Regressionen — hier gibt es sie nicht.
 // Ohne gebundene, jetzt gelaufene Prüfung ist ein Eval nicht bestanden.
 //
-// Der Lauf bewacht auch den Maßstab selbst: Er hinterlegt im Ergebnis, womit
-// er gemessen hat (Katalog samt Bindungen), und meldet jede inhaltliche
-// Abweichung vom letzten Lauf als eigenen Abschnitt „Maßstab geändert".
+// Der Lauf bewacht auch den Maßstab selbst: Der Maßstab, der gelten soll
+// (Katalog samt Bindungen), liegt in evals/massstab.lock.json — von Hand
+// gepflegt, versioniert. Jede inhaltliche Abweichung des heutigen Katalogs
+// davon meldet der Lauf als eigenen Abschnitt „Maßstab geändert". Womit er
+// tatsächlich gemessen hat, hinterlegt er zusätzlich im Ergebnis.
 
 import { execFile } from 'node:child_process'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
@@ -31,6 +33,8 @@ const appWurzel = resolve(hier, '..')
 
 const katalogPfad = resolve(hier, 'v2-fertigzustand.json')
 const bindungsPfad = resolve(hier, 'bindungen.json')
+const sperrPfad = resolve(hier, 'massstab.lock.json')
+// Nur zum Schreiben. Der Lauf liest sein eigenes Ergebnis nicht mehr — siehe unten.
 const ergebnisPfad = resolve(hier, 'results/fertigzustand-latest.json')
 const protokollOrdner = resolve(hier, 'results/laeufe')
 
@@ -41,19 +45,28 @@ const { bindungen, _ungebunden_begruendung: ungebunden, _live_gates: liveGates }
 const evals = flattenEvals(katalog)
 const liveIds = new Set(katalog.externalLiveGateIds)
 
-// --- Maßstabs-Wächter: Womit misst dieser Lauf, und womit maß der letzte? ----
-// Jeder Lauf hinterlegt seinen Maßstab (Katalog samt Bindungen) im Ergebnis.
-// Weicht der aktuelle davon ab, erscheint das unten als eigener Abschnitt
-// „Maßstab geändert" — niemals stumm. Fehlt der Vergleichsstand (erster Lauf,
-// gelöschte Ergebnisdatei), wird auch DAS gesagt, statt „unverändert" zu raten.
+// --- Maßstabs-Wächter: Womit misst dieser Lauf, und womit soll er messen? ----
+// Der Vergleichsmaßstab steht in evals/massstab.lock.json — einer eigenen,
+// versionierten Datei, die nur von Hand geändert wird. Weicht der heutige
+// Katalog davon ab, erscheint das unten als eigener Abschnitt „Maßstab
+// geändert" — niemals stumm. Fehlt die Sperrdatei, wird auch DAS gesagt, statt
+// „unverändert" zu raten.
+//
+// Warum nicht mehr aus der Ergebnisdatei: Der Lauf las bisher seinen eigenen
+// letzten Bericht und überschrieb ihn danach — Messgerät und Messprotokoll
+// waren dieselbe Datei. Bei jedem Zusammenführen von Zweigen stand sie im
+// Konflikt; wurde er „mit dem main-Stand" aufgelöst, verlor der Zweig sein
+// Maßstabs-Gedächtnis und der Wächter meldete danach „unverändert", ohne je
+// verglichen zu haben. Die Sperrdatei trennt beides: hier das Maß, dort das
+// Protokoll.
 const massstab = massstabSchnappschuss(katalog, bindungen)
-let vorherigerLauf = null
+let gesperrterMassstab = null
 try {
-  vorherigerLauf = JSON.parse(await readFile(ergebnisPfad, 'utf8'))
+  gesperrterMassstab = JSON.parse(await readFile(sperrPfad, 'utf8'))
 } catch {
-  vorherigerLauf = null
+  gesperrterMassstab = null
 }
-const massstabAenderungen = vergleicheMassstab(vorherigerLauf?.massstab, massstab)
+const massstabAenderungen = vergleicheMassstab(gesperrterMassstab, massstab)
 const massstabVergleich = massstabAenderungen === null
   ? { status: 'kein-vergleichsstand', aenderungen: [] }
   : { status: massstabAenderungen.length ? 'geaendert' : 'unveraendert', aenderungen: massstabAenderungen }
@@ -181,18 +194,12 @@ const aktuelleSchleife = {
   externalOpen: zaehler['external-open'],
   weightedScore: qualitaet.weightedScore,
 }
-let loops = [aktuelleSchleife]
-try {
-  const vorher = JSON.parse(await readFile(ergebnisPfad, 'utf8'))
-  if (vorher.catalogVersion === katalog.catalogVersion && Array.isArray(vorher.loops)) {
-    loops = [
-      ...vorher.loops.filter(lauf => Number.isInteger(lauf?.iteration) && lauf.iteration < aktuelleSchleife.iteration),
-      aktuelleSchleife,
-    ].slice(-katalog.thresholds.maximumIterationsPerStage)
-  }
-} catch {
-  // Der erste Lauf hat naturgemaess noch kein Vorergebnis.
-}
+// Die Ergebnisdatei wird ab hier nur noch geschrieben, nie gelesen. Frueher
+// holte sich der Lauf die Schleifen frueherer Durchgaenge aus genau der Datei,
+// die er gleich ueberschrieb. Ohne gesetzte Umgebungsvariable ITERATION (und
+// die setzt im Projekt niemand) war diese Uebernahme ohnehin wirkungslos: Es
+// gibt keinen frueheren Durchgang mit kleinerer Nummer als 1.
+const loops = [aktuelleSchleife]
 
 const ergebnis = {
   schemaVersion: 1,
@@ -222,7 +229,7 @@ process.stdout.write('\n')
 if (massstabVergleich.status === 'geaendert') {
   // Der Abschnitt steht VOR den Zahlen: Wer den Wert liest, soll zuerst
   // erfahren, dass sich das Maß geändert hat, mit dem er gemessen wurde.
-  const seit = vorherigerLauf?.generatedAt ? ` (letzter Lauf: ${vorherigerLauf.generatedAt})` : ''
+  const seit = gesperrterMassstab?._gesetztAm ? ` (Sperrdatei vom ${gesperrterMassstab._gesetztAm})` : ''
   process.stdout.write(`MASSSTAB GEÄNDERT${seit} — dieser Lauf misst anders als der letzte:\n`)
   for (const zeile of formatiereMassstabAenderungen(massstabVergleich.aenderungen)) {
     process.stdout.write(`  · ${zeile}\n`)
@@ -236,8 +243,8 @@ process.stdout.write(`Qualität:       ${qualitaet.weightedScore} / 5  (Gold-, K
 process.stdout.write(`Abdeckung:      ${Math.round(anteil * 100)} % der anwendbaren Evals frisch belegt\n`)
 process.stdout.write(`Maßstab:        ${{
   geaendert: `GEÄNDERT — ${massstabVergleich.aenderungen.length} Änderung(en), Abschnitt oben`,
-  unveraendert: 'unverändert gegenüber dem letzten Lauf',
-  'kein-vergleichsstand': 'kein Vergleichsstand vom letzten Lauf — Schnappschuss jetzt hinterlegt',
+  unveraendert: 'unverändert gegenüber der Sperrdatei evals/massstab.lock.json',
+  'kein-vergleichsstand': 'kein Vergleichsstand — evals/massstab.lock.json fehlt oder ist unlesbar',
 }[massstabVergleich.status]}\n`)
 process.stdout.write(`Ergebnis:       evals/results/fertigzustand-latest.json\n`)
 const schwellenFehler = []
