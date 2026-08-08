@@ -24,3 +24,28 @@ app/evals/results/laeufe/
 !.scratch/*/
 !.scratch/*/prototyp/
 !.scratch/*/prototyp/**
+
+# ---------------------------------------------------------------------------------------
+# Erzeugtes: was eine Maschine schreibt, wird nicht versioniert.
+#
+# Der einzige nachgewiesene Konfliktgrund dieses Projekts. Im Zusammenfuehren 8343d9f
+# lagen sieben von sieben Konflikten in Maschinenausgabe; workspace.js und style.css
+# fuegten sich konfliktfrei. Ein Konflikt in einem Bild oder in einem zusammengepressten
+# Buendel ist von Hand ohnehin nicht aufloesbar -- man muss neu erzeugen. Genau das gibt
+# „nicht versionieren" umsonst.
+#
+# Die Dateien bleiben auf der Platte. Sie verlassen nur die Verwaltung.
+#
+# NICHT hier drin, mit Absicht: app/evals/results/archiv/ und app/evals/results/verlauf/.
+# Die werden einmal geschrieben und nie ueberschrieben -- sie sind Gedaechtnis, nicht
+# Ausgabe. Ebenso bleibt app/evals/results/.gitkeep, damit der Ordner ueberhaupt existiert.
+#
+# Der Waechter betrieb/waechter/erzeugt.mjs (W5) prueft dieselben Muster noch einmal gegen
+# die verfolgten Dateien -- weil in diesem Projekt bewiesen ist, dass eine Zeile hier
+# allein nicht traegt.
+# ---------------------------------------------------------------------------------------
+app/evals/results/screenshots/
+app/evals/results/onda-ui-runs/
+app/evals/results/*-latest.json
+app/evals/results/stand.html
+tools/figma-onda-one-page/dist/

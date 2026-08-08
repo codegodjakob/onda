@@ -1,9 +1,0 @@
-
-> build
-> esbuild src/editor.js --bundle --minify --format=iife --global-name=AIWT --outfile=dist/editor.bundle.js
-
-
-
-  dist/editor.bundle.js  876.1kb
-
-⚡ Done in 33ms
