@@ -133,6 +133,7 @@ import {
   kurveStandard,
   laesseBlaseWachsen,
   tokenDauer,
+  tokenLaenge,
 } from './onda-blase.mjs'
 
 const BLOCK_TYPES = [
@@ -495,11 +496,18 @@ function blaseAntriebAbbrechen() {
   blaseFaeltZurueck = false
 }
 
+// Wie lang der Hals gerade ist, entscheidet style.css — bei der Fassung „mittig"
+// rechnet es die Strecke aus der Fensterhoehe aus. Hier wird nur gelesen.
+function blaseHalsLaenge(fenster) {
+  return tokenLaenge('--blase-hals', fenster)
+}
+
 function blaseMisstUndZeichnet(fenster, blase) {
   const kasten = fenster.getBoundingClientRect()
-  if (!blaseIstMoeglich(kasten.width, kasten.height)) return null
+  const hals = blaseHalsLaenge(fenster)
+  if (!blaseIstMoeglich(kasten.width, kasten.height, undefined, hals)) return null
   if (!blaseKontur || blaseKontur.svg !== blase) blaseKontur = erzeugeKontur(blase)
-  blaseKontur?.setzeMasse(kasten.width, kasten.height)
+  blaseKontur?.setzeMasse(kasten.width, kasten.height, hals)
   return blaseKontur
 }
 
@@ -606,6 +614,78 @@ function blaseFolgt(offen) {
   })
 }
 
+// VORUEBERGEHEND, und das ist der Punkt. Drei Halslaengen zum Umschalten, damit die
+// Wahl am laufenden Programm faellt und nicht in einer Ueberlegung. Der Umschalter
+// erscheint nur, wenn localStorage 'ondaVarianten' auf '1' steht — im normalen
+// Programm ist er nicht da. Sobald Jakob gewaehlt hat, fliegt er raus und die
+// gewaehlte Laenge steht fest in style.css.
+const HALS_FASSUNGEN = [
+  ['mittig', 'mittig'],
+  ['lang', 'lang'],
+  ['kurz', 'kurz'],
+]
+
+function variantenSchalterAn() {
+  try {
+    return window.localStorage?.getItem('ondaVarianten') === '1'
+  } catch {
+    return false
+  }
+}
+
+function halsFassungMerken(name) {
+  try {
+    window.localStorage?.setItem('ondaBlaseHals', name)
+  } catch {
+    // Ohne Speicher faellt nur das Erinnern weg, nicht das Umschalten.
+  }
+}
+
+function halsFassungSetzen(name) {
+  // 'mittig' ist die Voreinstellung und braucht kein Attribut — so steht im HTML
+  // nichts, was nach der Entscheidung wieder weggeraeumt werden muesste.
+  if (name === 'mittig') delete document.documentElement.dataset.blaseHals
+  else document.documentElement.dataset.blaseHals = name
+}
+
+function renderHalsUmschalter() {
+  if (!variantenSchalterAn()) return () => {}
+  let gemerkt = 'mittig'
+  try {
+    gemerkt = window.localStorage?.getItem('ondaBlaseHals') || 'mittig'
+  } catch {
+    gemerkt = 'mittig'
+  }
+  if (!HALS_FASSUNGEN.some(([name]) => name === gemerkt)) gemerkt = 'mittig'
+  halsFassungSetzen(gemerkt)
+
+  const leiste = createNode('div', 'onda-varianten')
+  leiste.append(createNode('span', 'onda-varianten__wort', 'Hals'))
+  const knoepfe = HALS_FASSUNGEN.map(([name, wort]) => {
+    const knopf = createNode('button', 'onda-varianten__knopf', wort)
+    knopf.type = 'button'
+    knopf.dataset.fassung = name
+    knopf.setAttribute('aria-pressed', String(name === gemerkt))
+    knopf.addEventListener('click', () => {
+      halsFassungSetzen(name)
+      halsFassungMerken(name)
+      knoepfe.forEach(anderer => anderer.setAttribute('aria-pressed', String(anderer === knopf)))
+      // Die Kontur haengt an einer Groesse, die sich gerade geaendert hat. Der
+      // ResizeObserver merkt das von selbst — aber erst im naechsten Bild, und bis
+      // dahin stuende der alte Pfad in der neuen Huelle.
+      const ui = elements()
+      if (blaseSteht && ui.agentWidget && ui.blase) {
+        const kontur = blaseMisstUndZeichnet(ui.agentWidget, ui.blase)
+        kontur?.zeichne(1, 1)
+      }
+    })
+    leiste.append(knopf)
+    return knopf
+  })
+  document.body.append(leiste)
+  return () => leiste.remove()
+}
+
 // Die Masse aendern sich auch ohne Zustandswechsel: 100dvh reagiert auf die
 // Fensterhoehe und auf die Adressleiste mobiler Browser, und unter 761px faellt die
 // Kontur ganz weg. Ohne diesen Beobachter entkoppelte sie sich dann stillschweigend
@@ -628,7 +708,12 @@ function blaseBeobachten() {
     kontur.zeichne(1, 1)
     blaseZeigen(ui.blase, true)
   })
-  beobachter.observe(ui.agentWidget)
+  // AUSDRUECKLICH die Randbox. Der Standard waere der Inhaltskasten — und den haelt
+  // das obere Polster konstant, weil es genau um die Halslaenge waechst. Bei einem
+  // hoeheren Fenster wurde der Kasten also 100px groesser, der Inhaltskasten blieb auf
+  // den Pixel gleich, der Beobachter schwieg, und die Kontur behielt den alten Hals:
+  // die Blase sass sichtbar zu hoch, ohne dass irgendetwas fehlgeschlagen waere.
+  beobachter.observe(ui.agentWidget, { box: 'border-box' })
   blaseBeobachter = beobachter
   return () => {
     beobachter.disconnect()
@@ -5539,6 +5624,7 @@ export function initWorkspace(context) {
   listenEditor('update', onEditorUpdate)
 
   cleanups.push(blaseBeobachten())
+  cleanups.push(renderHalsUmschalter())
 
   // Status-Abo: Statuszeile und Aura folgen dem echten Agenten-Zustand.
   cleanups.push(beiAgentStatus(() => {

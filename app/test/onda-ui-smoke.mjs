@@ -420,6 +420,7 @@ async function runShell(browser) {
   await assertTextNeverShrinks(page)
   await assertOrbStaysPut(page)
   await assertBlaseWaechstAusDemOrb(page)
+  await assertBlaseSitztMittigAmHals(page)
   await assertKlinkeBleibtStehen(page)
   await assertDreiAbschnitte(page)
   await assertZweiGesten(page)
@@ -927,6 +928,78 @@ async function assertBlaseWaechstAusDemOrb(page) {
   }))
   assert.equal(danach.konturVersteckt, true, 'Die Kontur bleibt nach dem Schließen stehen')
   assert.equal(danach.klassen, '', `Am Fenster bleibt "${danach.klassen}" hängen`)
+}
+
+// „ich will das die sprechblase immer horizontal zentriert auf der seite sitzt in der
+// rechten spalte" — Jakob am 8. August 2026. Gemeint ist die senkrechte Mitte: die
+// Blase klebte oben, jetzt steht ihr Körper mittig, und der Hals überbrückt, was
+// zwischen dem Orb in der Topbar und dieser Mitte liegt.
+//
+// Geprüft wird an der SILHOUETTE, nicht am Kasten: der Kasten reicht bis zum Orb
+// hinauf, sichtbar ist aber erst der Körper. Seine Oberkante ist der Endpunkt des
+// dritten 16er-Bogens (unten rechts, unten links, oben links — in dieser Reihenfolge
+// läuft der Pfad). Wer stattdessen den Kasten misst, bekommt jede Halslänge als
+// „mittig" bestätigt.
+async function assertBlaseSitztMittigAmHals(page) {
+  for (const hoehe of [900, 1100]) {
+    await page.setViewportSize({ width: 1440, height: hoehe })
+    await page.waitForTimeout(30)
+    await page.evaluate(() => {
+      if (!document.getElementById('editorView').classList.contains('is-agent-open')) {
+        document.getElementById('ondaAura').click()
+      }
+    })
+    await page.waitForFunction(() => !document.getElementById('agentWidget').classList.contains('waechst'))
+
+    const lage = await page.evaluate(() => {
+      const kasten = document.getElementById('agentWidget').getBoundingClientRect()
+      const orb = document.getElementById('ondaAura').getBoundingClientRect()
+      const d = document.querySelector('.onda-blase__pfad').getAttribute('d')
+      const ecken = [...d.matchAll(/A 16 16 0 0 1 (-?[\d.]+) (-?[\d.]+)/g)]
+      const stil = getComputedStyle(document.getElementById('editorView'))
+      return {
+        oben: kasten.top,
+        unten: kasten.bottom,
+        kante: ecken.length === 3 ? Number(ecken[2][2]) : null,
+        eckenAnzahl: ecken.length,
+        orbUnten: orb.bottom,
+        hals: parseFloat(stil.getPropertyValue('--blase-hals')),
+        schulter: parseFloat(stil.getPropertyValue('--blase-schulter')),
+        fensterhoehe: window.innerHeight,
+      }
+    })
+
+    assert.equal(lage.eckenAnzahl, 3, `Der Pfad hat ${lage.eckenAnzahl} Ecken statt drei`)
+    const koerperOben = lage.oben + lage.kante
+    const randOben = koerperOben
+    const randUnten = lage.fensterhoehe - lage.unten
+    assert.ok(
+      Math.abs(randOben - randUnten) <= 1.5,
+      `Die Blase sitzt bei ${hoehe}px Höhe nicht mittig: ${randOben.toFixed(1)}px oben gegen ${randUnten.toFixed(1)}px unten`,
+    )
+
+    // Der Hals ist wirklich eine Strecke und keine Behauptung: der Körper fängt
+    // deutlich unter dem Orb an. Vor dieser Änderung überlappten sich beide.
+    assert.ok(
+      koerperOben > lage.orbUnten + 40,
+      `Der Hals ist nur ${(koerperOben - lage.orbUnten).toFixed(1)}px lang — die Blase klebt wieder am Orb`,
+    )
+
+    // Und die Rechnung in CSS deckt sich mit dem, was gezeichnet wurde. Laufen die
+    // beiden auseinander, stimmt die Mitte nur zufällig.
+    assert.ok(
+      Math.abs(lage.kante - (lage.schulter + lage.hals)) <= 1,
+      `Gezeichnete Oberkante ${lage.kante.toFixed(2)} gegen gerechnete ${(lage.schulter + lage.hals).toFixed(2)}`,
+    )
+  }
+
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await page.evaluate(() => {
+    if (document.getElementById('editorView').classList.contains('is-agent-open')) {
+      document.getElementById('ondaAura').click()
+    }
+  })
+  await page.waitForTimeout(400)
 }
 
 async function assertOndaSurface(locator, name, { radius = '0px' } = {}) {

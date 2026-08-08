@@ -1814,6 +1814,18 @@ body.zen #title:focus { opacity: 1; }
   animation: ondaHintIn var(--dur-normal) var(--ease-out);
 }
 
+/* ANGEMELDET, damit JavaScript die Halslaenge LESEN kann. Eine gewoehnliche
+   CSS-Eigene-Eigenschaft gibt getComputedStyle den Rechenausdruck zurueck, nicht das
+   Ergebnis — aus "clamp(0px, calc(…), …)" wird beim Auslesen keine Zahl. Mit einer
+   Anmeldung als <length> rechnet der Browser sie aus und liefert Pixel. So bleibt die
+   Formel an genau EINER Stelle stehen, hier, und wird in onda-blase.mjs nicht ein
+   zweites Mal geschrieben. */
+@property --blase-hals {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 0px;
+}
+
 /* DIE BLASE SITZT AM ORB — und der Sitz ist keine Schaetzung, sondern gerechnet.
    .onda-topbar__aside steht fest bei right: var(--space-5), ist var(--topbar-height)
    hoch und zentriert seine Kinder; #ondaAura ist das letzte Kind und 44px gross. Also
@@ -1825,11 +1837,85 @@ body.zen #title:focus { opacity: 1; }
   --blase-rechts: var(--space-5);
   --blase-oben: calc((var(--topbar-height) - var(--orb-tastflaeche)) / 2);
   --blase-breite: min(380px, calc(100vw - 2 * var(--space-5)));
-  --blase-hoehe: min(560px, calc(100dvh - var(--blase-oben) - var(--space-5)));
+
+  /* DER HALS. Vom Sitz bis zur Oberkante des Koerpers.
+
+     Voreingestellt ist „mittig": Jakob will die Blase senkrecht in der Mitte der
+     rechten Spalte. Damit ist die Halslaenge KEINE freie Wahl mehr, sondern eine
+     Folge — sie ist genau die Strecke, die zwischen dem Orb in der Topbar und dieser
+     Mitte uebrig bleibt. Wird das Fenster hoeher, wird der Hals laenger.
+
+     Der Koerper behaelt in allen drei Fassungen dieselbe Groesse. Sonst veraenderte
+     der Umschalter zwei Dinge auf einmal, und die Wahl waere keine. */
+
+  /* Die Schulter: vom oberen Kastenrand bis zur Oberkante des Koerpers, wenn der
+     gerade Teil des Halses null lang ist. Sitz (22) + Kopfkehle (27,71) + Fusskehle
+     (10). Die 27,71 sind gerechnet und stehen in onda-blase.mjs als KOPF_VERSATZ;
+     onda-design-contract.test.mjs haelt die Zahl hier mit der dort zusammen. */
+  --blase-schulter: 59.71px;
+  /* Der kleinste Rand ueber dem Koerper, und er ist abgeleitet: Orb und Schulter
+     belegen die Strecke ohnehin, ein Fingerbreit Luft kommt dazu. Waere der Rand
+     kleiner, klemmte der Hals bei niedrigen Fenstern auf null, und die Blase saesse
+     nicht mehr mittig, ohne dass irgendwo etwas fehlschluege. */
+  --blase-rand: calc(var(--blase-oben) + var(--blase-schulter) + var(--space-4));
+  /* 528px ist die Koerperhoehe von vorher: 560 minus der damaligen Schulter von 32. */
+  --blase-koerper: min(528px, calc(100dvh - 2 * var(--blase-rand)));
+  --blase-hals-wunsch: calc((100dvh - var(--blase-koerper)) / 2 - var(--blase-oben) - var(--blase-schulter));
+  /* clamp faengt die kurzen Fenster ab: unten darf der Koerper nicht hinauslaufen,
+     oben darf der Hals nicht negativ werden — ein negativer Hals zoege die Kehle
+     durch den Sitz, und der Pfad schluege Haken. */
+  --blase-hals: clamp(0px, var(--blase-hals-wunsch), max(0px, calc(100dvh - var(--blase-oben) - var(--blase-schulter) - var(--blase-koerper) - var(--space-5))));
+  --blase-hoehe: calc(var(--blase-schulter) + var(--blase-hals) + var(--blase-koerper));
+
   /* Derselbe Schatten wie --shadow-lg, nur in der Schreibweise, die einer Silhouette
      folgen kann statt einem Rechteck. Die Zahlen muessen mit --shadow-lg
      uebereinstimmen — onda-design-contract.test.mjs nagelt das fest. */
   --blase-schatten: drop-shadow(0 4px 8px rgba(28, 26, 23, 0.06)) drop-shadow(0 16px 32px rgba(28, 26, 23, 0.1));
+}
+
+/* ZWEI FESTE HALSLAENGEN ZUM VERGLEICH. Sie haengen nicht an der Fensterhoehe — bei
+   ihnen bleibt die Blase oben angeschlagen und der Hals ist gesetzt. Nur damit am
+   laufenden Programm zu sehen ist, was „mittig" gegen einen kurzen Weg eintauscht.
+   Umgeschaltet wird ueber den Varianten-Umschalter; er ist keine Dauereinrichtung. */
+[data-blase-hals="kurz"] #editorView { --blase-hals-wunsch: 40px; }
+[data-blase-hals="lang"] #editorView { --blase-hals-wunsch: 96px; }
+
+/* Der Umschalter selbst. Absichtlich schlicht: er ist ein Geruest, kein Bauteil, und
+   verschwindet mit der Entscheidung wieder. Er sitzt unten links, wo weder Text noch
+   Blase noch Seitenleisten-Fuss stehen. */
+.onda-varianten {
+  position: fixed;
+  z-index: 70;
+  left: 50%;
+  bottom: var(--space-4);
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-overlay);
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-lg);
+  font: var(--type-caption);
+}
+
+.onda-varianten__wort { color: var(--text-tertiary); }
+
+.onda-varianten__knopf {
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  padding: 2px var(--space-2);
+  background: none;
+  color: var(--text-secondary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.onda-varianten__knopf[aria-pressed="true"] {
+  border-color: var(--border-default);
+  color: var(--text-primary);
+  background: var(--bg-sunken);
 }
 
 [data-theme="dark"] #editorView {
@@ -1885,9 +1971,10 @@ body.zen #title:focus { opacity: 1; }
   border-color: transparent;
   box-shadow: none;
   animation: none;
-  /* Der Sitz belegt die oberen 44px der rechten Ecke (2 x 22px). Die Kopfzeile faengt
-     darunter an, damit der Schliessen-Knopf nicht in die Tastflaeche des Orbs ragt. */
-  padding-top: 44px;
+  /* Der Inhalt faengt erst im Koerper an. Schulter und Hals sind leere Strecke — in
+     ihnen steht nichts, und der Schliessen-Knopf kommt so auch nicht in die
+     Tastflaeche des Orbs. */
+  padding-top: calc(var(--blase-schulter) + var(--blase-hals) + var(--space-3));
 }
 
 /* Waehrend des Wachsens legt die wachsende Kante den Inhalt frei. Er steht von Bild 1
