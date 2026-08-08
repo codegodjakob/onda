@@ -498,6 +498,7 @@ async function runShell(browser) {
   await assertGesteZeigtAufDieStelle(page)
   await assertOrtswechselZeigtSeinZiel(page)
   await assertAnmerkungOhnePlatte(page)
+  await assertAlternativeStehtImSatz(page)
   await assertEntscheidungOeffnetKeineKette(page)
   await assertWichtigstesZuerst(page)
   await assertRuhigeLage(page)
@@ -1115,6 +1116,68 @@ async function assertAnmerkungOhnePlatte(page) {
 
   await page.setViewportSize({ width: 1440, height: 1000 })
   await page.waitForTimeout(150)
+}
+
+// Die andere Fassung steht IM Satz: „gebraucht → benötigt".
+//
+// Bis zum 8.8.2026 stand sie nur in der Anmerkung daneben — man las dort „benötigt"
+// und musste sich selbst vorstellen, wie der Satz damit klingt. Der Vorschlag ist
+// jetzt im Satz zu lesen, bevor er im Satz steht.
+//
+// Drei Dinge, die dabei nicht passieren dürfen: der Dokumenttext darf sich nicht
+// ändern (die Zeile ist Verzierung, kein Inhalt), ein zu langer Vorschlag darf die
+// Zeile nicht aufbrechen, und eine Satz-Anmerkung bekommt sie gar nicht erst.
+async function assertAlternativeStehtImSatz(page) {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+
+  const zeige = (art, ziel, fassung) => page.evaluate(async ({ art, ziel, fassung }) => {
+    const doc = window.AIWT.state.docs.find(kandidat => kandidat.id === window.AIWT.state.active)
+    doc.findings = []
+    const block = window.AIWT.__blockIdentityTestBridge.getBlocks().find(kandidat => kandidat.text.includes(ziel))
+    if (!block) return { fehler: `kein Baustein mit „${ziel}"` }
+    const textVorher = block.text
+    window.AIWT.__workspaceTestBridge.injectFinding({
+      id: `alt-${art}`, status: 'open', placement: 'passage', blockId: block.id,
+      target: ziel, action: fassung, short: 'Beleg.', why: 'Beleg.', folge: 'Beleg.',
+      anmerkungsart: art, createdAt: -1,
+    })
+    await new Promise(fertig => setTimeout(fertig, 700))
+    const neu = document.querySelector('#editor .onda-stelle__neu')
+    const nachher = window.AIWT.__blockIdentityTestBridge.getBlocks().find(kandidat => kandidat.id === block.id)
+    return {
+      text: neu ? neu.textContent : null,
+      // Verzierung, kein Inhalt: der Dokumenttext darf sich um kein Zeichen ändern.
+      // Stünde die Zeile im Dokument, wanderte sie beim nächsten Speichern hinein.
+      textUnveraendert: nachher?.text === textVorher,
+      // Wer vorlesen lässt, bekäme sonst den eigenen Satz mitten entzwei.
+      versteckt: neu ? neu.getAttribute('aria-hidden') : null,
+      kursiv: neu ? getComputedStyle(neu).fontStyle : null,
+    }
+  }, { art, ziel, fassung })
+
+  const wort = await zeige('wortwahl', 'gebraucht', 'benötigt')
+  assert.equal(wort.fehler, undefined, wort.fehler)
+  assert.equal(wort.text, '→ benötigt', `Die andere Fassung steht nicht im Satz (${wort.text})`)
+  assert.equal(wort.textUnveraendert, true, 'Die Verzierung ist in den Dokumenttext gerutscht')
+  assert.equal(wort.versteckt, 'true', 'Die Zeile wird mit vorgelesen und zerreißt den Satz')
+  assert.equal(wort.kursiv, 'italic', 'Die andere Fassung sieht aus wie der Text selbst')
+
+  // Ein ganzer Satz gehört nicht zwischen zwei Wörter — er stünde dort länger als der
+  // Satz selbst. Dann trägt die Anmerkung daneben den Vorschlag, wie bisher.
+  const zuLang = await zeige('wortwahl', 'gebraucht',
+    'in Anspruch genommen, und zwar dann, wenn es tatsächlich einen Anlass dafür gibt')
+  assert.equal(zuLang.text, null, `Ein langer Vorschlag steht trotzdem im Satz (${zuLang.text})`)
+
+  // Und die Satz-Geste bekommt sie nicht: dort ist die markierte Stelle schon ein
+  // ganzer Satz, die Alternative wäre ein zweiter daneben.
+  const satz = await zeige('satzstil', 'Calm Technology beschreibt Technik', 'Anders gesagt')
+  assert.equal(satz.text, null, 'Auch die Satz-Geste bekommt die andere Fassung in den Satz')
+
+  await page.evaluate(() => {
+    const doc = window.AIWT.state.docs.find(kandidat => kandidat.id === window.AIWT.state.active)
+    doc.findings = []
+    window.AIWT.__workspaceTestBridge.reinitialize()
+  })
 }
 
 // Der Tastweg folgt dem Blick: was oben steht, kommt zuerst. Und wer ein Fenster mit

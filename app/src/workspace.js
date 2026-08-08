@@ -180,6 +180,7 @@ let localDecoratedSpacing = 0
 let localDecoratedAbsatzweit = false
 let localDecoratedGestalt = 'keine'
 let localDecoratedZiel = ''
+let localDecoratedAlternative = ''
 let localDecoratedOrtswechsel = ''
 let localFeedbackError = null
 let localPositionFrame = null
@@ -394,6 +395,38 @@ function localFindingPlugin() {
                 local.push(Decoration.inline(stelle.von, stelle.bis, {
                   class: `onda-stelle onda-stelle--${findingState.gestalt}`,
                 }))
+                // Die Alternative steht IM Satz, direkt hinter dem Wort: „gebraucht
+                // → benötigt". Bis zum 8.8.2026 stand sie nur in der Anmerkung
+                // daneben — man las dort „benötigt" und musste sich selbst
+                // vorstellen, wie der Satz damit klingt. Genau das nimmt ihr diese
+                // Zeile ab: der Vorschlag ist im Satz zu lesen, bevor er im Satz
+                // steht.
+                //
+                // OB es eine Fassung zu zeigen gibt, entscheidet alternativeImSatz —
+                // an einer Stelle, mit allen Bedingungen (nur die Wort-Geste, nicht
+                // laenger als eine Zeile vertraegt, nicht gleich dem Wortlaut). Hier
+                // wird nur noch gezeichnet, was von dort kommt. Ein zweites Mal
+                // dieselbe Bedingung zu pruefen hiesse, sie an zwei Stellen richtig
+                // halten zu muessen — und die zweite faellt beim ersten Umbau um.
+                //
+                // aria-hidden, und das mit Absicht: wer vorlesen laesst, bekaeme
+                // sonst „wenn sie wirklich gebraucht Pfeil benoetigt wird" — der
+                // eigene Satz waere mitten entzwei. Die Anmerkung daneben sagt
+                // dieselbe Sache in ganzen Saetzen, und die wird vorgelesen.
+                if (findingState.alternative) {
+                  local.push(Decoration.widget(stelle.bis, () => {
+                    const neu = document.createElement('span')
+                    neu.className = 'onda-stelle__neu'
+                    neu.contentEditable = 'false'
+                    neu.setAttribute('aria-hidden', 'true')
+                    neu.textContent = `→ ${findingState.alternative}`
+                    return neu
+                  }, {
+                    key: `onda-stelle-neu:${findingState.blockId}:${findingState.alternative}`,
+                    side: 1,
+                    ignoreSelection: true,
+                  }))
+                }
               }
             }
             if (findingState.spacing > 0) {
@@ -435,6 +468,26 @@ let aktuelleAnmerkungIstAbsatzweit = false
 let aktuelleAnmerkungGestalt = 'keine'
 let aktuelleAnmerkungZiel = ''
 let aktuellesZiel = null
+let aktuelleAlternative = ''
+
+// Die andere Fassung, wie sie IM Satz stehen wuerde. finding.action ist der Anker mit
+// eingesetztem Vorschlag; bei der Wort-Geste ist der Anker das Wort, also ist action
+// genau das neue Wort.
+//
+// Drei Bedingungen, alle fail-closed: es muss eine Fassung geben, sie muss sich vom
+// Wortlaut unterscheiden, und sie muss kurz genug sein, um zwischen zwei Woerter zu
+// passen. Die Grenze ist nicht Geschmack: was laenger ist, schiebt die Zeile
+// auseinander und macht den Satz beim Lesen unbrauchbar — dann traegt die Anmerkung
+// daneben den Vorschlag, wie bisher.
+const ALTERNATIVE_MAX = 60
+
+function alternativeImSatz(finding, gestalt) {
+  if (gestalt !== 'wort') return ''
+  const neu = String(finding?.action || '').trim()
+  const alt = String(finding?.target || '').trim()
+  if (!neu || neu === alt || neu.length > ALTERNATIVE_MAX) return ''
+  return /[\r\n]/.test(neu) ? '' : neu
+}
 
 // Das zweite Ende eines Ortswechsels, aufgeloest gegen die Bausteine, die JETZT im
 // Dokument stehen. move.toBlockId entstand beim Hinweislauf (agent-findings.mjs,
@@ -496,6 +549,7 @@ function setLocalFindingDecoration(blockId, spacing = 0, force = false) {
   const absatzweit = Boolean(blockId) && aktuelleAnmerkungIstAbsatzweit
   const gestalt = blockId ? aktuelleAnmerkungGestalt : 'keine'
   const ziel = blockId ? aktuelleAnmerkungZiel : ''
+  const alternative = blockId ? aktuelleAlternative : ''
   const ortswechsel = blockId && gestalt === 'block' ? aktuellesZiel : null
   const ortswechselSchluessel = ortswechsel
     ? `${ortswechsel.blockId}|${ortswechsel.lage}|${ortswechsel.aufschrift}`
@@ -507,12 +561,14 @@ function setLocalFindingDecoration(blockId, spacing = 0, force = false) {
     && localDecoratedAbsatzweit === absatzweit
     && localDecoratedGestalt === gestalt
     && localDecoratedZiel === ziel
+    && localDecoratedAlternative === alternative
     && localDecoratedOrtswechsel === ortswechselSchluessel) return false
   localDecoratedBlockId = blockId
   localDecoratedSpacing = nextSpacing
   localDecoratedAbsatzweit = absatzweit
   localDecoratedGestalt = gestalt
   localDecoratedZiel = ziel
+  localDecoratedAlternative = alternative
   localDecoratedOrtswechsel = ortswechselSchluessel
   ctx.editor.view.dispatch(ctx.editor.state.tr.setMeta(localFindingKey, {
     blockId,
@@ -520,6 +576,7 @@ function setLocalFindingDecoration(blockId, spacing = 0, force = false) {
     absatzweit,
     gestalt,
     ziel,
+    alternative,
     ortswechsel,
   }))
   return true
@@ -4276,6 +4333,7 @@ function renderLocalFinding() {
   // Baustein, den es nicht mehr gibt, entsteht keine — die Anmerkung bleibt lesbar,
   // sie behauptet nur kein Wohin, das der Text nicht hergibt.
   aktuellesZiel = ortswechselZiel(finding, blocks, blockId)
+  aktuelleAlternative = alternativeImSatz(finding, aktuelleAnmerkungGestalt)
 
   // Eine neue Anmerkung kommt zugeklappt. Das Aufklappen galt der vorigen — sonst
   // stuende die naechste sofort in voller Groesse da, und der Takt waere dahin.
@@ -6083,6 +6141,7 @@ export function initWorkspace(context) {
     localDecoratedAbsatzweit = false
     localDecoratedGestalt = 'keine'
     localDecoratedZiel = ''
+    localDecoratedAlternative = ''
     localDecoratedOrtswechsel = ''
     localFeedbackError = null
     localPositionFrame = null

@@ -1397,6 +1397,21 @@ body.zen #title:focus { opacity: 1; }
   animation: onda-stelle-auf var(--dur-normal) var(--ease-out) both;
 }
 
+/* Die andere Fassung, direkt im Satz. Kursiv und ruhiger als der Text: sie steht
+   noch nicht da, sie wird angeboten. Wer sie annimmt, sieht sie im naechsten Moment
+   in der normalen Schrift — der Unterschied zwischen Vorschlag und Text ist damit
+   sichtbar, ohne dass irgendwo „Vorschlag" stehen muesste.
+
+   Nach der Kontur, nicht mit ihr: erst umfasst der Stift das Wort, dann schreibt er
+   daneben. Derselbe Versatz wie zwischen Markierung und Anmerkung. */
+#editorView #editor .ProseMirror .onda-stelle__neu {
+  margin-left: 6px;
+  color: var(--text-secondary);
+  font-style: italic;
+  user-select: none;
+  animation: onda-stelle-auf var(--dur-normal) var(--ease-out) 240ms both;
+}
+
 /* SATZ — ein Strich darunter, der der Satzlaenge folgt. Als Hintergrundbild und
    nicht als text-decoration: so laesst er sich ziehen (background-size waechst von
    0 auf 100 %), und der Stift schreibt sichtbar, statt fertig dazustehen. */
@@ -1478,7 +1493,8 @@ body.zen #title:focus { opacity: 1; }
 @media (prefers-reduced-motion: reduce) {
   #editorView #editor .ProseMirror > [data-block-id].has-local-finding.hat-absatzweite-anmerkung::before,
   #editorView #editor .ProseMirror > [data-block-id].has-local-finding.hat-ortswechsel,
-  #editorView #editor .ProseMirror .onda-stelle--wort { animation: none; }
+  #editorView #editor .ProseMirror .onda-stelle--wort,
+  #editorView #editor .ProseMirror .onda-stelle__neu { animation: none; }
   /* Der Strich braucht seinen Endzustand auch ohne Bewegung — ohne ihn bliebe die
      background-size auf ihrem Anfangswert 0 und der Satz waere unmarkiert. */
   #editorView #editor .ProseMirror .onda-stelle--satz { animation: none; background-size: 100% 2px; }
