@@ -18,14 +18,14 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
-import { flattenEvals, ladeEvalKatalog, validiereEvalErgebnisse } from '../src/eval-catalog.mjs'
+import { flattenEvals, ladeEvalKatalog, validiereEvalErgebnisse } from './lib/eval-catalog.mjs'
 import { runQualityRubric } from './run-quality-rubric.mjs'
 import {
   belegartAusVollzug,
   formatiereMassstabAenderungen,
   massstabSchnappschuss,
   vergleicheMassstab,
-} from '../src/massstab-waechter.mjs'
+} from './lib/massstab-waechter.mjs'
 
 const ausfuehren = promisify(execFile)
 const hier = dirname(fileURLToPath(import.meta.url))

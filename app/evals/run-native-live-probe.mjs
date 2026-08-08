@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
-import { containsSecretMarker, processArgumentsAreSecretFree, redactSecrets } from '../src/eval-redaction.mjs'
+import { containsSecretMarker, processArgumentsAreSecretFree, redactSecrets } from './lib/eval-redaction.mjs'
 
 const execFile = promisify(execFileCallback)
 const here = dirname(fileURLToPath(import.meta.url))

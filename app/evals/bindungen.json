@@ -1,6 +1,6 @@
 {
   "_zweck": "Bindet jedes Eval an Pruefungen, die JETZT laufen. Ein Eval gilt nur als bestanden, wenn seine gebundenen Pruefungen in DIESEM Lauf erfolgreich waren. Ohne Bindung: ungebunden — nie stillschweigend bestanden.",
-  "_belegart": "Die Belegart je Bindung wird aus dem Vollzug abgeleitet, nicht aus der automation-Angabe des Katalogs: browser nur, wenn die Pruefdatei wirklich einen Browser startet; unit bei node --test; sonst integration. Siehe src/massstab-waechter.mjs.",
+  "_belegart": "Die Belegart je Bindung wird aus dem Vollzug abgeleitet, nicht aus der automation-Angabe des Katalogs: browser nur, wenn die Pruefdatei wirklich einen Browser startet; unit bei node --test; sonst integration. Siehe evals/lib/massstab-waechter.mjs.",
   "bindungen": {
     "INV-01": [
       "test/v2-smoke.mjs",

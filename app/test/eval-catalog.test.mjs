@@ -10,7 +10,7 @@ import {
   summarisiereEvalKatalog,
   validiereEvalKatalog,
   validiereEvalErgebnisse,
-} from '../src/eval-catalog.mjs'
+} from '../evals/lib/eval-catalog.mjs'
 
 const KATALOG_PFAD = fileURLToPath(new URL('../evals/v2-fertigzustand.json', import.meta.url))
 const CLI_PFAD = fileURLToPath(new URL('../evals/run-v2-evals.mjs', import.meta.url))

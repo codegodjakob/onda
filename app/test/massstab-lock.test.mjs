@@ -16,12 +16,12 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { ladeEvalKatalog } from '../src/eval-catalog.mjs'
+import { ladeEvalKatalog } from '../evals/lib/eval-catalog.mjs'
 import {
   formatiereMassstabAenderungen,
   massstabSchnappschuss,
   vergleicheMassstab,
-} from '../src/massstab-waechter.mjs'
+} from '../evals/lib/massstab-waechter.mjs'
 
 const appWurzel = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const sperrPfad = resolve(appWurzel, 'evals/massstab.lock.json')

@@ -7,7 +7,7 @@ import {
   summarisiereEvalKatalog,
   validiereEvalErgebnisse,
   validiereEvalKatalog,
-} from '../src/eval-catalog.mjs'
+} from './lib/eval-catalog.mjs'
 
 const katalogPfad = fileURLToPath(new URL('./v2-fertigzustand.json', import.meta.url))
 const argumente = process.argv.slice(2)

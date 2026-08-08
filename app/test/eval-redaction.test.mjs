@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { containsSecretMarker, processArgumentsAreSecretFree, redactSecrets } from '../src/eval-redaction.mjs'
+import { containsSecretMarker, processArgumentsAreSecretFree, redactSecrets } from '../evals/lib/eval-redaction.mjs'
 
 test('native Belege redigieren synthetische Schlüssel und Autorisierungswerte', () => {
   const raw = 'Authorization: Bearer sk-ant-example x-api-key=sk-example api-key: sk-third'

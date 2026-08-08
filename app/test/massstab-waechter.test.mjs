@@ -5,7 +5,7 @@ import {
   formatiereMassstabAenderungen,
   massstabSchnappschuss,
   vergleicheMassstab,
-} from '../src/massstab-waechter.mjs'
+} from '../evals/lib/massstab-waechter.mjs'
 
 function beispielKatalog() {
   return {

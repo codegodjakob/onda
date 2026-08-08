@@ -5,8 +5,8 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
-import { flattenEvals, ladeEvalKatalog } from '../src/eval-catalog.mjs'
-import { containsSecretMarker, redactSecrets } from '../src/eval-redaction.mjs'
+import { flattenEvals, ladeEvalKatalog } from './lib/eval-catalog.mjs'
+import { containsSecretMarker, redactSecrets } from './lib/eval-redaction.mjs'
 
 const execFile = promisify(execFileCallback)
 const here = dirname(fileURLToPath(import.meta.url))

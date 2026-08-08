@@ -8,7 +8,7 @@
 import { readdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { ladeEvalKatalog } from '../src/eval-catalog.mjs'
+import { ladeEvalKatalog } from './lib/eval-catalog.mjs'
 
 const hier = dirname(fileURLToPath(import.meta.url))
 const katalog = await ladeEvalKatalog(resolve(hier, 'v2-fertigzustand.json'))
