@@ -224,3 +224,25 @@ test('Blöcke entstehen in workspace.js an genau einer Stelle', async () => {
     'workspace.js holt Blöcke wieder direkt aus dem Editor — dort fehlen dann die Rollen',
   )
 })
+
+// Task 9 (Issue #36, Kriterium 2): „Freier Absatz" war ein Etikett ohne Aussage — es sah aus
+// wie eine Angabe und war keine. Ein Absatz, den die Erkennung noch nicht gelesen hat und den
+// niemand bewusst als etwas angelegt hat, trägt jetzt gar nichts.
+//
+// Die Auswahl im Menü behält ihr Wort: Dort heißt „Freier Absatz" „lege einen gewöhnlichen
+// Absatz an", und das ist eine Aussage. Deshalb prüft der Wächter die BESCHRIFTUNG der Karten
+// (ROLE_LABELS), nicht die Menü-Auswahl (BLOCK_TYPES).
+test('keine Struktur-Karte trägt mehr „Freier Absatz"', async () => {
+  const workspace = await readFile(new URL('../src/workspace.js', import.meta.url), 'utf8')
+  assert.doesNotMatch(
+    workspace,
+    /\|\| 'Freier Absatz'/,
+    'eine Karte fällt noch auf „Freier Absatz" zurück',
+  )
+  assert.match(workspace, /bausteinNamen\(/, 'die Karten lesen die erkannten Namen nicht')
+  assert.match(workspace, /'Überschrift'/, 'die Überschrift hat ihr Wort verloren')
+  // Die Beschriftungstabelle darf den gewöhnlichen Absatz nicht mehr kennen — sonst käme das
+  // Etikett über ROLE_LABELS.get() zurück, nur ohne den Rückfall daneben.
+  const tabelle = workspace.match(/const ROLE_LABELS = new Map\(\[([\s\S]*?)\]\)/)?.[1] || ''
+  assert.doesNotMatch(tabelle, /paragraph/, 'ROLE_LABELS beschriftet den gewöhnlichen Absatz noch')
+})

@@ -24,7 +24,7 @@ import {
   shouldOpenAgentWidget,
   structureHintMap,
 } from './workspace-model.mjs'
-import { bausteinRollen } from './bausteinlauf-model.mjs'
+import { bausteinNamen, bausteinRollen } from './bausteinlauf-model.mjs'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import { applySettings } from './ui.js'
@@ -153,8 +153,15 @@ const BLOCK_TYPES = [
   ['question', 'Offene Frage'],
 ]
 
+// Die Beschriftung einer Karte — bewusst OHNE den gewoehnlichen Absatz. "Freier Absatz" war
+// ein Etikett ohne Aussage: Es sah aus wie eine Angabe und war keine. Wer nichts weiss, sagt
+// hier nichts.
+//
+// Im MENUE behaelt das Wort seinen Sinn (BLOCK_TYPES, unveraendert): Dort heisst es "lege
+// einen gewoehnlichen Absatz an" -- das ist eine Aussage. Beschriften und Auswaehlen sind
+// zwei verschiedene Zwecke, darum ab hier zwei verschiedene Tabellen.
 const ROLE_LABELS = new Map([
-  ...BLOCK_TYPES,
+  ...BLOCK_TYPES.filter(([rolle]) => rolle !== 'paragraph'),
   ['heading', 'Überschrift'],
 ])
 
@@ -454,6 +461,18 @@ function bausteinBestand(workspace = activeWorkspace()) {
 
 function aktuelleBloecke(editor = ctx?.editor) {
   return getEditorBlocks(editor, bausteinRollen(bausteinBestand()))
+}
+
+// Wie ein Baustein beschriftet wird — an EINER Stelle, weil es drei Anzeigen gibt
+// (Struktur-Spalte, Blaetter-Liste, Blaetter-Tiefe) und drei Fassungen derselben Regel
+// unweigerlich auseinanderlaufen.
+//
+// Rangfolge, und sie ist die Entscheidung (Issue #36):
+//   1. Der erkannte Name — was dieser Absatz in DIESEM Text tut ("Befund", "Einwand").
+//   2. Das beim Erzeugen von Hand gewaehlte Wort ("Kernbehauptung", "Beleg").
+//   3. Nichts. Ein Etikett, das nichts aussagt, ist schlechter als keines.
+function bausteinName(block, namen) {
+  return namen?.get(block.id) || ROLE_LABELS.get(block.role) || ''
 }
 
 function suppressionStoreFor(doc = ctx?.activeDoc(), workspace = activeWorkspace()) {
@@ -953,8 +972,11 @@ function createNavBlockNode(block) {
 // die Funktion eines Absatzes — ihr Text wiederholt nur den Fliesstext.
 const NAV_ROLLEN_MIT_EIGENEM_TEXT = new Set(['heading'])
 
-function updateNavBlockNode(nodes, block, activeBlockId, hintKind) {
-  const roleLabel = ROLE_LABELS.get(block.role) || 'Freier Absatz'
+// bausteinName ist der von der KI fuer DIESEN Text erkannte Name ("Befund", "Einwand").
+// Er gewinnt ueber die allgemeine Beschriftung: Er sagt, was der Absatz HIER tut, nicht,
+// welcher Schublade er allgemein angehoert. Fehlt beides, bleibt die Karte still.
+function updateNavBlockNode(nodes, block, activeBlockId, hintKind, namen = null) {
+  const roleLabel = bausteinName(block, namen)
   const excerpt = block.excerpt || 'Noch leer'
   const hintLabel = hintKind === 'evidence'
     ? ' — Beleg offen'
@@ -967,8 +989,9 @@ function updateNavBlockNode(nodes, block, activeBlockId, hintKind) {
   const zeigeAuszug = istKarteOffen(block)
 
   // Vorlesegeraete bekommen weiterhin den vollen Wortlaut — die Kuerzung ist
-  // eine Frage der Augen, nicht der Zugaenglichkeit.
-  nodes.preview.setAttribute('aria-label', `${roleLabel}: ${excerpt}${hintLabel}`)
+  // eine Frage der Augen, nicht der Zugaenglichkeit. Ohne Namen entsteht auch kein
+  // leerer Doppelpunkt davor.
+  nodes.preview.setAttribute('aria-label', roleLabel ? `${roleLabel}: ${excerpt}${hintLabel}` : `${excerpt}${hintLabel}`)
   nodes.preview.setAttribute('aria-expanded', zeigeAuszug ? 'true' : 'false')
   if (istAktiv) nodes.preview.setAttribute('aria-current', 'true')
   else nodes.preview.removeAttribute('aria-current')
@@ -979,6 +1002,7 @@ function updateNavBlockNode(nodes, block, activeBlockId, hintKind) {
   nodes.preview.classList.toggle('is-offen', zeigeAuszug)
 
   nodes.role.textContent = roleLabel
+  nodes.role.hidden = !roleLabel
   nodes.preview.classList.toggle('has-hint', Boolean(hintKind))
   nodes.hint.dataset.hint = hintKind || ''
 }
@@ -1014,9 +1038,16 @@ function renderStructureNav() {
   if (orderChanged) rebuildStructureNav(list, doc, blocks)
 
   const hints = structureHintMap(doc, blocks)
+  // Der Anzeigename geht bewusst NICHT ueber block.role: Dort steht die Funktion im Argument
+  // (claim, evidence, ...), hier der Name, den die KI fuer diesen Text gefunden hat. Zwei
+  // Zwecke, zwei Wege — so bleibt block.role genau das, was es ist, und die Anzeige haengt
+  // nicht an der Rechenlogik.
+  const namen = bausteinNamen(bausteinBestand(workspace))
   blocks.forEach(block => {
     const nodes = structureNavState.blockNodes.get(block.id)
-    if (nodes) updateNavBlockNode(nodes, block, workspace.activeBlockId, hints.get(block.id) || null)
+    if (nodes) {
+      updateNavBlockNode(nodes, block, workspace.activeBlockId, hints.get(block.id) || null, namen)
+    }
   })
 }
 
@@ -1076,8 +1107,9 @@ function openStrukturModal(opener) {
         return
       }
       const offen = blocks.some(block => block.id === gewaehlt) ? gewaehlt : blocks[0].id
+      const namen = bausteinNamen(bausteinBestand())
       blocks.forEach(block => {
-        liste.append(eintrag(block.id, ROLE_LABELS.get(block.role) || 'Freier Absatz', {
+        liste.append(eintrag(block.id, bausteinName(block, namen), {
           anriss: blockAnriss(block.excerpt || block.text),
           gewaehlt: offen === block.id,
           onWaehle: () => waehle(block.id),
@@ -1102,7 +1134,8 @@ function openStrukturModal(opener) {
         tief.append(createNode('p', 'onda-blaetter__tiefe-hinweis', 'Noch keine Textabschnitte.'))
         return
       }
-      tief.append(createNode('h3', 'onda-blaetter__tiefe-titel', ROLE_LABELS.get(block.role) || 'Freier Absatz'))
+      const tiefeName = bausteinName(block, bausteinNamen(bausteinBestand()))
+      if (tiefeName) tief.append(createNode('h3', 'onda-blaetter__tiefe-titel', tiefeName))
       if (block.isTextblock) {
         bearbeitbaresFeld(tief, 'Text dieses Bausteins', block.text || '', wert => {
           schreibeBlockText(block.id, wert)
@@ -1580,7 +1613,9 @@ function blattEintrag(schluessel, name, { anriss = '', gewaehlt = false, onWaehl
   knopf.type = 'button'
   knopf.dataset.blattId = schluessel
   if (gewaehlt) knopf.setAttribute('aria-current', 'true')
-  knopf.append(createNode('span', 'onda-blaetter__eintrag-name', name))
+  // Auch der Name ist bedingt, nicht nur der Anriss: Ein Baustein ohne erkannten und ohne
+  // von Hand gewaehlten Namen traegt keinen — dann soll dort auch keine leere Zeile stehen.
+  if (name) knopf.append(createNode('span', 'onda-blaetter__eintrag-name', name))
   if (anriss) knopf.append(createNode('span', 'onda-blaetter__eintrag-anriss', anriss))
   if (onWaehle) knopf.addEventListener('click', onWaehle)
   return knopf
@@ -2407,8 +2442,9 @@ let pvBlaetter = null
 // feld  = was in das Textfeld darunter gehoert.
 // Beides muss verschieden sein: bis zum 7.8.2026 stand hier zweimal derselbe Wortlaut
 // untereinander — Ueberschrift "Aufgabe", sechs Pixel darunter noch einmal "Aufgabe".
-// Die Struktur-Ansicht macht es seit jeher richtig vor ("Freier Absatz" / "Text dieses
-// Bausteins"): die Ueberschrift sagt, WO man ist, der Feldname sagt, WAS man schreibt.
+// Die Struktur-Ansicht macht es vor ("Einwand" / "Text dieses Bausteins"): die Ueberschrift
+// sagt, WO man ist, der Feldname sagt, WAS man schreibt. Dort steht seit dem 8.8.2026 der
+// erkannte Name — und wo keiner erkannt ist, gar nichts.
 const PV_FELDER = [
   { schluessel: 'task', label: 'Aufgabe', feld: 'Was dieser Text leisten soll', lese: u => u.task, schreibe: (u, wert) => { u.task = wert } },
   { schluessel: 'audience', label: 'Zielgruppe', feld: 'Für wen er geschrieben ist', lese: u => u.audience.join(', '), schreibe: (u, wert) => { u.audience = splitList(wert, false) } },
