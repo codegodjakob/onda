@@ -10,6 +10,11 @@ const PERSISTED_KEYS = Object.freeze([
   'activeProject',
   'settings',
   'memoryStore',
+  // laufJournal (Issue #12): muss ins Voll-Exportpaket, sonst verliert „Alle Daten
+  // exportieren" die Lauf-Chronik still. emptyLocalState() bleibt bewusst OHNE dieses
+  // Feld -- ein Alles-loeschen soll das Journal wegwerfen; normalisiereLaufJournal
+  // defaultet beim naechsten Laden ohnehin auf ein leeres Journal.
+  'laufJournal',
 ])
 
 function isObject(value) {
@@ -107,6 +112,11 @@ function buildManifest(state) {
       texts: true,
       projects: true,
       sources: true,
+      // Die Themen, nach denen die Quellen stehen. Sie liegen im Projekt und reisen
+      // deshalb ohnehin mit — aber diese Liste ist eine BEHAUPTUNG von
+      // Vollstaendigkeit, und was sie verschweigt, gilt beim Auszug als nicht
+      // vorhanden. Wer sein Projekt mitnimmt, nimmt auch seine Ordnung mit.
+      quellenThemen: true,
       evidenceBundles: true,
       researchRuns: true,
       decisions: true,

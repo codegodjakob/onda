@@ -1,24 +1,31 @@
 // Gemeinsame Browser-Navigation für Smokes, die aus dem Schreibraum in die
-// Quellenbibliothek wechseln. Auf schmalen Ansichten folgt sie dem sichtbaren
-// Seitenleisten-Schalter und wartet zustandsbasiert auf beide Animationen.
+// Quellenbibliothek wechseln. Auf schmalen Ansichten folgt sie der festen Klinke
+// (#sidebarToggle) und wartet zustandsbasiert auf beide Animationen.
+//
+// Seit dem 7. August 2026 gibt es EINEN Knopf statt zweier: #sidebarCollapse und
+// #sidebarReopen konnten nie an derselben Stelle stehen, weil sie in verschiedenen
+// Kästen hingen. Der Zustand steht am aria-expanded der einen Klinke.
+
+async function warteAufDieLeiste(page) {
+  await page.locator('#ondaSidebar').evaluate(async node => {
+    await Promise.all(node.getAnimations().map(animation => animation.finished.catch(() => {})))
+  })
+}
 
 export async function ensureProjectSidebarOpen(page) {
-  if (await page.locator('#sidebarReopen').isVisible()) {
-    await page.locator('#sidebarReopen').click()
-    await page.locator('#ondaSidebar').evaluate(async node => {
-      await Promise.all(node.getAnimations().map(animation => animation.finished.catch(() => {})))
-    })
+  const klinke = page.locator('#sidebarToggle')
+  if (await klinke.getAttribute('aria-expanded') === 'false') {
+    await klinke.click()
+    await warteAufDieLeiste(page)
   }
 }
 
 export async function collapseProjectSidebar(page, { touch = false } = {}) {
   await ensureProjectSidebarOpen(page)
-  const control = page.locator('#sidebarCollapse')
+  const control = page.locator('#sidebarToggle')
   if (touch) await control.tap()
   else await control.click()
-  await page.locator('#ondaSidebar').evaluate(async node => {
-    await Promise.all(node.getAnimations().map(animation => animation.finished.catch(() => {})))
-  })
+  await warteAufDieLeiste(page)
 }
 
 export async function openMaterialLibrary(page) {

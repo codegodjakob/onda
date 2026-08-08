@@ -217,11 +217,20 @@ export async function fuehreChatVorgangAus({ laeuftBereits, sperreSetzen, setzeS
     sperreSetzen(true)
     setzeStatus({ zustand: 'laeuft' })
     await verdichte()
-    await chatte()
-    return { gestartet: true }
+    // Task 6 (Chat-Kanal durchs Tor): das Ergebnis von chatte() (in workspace.js:
+    // fuehreChatLauf) wird durchgereicht statt verworfen -- das Lauf-Tor liest genau dieses
+    // laufFn-Ergebnis, um im Journal zwischen 'geliefert' und 'fehler' zu unterscheiden
+    // (bewerteLaufErgebnis, lauf-tor.mjs). chatte() faengt seine Fehler selbst ab und kehrt
+    // normal mit { erfolg: false, fehler } zurueck statt zu werfen.
+    const chatErgebnis = await chatte()
+    return { gestartet: true, ...(chatErgebnis && typeof chatErgebnis === 'object' ? chatErgebnis : {}) }
   } catch (fehler) {
     setzeStatus({ zustand: 'fehler', fehlerTyp: fehler?.typ })
-    return { gestartet: true, erfolg: false }
+    // Branch-Review-Nacharbeit (Finding 4): fehler-Feld auch hier durchreichen, wie im
+    // Erfolgspfad oben (chatErgebnis) und im Lauf-Tor (fuehreLaufAus) -- sonst journalisiert
+    // ein Wurf aus verdichte()/chatte() SELBST (das Sicherheitsnetz, siehe Kommentar oben)
+    // immer als 'unbekannt' statt mit dem tatsaechlichen Fehlertyp.
+    return { gestartet: true, erfolg: false, fehler: fehler?.typ }
   } finally {
     sperreSetzen(false)
   }

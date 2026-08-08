@@ -1,0 +1,115 @@
+# Die automatische Pruefung.
+#
+# WARUM es sie gibt: Bis zum 7. August 2026 hat niemand ausser dem Menschen am
+# Laptop die Tests gestartet. Wer einen Zweig zusammenfuehrte, verliess sich
+# darauf, dass irgendjemand vorher `npm test` getippt hatte. Bei mehreren
+# parallelen Arbeitszweigen, die alle auf `main` zulaufen, haelt das niemand nach.
+# Ab hier laeuft es von selbst — und der Punkt am Pull Request wird gruen oder rot.
+#
+# Was NICHT hier laeuft:
+#   - Die Mac-Huelle (`mac/build.sh`). Sie braucht macOS mit Xcode; das waere ein
+#     eigener, viel teurerer Lauf. Sie wird weiter von Hand gebaut.
+#   - Die Eval-Laeufe (`npm run eval:*`, `evals/run-fertigzustand.mjs`). Die rufen
+#     die Anthropic-Schnittstelle auf und kosten bei jedem Lauf echtes Geld.
+#     Nichts, was ungefragt bei jedem Commit passieren darf.
+
+name: Prüfung
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# Wer zweimal hintereinander pusht, braucht den ersten Lauf nicht mehr.
+# Spart Wartezeit und Rechenminuten.
+concurrency:
+  group: pruefung-${{ github.ref }}
+  cancel-in-progress: true
+
+# Der Lauf liest nur. Er braucht kein Recht, irgendetwas am Projekt zu aendern —
+# also bekommt er auch keines.
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: Tests und Bundle
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        # Alles Ausfuehrbare liegt in app/; im Wurzelverzeichnis gibt es keine
+        # package.json.
+        working-directory: app
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Pakete installieren
+        run: npm ci
+
+      # Die Browser kommen nicht mit npm ci mit. `--with-deps` holt zusaetzlich die
+      # Systembibliotheken, ohne die Firefox und WebKit unter Linux nicht starten.
+      # Alle drei werden gebraucht: etappe-d2-smoke.mjs prueft in Chromium, Firefox
+      # UND WebKit.
+      - name: Browser installieren
+        run: npx playwright install --with-deps chromium firefox webkit
+
+      # app/dist/ steht in .gitignore, liegt also nach dem Auschecken nicht vor —
+      # und index.html laedt genau dieses Bundle. Ohne diesen Schritt baut die App
+      # im Browser gar nichts auf, und jede Browser-Pruefung stirbt in einem
+      # irrefuehrenden Timeout auf den ersten Locator.
+      - name: Bundle bauen
+        run: npm run build
+
+      # Alle Browser-Pruefungen bis auf onda-ui-smoke.mjs brauchen einen laufenden
+      # Server; nur diese eine startet sich selbst einen. Genommen wird der Server
+      # des Projekts (scripts/dev-server.mjs) und nicht irgendein Fremdwerkzeug:
+      # er liefert dieselben MIME-Typen wie beim Entwickeln, und wenn sich daran
+      # etwas aendert, wandert die Pruefung automatisch mit.
+      # Der Port MUSS als `--port=4173` uebergeben werden. Ein nacktes `4173`
+      # verwirft cliPort() stillschweigend und nimmt den Standardport — das faellt
+      # hier nur deshalb nicht auf, weil der Standard zufaellig derselbe ist.
+      # Nichts, worauf man sich verlassen sollte.
+      - name: Server starten
+        run: |
+          node scripts/dev-server.mjs --port=4173 > /tmp/onda-server.log 2>&1 &
+          echo $! > /tmp/onda-server.pid
+          # Warten, bis er wirklich antwortet. Ohne das rennt der erste Test gegen
+          # eine geschlossene Tuer und der ganze Lauf ist aus einem Grund rot, der
+          # nichts mit dem Code zu tun hat.
+          for i in $(seq 1 60); do
+            if curl -sf -o /dev/null http://127.0.0.1:4173/index.html; then
+              echo "Server antwortet nach ${i} Versuchen."
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Server kam in 60 Sekunden nicht hoch:"
+          cat /tmp/onda-server.log
+          exit 1
+
+      # AIWT_URL ausdruecklich setzen, statt sich auf den eingebauten Rueckfall auf
+      # Port 4173 zu verlassen: dann steht schwarz auf weiss da, gegen welchen
+      # Server gemessen wird.
+      - name: Tests
+        run: npm test
+        env:
+          AIWT_URL: http://127.0.0.1:4173/
+
+      # Laeuft auch, wenn die Tests rot waren — dann steht im Serverprotokoll oft
+      # der eigentliche Grund (404 auf eine Datei, die niemand gebaut hat).
+      - name: Serverprotokoll
+        if: always()
+        run: cat /tmp/onda-server.log || true
+
+      - name: Server beenden
+        if: always()
+        run: kill "$(cat /tmp/onda-server.pid)" 2>/dev/null || true

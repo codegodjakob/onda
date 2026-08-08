@@ -176,7 +176,7 @@ async function runSeedMigrationRegression(browser) {
   await page.close()
 }
 
-// ENTFERNT (07.08.2026): waitForLocalFeedbackLayout. Der Helfer wartete, bis Anmerkung
+// ENTFERNT (08.08.2026): waitForLocalFeedbackLayout. Der Helfer wartete, bis Anmerkung
 // und Vorschlagskarte der zweistufigen Rückmeldung ihre endgültige Lage gefunden
 // hatten: Notiz am oder unter dem Absatz, Vorschlag darunter, dazwischen ein
 // Abstandhalter, der den Folgeabsatz freihält, und keine Überdeckung zwischen den
@@ -216,11 +216,15 @@ async function runDesktop(browser) {
   // Seitenleiste einklappen/ausklappen persistiert in settings.sidebarCollapsed
   await collapseProjectSidebar(page)
   assert.equal(await page.locator('#editorView').evaluate(n => n.classList.contains('is-sidebar-collapsed')), true)
-  assert.equal(await page.locator('#sidebarReopen').isVisible(), true)
+  // Seit dem 8. August 2026 gibt es EINE Klinke statt zweier. #sidebarCollapse und
+  // #sidebarReopen hingen in verschiedenen Kaesten und konnten deshalb nie an derselben
+  // Stelle stehen — das war die Ursache des springenden Pfeils, den Jakob gemeldet hat.
+  // Der Zustand steht jetzt am aria-expanded der einen Klinke.
+  assert.equal(await page.locator('#sidebarToggle').getAttribute('aria-expanded'), 'false')
   assert.equal(await page.evaluate(() => AIWT.state.settings.sidebarCollapsed), true)
   await ensureProjectSidebarOpen(page)
   assert.equal(await page.locator('#editorView').evaluate(n => n.classList.contains('is-sidebar-collapsed')), false)
-  assert.equal(await page.locator('#sidebarReopen').isHidden(), true)
+  assert.equal(await page.locator('#sidebarToggle').getAttribute('aria-expanded'), 'true')
   assert.equal(await page.evaluate(() => AIWT.state.settings.sidebarCollapsed), false)
 
   // Seit 04.08.2026 klappen Struktur-Karten nur auf Klick auf; von allein steht nur
@@ -670,7 +674,12 @@ async function runBlockIdentityRegressions(browser) {
       commands: Object.keys(window.AIWT.state.editor.commands),
     }
   })
-  assert.doesNotMatch(schemaContract.html, /<(?:strong|em|u|s|code|img)\b|style=/)
+  // Kursiv ist seit dem 7. August 2026 die EINZIGE Auszeichnung, die zurueckkommt
+  // (editor.js: StarterKit mit bold/strike/code aus). Ein wissenschaftlicher deutscher
+  // Text braucht sie fuer Werktitel und fremdsprachige Ausdruecke. Fett, durchgestrichen
+  // und Inline-Code sind Betonung — die gehoert in den Satzbau, nicht in eine Leiste.
+  assert.doesNotMatch(schemaContract.html, /<(?:strong|u|s|code|img)\b|style=/)
+  assert.match(schemaContract.html, /<em\b/, 'Kursiv wird verschluckt — es ist die eine erlaubte Auszeichnung')
   assert.match(schemaContract.html, /<a\b[^>]*href="https:\/\/example\.com"/)
   assert.deepEqual(
     schemaContract.commands.filter(name => [
@@ -873,7 +882,7 @@ async function runTask4InteractionRegressions(browser) {
   await page.close()
 }
 
-// ENTFERNT (07.08.2026): runTask5PassageFeedback. Geprüft wurde die zweistufige
+// ENTFERNT (08.08.2026): runTask5PassageFeedback. Geprüft wurde die zweistufige
 // Rückmeldung am Absatz: eine Kurzzeile mit Verbindungsstrich zum Absatz, die sich per
 // Eingabetaste zu den drei Feldern Beobachtung, Relevanz und Folge öffnete und beim
 // zweiten Druck die Vorschlagskarte mit Wortlaut-Vergleich (bisher gegen neu)
@@ -901,7 +910,7 @@ async function runTask4InteractionRegressions(browser) {
 // stehen lässt, und dass die Anmerkungsebene nach dem Zeichnen zur Ruhe kommt (die
 // alte Zusage: keine endlosen Nachzeichnungen).
 
-// ENTFERNT (07.08.2026): runTask5OwnershipAndAmbiguity. Geprüft wurde, wem der Text
+// ENTFERNT (08.08.2026): runTask5OwnershipAndAmbiguity. Geprüft wurde, wem der Text
 // gehört, wenn man einen Vorschlag nicht einfach übernimmt: „Eigene Fassung schreiben"
 // wählt die Zielstelle aus, hält den Zwischenstand als `editingFinding` über einen
 // Neustart hinweg, schreibt dabei aber noch keine Entscheidung fest -- erst
@@ -924,7 +933,7 @@ async function runTask4InteractionRegressions(browser) {
 // NICHT MEHR GEPRÜFT im Browser: der Weg „eigene Fassung schreiben -> Neustart ->
 // abschliessen" von Anfang bis Ende.
 
-// ENTFERNT (07.08.2026): runFinalFindingRegressions. Geprüft wurden drei Fälle, in
+// ENTFERNT (08.08.2026): runFinalFindingRegressions. Geprüft wurden drei Fälle, in
 // denen ein Hinweis nicht einfach angewendet werden darf: (1) ein Anker, dessen
 // Passage inzwischen umgeschrieben wurde -- die Anmerkung meldet „Textstelle
 // verändert" und bietet keinen Vorschlag mehr an; (2) Hinweise ohne sichere Textstelle
@@ -949,7 +958,7 @@ async function runTask4InteractionRegressions(browser) {
 // `riskConfirmationFindingId`), und dass unplatzierbare Hinweise im Agentenfeld
 // auftauchen. Für beides gibt es derzeit nirgends sonst einen Beleg.
 
-// ENTFERNT (07.08.2026): runTask5MobileFeedback. Geprüft wurde die zweistufige
+// ENTFERNT (08.08.2026): runTask5MobileFeedback. Geprüft wurde die zweistufige
 // Rückmeldung auf dem Tastgerät (390 Punkt): dass Anmerkung und Vorschlagskarte im
 // Bild bleiben, einander nicht überdecken, unterhalb des Absatzes sitzen, den
 // Folgeabsatz über einen Abstandhalter freihalten, und dass sie nach Rollen und
@@ -966,7 +975,7 @@ async function runTask4InteractionRegressions(browser) {
 // Einfügemenü den Vorschlag beiseiteräumt, hing an genau der Vorschlagskarte, die weg
 // ist; das Menü selbst prüft runTask4InteractionRegressions weiter.
 
-// ENTFERNT (07.08.2026): injectTask6PassageFinding. Der Helfer setzte dem Beispieltext
+// ENTFERNT (08.08.2026): injectTask6PassageFinding. Der Helfer setzte dem Beispieltext
 // eine Anmerkung an die Stelle „Calm Technology beschreibt Technik" -- wahlweise mit
 // zwei Belegen (geprüfte Primärquelle und ungeprüfte Arbeitsnotiz), um das Belegfenster
 // zu füllen. Gebraucht wurde er nur von runTask6Mobile, prepareTask7Scenario und
@@ -978,7 +987,7 @@ async function runTask4InteractionRegressions(browser) {
 // sie lief also nie und prüfte nichts. Was sie beschrieb (Gespräch am Absatz,
 // Belegfenster), prüft der semantische Onda-Smoke über alle Formen hinweg.
 
-// ENTFERNT (07.08.2026): runTask6Mobile. Geprüft wurde die Rückmeldung auf dem
+// ENTFERNT (08.08.2026): runTask6Mobile. Geprüft wurde die Rückmeldung auf dem
 // Tastgerät (390 Punkt): dass das Agentenfeld mit seinem Eingabefeld vollständig im
 // Bild bleibt, dass das Gespräch am Absatz nach acht Antworten nicht aus dem Bild
 // wächst, dass die Nachrichtenliste dabei selbst rollt statt die Karte zu strecken,
@@ -1129,10 +1138,10 @@ async function runTask6InitiativeAndLifecycle(browser) {
   await page.close()
 }
 
-// ENTFERNT (07.08.2026): der ganze Task-7-Block -- TASK7_SCENARIOS, parkPassageFindings,
+// ENTFERNT (08.08.2026): der ganze Task-7-Block -- TASK7_SCENARIOS, parkPassageFindings,
 // captureTask7PassageState, prepareTask7Scenario, assertTask7IconControls,
 // assertVisibleTabSequence, assertTask7MobileHitboxes, assertTask7CommonLayout,
-// transitionSeconds, assertReducedTransition, runTask7Scenarios, runTask7Intermediate
+// runTask7Scenarios, runTask7Intermediate, transitionSeconds, assertReducedTransition
 // und runTask7KeyboardAndMotion.
 //
 // Geprüft wurde eine Matrix aus sieben Lagen (leer, Struktur, Anmerkung, Vorschlag,
@@ -1151,6 +1160,14 @@ async function runTask6InitiativeAndLifecycle(browser) {
 // `.local-finding-short`, `.local-finding-disclosure` und `.suggestion-action` zielen
 // auf Klassen, die niemand mehr erzeugt. Gemessen am 07.08.2026: alle drei Läufe rot,
 // jeder an genau dieser Stelle.
+//
+// ACHTUNG für die Nachwelt: Commit 94c0c81 vom 08.08.2026 hat in
+// assertTask7MobileHitboxes noch `#sidebarReopen` auf `#sidebarToggle` nachgezogen --
+// an einer Funktion, die zu diesem Zeitpunkt schon drei Tage lang nie lief. Genau so
+// entsteht der Eindruck von Absicherung, wo keine ist. Die Verschärfung ist damit
+// gegenstandslos geworden; die übrigen drei aus demselben Commit (eine Klinke statt
+// zweier, Kursiv als einzige Auszeichnung, „Erkanntes" im Projektverständnis-Fenster)
+// liegen in Funktionen, die laufen, und sind unangetastet.
 //
 // WEITER GEPRÜFT: Breitenverhalten, Trefferflächen, Fokus, Kontrast und die
 // Escape-Leiter der heutigen Oberfläche in test/onda-ui-smoke.mjs (Abschnitte shell,
@@ -1322,7 +1339,17 @@ async function runFinalStateLearningAndCrossDocument(browser) {
     return { sourceId: source.id, targetId: target.id, targetBlockId, prinzip }
   })
 
-  const erkanntes = page.locator('#erkanntes')
+  // „Erkanntes" stand bis zum 8. August 2026 als eigener Abschnitt in der Seitenleiste.
+  // Die Leiste hat jetzt genau drei Abschnitte (Jakob: Erkanntes und Erweiterungen sind
+  // "sachen die der agent im chat oder als anmerkung kommuniziert"). Erkanntes ist aber
+  // KEIN proaktives Angebot, sondern ein Blick zurueck auf den Personenspeicher —
+  // deshalb liegt es jetzt im Projektverstaendnis-Fenster, wo auch das Projektgedaechtnis
+  // liegt. Der Inhalt ist derselbe geblieben, nur der Weg dorthin ist ein anderer.
+  await ensureProjectSidebarOpen(page)
+  await page.locator('#pvCard').click()
+  await page.locator('#pvModal').waitFor({ state: 'visible' })
+  await page.locator('#pvModal').getByRole('button', { name: 'Erkanntes', exact: true }).click()
+  const erkanntes = page.locator('#pvModal .onda-erk-flaeche')
   await erkanntes.getByRole('button', { name: 'Als Stimme prüfen', exact: true }).waitFor()
   assert.match(await erkanntes.textContent(), /Sprache/)
   assert.match(await erkanntes.textContent(), /2×/)
@@ -1351,15 +1378,33 @@ async function runFinalStateLearningAndCrossDocument(browser) {
   await rueckkopplung.getByRole('button', { name: 'Nicht mehr berücksichtigen', exact: true }).click()
   assert.equal(await page.evaluate(() => window.AIWT.state.rueckkopplung?.status), 'rejected')
 
-  const erweiterungen = page.locator('#erweiterungen')
-  await erweiterungen.locator('.onda-erw-kopf').click()
-  await erweiterungen.getByRole('button', { name: /Zweite Stelle.*Instandhaltung/ }).click()
-  await page.waitForFunction(targetId => window.AIWT.state.active === targetId, fixture.targetId)
-  await page.waitForFunction(targetBlockId => (
-    window.AIWT.__blockIdentityTestBridge.getActiveBlockId() === targetBlockId
-  ), fixture.targetBlockId)
+  // Erweiterungen haben seit dem 8. August 2026 keine eigene Spalte mehr. Jakob:
+  // "erweiterungsanmerkungen sind sachen die der agent im chat oder als anmerkung
+  // kommuniziert". Der Kanal spricht jetzt im Chat — eine Erweiterung ist etwas, das
+  // jemand SAGT, kein Posten in einem Regal.
+  await page.waitForFunction(() => {
+    const doc = window.AIWT.state.docs.find(d => d.id === window.AIWT.state.active)
+    return (doc?.workspace?.agent?.messages || []).some(m => String(m.id).startsWith('erweiterung-'))
+  }, null, { timeout: 10000 }).catch(() => {
+    assert.fail('Keine Erweiterung ist im Chat angekommen')
+  })
+  const erweiterungImChat = await page.evaluate(() => {
+    const doc = window.AIWT.state.docs.find(d => d.id === window.AIWT.state.active)
+    return (doc?.workspace?.agent?.messages || [])
+      .filter(m => String(m.id).startsWith('erweiterung-'))
+      .map(m => m.text)
+  })
+  assert.ok(
+    erweiterungImChat.some(text => /Verbindung|Weiterführung|Feld/.test(text)),
+    `Die Erweiterung nennt ihre Art nicht: ${erweiterungImChat.join(' | ')}`,
+  )
 
-  assert.equal(await page.evaluate(() => window.AIWT.state.active), fixture.targetId)
+  // OFFENE LÜCKE, absichtlich hier festgehalten statt still übergangen: die alte Spalte
+  // hatte für eine "Verbindung" einen Knopf zur ZWEITEN Stelle — auch über
+  // Dokumentgrenzen hinweg. Chat-Nachrichten tragen heute nur Text und keine Handlung,
+  // also gibt es diesen Sprung nicht mehr. Eine Verbindung, die man nicht aufsuchen
+  // kann, ist eine halbe Verbindung. Wer das behebt, ersetzt diesen Kommentar durch die
+  // Prüfung, die den Sprung wieder belegt.
   assert.deepEqual(errors, [])
   await page.close()
 }
@@ -1374,8 +1419,9 @@ try {
     // Jede hier aufgeführte Prüfung läuft auch wirklich. Wer eine Funktion in dieser
     // Datei anlegt, ohne sie hier einzutragen, baut eine Kulisse: die Datei sähe nach
     // Absicherung aus, ein Teil davon liefe nie. Genau das war zwischen dem 05. und
-    // dem 07.08.2026 der Fall -- neun Funktionen mit rund tausend Zeilen standen
-    // stumm herum. Ihre Stellen sind oben als ENTFERNT-Kommentare vermerkt.
+    // dem 08.08.2026 der Fall -- neun Funktionen mit rund tausend Zeilen standen
+    // stumm herum, und eine spätere Sitzung hat sogar noch eine davon "verschärft".
+    // Ihre Stellen sind oben als ENTFERNT-Kommentare vermerkt.
     await runSeedMigrationRegression(browser)
     await runDesktop(browser)
     await runBlockIdentityRegressions(browser)

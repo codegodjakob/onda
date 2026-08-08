@@ -112,7 +112,7 @@ body.view-editor #editorView { display: flex; }
 .doc-main {
   width: 100%; min-width: 0; flex: 1;
   appearance: none; display: block;
-  margin: 0; padding: 0; border: 0; border-radius: 5px;
+  margin: 0; padding: 0; border: 0; border-radius: var(--radius-md);
   background: transparent; color: inherit;
   font: inherit; text-align: left; cursor: pointer;
 }
@@ -148,7 +148,7 @@ body.view-editor #editorView { display: flex; }
   flex: 1; min-width: 0; font-size: var(--text-xs); color: var(--txt2);
   overflow-wrap: anywhere;
 }
-.trash-acts { display: flex; gap: 2px; flex: none; opacity: 0; transition: opacity var(--dur) var(--ease); }
+.trash-acts { display: flex; gap: var(--space-05); flex: none; opacity: 0; transition: opacity var(--dur) var(--ease); }
 .trash-doc:hover .trash-acts,
 .trash-doc:focus-within .trash-acts,
 .doc:hover .trash-acts,
@@ -264,7 +264,7 @@ body.view-editor #editorView { display: flex; }
 
 
 /* Bibliothek: Breadcrumb + Projekt-Umbenennen */
-.crumb { font-size: 12px; color: var(--txt3); padding: 0 0 10px; display: block; }
+.crumb { font-size: var(--text-xs); color: var(--txt3); padding: 0 0 var(--space-3); display: block; }
 .crumb[hidden] { display: none; }
 .crumb:hover { color: var(--accent); }
 .rename-input {
@@ -277,21 +277,11 @@ body.view-editor #editorView { display: flex; }
 /* Fokus-Modus blendet auch Rails & Panels aus */
 
 
-.bar-group { display: flex; align-items: center; gap: 3px; }
-.bar-right { gap: 12px; }
-.bar-sep { width: 0.5px; height: 18px; background: var(--line2); margin: 0 6px; flex: none; }
-.tbtn {
-  min-width: 30px; height: 30px; padding: 0 8px;
-  border-radius: 7px; font-size: 13.5px; color: var(--txt2);
-  display: inline-flex; align-items: center; justify-content: center; gap: 4px;
-  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
-}
-.tbtn:hover { background: var(--bg3); color: var(--txt); }
-.tbtn.on { color: var(--accent); background: var(--accentbg); }
-.tbtn svg { width: 16px; height: 16px; display: block; }
-.tbtn-label { padding: 0 10px; }
-.tbtn-block { min-width: 34px; justify-content: center; }
-.tbtn-block #blockLabel { display: inline-flex; }
+/* Hier lagen .bar-group/.bar-right/.bar-sep und die .tbtn-Familie — die Gestaltung der
+   Werkzeugleiste ueber dem Text. Die Leiste ist mit Commit c0a8f21 gefallen
+   (docs/PHILOSOPHIE.md §1), das CSS blieb liegen und wurde von keiner Datei mehr
+   verwendet. Was beim Markieren erscheint, heisst .auswahl-leiste und steht weiter
+   unten bei den Menues. */
 .mi-sublabel { font-size: 12px; color: var(--txt2); width: 64px; flex: none; }
 .mi-note { font-size: 11px; color: var(--txt3); padding: 2px 10px 8px; }
 .counter { font-size: 12px; color: var(--txt3); font-variant-numeric: tabular-nums; }
@@ -336,9 +326,20 @@ body.view-editor #editorView { display: flex; }
   transition: font-size var(--dur) var(--ease);
 }
 #editor .ProseMirror p { margin: 0 0 .8em; }
-#editor .ProseMirror h1 { font-size: 1.62em; font-weight: 700; margin: 1.5em 0 .45em; line-height: 1.28; }
-#editor .ProseMirror h2 { font-size: 1.35em; font-weight: 700; margin: 1.35em 0 .4em; line-height: 1.3; }
-#editor .ProseMirror h3 { font-size: 1.15em; font-weight: 700; margin: 1.2em 0 .35em; line-height: 1.32; }
+/* Drei Stufen, mehr nicht: gross · mittel · klein (Jakob, 7.8.2026). Es gab sie auch
+   vorher schon im Schema, aber nicht im Auge: 24,3 / 20,3 / 17,3px lagen drei bzw. zwei
+   Pixel auseinander, und zwei Pixel sieht niemand. Jetzt 27 / 21 / 17,25px — die
+   mittlere Stufe landet damit genau auf --text-xl (21px), also auf einer Hausmarke.
+   Die Faktoren bleiben em-relativ, damit sie an der Grundgroesse haengen und nicht
+   danebenlaufen, wenn die sich je aendert.
+   Der obere Abstand ist bei jeder Stufe deutlich groesser als der Absatzabstand (12px):
+   auch die kleine Ueberschrift kuendigt sich an, bevor man sie liest. Nach unten ist
+   sie eng — eine Ueberschrift gehoert zu dem, was folgt, nicht zu dem, was war.
+   --tracking-tight auf den beiden grossen Stufen, weil ABC Diatype bei grossen Graden
+   weit laeuft; der Titel macht es bei 40px mit --tracking-tighter schon vor. */
+#editor .ProseMirror h1 { font-size: 1.80em; font-weight: 700; margin: 1.5em 0 .45em; line-height: 1.2; letter-spacing: var(--tracking-tight); }
+#editor .ProseMirror h2 { font-size: 1.40em; font-weight: 700; margin: 1.45em 0 .42em; line-height: 1.25; letter-spacing: var(--tracking-tight); }
+#editor .ProseMirror h3 { font-size: 1.15em; font-weight: 700; margin: 1.4em 0 .4em; line-height: 1.3; letter-spacing: var(--tracking-normal); }
 #editor .ProseMirror ul, #editor .ProseMirror ol { margin: 0 0 .8em; padding-left: 1.35em; }
 #editor .ProseMirror li { margin: .15em 0; }
 #editor .ProseMirror li p { margin: 0; }
@@ -381,6 +382,51 @@ body.view-editor #editorView { display: flex; }
 #editor .ProseMirror ul[data-type="taskList"] li[data-checked="true"] > div {
   color: var(--txt3); text-decoration: line-through; text-decoration-color: var(--line2);
 }
+
+/* ---------- Auswahl-Leiste ----------
+   Erscheint beim Markieren, verschwindet mit der Markierung. position: fixed — sie
+   liegt ausserhalb jedes Flusses und kann die Schreibspalte nicht schmaler machen.
+   z-index 59 liegt eine Stufe UNTER .menu (60), damit das Format-Untermenue ueber
+   ihr aufgeht statt hinter ihr. */
+.auswahl-leiste {
+  position: fixed; z-index: 59;
+  display: flex; align-items: center; gap: var(--space-05);
+  /* Auf schmalen Ansichten ist "Überschrift mittel" allein schon so breit, dass die
+     vier Werkzeuge nebeneinander aus dem Fenster ragen wuerden — und eine feste
+     Flaeche, die hinausragt, schiebt das ganze Dokument seitlich. Dann bricht sie
+     lieber um. */
+  flex-wrap: wrap;
+  max-width: calc(100vw - var(--space-4));
+  padding: var(--space-1);
+  background: var(--bg-surface);
+  border: 0.5px solid var(--border-default);
+  border-radius: var(--radius-control);
+  box-shadow: var(--shadow-lg);
+  opacity: 0;
+  /* Sie waechst aus der Markierung nach oben heraus, deshalb der Versatz von unten.
+     Nur --dur-quick/--ease-out: kein Federn in funktionaler UI, und ueber die Marken
+     greift prefers-reduced-motion von selbst. */
+  transform: translateY(4px) scale(.985);
+  pointer-events: none;
+  transition: opacity var(--dur-quick) var(--ease-out), transform var(--dur-quick) var(--ease-out);
+}
+.auswahl-leiste.open { opacity: 1; transform: none; pointer-events: auto; }
+.auswahl-knopf {
+  display: inline-flex; align-items: center; gap: var(--space-1);
+  min-height: 44px; padding: 0 var(--space-3);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  /* Kein neuer Grad und kein neues Gewicht: kleinster Grad, mittleres Gewicht — die
+     Mischung, mit der im Haus jede kleine Beschriftung gesetzt ist. */
+  font: var(--fw-medium) var(--text-xs)/var(--leading-snug) var(--font-sans);
+  letter-spacing: var(--tracking-wide);
+  white-space: nowrap;
+  transition: var(--transition-colors);
+}
+.auswahl-knopf:hover { background: var(--bg-hover); color: var(--text-primary); }
+.auswahl-knopf[aria-pressed="true"] { background: var(--accent-tint); color: var(--text-primary); }
+.auswahl-knopf svg { display: block; color: var(--text-tertiary); }
+.auswahl-knopf-format { padding-right: var(--space-2); }
 
 /* ---------- Menüs, Bubble, Slash ---------- */
 .menu {
@@ -562,7 +608,6 @@ body.zen #title:focus { opacity: 1; }
 .lane-bracket { stroke-linejoin: round; stroke-linecap: round; }
 /* "Absatz"-Kennzeichen in der Bubble */
 .anno-scope { display: inline-block; font-size: 9.5px; font-weight: 500; letter-spacing: .03em; color: var(--txt3); border: 0.5px solid var(--line2); padding: 1px 6px; border-radius: 999px; }
-.tbtn-lane { position: relative; }
 
 /* ---------- Struktur+Narrative: eine breite Leiste, zwei Spalten ---------- */
 #pStruct { width: 560px; }
@@ -774,11 +819,13 @@ body.zen #title:focus { opacity: 1; }
   #pStruct { left: 38px; }
   #pCoach { right: 38px; }
 
-  .bar-right { gap: 5px; }
-  .bar-sep { margin: 0 2px; }
+  /* Hier standen noch .bar-right und .bar-sep — Reste der Werkzeugleiste, die es seit
+     c0a8f21 nicht mehr gibt. Und `#title { font-size: 27px }`: ein Titelgrad, der nie
+     griff, weil onda-shell.css ihn mit `#editorView #title` (zwei Kennungen gegen eine)
+     ueberall schlaegt und unter 560px sogar ausdruecklich auf 40px zurueckstellt. Er
+     las sich trotzdem wie die geltende Regel. */
   .counter { display: none !important; }
   #page { padding: 38px 22px 42vh; }
-  #title { font-size: 27px; }
   #homeInner { padding: var(--space-9) var(--space-5) var(--space-11); }
   #doclist.grid { grid-template-columns: 1fr; }
   .ai-overlay { align-items: stretch; padding: 8px; }
@@ -854,13 +901,20 @@ body.zen #title:focus { opacity: 1; }
   box-shadow: var(--shadow-focus);
 }
 
+/* Der Auszug steht UNTER der Abschnittsbeschriftung ("Struktur") und muss das zeigen:
+   400 gegen deren 500 und einen Farbschritt zurueck (siehe die Regel bei
+   --type-rubrik in onda-tokens.css). Bis zum 7.8.2026 war er primary wie sie, also
+   unterschied allein das Gewicht — im Bild las sich "Warum es wichtig ist" mindestens
+   so stark wie "Struktur" darueber. Die Spalte ist Navigation, kein Lesetext; der
+   gerade bearbeitete Baustein wird durch seine Flaeche ausgezeichnet, nicht durch
+   Schwaerze. */
 .block-preview-excerpt {
   min-height: calc(1.5em * 2);
   display: -webkit-box;
   overflow: hidden;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
-  color: var(--text-primary);
+  color: var(--text-secondary);
   font: var(--type-body);
   overflow-wrap: anywhere;
 }
@@ -881,42 +935,16 @@ body.zen #title:focus { opacity: 1; }
   letter-spacing: var(--tracking-normal, 0);
 }
 
-/* Zurueckgehaltenes. Bewusst kein Warnton und kein Ausrufezeichen: es ist eine
-   Auskunft, keine Mahnung. Ein Klick hebt die Zurueckhaltung auf, bis wieder
-   geschrieben wird. */
-.onda-side-zurueck[hidden] { display: none; }
-.onda-zurueck-knopf {
-  display: flex; align-items: baseline; gap: var(--space-2);
-  width: 100%;
-  padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius-card);
-  background: var(--bg-sunken);
-  text-align: left; cursor: pointer;
-}
-.onda-zurueck-knopf:hover { background: var(--bg-active); }
-.onda-zurueck-knopf:focus-visible { outline: 2px solid transparent; box-shadow: var(--shadow-focus); }
-.onda-zurueck-zahl {
-  flex: none;
-  color: var(--text-primary);
-  font: var(--type-label);
-  font-variant-numeric: tabular-nums;
-}
-.onda-zurueck-text {
-  color: var(--text-secondary);
-  font: var(--type-caption);
-}
-
-/* ---------- Erweiterungen: der zweite Kanal ----------
-   Sichtbar anders als eine Korrektur, und zwar an drei Stellen:
-   keine Warn- oder Gefahrfarbe (nichts ist kaputt), keine Zahl (nichts ist offen),
-   kein Strich zum Text (nichts wartet an einer Zeile). Der Akzentstrich links steht
-   fuer ein Angebot; die Karte selbst bleibt Papier. */
 /* ---------- Erkanntes: was diese Person schon weiss ----------
-   Bewusst die leiseste Flaeche der Spalte: keine Karte, keine Umrandung, kein
+   Bewusst die leiseste Flaeche, die es gibt: keine Karte, keine Umrandung, kein
    Schatten. Das hier ist kein Angebot und keine Aufgabe, sondern ein Rueckblick.
    Jede Zeile laesst sich mit einer Geste zuruecknehmen — ohne das wiederholte sich
-   ein falscher Satz in jedem kuenftigen Text. */
-.onda-side-erkanntes { display: flex; flex-direction: column; gap: var(--space-1); }
+   ein falscher Satz in jedem kuenftigen Text.
+
+   Seit dem 7. August 2026 steht der Rueckblick nicht mehr in der Seitenleiste,
+   sondern als eigener Eintrag im Projektverstaendnis-Fenster: er ist ein Blick
+   zurueck auf den Personenspeicher, kein Vorrat, den man durchsieht. */
+.onda-erk-flaeche { display: flex; flex-direction: column; gap: var(--space-1); }
 .onda-erk-leer {
   margin: 0; color: var(--text-tertiary);
   font: var(--type-caption);
@@ -988,94 +1016,11 @@ body.zen #title:focus { opacity: 1; }
 .onda-rueckkopplung-liste { margin: 0 0 var(--space-3); padding-left: var(--space-6); }
 .onda-rueckkopplung-gesten { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 
-.onda-side-erweiterungen { display: flex; flex-direction: column; gap: var(--space-2); }
-
-.onda-erw {
-  position: relative;
-  border-left: 2px solid var(--accent);
-  border-radius: var(--radius-card);
-  background: var(--bg-surface);
-  box-shadow: none;
-  overflow: hidden;
-  transition: background var(--dur-quick) var(--ease-out);
-}
-.onda-erw:hover { background: var(--bg-hover); box-shadow: none; }
-/* Gemerktes traegt einen vollen Strich statt eines Haekchens: ein Haken ist die
-   Sprache erledigter Aufgaben, und eine Erweiterung war nie eine Aufgabe. */
-.onda-erw.is-gemerkt { border-left-width: 4px; background: var(--bg-sunken); }
-
-.onda-erw-kopf {
-  display: flex; flex-direction: column; gap: var(--space-1);
-  width: 100%; min-width: 0;
-  padding: var(--space-5);
-  text-align: left; cursor: pointer;
-}
-.onda-erw-kopf:focus-visible { outline: 2px solid transparent; box-shadow: var(--shadow-focus); }
-.onda-erw-art {
-  color: var(--text-secondary);
-  font: var(--fw-medium) var(--text-xs)/1.2 var(--font-sans);
-}
-.onda-erw-anriss {
-  color: var(--text-primary);
-  font: var(--type-body);
-  overflow-wrap: anywhere;
-}
-
-.onda-erw-koerper {
-  display: flex; flex-direction: column; gap: var(--space-3);
-  padding: 0 var(--space-5) var(--space-5);
-}
-.onda-erw-was {
-  margin: 0; color: var(--text-tertiary);
-  font: var(--type-caption);
-}
-.onda-erw-gedanke {
-  margin: 0; color: var(--text-primary);
-  font: var(--type-body);
-}
-.onda-erw-muster {
-  margin: 0; display: flex; flex-direction: column; gap: var(--space-1);
-  padding: var(--space-4);
-  border-radius: var(--radius-card);
-  background: var(--surface-2);
-}
-.onda-erw-muster-label {
-  color: var(--text-secondary);
-  font: var(--fw-medium) var(--text-xs)/1.2 var(--font-sans);
-}
-.onda-erw-muster-text {
-  color: var(--text-primary);
-  font: var(--type-body);
-}
-
-.onda-erw-stellen { display: flex; flex-direction: column; gap: var(--space-1); }
-.onda-erw-stelle {
-  display: flex; flex-direction: column; gap: var(--space-05);
-  padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius-card);
-  background: var(--bg-sunken);
-  text-align: left; cursor: pointer;
-}
-.onda-erw-stelle:hover:not(:disabled) { background: var(--bg-active); }
-.onda-erw-stelle:disabled { cursor: default; opacity: 0.55; }
-/* Eine Stelle in einem anderen Text: der Knopf springt nicht, weil der Baustein im
-   gerade offenen Editor nicht existiert. Er ist keine kaputte Schaltflaeche, sondern
-   ein Beleg — deshalb voll lesbar statt ausgegraut, und ohne Zeigefinger. */
-.onda-erw-stelle.is-fremd:disabled { opacity: 1; background: var(--bg-sunken); }
-.onda-erw-stelle:focus-visible { outline: 2px solid transparent; box-shadow: var(--shadow-focus); }
-.onda-erw-stelle-label {
-  color: var(--text-secondary);
-  font: var(--fw-medium) var(--text-xs)/1.2 var(--font-sans);
-}
-.onda-erw-stelle-zitat {
-  color: var(--text-primary);
-  font: var(--type-body);
-  font-style: italic;
-  overflow-wrap: anywhere;
-}
-
-.onda-erw-gesten { display: flex; gap: var(--space-2); }
-.onda-erw-geste {
+/* Die beiden Gesten am Rueckkopplungs-Block. Sie hiessen frueher .onda-erw-geste und
+   liehen sich das Aussehen von den Erweiterungs-Karten; die sind fort, das Aussehen
+   bleibt. */
+.onda-erk-geste {
+  min-height: 44px;
   padding: var(--space-2) var(--space-4);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-control);
@@ -1083,28 +1028,10 @@ body.zen #title:focus { opacity: 1; }
   font: var(--type-label);
   cursor: pointer;
 }
-.onda-erw-geste:hover:not(:disabled) { background: var(--bg-hover); }
-.onda-erw-geste:disabled { cursor: default; color: var(--text-secondary); border-color: var(--border-subtle); }
-.onda-erw-geste.is-still { border-color: transparent; color: var(--text-secondary); }
-.onda-erw-geste:focus-visible { outline: 2px solid transparent; box-shadow: var(--shadow-focus); }
-
-.onda-erw-leer {
-  margin: 0;
-  color: var(--text-secondary);
-  font: var(--fw-regular) var(--text-xs)/1.55 var(--font-sans);
-}
-.onda-erw-fragen {
-  align-self: flex-start;
-  padding: var(--space-2) var(--space-4);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-control);
-  color: var(--text-secondary);
-  font: var(--type-label);
-  cursor: pointer;
-}
-.onda-erw-fragen:hover:not(:disabled) { background: var(--bg-hover); color: var(--text-primary); }
-.onda-erw-fragen:disabled { cursor: default; opacity: 0.5; }
-.onda-erw-fragen:focus-visible { outline: 2px solid transparent; box-shadow: var(--shadow-focus); }
+.onda-erk-geste:hover:not(:disabled) { background: var(--bg-hover); }
+.onda-erk-geste:disabled { cursor: default; color: var(--text-secondary); border-color: var(--border-subtle); }
+.onda-erk-geste.is-still { border-color: transparent; color: var(--text-secondary); }
+.onda-erk-geste:focus-visible { outline: 2px solid transparent; box-shadow: var(--shadow-focus); }
 
 #agentWidget[hidden],
 #evidenceWindow[hidden] {
@@ -1131,11 +1058,16 @@ body.zen #title:focus { opacity: 1; }
   margin-left: calc(-1 * var(--sidebar-width));
 }
 
+/* Die erste Zeile der Leiste liegt auf demselben Band wie die Topbar, damit der
+   Schriftzug neben der festen Klinke steht und nicht darunter. Der Innenabstand
+   links macht der Klinke Platz: 20px Fensterrand + 44px Knopf + 8px Luft, abzueglich
+   der 16px, die die Leiste selbst schon einrueckt. */
 .onda-brand {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  min-height: 32px;
+  min-height: var(--topbar-height);
+  padding-left: 56px;
 }
 .onda-brand .onda-wordmark {
   flex: 1;
@@ -1144,9 +1076,6 @@ body.zen #title:focus { opacity: 1; }
   letter-spacing: var(--tracking-tight);
   color: var(--text-primary);
 }
-.onda-brand #sidebarCollapse { flex: none; }
-
-.onda-side-material { margin-top: var(--space-1); }
 
 .onda-side-footer .onda-side-user {
   flex: 1;
@@ -1268,8 +1197,23 @@ body.zen #title:focus { opacity: 1; }
   box-shadow: var(--shadow-glow);
 }
 
-#sidebarReopen { flex: none; }
-#sidebarReopen[hidden] { display: none; }
+/* DIE KLINKE DER SEITENLEISTE BLEIBT, WO SIE IST — das Spiegelbild des Orbs.
+   Sie sprang vorher um 183px zur Seite und 14px nach oben, weil es zwei Knoepfe in
+   zwei verschiedenen Kaesten waren: der eine an der rechten Innenkante der 264px
+   breiten Leiste, der andere am linken Rand der Topbar; dazu zwei verschiedene
+   Hoehenbaender (20px Leistenpolster gegen 56px Topbar) und ein Enthaltungsblock,
+   der sich beim Einklappen selbst um die volle Leistenbreite verschiebt.
+   Am Fenster verankert kann keine der drei Ursachen ihn noch bewegen. */
+.onda-topbar__lead {
+  position: fixed;
+  top: 0;
+  left: var(--space-5);
+  /* Ueber dem Agentenfenster (45), unter Menues und Overlays. */
+  z-index: 47;
+  height: var(--topbar-height);
+  display: flex;
+  align-items: center;
+}
 
 #editorView #scroll {
   min-width: 0;
@@ -1299,14 +1243,13 @@ body.zen #title:focus { opacity: 1; }
    Es gibt jetzt genau eine Regel, in onda-shell.css. Zwei Regeln um dieselbe Breite
    waren die eigentliche Ursache — nicht der eine oder andere Wert. */
 
+/* Dieselbe Falle wie oben bei #page, nur eine Etage tiefer: onda-shell.css hat fuer
+   #title und die Schreibspalte dieselben Selektoren bei gleicher Spezifitaet und wird
+   spaeter geladen — es gewann also ohnehin drueben. Was hier stand (30px, --fw-semibold,
+   16.5px, width:100%), war wirkungslos und las sich trotzdem wie die geltende Regel.
+   Uebrig bleibt genau das, was onda-shell.css NICHT setzt. */
 #editorView #title {
-  font-family: var(--font-sans);
-  font-size: 30px;
-  font-weight: var(--fw-semibold);
-  line-height: 1.2;
-  letter-spacing: var(--tracking-tight);
   color: var(--text-primary);
-  margin-bottom: 20px;
 }
 
 #editorView #title::placeholder,
@@ -1315,11 +1258,7 @@ body.zen #title:focus { opacity: 1; }
 }
 
 #editorView #editor .ProseMirror {
-  width: 100%;
-  font-family: var(--font-sans);
-  font-size: 16.5px;
-  line-height: 1.7;
-  letter-spacing: 0;
+  letter-spacing: var(--tracking-normal);
   color: var(--text-primary);
   caret-color: var(--accent);
 }
@@ -1618,8 +1557,10 @@ body.zen #title:focus { opacity: 1; }
   letter-spacing: 0;
 }
 
+/* Der Fokusring genuegt. Eine zusaetzlich eingefaerbte Kante war doppelt gemoppelt und
+   brachte das Blau ein zweites Mal ins Fenster. */
 .agent-chat-input:focus {
-  border-color: var(--accent);
+  border-color: var(--border-strong);
   outline: 2px solid transparent;
   box-shadow: var(--shadow-focus);
 }
@@ -1826,9 +1767,15 @@ body.zen #title:focus { opacity: 1; }
 
 
 
+/* Der Oeffner des Menues steht seit dem 7. August 2026 IM Struktur-Fenster
+   ("Baustein hinzufuegen"). Also muss das Menue UEBER dem Fenster liegen, und der
+   Fensterhintergrund (.onda-dialog-scrim) liegt bei 64 — 65 ist also die kleinste
+   Zahl, die traegt. Sie stand einmal auf 63: das Menue erschien, war zu sehen, und
+   der Mausklick lief trotzdem in den Hintergrund. Beide haengen als Geschwister an
+   #editorView, es entscheidet also allein diese Zahl. */
 .semantic-insert-menu {
   position: fixed;
-  z-index: 55;
+  z-index: 65;
   width: 214px;
   padding: 5px;
   display: flex; flex-direction: column; gap: 1px;
@@ -1869,12 +1816,111 @@ body.zen #title:focus { opacity: 1; }
   animation: ondaHintIn var(--dur-normal) var(--ease-out);
 }
 
+/* DIE BLASE SITZT AM ORB — und der Sitz ist keine Schaetzung, sondern gerechnet.
+   .onda-topbar__aside steht fest bei right: var(--space-5), ist var(--topbar-height)
+   hoch und zentriert seine Kinder; #ondaAura ist das letzte Kind und 44px gross. Also
+   liegt die Tastflaeche des Orbs bei right = 20px und top = (56 - 44) / 2 = 6px.
+   Genau dort liegen die beiden Kanten der Blase, und daraus folgt der Sitzradius
+   zwingend: 22px, der Kreis, der dem Orb-Knopf einbeschrieben ist. */
+#editorView {
+  --orb-tastflaeche: 44px;
+  --blase-rechts: var(--space-5);
+  --blase-oben: calc((var(--topbar-height) - var(--orb-tastflaeche)) / 2);
+  --blase-breite: min(380px, calc(100vw - 2 * var(--space-5)));
+  --blase-hoehe: min(560px, calc(100dvh - var(--blase-oben) - var(--space-5)));
+  /* Derselbe Schatten wie --shadow-lg, nur in der Schreibweise, die einer Silhouette
+     folgen kann statt einem Rechteck. Die Zahlen muessen mit --shadow-lg
+     uebereinstimmen — onda-design-contract.test.mjs nagelt das fest. */
+  --blase-schatten: drop-shadow(0 4px 8px rgba(28, 26, 23, 0.06)) drop-shadow(0 16px 32px rgba(28, 26, 23, 0.1));
+}
+
+[data-theme="dark"] #editorView {
+  --blase-schatten: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.35)) drop-shadow(0 16px 32px rgba(0, 0, 0, 0.45));
+}
+
 #agentWidget {
-  top: 68px;
-  height: min(560px, calc(100dvh - 104px));
+  top: var(--blase-oben);
+  right: var(--blase-rechts);
+  width: var(--blase-breite);
+  height: var(--blase-hoehe);
+  max-height: var(--blase-hoehe);
   min-height: 280px;
   display: flex;
   flex-direction: column;
+}
+
+/* Die Kontur liegt UNTER dem Fenster (45) und UEBER dem Blatt, der Orb darueber (46).
+   So bleibt der Ursprung sichtbar, waehrend die Blase aus ihm herauswaechst. */
+#ondaBlase {
+  --blase-an: 1;
+  position: fixed;
+  z-index: 44;
+  top: var(--blase-oben);
+  right: var(--blase-rechts);
+  width: var(--blase-breite);
+  height: var(--blase-hoehe);
+  overflow: visible;
+  pointer-events: none;
+  filter: var(--blase-schatten);
+}
+
+/* Pflicht: die UA-Regel [hidden]{display:none} steht in der HTML-Stilvorlage und
+   greift bei einem Element aus dem SVG-Namensraum nicht verlaesslich. */
+#ondaBlase[hidden] { display: none; }
+
+.onda-blase__pfad {
+  fill: var(--bg-surface);
+  stroke: var(--border-subtle);
+  stroke-width: 1;
+}
+
+/* Sobald die Kontur wirklich zeichnet, gibt das Fenster seine eigene Flaeche ab —
+   sonst saehe man zwei Formen uebereinander statt einer. Der Rahmen bleibt 1px breit
+   und wird nur unsichtbar, damit der Kasten seine Masse behaelt und Kontur und Inhalt
+   nicht um einen Pixel auseinanderlaufen. border-radius bleibt stehen: ohne JS ist
+   #agentWidget genau das rechteckige Fenster von vorher.
+
+   animation: none ist der Punkt, den man garantiert uebersieht — ondaHintIn verschiebt
+   den ganzen Kasten um 6px und koppelte den Sitz fuer 240ms vom Orb ab. */
+#agentWidget.hat-kontur {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  animation: none;
+  /* Der Sitz belegt die oberen 44px der rechten Ecke (2 x 22px). Die Kopfzeile faengt
+     darunter an, damit der Schliessen-Knopf nicht in die Tastflaeche des Orbs ragt. */
+  padding-top: 44px;
+}
+
+/* Waehrend des Wachsens legt die wachsende Kante den Inhalt frei. Er steht von Bild 1
+   an in voller Endgroesse da — ohne Zuschnitt haenge er unten aus der noch kleinen
+   Blase heraus. clipPathUnits="userSpaceOnUse" rechnet ab der Border-Box des
+   schneidenden Elements, und Fenster und Kontur teilen sich exakt denselben Kasten. */
+#agentWidget.waechst { clip-path: url(#ondaBlaseSchnitt); }
+
+/* Der Inhalt landet 60ms VOR der Flaeche: erst ist der Text da, dann kommt die Flaeche
+   zur Ruhe. Der Inhalt ist die Sache, die Flaeche nur ihr Traeger. Animiert werden die
+   Kinder und nicht das Fenster selbst — ein translate am Fenster verschoebe auch den
+   Zuschnitt und koppelte ihn von der Kontur ab. */
+#agentWidget.waechst > * {
+  animation: onda-blase-inhalt var(--dur-quick) var(--ease-out) var(--dur-fast) backwards;
+}
+
+@keyframes onda-blase-inhalt {
+  from { opacity: 0; transform: translateY(-8px); }
+}
+
+/* Fassung B des Abgangs (data-blase-abgang="b" an <html>): der Inhalt verblasst mit
+   der Flaeche, statt in einem Bild zu verschwinden. --ease-standard und nicht
+   --ease-out, weil --ease-out den Text in den ersten 40ms wegnimmt — dann waere die
+   Fassung von Fassung A nicht mehr zu unterscheiden, und die Wahl waere keine.
+   Fassung A ist voreingestellt; angesehen wird am laufenden Programm, nicht ueberlegt. */
+#agentWidget.faellt-zurueck > * {
+  animation: onda-blase-abgang var(--dur-quick) var(--ease-standard) forwards;
+}
+
+@keyframes onda-blase-abgang {
+  to { opacity: 0; }
 }
 
 #evidenceWindow {
@@ -1914,22 +1960,44 @@ body.zen #title:focus { opacity: 1; }
   padding: var(--space-3) var(--space-6) var(--space-6);
 }
 
+/* Dasselbe Material wie der Knopf daneben — beide sind Glas auf derselben Ebene, und
+   sie sollen wie EIN Bedienstueck wirken, nicht wie Feld plus Schaltflaeche. */
 .agent-widget-form .agent-chat-input {
   height: 38px;
   border-radius: var(--radius-pill);
   padding: 6px 14px;
+  border-color: transparent;
+  background: var(--onda-material);
+  box-shadow: var(--onda-material-kante);
+  backdrop-filter: blur(20px) saturate(1.6);
+  -webkit-backdrop-filter: blur(20px) saturate(1.6);
 }
 
+/* DER SENDEN-KNOPF TRAEGT KEINE FARBE MEHR.
+   Er war der einzige blaue Fleck im ganzen Fenster und zog den Blick auf sich, obwohl
+   er nichts sagt — man weiss auch ohne Farbe, wo man abschickt. Jakob am 8.8.2026:
+   "es soll ohne farbe sein und mehr im stil von apple tahoe".
+
+   An seine Stelle tritt Material: eine durchscheinende Flaeche mit haarfeiner Kante und
+   einem hellen Innenrand oben. Das ist die Tahoe-Logik — Bedienelemente sind Glas, nicht
+   Anstrich, und Farbe bleibt der Bedeutung vorbehalten. Die Aura ist die einzige Stelle,
+   die im Haus noch faerben darf. */
 .agent-widget-form .agent-chat-send {
   border-radius: var(--radius-pill);
-  background: var(--accent);
-  color: var(--on-accent);
+  background: var(--onda-material);
+  color: var(--text-secondary);
+  box-shadow: var(--onda-material-kante);
+  backdrop-filter: blur(20px) saturate(1.6);
+  -webkit-backdrop-filter: blur(20px) saturate(1.6);
 }
 
+/* Naeher kommen heisst dichter werden, nicht bunter. */
 .agent-widget-form .agent-chat-send:hover {
-  background: var(--accent-hover);
-  color: var(--on-accent);
+  background: var(--onda-material-dicht);
+  color: var(--text-primary);
 }
+
+.agent-widget-form .agent-chat-send:active { transform: scale(.96); }
 
 .unplaced-findings {
   flex: none;
@@ -1951,9 +2019,13 @@ body.zen #title:focus { opacity: 1; }
   font: 10.5px/1.35 var(--sans);
 }
 
+/* Der Entscheidungsverlauf lag als hellerer Block im Fenster — ein Balken, der eine
+   Wichtigkeit behauptete, die er nicht hat. Eine Haarlinie trennt genauso gut und
+   traegt kein Gewicht. */
 .agent-decisions {
   flex: none;
-  background: var(--surface-2);
+  background: transparent;
+  border-block: 1px solid var(--border-subtle);
 }
 
 .agent-decisions-toggle {
@@ -2207,7 +2279,8 @@ body.zen #title:focus { opacity: 1; }
 
 #saveAlert {
   position: fixed;
-  z-index: 60;
+  /* Ganz oben: eine Speicherwarnung darf nie hinter einem Fenster verschwinden. */
+  z-index: 66;
   left: 50%;
   bottom: 18px;
   max-width: min(420px, calc(100vw - 32px));
@@ -2277,6 +2350,11 @@ body.zen #title:focus { opacity: 1; }
   }
   #editorView.is-sidebar-collapsed::before { opacity: 0; }
 
+  /* Die Leiste ist hier ein fester Auszug (60) und der Abdunkler liegt bei 55 —
+     die Klinke muss ueber beiden bleiben, sonst waere sie ausgeklappt nicht mehr
+     zu treffen. */
+  .onda-topbar__lead { z-index: 61; }
+
   .onda-editor-col { width: 100%; min-width: 0; }
 
   #editorView #page { width: 100%; padding: 44px 24px 34vh; }
@@ -2291,6 +2369,20 @@ body.zen #title:focus { opacity: 1; }
   }
   #agentWidget { top: 62px; height: 70dvh; min-height: 0; }
   #evidenceWindow { top: 62px; }
+
+  /* Hier ist das Fenster fast fensterbreit und sitzt bei top:62px — es kann den Orb
+     gar nicht mehr treffen, und eine Kerbe in der Ecke saehe wie ein Fehler aus statt
+     wie eine Herkunft. Also keine Kontur; das Fenster ist wieder es selbst.
+     --blase-an: 0 ist der Schalter, an dem das JavaScript es erkennt — so steht der
+     Umschaltpunkt an genau EINER Stelle, hier im Stil. */
+  #ondaBlase { --blase-an: 0; display: none; }
+  #agentWidget.hat-kontur {
+    background: var(--surface);
+    border-color: var(--border-subtle);
+    box-shadow: var(--shadow-lg);
+    padding-top: 0;
+  }
+  #agentWidget.waechst { clip-path: none; }
 
   .semantic-insert-menu { width: min(214px, calc(100vw - 20px)); }
   .local-finding,
@@ -2334,9 +2426,11 @@ body.zen #title:focus { opacity: 1; }
   #ondaSidebar,
   .onda-topbar,
   #agentWidget,
+  #ondaBlase,
   #evidenceWindow,
   #localAgentLayer,
   .semantic-insert-menu,
+  .onda-topbar__lead,
   #pvModal,
   #saveAlert,
   #editorView::before {
@@ -2599,12 +2693,16 @@ button.onda-aura:focus-visible {
   gap: var(--space-2);
   padding: var(--space-4) 0 0;
 }
+/* Keine Versalien mehr, im ganzen Programm nicht (Jakob, 7.8.2026). Die Rubrik
+   traegt jetzt Gewicht statt Grossschreibung; --tracking-wider (0.08em) gab es nur,
+   um Versalien lesbar zu halten, und auf Kleinbuchstaben sieht es aus wie ein
+   Satzfehler. 0.02em laesst dem kleinen Grad trotzdem Luft. Die Farbe bleibt, wie sie
+   war: sie unterscheidet Abschnittsbeschriftung von Kleingedrucktem. */
 .onda-eyebrow {
   margin: 0;
   color: var(--text-secondary);
-  font: var(--type-caption);
-  letter-spacing: var(--tracking-wider);
-  text-transform: uppercase;
+  font: var(--type-rubrik);
+  letter-spacing: var(--tracking-wide);
 }
 
 /* Der Weg zurueck steht jetzt in der Fusszeile, neben Erscheinung und Einstellungen.
@@ -2654,38 +2752,84 @@ button.onda-aura:focus-visible {
 .onda-wordmark-btn:hover { color: var(--text-secondary); }
 .onda-wordmark-btn:focus-visible { outline: 2px solid transparent; box-shadow: var(--shadow-focus); border-radius: var(--radius-control); }
 
-/* Projektverständnis-Kachel */
-#pvCard {
+/* ---------- Die Kopfzeile eines Abschnitts: zwei Gesten, klar getrennt ----------
+   Klick auf den NAMEN oeffnet das Fenster, Klick auf den PFEIL klappt den Baum auf
+   und zu. Beide sind eigene Knoepfe mit 44px Trefferflaeche, beide tastaturbedienbar.
+   Ein einziger Knopf, der beides taete, koennte keins von beidem ankuendigen —
+   aria-haspopup und aria-expanded widersprechen sich am selben Element. */
+.onda-side-kopf {
   display: flex;
-  flex-direction: column;
+  align-items: center;
   gap: var(--space-1);
-  width: 100%;
-  padding: var(--space-5);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-card);
-  background: var(--bg-surface);
+}
+
+/* Ohne Versalien muss die Auszeichnung aus Gewicht und Farbe kommen, sonst liest sich
+   die Abschnittsbeschriftung wie ein Listeneintrag. Die Eintraege darunter sind
+   kleiner (--type-caption) und zurueckgenommener — der Abstand traegt die Rubrik. */
+.onda-side-name {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
   box-shadow: none;
+  color: var(--text-primary);
+  font: var(--type-label);
+  letter-spacing: var(--tracking-normal);
   text-align: left;
   cursor: pointer;
-  transition: background var(--dur-quick) var(--ease-out);
+  transition: color var(--dur-quick) var(--ease-out), background var(--dur-quick) var(--ease-out);
 }
-#pvCard:hover { background: var(--bg-hover); box-shadow: none; }
-#pvCard:focus-visible { outline: 2px solid transparent; box-shadow: var(--shadow-focus); }
-.onda-pv-card-title {
-  color: var(--text-primary);
-  font: var(--fw-semibold) var(--text-base)/1.35 var(--font-sans);
-  letter-spacing: var(--tracking-tight);
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+.onda-side-name:hover { color: var(--text-primary); background: var(--bg-hover); }
+.onda-side-name:focus-visible { outline: 2px solid transparent; box-shadow: var(--shadow-focus); }
+
+.onda-side-pfeil {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition: color var(--dur-quick) var(--ease-out), background var(--dur-quick) var(--ease-out);
 }
-.onda-pv-card-claim {
+.onda-side-pfeil:hover { color: var(--text-secondary); background: var(--bg-hover); }
+.onda-side-pfeil:focus-visible { outline: 2px solid transparent; box-shadow: var(--shadow-focus); }
+/* Keine Feder in funktionaler UI: --ease-out, und ueber --dur-quick greift
+   prefers-reduced-motion von allein. */
+.onda-side-pfeil svg { transition: transform var(--dur-quick) var(--ease-out); }
+.onda-side-pfeil[aria-expanded="true"] svg { transform: rotate(90deg); }
+
+/* Der Satz unter dem Namen: was das Projekt gerade sein will. Kein Knopf — wer ihn
+   aendern will, oeffnet das Fenster darueber. */
+.onda-side-claim {
+  margin: 0;
+  padding: 0 var(--space-2);
   color: var(--text-secondary);
   font: var(--type-caption);
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
-#pvCard.is-empty .onda-pv-card-title { color: var(--text-tertiary); }
+/* „Noch nicht festgelegt" ist keine Auskunft, sondern ihr Fehlen — also tritt der Satz
+   einen Farbschritt zurueck. Die Klasse sitzt am Satz selbst (renderProjectUnderstanding-
+   Card); als Geschwister-Regel am Knopf konnte sie nie greifen. */
+.onda-side-claim.is-empty { color: var(--text-tertiary); }
 
 /* Struktur-Liste + Hinweis-Punkt */
 .structure-nav-list { display: flex; flex-direction: column; gap: 0; }
+/* Muss sein: display:flex schlaegt das display:none, das der Browser [hidden] gibt —
+   ohne diese Zeile klappte der Pfeil den Baum zu, und man saehe es nicht. */
+.structure-nav-list[hidden] { display: none; }
 .structure-nav-empty { margin: 0; color: var(--text-tertiary); font: var(--type-body); }
 .block-preview-hint {
   position: absolute;
@@ -2701,28 +2845,114 @@ button.onda-aura:focus-visible {
 /* Punkt braucht Platz neben dem Rollen-Label */
 .block-preview.has-hint .block-preview-role { padding-right: var(--space-4); }
 
-/* Material-Eintrag */
-#materialSources {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-  width: 100%;
-  padding: var(--space-3) var(--space-4);
-  border-bottom: 1px solid var(--border-subtle);
-  border-radius: var(--radius-none);
-  background: transparent;
-  box-shadow: none;
-  color: var(--text-primary);
-  font: var(--type-label);
-  text-align: left;
-  cursor: pointer;
-  transition: background var(--dur-quick) var(--ease-out);
-}
-#materialSources:hover { background: var(--bg-sunken); }
-#materialSources:focus-visible { outline: 2px solid transparent; box-shadow: var(--shadow-focus); }
+/* Quellen: der Name traegt die Zahl des Bestands. Das ist erlaubt und gemeint —
+   docs/PHILOSOPHIE.md §1 verbietet Zahlen ueber ANMERKUNGEN, nicht ueber Material.
+   Wie viele Quellen im Projekt liegen, ist eine Auskunft und keine Hausaufgabe. */
 .onda-material-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .onda-material-count { flex: none; }
+
+/* ---------- Der Baum unter einem Abschnitt ----------
+   Quellen stehen nach Thema, die Themen bildet und benennt der Agent; umbenennen,
+   verschieben und neue Gruppen anlegen kann der Mensch im Quellen-Fenster. */
+.onda-side-baum { display: flex; flex-direction: column; gap: 0; }
+.onda-side-baum[hidden] { display: none; }
+.onda-baum-thema { display: flex; flex-direction: column; }
+
+/* Eine Gruppenzeile traegt dieselben zwei Gesten wie die Abschnittszeile darueber,
+   eine Ebene tiefer: PFEIL klappt auf, NAME oeffnet das Fenster. Beide Treffflaechen
+   messen 44px. Leichter als die Abschnittszeile wird sie nicht durch weniger Hoehe,
+   sondern durch Schriftgrad und Farbe — sonst waere sie mit dem Finger nicht zu
+   treffen, und getrennte Gesten waeren nur auf dem Papier getrennt. */
+.onda-baum-kopf { display: flex; align-items: center; gap: var(--space-05); }
+.onda-baum-pfeil {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition: color var(--dur-quick) var(--ease-out), background var(--dur-quick) var(--ease-out);
+}
+.onda-baum-pfeil:hover { color: var(--text-secondary); background: var(--bg-hover); }
+.onda-baum-pfeil:focus-visible { outline: 2px solid transparent; box-shadow: var(--shadow-focus); }
+/* Gedreht wird per CSS statt mit einem zweiten Symbol — ein Symbol, zwei Zustaende.
+   Keine Feder in funktionaler UI: --ease-out, und ueber --dur-quick greift
+   prefers-reduced-motion von allein. */
+.onda-baum-pfeil svg { transition: transform var(--dur-quick) var(--ease-out); }
+.onda-baum-pfeil[aria-expanded="true"] svg { transform: rotate(90deg); }
+.onda-baum-name {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-secondary);
+  font: var(--type-rubrik);
+  letter-spacing: var(--tracking-normal);
+  text-align: left;
+  cursor: pointer;
+  transition: color var(--dur-quick) var(--ease-out), background var(--dur-quick) var(--ease-out);
+}
+.onda-baum-name:hover { color: var(--text-primary); background: var(--bg-hover); }
+.onda-baum-name:focus-visible { outline: 2px solid transparent; box-shadow: var(--shadow-focus); }
+.onda-baum-name-text { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+
+/* Die Kinder sitzen unter dem Pfeil, der sie oeffnet — die Einrueckung ist genau
+   dessen Breite, damit der Blick die Linie wiederfindet. */
+.onda-baum-kinder {
+  display: flex;
+  flex-direction: column;
+  padding-left: var(--space-6);
+  border-left: 1px solid var(--border-subtle);
+  margin-left: calc(44px / 2);
+}
+.onda-baum-kinder[hidden] { display: none; }
+/* Dieselbe Regel eine Ebene tiefer: die Gruppenzeile darueber ist die Beschriftung
+   (500, secondary), die Quelle darunter der Eintrag — 400 und einen Farbschritt
+   zurueck. Ohne den Farbschritt trennte die beiden nur das Gewicht. */
+.onda-baum-quelle {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  /* 44px wie jede andere Bedienflaeche im Haus. Sie stand einmal auf 32px — ein echter
+     Knopf (er oeffnet das Quellen-Fenster), der mit dem Finger nicht zu treffen war.
+     Leichter als die Gruppenzeile darueber wird sie durch Schriftgrad und Farbe, nicht
+     durch eine kleinere Trefferflaeche. */
+  min-height: 44px;
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-tertiary);
+  font: var(--type-caption);
+  text-align: left;
+  cursor: pointer;
+  transition: color var(--dur-quick) var(--ease-out), background var(--dur-quick) var(--ease-out);
+}
+.onda-baum-quelle:hover { color: var(--text-primary); background: var(--bg-hover); }
+.onda-baum-quelle:focus-visible { outline: 2px solid transparent; box-shadow: var(--shadow-focus); }
+/* Der Wortlaut steht in einer eigenen Spanne, wie bei der Gruppenzeile darueber: in
+   einem Flex-Kasten greift text-overflow am anonymen Kind nicht, der Titel liefe dann
+   ueber den Rand hinaus statt sauber abzubrechen. */
+.onda-baum-quelle-text { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.onda-baum-leer {
+  margin: 0;
+  padding: var(--space-1) var(--space-2);
+  color: var(--text-tertiary);
+  font: var(--type-caption);
+}
 
 /* Fußzeile */
 .onda-side-footer {
@@ -2733,18 +2963,21 @@ button.onda-aura:focus-visible {
   padding: var(--space-5) 0 0;
 }
 
-/* Onda-Dialog (Projektverständnis / Quellen) */
+/* Onda-Dialog (Projektverständnis / Struktur / Quellen) */
 .onda-dialog-scrim {
   position: fixed;
   inset: 0;
-  z-index: 60;
+  /* Ueber der ausgefahrenen Seitenleiste (60) und ueber der festen Klinke (47/61). */
+  z-index: 64;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: var(--space-6);
   background: rgba(28, 26, 23, 0.4);
-  backdrop-filter: blur(3px);
-  -webkit-backdrop-filter: blur(3px);
+  /* 1px, nicht 3px: der Text soll am Rand SICHTBAR bleiben, nicht zu Brei werden.
+     Man schaut nur nach und kommt gleich zurueck — das muss man sehen koennen. */
+  backdrop-filter: blur(1px);
+  -webkit-backdrop-filter: blur(1px);
   animation: onda-dialog-fade var(--dur-normal) var(--ease-out);
 }
 :root[data-theme="dark"] .onda-dialog-scrim { background: rgba(0, 0, 0, 0.55); }
@@ -2768,9 +3001,15 @@ button.onda-aura:focus-visible {
   gap: var(--space-3);
   padding: var(--space-6) var(--space-6) var(--space-4);
 }
+/* Der Name des Fensters. Er stand bis zum 7.8.2026 auf 18px — einem Grad, den das
+   Haus gar nicht kennt (12/15/21/40) — und war damit KLEINER als die Ueberschrift der
+   rechten Spalte darunter (21px). "Aufgabe" las sich groesser als
+   "Projektverstaendnis": die Hierarchie stand auf dem Kopf. Jetzt traegt der
+   Fenstername den Titel-Grad des Hauses, und die Ueberschrift darunter tritt eine
+   Stufe zurueck (siehe .onda-blaetter__tiefe-titel). */
 .onda-dialog-title {
   margin: 0;
-  font: var(--fw-bold) 18px/1.3 var(--font-sans);
+  font: var(--type-title);
   letter-spacing: var(--tracking-tight);
 }
 .onda-dialog-body {
@@ -2781,6 +3020,192 @@ button.onda-aura:focus-visible {
   gap: var(--space-4);
 }
 @keyframes onda-dialog-fade { from { opacity: 0; } to { opacity: 1; } }
+
+/* ---------- Die Blaetter-Vorlage: EIN Fenster fuer alle drei Abschnitte ----------
+   Grosses schwebendes Fenster ueber dem Text; der Text bleibt links und rechts am
+   Rand sichtbar und abgedunkelt, damit man weiss: ich schaue nur nach und bin gleich
+   zurueck. Links die Eintraege, rechts der vertiefende Text zum gewaehlten Eintrag —
+   und rechts darf ueberall hineingeschrieben werden. */
+.onda-dialog-scrim--breit { padding: var(--space-9) var(--space-10); }
+.onda-dialog--breit {
+  width: min(1040px, 100%);
+  height: min(720px, 100%);
+  max-height: none;
+}
+.onda-blaetter {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
+  /* hebt die Polsterung von .onda-dialog-body auf — jede Spalte polstert selbst */
+  padding: 0;
+  gap: 0;
+}
+/* Die linke Spalte besteht aus zwei Stuecken: der rollenden Liste und einem festen
+   Streifen darunter. Bis zum 7.8.2026 hing der Fuss am ENDE der Liste (margin-top:auto)
+   und rollte mit ihr weg — „Baustein hinzufuegen" stand beim Oeffnen auf y=1391 in
+   einem Fenster, das bei 860 endet, und war ohne Scrollen nicht zu sehen. Derselbe Fuss
+   klebte im Quellen-Fenster (kurze Liste) unten am Rand: ein Bedienelement an zwei
+   Orten, je nach Inhalt. Jetzt haengt er am Panel und steht immer an derselben Stelle. */
+.onda-blaetter__spalte {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border-subtle);
+}
+.onda-blaetter__liste {
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-05);
+  overflow-y: auto;
+  padding: 0 var(--space-4) var(--space-4);
+}
+.onda-blaetter__tiefe {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  overflow-y: auto;
+  padding: 0 var(--space-6) var(--space-6);
+}
+.onda-blaetter__eintrag {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: 44px;
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-secondary);
+  /* Ein Eintrag ruht bei 400. Mittleres Gewicht ist im ganzen Programm reserviert fuer
+     zweierlei: fuer eine Beschriftung und fuer das, was gerade gewaehlt ist. Stuenden
+     alle Eintraege auf 500, koennte der gewaehlte sich davon nicht mehr abheben — und
+     die Gruppenbeschriftung darueber auch nicht. */
+  font: var(--type-body);
+  text-align: left;
+  cursor: pointer;
+  transition: color var(--dur-quick) var(--ease-out), background var(--dur-quick) var(--ease-out);
+}
+.onda-blaetter__eintrag:hover { color: var(--text-primary); background: var(--bg-hover); }
+.onda-blaetter__eintrag:focus-visible { outline: 2px solid transparent; box-shadow: var(--shadow-focus); }
+.onda-blaetter__eintrag[aria-current="true"] {
+  color: var(--text-primary);
+  background: var(--bg-active);
+  font-weight: var(--fw-medium);
+}
+/* Laeuft gerade: der Knopf bleibt stehen, wird aber blass und nimmt keinen zweiten
+   Auftrag an. Ein verschwindender Knopf liesse den Blick suchen, wo eben noch einer war. */
+.onda-blaetter__eintrag:disabled { color: var(--text-tertiary); cursor: default; }
+.onda-blaetter__eintrag:disabled:hover { background: transparent; }
+.onda-blaetter__eintrag-anriss {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  /* Secondary, nicht tertiary: auf dem hinterlegten Grund des gewaehlten Eintrags
+     reisst tertiary bei 12px den Kontrast (axe color-contrast, gemessen 4.45:1). */
+  color: var(--text-secondary);
+  font: var(--type-caption);
+}
+.onda-blaetter__gruppe {
+  margin: var(--space-4) 0 var(--space-1);
+  padding: 0 var(--space-3);
+  color: var(--text-tertiary);
+  font: var(--type-rubrik);
+  letter-spacing: var(--tracking-normal);
+}
+/* Eine Gruppe im Quellen-Fenster ist ein EINTRAG und keine tote Rubrik: nur so kommt
+   man an ihren Namen, an den Satz darunter und an den Weg, sie wieder aufzuloesen.
+   Sie sieht trotzdem wie eine Rubrik aus — Abstand darueber, ihre Quellen eingerueckt
+   darunter, damit die Ebene ohne Erklaerung lesbar bleibt. */
+.onda-blaetter__eintrag--gruppe {
+  margin-top: var(--space-4);
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-05);
+  color: var(--text-primary);
+  /* Sie beschriftet die Quellen unter ihr — also 500 gegen deren 400, und dazu der
+     Farbschritt von primary auf secondary. */
+  font-weight: var(--fw-medium);
+}
+.onda-blaetter__eintrag--gruppe:first-child { margin-top: 0; }
+.onda-blaetter__eintrag--kind {
+  margin-left: var(--space-4);
+  color: var(--text-secondary);
+  font: var(--type-caption);
+}
+/* Der Weg, eine Gruppe wieder loszuwerden, steht zurueck: er ist selten gemeint und
+   soll nicht mit den Feldern darueber um Aufmerksamkeit streiten. Keine Warnfarbe —
+   aufloesen loescht nichts, die Quellen bleiben. */
+.onda-blaetter__eintrag--still { color: var(--text-tertiary); }
+.onda-blaetter__eintrag--still:hover { color: var(--text-secondary); }
+/* Der feste Streifen unter der rollenden Liste. Er scrollt nicht mit und steht in jedem
+   der drei Fenster an derselben Stelle — unabhaengig davon, wie lang die Liste ist.
+   :empty faellt weg, damit ein Fenster ohne Fuss keine leere Linie traegt. */
+.onda-blaetter__fuss {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-05);
+  padding: var(--space-2) var(--space-4) var(--space-4);
+  border-top: 1px solid var(--border-subtle);
+}
+.onda-blaetter__fuss:empty { display: none; }
+/* Was gerade geschehen ist, in einem Satz. Vorlesegeraete bekommen ihn immer
+   (role=status); die Augen bekommen ihn zurueckgenommen und ohne Ausrufezeichen. */
+.onda-blaetter__meldung {
+  margin: var(--space-2) 0 0;
+  padding: 0 var(--space-3);
+  color: var(--text-tertiary);
+  font: var(--type-caption);
+}
+.onda-blaetter__meldung[hidden] { display: none; }
+/* Die Quellen einer Gruppe in der rechten Tafel. */
+.onda-quellen-gruppe { display: flex; flex-direction: column; gap: var(--space-1); }
+.onda-quellen-thema-wahl {
+  width: 100%;
+  min-height: 44px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-control);
+  background: var(--bg-app);
+  color: var(--text-primary);
+  font: var(--fw-regular) var(--text-base)/1.5 var(--font-sans);
+  cursor: pointer;
+}
+.onda-quellen-thema-wahl:focus-visible { outline: none; border-color: var(--accent); box-shadow: var(--shadow-focus); }
+/* Die Ueberschrift der rechten Spalte benennt den gewaehlten Eintrag — sie steht also
+   UNTER dem Fensternamen und muss das auch zeigen. Das Haus hat vier Grade; unter 21px
+   kommt 15px, und den Abstand zum Fliesstext derselben Groesse traegt dann das Gewicht:
+   700 fuer die Ueberschrift, 500 fuer den Feldnamen, 400 fuer den Text. Das ist genau
+   das, was die Markendatei verlangt — "Hierarchie ueber Gewicht + Farbe, nicht ueber
+   weitere Grade". */
+.onda-blaetter__tiefe-titel {
+  margin: 0;
+  color: var(--text-primary);
+  font: var(--fw-bold) var(--text-base)/var(--leading-snug) var(--font-sans);
+  letter-spacing: var(--tracking-normal);
+}
+.onda-blaetter__tiefe-hinweis {
+  margin: 0;
+  color: var(--text-tertiary);
+  font: var(--type-caption);
+}
+
+@media (max-width: 880px) {
+  .onda-dialog-scrim--breit { padding: var(--space-4); }
+  .onda-dialog--breit { height: min(88dvh, 100%); }
+  .onda-blaetter { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, auto) minmax(0, 1fr); }
+  .onda-blaetter__spalte { max-height: 46%; border-right: 0; border-bottom: 1px solid var(--border-subtle); }
+}
 @media (prefers-reduced-motion: reduce) { .onda-dialog-scrim, .onda-dialog { animation: none; } }
 
 .onda-pv-field { display: flex; flex-direction: column; gap: var(--space-1); }
@@ -2827,21 +3252,32 @@ button.onda-aura:focus-visible {
   flex-direction: column;
   gap: var(--space-3);
 }
+/* Die Abschnittsueberschriften der Quellenbibliothek sind DIESELBE Ueberschrift wie in
+   den anderen beiden Fenstern (.onda-blaetter__tiefe-titel). Sie standen bis zum
+   7.8.2026 auf 500 — eine Stufe leichter als dieselbe Rolle nebenan, und damit las sich
+   das Quellen-Fenster wie eine zweite Handschrift im selben Rahmen. Jakobs Maßstab war
+   „ein Overlay-Template für alle drei". */
 .source-section-title,
 .source-reader-title {
   margin: 0;
   color: var(--text-primary);
-  font: var(--fw-semibold) var(--text-base)/1.35 var(--font-sans);
+  font: var(--fw-bold) var(--text-base)/var(--leading-snug) var(--font-sans);
+  letter-spacing: var(--tracking-normal);
 }
-.source-library-list { display: flex; flex-direction: column; gap: var(--space-3); }
+.source-library-list { display: flex; flex-direction: column; gap: 0; }
+/* Eine Quelle ist eine Zeile, kein Kaertchen. In den anderen beiden Fenstern liegt
+   nichts uebereinander — die Gliederung traegt die Linie, nicht ein eigener Grund. */
 .source-library-item {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  padding: var(--space-5) var(--space-6);
-  border-radius: var(--radius-card);
-  background: var(--surface-2);
+  padding: var(--space-4) 0;
+  border-bottom: 1px solid var(--border-subtle);
+  border-radius: var(--radius-none);
+  background: transparent;
+  box-shadow: none;
 }
+.source-library-item:last-child { border-bottom: 0; }
 .source-library-header {
   display: flex;
   align-items: flex-start;
@@ -2873,9 +3309,12 @@ button.onda-aura:focus-visible {
   background: var(--warning-tint);
   color: var(--text-primary);
 }
+/* Die Pruefsumme bleibt lesbar — sie ist der Beleg, dass am Original nichts verrutscht
+   ist. Sie steht aber als Kleingedrucktes da und nicht als graues Kaertchen: 10,5px ist
+   kein Hausgrad, und einen eigenen Grund braucht sie nicht. */
 .source-library-checksum {
-  color: var(--text-secondary);
-  font: var(--fw-regular) 10.5px/1.4 var(--font-mono);
+  color: var(--text-tertiary);
+  font: var(--type-caption);
 }
 .source-bundle-status,
 .source-reader-bundle-status {
@@ -2894,38 +3333,18 @@ button.onda-aura:focus-visible {
   background: var(--warning-tint);
   color: var(--text-primary);
 }
-.source-library-locators { display: flex; flex-wrap: wrap; gap: var(--space-2); }
-.source-locator-open,
-.source-reader-back,
-.source-retract,
-.source-import-submit {
-  width: fit-content;
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-control);
-  background: transparent;
-  color: var(--text-secondary);
-  padding: 6px 10px;
-  cursor: pointer;
-  font: var(--type-label);
-}
-.source-import-submit {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--on-accent);
-}
-.source-locator-open:hover,
-.source-reader-back:hover,
-.source-retract:hover { border-color: var(--border-strong); color: var(--text-primary); background: var(--bg-hover); }
-.source-retract { color: var(--text-primary); }
-.source-locator-open:focus-visible,
-.source-reader-back:focus-visible,
-.source-retract:focus-visible,
-.source-import-submit:focus-visible,
+/* Jede Handlung im Quellen-Fenster ist eine 44px-Zeile — derselbe Baustein wie nebenan
+   (.onda-blaetter__eintrag, im JS gesetzt). Hier standen bis zum 7.8.2026 vier eigene
+   Knopfformen mit 34px Hoehe, zwei davon GEFUELLT in der Akzentfarbe, waehrend in den
+   anderen beiden Fenstern kein einziger Knopf gefuellt ist. Deshalb bleibt hier nur,
+   was der Baustein nicht kennt: die Fundstellen stehen untereinander statt nebeneinander,
+   und der Wartezeiger beim Aufnehmen. */
+.source-library-locators { display: flex; flex-direction: column; gap: var(--space-05); }
 .source-form-control:focus-visible {
   outline: 2px solid transparent;
   box-shadow: var(--shadow-focus);
 }
-.source-import-submit:disabled { opacity: .55; cursor: wait; }
+.source-import-submit:disabled { cursor: wait; }
 .source-import-form {
   padding-top: var(--space-7);
 }
@@ -2933,9 +3352,8 @@ button.onda-aura:focus-visible {
 .source-form-label,
 .source-reader-kicker {
   color: var(--text-secondary);
-  font: var(--type-caption);
-  letter-spacing: var(--tracking-wider);
-  text-transform: uppercase;
+  font: var(--type-rubrik);
+  letter-spacing: var(--tracking-wide);
 }
 .source-form-control {
   width: 100%;
@@ -3045,14 +3463,22 @@ button.onda-aura:focus-visible {
 .research-overview {
   padding-bottom: var(--space-7);
 }
-.research-overview-header,
-.research-run-card,
-.research-path,
-.research-run-header {
+.research-path {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-3);
+}
+/* Untereinander statt nebeneinander: die Handlung ist jetzt eine 44px-Zeile ueber die
+   ganze Spaltenbreite, wie in den anderen beiden Fenstern. Neben einem Textblock
+   stehend saehe sie wieder wie ein eigener Knopftyp aus. */
+.research-overview-header,
+.research-run-card,
+.research-run-header {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-2);
 }
 .research-overview-copy,
 .research-intro,
@@ -3069,11 +3495,15 @@ button.onda-aura:focus-visible {
   flex-direction: column;
   gap: var(--space-2);
 }
+/* Wie die Quellenzeile: eine Linie gliedert, kein Grund. */
 .research-run-card {
-  padding: var(--space-5) var(--space-6);
-  border-radius: var(--radius-card);
-  background: var(--surface-2);
+  padding: var(--space-4) 0;
+  border-bottom: 1px solid var(--border-subtle);
+  border-radius: var(--radius-none);
+  background: transparent;
+  box-shadow: none;
 }
+.research-run-card:last-child { border-bottom: 0; }
 .research-run-card-copy {
   min-width: 0;
   display: flex;
@@ -3091,38 +3521,11 @@ button.onda-aura:focus-visible {
   color: var(--text-secondary);
   font: var(--type-body);
 }
-.research-action,
-.research-primary {
-  width: fit-content;
-  flex: none;
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-control);
-  background: transparent;
-  color: var(--text-secondary);
-  padding: 6px 10px;
-  cursor: pointer;
-  font: var(--type-label);
-}
-.research-primary {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: var(--on-accent);
-}
-.research-action:hover:not(:disabled) {
-  border-color: var(--border-strong);
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-.research-action:focus-visible,
-.research-primary:focus-visible {
-  outline: 2px solid transparent;
-  box-shadow: var(--shadow-focus);
-}
+/* Auch die Recherche-Handlungen sind 44px-Zeilen (.onda-blaetter__eintrag, im JS
+   gesetzt). „Recherche planen" und „Geprüfte Fundstellen übernehmen" waren gefuellte
+   34px-Knoepfe — die einzigen gefuellten Akzentknoepfe in den drei Fenstern. */
 .research-action:disabled,
-.research-primary:disabled {
-  opacity: .5;
-  cursor: not-allowed;
-}
+.research-primary:disabled { cursor: not-allowed; }
 .research-cancel { color: var(--warning); }
 .research-plan-preview {
   display: flex;
@@ -3258,14 +3661,12 @@ button.onda-aura:focus-visible {
 .research-tool-event strong { color: var(--text-secondary); }
 .research-controls {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
+  flex-direction: column;
+  gap: var(--space-05);
   padding-top: var(--space-2);
 }
 
 @media (max-width: 520px) {
-  .research-overview-header,
-  .research-run-card { flex-direction: column; }
   .research-path-list { grid-template-columns: 1fr; }
 }
 
@@ -3340,9 +3741,8 @@ button.onda-aura:focus-visible {
 }
 .memory-kicker {
   color: var(--text-tertiary);
-  font: var(--type-caption);
-  letter-spacing: var(--tracking-wider);
-  text-transform: uppercase;
+  font: var(--type-rubrik);
+  letter-spacing: var(--tracking-wide);
 }
 .memory-intro-copy,
 .memory-empty,
@@ -3513,9 +3913,8 @@ button.onda-aura:focus-visible {
 }
 .argument-kicker {
   color: var(--text-secondary);
-  font: var(--type-caption);
-  letter-spacing: var(--tracking-wider);
-  text-transform: uppercase;
+  font: var(--type-rubrik);
+  letter-spacing: var(--tracking-wide);
 }
 .argument-status {
   margin: 0;
@@ -4031,9 +4430,8 @@ button.onda-aura:focus-visible {
 }
 .language-kicker {
   color: var(--text-secondary);
-  font: var(--type-caption);
-  letter-spacing: var(--tracking-wider);
-  text-transform: uppercase;
+  font: var(--type-rubrik);
+  letter-spacing: var(--tracking-wide);
 }
 .language-status {
   margin: 0;

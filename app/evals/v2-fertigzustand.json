@@ -1442,12 +1442,13 @@
           "id": "DESIGN-06",
           "title": "Die Umgestaltungsentscheidungen sind getroffen",
           "gate": "hard",
-          "automation": "file-inspection",
+          "automation": "integration",
           "given": "docs/REDESIGN-IDEEN.md sammelt Punkte mit Status offen, vereinbart oder verworfen.",
           "when": "Die Umsetzung eines Punktes beginnt.",
           "then": "Dieser Punkt trägt den Status vereinbart oder verworfen mit einer Begründung. Kein Punkt wird umgesetzt, solange er auf offen steht — die Entscheidung liegt beim Nutzer, nicht bei der Umsetzung.",
           "evidence": [
-            "Datei-Prüfung: Statustabelle in docs/REDESIGN-IDEEN.md enthält keinen Eintrag 'open' für einen Punkt, dessen Eval bereits bestanden wird"
+            "Datei-Prüfung: Statustabelle in docs/REDESIGN-IDEEN.md enthält keinen Eintrag 'open' für einen Punkt, dessen Eval bereits bestanden wird",
+            "Frische Messung im selben Lauf: ob ein Punkt umgesetzt ist, wird durch Starten der Gestalt-Prüfung jetzt ermittelt — nicht aus dem Ergebnisstand eines früheren Laufs gelesen"
           ],
           "source": [
             "Anweisung 2026-07-31: erst sammeln, dann umsetzen"

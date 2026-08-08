@@ -10,15 +10,41 @@
 // ausdrücklich „erst sammeln, dann umsetzen". Ohne eine Prüfung, die das nachhält,
 // ist eine solche Anweisung nach zwei Wochen Arbeit nur noch eine Erinnerung.
 //
-// Bis zum 04.08.2026 hatte dieses Eval keine gebundene Prüfung und galt deshalb als
-// unbewiesen. Das war korrekt, solange kein Gestaltungspunkt umgesetzt war. Seit
-// DESIGN-01 bis DESIGN-05 bestehen, hat es etwas zu prüfen.
+// WOHER DIESES TOR WEISS, WAS UMGESETZT IST — und warum es das nachweisen muss:
+//
+// Bis zum 06.08.2026 las es evals/results/fertigzustand-latest.json, also den Stand
+// des LETZTEN Laufs. Das ist genau die Weiterreichung, die der Gesamtlauf selbst
+// verbietet („dort durfte ein Eval bestanden heißen, weil ein früherer Lauf das
+// gesagt hatte"). Und sie ging schief: Am 06.08.2026 meldete dieses Tor grün und
+// führte „Punkt 1 umgesetzt (DESIGN-01)" an — die Ergebnisdatei stammte aus Commit
+// 6de1f5b, von vor dem ganzen Oberflächen-Umbau, während DESIGN-01 frisch gemessen
+// durchfiel. Ein Tor, das den Stand von vorgestern beurteilt, ist kein Tor.
+//
+// Seitdem gilt: gemessen wird IN DIESEM LAUF. Zwei Wege führen dahin, und der
+// billigere wird nur genommen, wenn er sich beweisen lässt:
+//
+//   1. Der Fertigzustandsläufer startet die Gestalt-Prüfung ohnehin und schreibt ihr
+//      Protokoll nach results/laeufe/. Liegt dieses Protokoll vor UND ist es jünger
+//      als jede Datei, die sein Urteil ändern könnte (die Oberfläche, die Prüfung
+//      selbst), dann beschreibt es den heutigen Code. Dann wird es gelesen; das
+//      spart den zweiten Browserstart.
+//   2. Sonst — kein Protokoll, oder eines, das älter ist als der Code, den es
+//      beurteilt — startet dieses Tor die Gestalt-Prüfung selbst. Das kostet ein
+//      paar Sekunden und kann nicht veralten.
+//
+// Ein Protokoll, das älter ist als der Code, ist kein Beleg. Und läuft die Prüfung
+// gar nicht (kein Server, kein Browser), bricht dieses Tor LAUT ab, statt eine alte
+// Antwort weiterzureichen.
 
-import { readFileSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
+import { execFile } from 'node:child_process'
+import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { promisify } from 'node:util'
 
+const ausfuehren = promisify(execFile)
 const hier = dirname(fileURLToPath(import.meta.url))
+const appWurzel = resolve(hier, '../..')
 const wurzel = resolve(hier, '../../..')
 
 // Welcher Punkt der Ideensammlung wird von welchem Gestalt-Eval belegt. Diese
@@ -56,57 +82,102 @@ if (ideen) {
   if (!status.size) fehler.push('In docs/REDESIGN-IDEEN.md wurde keine Statustabelle gefunden.')
 }
 
-// --- Die Gestalt-Ergebnisse lesen --------------------------------------------
-let bestanden = new Set()
-try {
-  // Der Fertigzustandsläufer schreibt das Gestalt-Protokoll vor diesem Prozess-Tor.
-  // Es ist damit der aktuelle Lauf. Die aggregierte JSON-Datei wird erst nach allen
-  // Prüfungen geschrieben und wäre hier zwangsläufig der veraltete vorige Lauf.
-  const protokoll = readFileSync(resolve(hier, '../results/laeufe/evals-pruefungen-gestalt-mjs.log'), 'utf8')
-  for (const treffer of protokoll.matchAll(/^ok\s+(DESIGN-\d+)\b/gm)) bestanden.add(treffer[1])
-} catch {
-  // Außerhalb des Fertigzustandsläufers bleibt der letzte Gesamtstand ein
-  // sinnvoller Rückfall, beispielsweise für eine gezielte lokale Prüfung.
-  try {
-    const ergebnisse = JSON.parse(readFileSync(resolve(hier, '../results/fertigzustand-latest.json'), 'utf8'))
-    const sammle = knoten => {
-      if (Array.isArray(knoten)) { knoten.forEach(sammle); return }
-      if (!knoten || typeof knoten !== 'object') return
-      if (typeof knoten.id === 'string' && knoten.status === 'passed') bestanden.add(knoten.id)
-      Object.values(knoten).forEach(sammle)
+// --- Woran sich das Alter eines Protokolls misst ------------------------------
+// Alles, was das Urteil der Gestalt-Prüfung ändern kann: die Oberfläche selbst, die
+// Seite, die sie zusammensetzt, und die Prüfung. Ist eine dieser Dateien jünger als
+// das Protokoll, beschreibt das Protokoll einen anderen Stand als den heutigen.
+function juengsteAenderung(pfade) {
+  let neuestes = 0
+  const besuche = pfad => {
+    let eintrag
+    try { eintrag = statSync(pfad) } catch { return }
+    if (eintrag.isDirectory()) {
+      for (const kind of readdirSync(pfad)) besuche(join(pfad, kind))
+      return
     }
-    sammle(ergebnisse)
-  } catch {
-    // Kein Ergebnisstand vorhanden: dann ist noch nichts umgesetzt, und das Tor hat
-    // nichts zu prüfen. Die Gegenprobe unten macht einen stillen Erfolg unmöglich.
-    bestanden = new Set()
+    if (eintrag.mtimeMs > neuestes) neuestes = eintrag.mtimeMs
   }
+  pfade.forEach(besuche)
+  return neuestes
+}
+
+const QUELLEN = [
+  resolve(appWurzel, 'src'),
+  resolve(appWurzel, 'index.html'),
+  resolve(hier, 'gestalt.mjs'),
+]
+
+// --- Den Stand der Gestalt-Prüfung aus DIESEM Lauf besorgen -------------------
+const protokollPfad = resolve(hier, '../results/laeufe/evals-pruefungen-gestalt-mjs.log')
+const bestanden = new Set()
+let ausgabe = ''
+let herkunft = ''
+
+try {
+  const alterProtokoll = statSync(protokollPfad).mtimeMs
+  if (alterProtokoll < juengsteAenderung(QUELLEN)) {
+    throw new Error('Protokoll ist älter als der Code, den es beurteilt')
+  }
+  ausgabe = readFileSync(protokollPfad, 'utf8')
+  herkunft = 'Protokoll dieses Laufs (results/laeufe/)'
+} catch {
+  // Kein brauchbares Protokoll: selbst messen. Nicht bestandene Gestalt-Evals lassen
+  // das Skript mit Code 1 enden. Das ist hier kein Abbruch, sondern eine Antwort:
+  // dann ist der Punkt eben nicht umgesetzt.
+  herkunft = 'eigener Lauf der Gestalt-Prüfung'
+  try {
+    const lauf = await ausfuehren('node', ['evals/pruefungen/gestalt.mjs'], {
+      cwd: appWurzel,
+      maxBuffer: 8 * 1024 * 1024,
+      timeout: 300_000,
+    })
+    ausgabe = lauf.stdout
+  } catch (ursache) {
+    ausgabe = ursache.stdout || ''
+    if (!ausgabe) {
+      fehler.push(
+        'Die Gestalt-Prüfung liess sich nicht ausführen, also ist unbekannt, was umgesetzt ist: '
+        + `${(ursache.message || '').split('\n')[0]}`,
+      )
+    }
+  }
+}
+
+for (const treffer of ausgabe.matchAll(/^ok\s+(DESIGN-\d+)\b/gm)) bestanden.add(treffer[1])
+
+// Eine Ausgabe ohne eine einzige Ergebniszeile heisst: gemessen wurde nichts.
+const gemessen = /^(ok|not ok) DESIGN-\d+/m.test(ausgabe)
+if (!fehler.length && !gemessen) {
+  fehler.push(`Die Gestalt-Prüfung hat kein einziges Ergebnis gemeldet (${herkunft}) — ohne Messung kein Urteil.`)
 }
 
 // --- Die eigentliche Pruefung -------------------------------------------------
-for (const [punkt, evals] of Object.entries(PUNKT_ZU_EVALS)) {
-  const umgesetzt = evals.filter(id => bestanden.has(id))
-  if (!umgesetzt.length) {
-    belege.push(`Punkt ${punkt}: nicht umgesetzt (${evals.join(', ')} bestehen nicht) — nichts zu entscheiden.`)
-    continue
+if (gemessen) {
+  belege.push(`Stand der Gestalt-Prüfung aus diesem Lauf, gelesen aus: ${herkunft}.`)
+  for (const [punkt, evals] of Object.entries(PUNKT_ZU_EVALS)) {
+    const umgesetzt = evals.filter(id => bestanden.has(id))
+    if (!umgesetzt.length) {
+      belege.push(`Punkt ${punkt}: nicht umgesetzt (${evals.join(', ')} bestehen nicht) — nichts zu entscheiden.`)
+      continue
+    }
+    const eintrag = status.get(punkt)
+    if (eintrag === undefined) {
+      fehler.push(`Punkt ${punkt} ist umgesetzt (${umgesetzt.join(', ')}), steht aber in keiner Statuszeile.`)
+      continue
+    }
+    if (eintrag === 'agreed' || eintrag === 'vereinbart' || eintrag === 'verworfen' || eintrag === 'rejected') {
+      belege.push(`Punkt ${punkt}: umgesetzt (${umgesetzt.join(', ')}) und entschieden ("${eintrag}").`)
+      continue
+    }
+    fehler.push(
+      `Punkt ${punkt} ist umgesetzt (${umgesetzt.join(', ')}), steht aber auf "${eintrag}". `
+      + 'Umgesetzt wird erst, was entschieden ist — die Entscheidung liegt beim Nutzer.',
+    )
   }
-  const eintrag = status.get(punkt)
-  if (eintrag === undefined) {
-    fehler.push(`Punkt ${punkt} ist umgesetzt (${umgesetzt.join(', ')}), steht aber in keiner Statuszeile.`)
-    continue
-  }
-  if (eintrag === 'agreed' || eintrag === 'vereinbart' || eintrag === 'verworfen' || eintrag === 'rejected') {
-    belege.push(`Punkt ${punkt}: umgesetzt (${umgesetzt.join(', ')}) und entschieden ("${eintrag}").`)
-    continue
-  }
-  fehler.push(
-    `Punkt ${punkt} ist umgesetzt (${umgesetzt.join(', ')}), steht aber auf "${eintrag}". `
-    + 'Umgesetzt wird erst, was entschieden ist — die Entscheidung liegt beim Nutzer.',
-  )
 }
 
 // Gegenprobe: die Prüfung darf nicht dadurch bestehen, dass sie nichts findet.
-if (!fehler.length && !belege.some(zeile => zeile.includes('entschieden'))) {
+if (!fehler.length && !belege.some(zeile => zeile.includes('und entschieden'))) {
   fehler.push('Kein einziger umgesetzter Punkt gefunden — die Zuordnung Punkt→Eval greift nicht mehr.')
 }
 

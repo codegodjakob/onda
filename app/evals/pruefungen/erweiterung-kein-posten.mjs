@@ -139,24 +139,27 @@ for (const modul of ['workspace.js', 'reasoning-model.mjs', 'erweiterung-model.m
   }
 }
 
-// Die eine sichtbare Warte-Zahl der Oberfläche zeichnet renderZurueckgehalten
-// in workspace.js. Kommt dort das Wort Erweiterung nicht vor und speist sich
-// die Zahl aus den Hinweisen (findings), kann sie strukturell keine
-// Erweiterung meinen.
+// Bis zum 7. August 2026 stand hier: die eine sichtbare Warte-Zahl
+// (renderZurueckgehalten) kennt den Erweiterungs-Kanal nicht. Diese Zahl gibt es nicht
+// mehr. Sie zählte offene Hinweise ("3 Hinweise warten aufs Aufschauen") und verstieß
+// damit gegen zwei prüfbare Sätze aus docs/PHILOSOPHIE.md §1: "Es wird nicht gezählt"
+// und "Es gibt höchstens ein Bedienelement für Anmerkungen, und das schaltet sie nur
+// an und aus."
+//
+// Der Maßstab ist damit SCHÄRFER geworden, nicht weicher: geprüft wird nicht mehr, ob
+// die eine Zahl den falschen Kanal meint, sondern dass es in der ganzen Oberfläche
+// überhaupt keine Zahl über Anmerkungen mehr gibt. Verloren geht dabei nichts, was ein
+// Vorlesegerät braucht — renderAnnotationPresence gibt weiterhin den vollen Wortlaut.
 const workspaceQuelle = ohneKommentare(await lies('workspace.js'))
-const warteZahl = funktionsKoerper(workspaceQuelle, 'function renderZurueckgehalten')
-if (!warteZahl) {
-  fehler.push('src/workspace.js: renderZurueckgehalten nicht gefunden — die Warte-Zahl wurde umbenannt oder entfernt.')
-} else {
-  if (/erweiterung/i.test(warteZahl)) {
-    fehler.push('src/workspace.js: renderZurueckgehalten kennt den Erweiterungs-Kanal — die Warte-Zahl könnte ihn meinen.')
+for (const totesZeichen of ['onda-zurueck-zahl', 'renderZurueckgehalten']) {
+  if (workspaceQuelle.includes(totesZeichen)) {
+    fehler.push(`src/workspace.js: ${totesZeichen} ist zurück — eine Zahl über Anmerkungen zählt Geschenke wie Hausaufgaben.`)
   }
-  if (!warteZahl.includes('findings')) {
-    fehler.push('src/workspace.js: renderZurueckgehalten zählt nicht mehr aus den Hinweisen (findings).')
-  }
-  if (!warteZahl.includes('onda-zurueck-zahl')) {
-    fehler.push('src/workspace.js: renderZurueckgehalten zeichnet die Warte-Zahl nicht mehr — die Prüfung misst nicht mehr, was sie messen soll.')
-  }
+}
+// Gegenprobe zur Gegenprobe: die Auskunft für Vorlesegeräte muss bleiben. Ohne sie
+// wäre die Abwesenheit der Zahl eine Unterschlagung statt einer Zurückhaltung.
+if (!workspaceQuelle.includes('bilanzVorlesetext')) {
+  fehler.push('src/workspace.js: der volle Wortlaut für Vorlesegeräte ist mit der Zahl verschwunden — Ruhe ist keine Ausrede für Auslassung.')
 }
 
 // Und die Gegenrichtung: der Bereich, der Erweiterungen zeigt, zeichnet keine
@@ -190,8 +193,8 @@ if (!ZAEHL_MARKEN.some(marke => oberflaeche.includes(marke))) {
 
 // Und im ausgelieferten Bündel: der Abschnitt der Seitenspalte trägt keine Zahl.
 const buendel = await lies('../dist/editor.bundle.js').catch(() => '')
-if (buendel && /onda-side-erweiterungen[^"]*"[^)]{0,400}?badge/i.test(buendel)) {
-  fehler.push('dist/editor.bundle.js: der Erweiterungs-Abschnitt trägt im gelieferten Programm ein Abzeichen.')
+if (buendel && /erweiterung-[^"]*"[^)]{0,400}?badge/i.test(buendel)) {
+  fehler.push('dist/editor.bundle.js: der Erweiterungs-Kanal trägt im gelieferten Programm ein Abzeichen.')
 }
 
 // --- Teil 3: der Kanal klopft nicht an ---------------------------------------
@@ -257,7 +260,8 @@ if (fehler.length) {
 }
 process.stdout.write(
   'ERWEITERUNG-04: drei Erweiterungen neben drei Hinweisen — die Warteschlange zählt 3, '
-  + 'die Warte-Zahl im lebenden Modul (workspace.js, vom Einstieg aus erreichbar) kennt den '
-  + 'Kanal nicht, der Erweiterungs-Bereich zeichnet keine Zahl, der Lauf klopft nicht an, '
+  + 'im lebenden Modul (workspace.js, vom Einstieg aus erreichbar) gibt es keine Zahl über '
+  + 'Anmerkungen mehr und den vollen Wortlaut für Vorlesegeräte weiterhin, der '
+  + 'Erweiterungs-Bereich zeichnet keine Zahl, der Lauf klopft nicht an, '
   + 'und es gibt genau zwei Gesten: merken und weglegen.\n',
 )

@@ -1,5 +1,6 @@
 import {
   ANNOTATION_SECTIONS,
+  ANNOTATION_VIEW_DEFINITIONS,
   COMPONENT_DEFINITIONS,
   CORE_OVERVIEW_DEFINITION,
   CORE_VIEW_DEFINITIONS,
@@ -1075,6 +1076,424 @@ function secondaryRegionBindingsMatch(region, expected) {
   if (!expected) return false
   if (!sameSecondaryValue(region.fillBindings, expected.fillBindings) || !sameSecondaryValue(region.strokeBindings, expected.strokeBindings)) return false
   return Object.entries(expected.fieldVariableIds).every(([field, ids]) => sameSecondaryValue(region.fieldVariableIds?.[field] || [], ids))
+}
+
+const ANNOTATION_BATCH_SIZE = 5
+const ANNOTATION_COMPONENT_IDS = Object.freeze([
+  'annotation-anchor',
+  'annotation-form',
+  'annotation-card',
+  'status-symbol',
+  'dialog-action',
+])
+
+function annotationNodeId(record) {
+  return record?.id || record?.nodeId || null
+}
+
+function annotationOwned(record) {
+  const explicitOwner = record?.owner
+  const dataOwner = record?.pluginData?.owner
+  return explicitOwner === PLUGIN_ORIGIN
+    && (dataOwner === undefined || dataOwner === PLUGIN_ORIGIN)
+}
+
+function annotationBatchDefinitions(batchIndex) {
+  if (!Number.isInteger(batchIndex) || batchIndex < 0 || batchIndex > 5) return []
+  return ANNOTATION_VIEW_DEFINITIONS.slice(batchIndex * ANNOTATION_BATCH_SIZE, batchIndex * ANNOTATION_BATCH_SIZE + ANNOTATION_BATCH_SIZE)
+}
+
+function annotationViewEntries(batchIndex) {
+  return annotationBatchDefinitions(batchIndex).flatMap(annotation => annotation.views.map(contract => ({
+    annotation,
+    contract,
+    displayName: `${annotation.definition.label} / ${contract.name}`,
+    key: `${annotation.sectionName}\u0000${annotation.kind}\u0000${contract.name}`,
+  })))
+}
+
+function annotationRecordKey(record) {
+  return `${record?.sectionName || ''}\u0000${record?.kind || ''}\u0000${record?.viewName || ''}`
+}
+
+function annotationSameValue(left, right) {
+  return JSON.stringify(canonicalize(left)) === JSON.stringify(canonicalize(right))
+}
+
+function annotationDuplicates(records, key, label, errors) {
+  const seen = new Set()
+  for (const record of records) {
+    const value = key(record)
+    if (seen.has(value)) errors.push(`Annotation-Views: duplicate ${label} ${value || '<unnamed>'}`)
+    seen.add(value)
+  }
+}
+
+function annotationExpectedBindings(inventory, theme) {
+  const collectionName = `Onda · Semantic · ${theme}`
+  function variableId(name) {
+    const matches = (inventory.variables || []).filter(variable => variable.collectionName === collectionName && variable.name === name)
+    return matches.length === 1 ? matches[0].id : null
+  }
+  return {
+    surface: variableId('color/surface'),
+    border: variableId('color/border'),
+    text: variableId('color/text'),
+    muted: variableId('color/text-muted'),
+  }
+}
+
+function annotationExpectedPaints(theme) {
+  return theme === 'Dark'
+    ? {
+        fills: [{ type: 'SOLID', color: { r: 0.08, g: 0.08, b: 0.08 } }],
+        strokes: [{ type: 'SOLID', color: { r: 0.24, g: 0.24, b: 0.24 } }],
+      }
+    : {
+        fills: [{ type: 'SOLID', color: { r: 1, g: 1, b: 1 } }],
+        strokes: [{ type: 'SOLID', color: { r: 0.82, g: 0.82, b: 0.82 } }],
+      }
+}
+
+function annotationComponentLink(inventory, contract) {
+  const definition = COMPONENT_DEFINITIONS.find(component => component.id === contract.setId)
+  const set = (inventory.components || inventory.componentSets || []).find(component => component.name === definition?.name)
+  const variants = Array.isArray(set?.variants) ? set.variants : []
+  const variant = variants.find(candidate => candidate.name === contract.variant)
+  return set && variant ? {
+    mainComponentId: annotationNodeId(variant),
+    componentSetId: annotationNodeId(set),
+    componentSetName: definition.name,
+    variantName: contract.variant,
+  } : null
+}
+
+function annotationExpectedEffect(inventory, contract) {
+  if (contract.setId !== 'annotation-card') return { effects: [], effectStyleId: '' }
+  const styles = (inventory.effectStyles || []).filter(style => style.name === 'Onda/Shadow/Overlay')
+  const styleId = styles.length === 1 ? annotationNodeId(styles[0]) : null
+  return styleId ? {
+    effects: [{ type: 'DROP_SHADOW', styleId }],
+    effectStyleId: styleId,
+  } : null
+}
+
+function annotationTargetRecords(inventory) {
+  const records = []
+  for (const section of inventory.sections || []) records.push(section)
+  for (const view of inventory.views || []) {
+    records.push(view)
+    records.push(...(view.layoutRegions || []), ...(view.copyNodes || []), ...(view.standIns || []))
+    for (const instance of view.instances || []) records.push(instance, ...(instance.roleDescendants || []))
+  }
+  return records
+}
+
+function annotationValidateUniqueIds(inventory, errors) {
+  const records = [
+    inventory.targetPage,
+    ...annotationTargetRecords(inventory),
+    ...(inventory.untouchedPageChildren || []),
+    ...(inventory.untouchedPageDescendants || []),
+    ...(inventory.components || inventory.componentSets || []),
+    ...(inventory.components || inventory.componentSets || []).flatMap(component => component.variants || []),
+    ...(inventory.variables || []),
+    ...(inventory.effectStyles || []),
+  ].filter(Boolean)
+  const seen = new Map()
+  for (const record of records) {
+    const id = annotationNodeId(record)
+    if (!id) {
+      errors.push(`Annotation-Views: record without ID ${record.name || '<unnamed>'}`)
+      continue
+    }
+    if (seen.has(id)) errors.push(`Annotation-Views: duplicate node ID ${id}`)
+    else seen.set(id, record)
+  }
+}
+
+function annotationValidateResources(inventory, errors) {
+  const components = inventory.components || inventory.componentSets || []
+  for (const id of ANNOTATION_COMPONENT_IDS) {
+    const definition = COMPONENT_DEFINITIONS.find(component => component.id === id)
+    const matches = components.filter(component => component.name === definition?.name)
+    if (matches.length !== 1 || matches[0].type !== 'COMPONENT_SET' || !annotationOwned(matches[0])) errors.push(`Annotation-Views: invalid component set ${id}`)
+    for (const variantName of new Set(annotationViewEntries(inventory.batchIndex).flatMap(entry => entry.contract.instances.filter(instance => instance.setId === id).map(instance => instance.variant)))) {
+      const variants = matches[0]?.variants || []
+      if (variants.filter(variant => variant.name === variantName && variant.type === 'COMPONENT').length !== 1) errors.push(`Annotation-Views: invalid variant ${id}/${variantName}`)
+    }
+  }
+  for (const theme of ['Light', 'Dark']) {
+    const bindings = annotationExpectedBindings(inventory, theme)
+    if (Object.values(bindings).some(id => !id)) errors.push(`Annotation-Views: incomplete ${theme} semantic variables`)
+  }
+  if ((inventory.effectStyles || []).filter(style => style.name === 'Onda/Shadow/Overlay').length !== 1) errors.push('Annotation-Views: invalid overlay effect style')
+}
+
+function annotationValidateUntouched(inventory, expectedSections, expectedViews, errors) {
+  const targetPageId = annotationNodeId(inventory.targetPage)
+  const children = inventory.untouchedPageChildren || []
+  const descendants = inventory.untouchedPageDescendants || []
+  const allUntouched = new Map([...children, ...descendants].map(record => [annotationNodeId(record), record]))
+  for (const child of children) {
+    const targeted = expectedSections.has(child.name)
+      || expectedViews.has(child.name)
+      || child.pluginData?.ondaAnnotationView !== undefined
+      || child.pluginData?.ondaAnnotationKind !== undefined
+      || child.pluginData?.ondaAnnotationInstance !== undefined
+      || child.pluginData?.ondaAnnotationRole !== undefined
+    if (targeted || child.parentId !== targetPageId || child.parentType !== 'PAGE' || child.parentName !== TARGET_PAGE_NAME) errors.push(`Annotation-Views: invalid untouched Page child ${child.name || annotationNodeId(child)}`)
+  }
+  for (const descendant of descendants) {
+    const parent = allUntouched.get(descendant.parentId)
+    const targeted = expectedViews.has(descendant.name)
+      || descendant.pluginData?.ondaAnnotationView !== undefined
+      || descendant.pluginData?.ondaAnnotationInstance !== undefined
+      || descendant.pluginData?.ondaAnnotationRole !== undefined
+    if (targeted || !parent || descendant.parentType !== parent.type || descendant.parentName !== parent.name) errors.push(`Annotation-Views: invalid untouched descendant ${descendant.name || annotationNodeId(descendant)}`)
+  }
+}
+
+export function validateAnnotationViewMutationInventory(inventory = {}) {
+  const errors = []
+  const batchIndex = inventory.batchIndex
+  const annotations = annotationBatchDefinitions(batchIndex)
+  const entries = annotationViewEntries(batchIndex)
+  if (!annotations.length || inventory.command !== `annotations-${Number(batchIndex) + 1}`) errors.push('Annotation-Views: invalid batch identity')
+  const pageId = annotationNodeId(inventory.targetPage)
+  if (!pageId || inventory.targetPage?.type !== 'PAGE' || inventory.targetPage?.name !== TARGET_PAGE_NAME) errors.push('Annotation-Views: invalid target Page')
+
+  const sections = Array.isArray(inventory.sections) ? inventory.sections : []
+  const views = Array.isArray(inventory.views) ? inventory.views : []
+  const expectedSectionByName = new Map(annotations.map(annotation => [annotation.sectionName, annotation]))
+  const expectedEntryByKey = new Map(entries.map(entry => [entry.key, entry]))
+  const sectionByName = new Map(sections.map(section => [section.name, section]))
+  annotationDuplicates(sections, section => section.name, 'Section', errors)
+  annotationDuplicates(views, annotationRecordKey, 'view identity', errors)
+
+  for (const section of sections) {
+    if (!expectedSectionByName.has(section.name)
+      || section.type !== 'SECTION'
+      || !annotationOwned(section)
+      || section.parentId !== pageId
+      || section.parentType !== 'PAGE'
+      || section.parentName !== TARGET_PAGE_NAME) errors.push(`Annotation-Views: invalid Section ${section.name || '<unnamed>'}`)
+  }
+
+  for (const view of views) {
+    const entry = expectedEntryByKey.get(annotationRecordKey(view))
+    if (!entry || view.name !== entry.displayName) {
+      errors.push(`Annotation-Views: unknown marked view ${view.name || '<unnamed>'}`)
+      continue
+    }
+    const section = sectionByName.get(entry.annotation.sectionName)
+    if (view.type !== 'FRAME'
+      || !annotationOwned(view)
+      || !section
+      || view.parentId !== annotationNodeId(section)
+      || view.parentType !== 'SECTION'
+      || view.parentName !== entry.annotation.sectionName) errors.push(`Annotation-Views: invalid view ancestry ${view.name}`)
+
+    const regions = Array.isArray(view.layoutRegions) ? view.layoutRegions : []
+    const copies = Array.isArray(view.copyNodes) ? view.copyNodes : []
+    const instances = Array.isArray(view.instances) ? view.instances : []
+    const expectedRegions = new Map(entry.contract.regions.map(region => [region.name, region]))
+    const regionByName = new Map(regions.map(region => [region.name, region]))
+    annotationDuplicates(regions, region => region.name, `region in ${view.name}`, errors)
+    annotationDuplicates(copies, copy => copy.role, `copy in ${view.name}`, errors)
+    annotationDuplicates(instances, instance => instance.name, `instance in ${view.name}`, errors)
+
+    for (const region of regions) {
+      if (!expectedRegions.has(region.name)
+        || region.type !== 'FRAME'
+        || !annotationOwned(region)
+        || region.parentId !== annotationNodeId(view)
+        || region.parentType !== 'FRAME'
+        || region.parentName !== view.name) errors.push(`Annotation-Views: invalid region ${view.name}/${region.name || '<unnamed>'}`)
+    }
+    for (const copy of copies) {
+      const expected = Object.hasOwn(entry.contract.copyContracts, copy.role)
+      const region = regionByName.get('Content')
+      if (!expected
+        || copy.type !== 'TEXT'
+        || !annotationOwned(copy)
+        || !region
+        || copy.parentId !== annotationNodeId(region)
+        || copy.parentType !== 'FRAME'
+        || copy.parentName !== region.name) errors.push(`Annotation-Views: invalid copy ${view.name}/${copy.role || '<unnamed>'}`)
+    }
+    for (const instance of instances) {
+      const contract = entry.contract.instances.find(candidate => candidate.name === instance.name)
+      const region = regionByName.get(contract?.region)
+      if (!contract
+        || instance.type !== 'INSTANCE'
+        || !annotationOwned(instance)
+        || !region
+        || instance.parentId !== annotationNodeId(region)
+        || instance.parentType !== 'FRAME'
+        || instance.parentName !== region.name) {
+        errors.push(`Annotation-Views: invalid instance ${view.name}/${instance.name || '<unnamed>'}`)
+        continue
+      }
+      const component = COMPONENT_DEFINITIONS.find(definition => definition.id === contract.setId)
+      const expectedRoles = new Map(component.roles.map(role => [role.name, role]))
+      const roles = Array.isArray(instance.roleDescendants) ? instance.roleDescendants : []
+      annotationDuplicates(roles, role => role.role, `Role in ${view.name}/${instance.name}`, errors)
+      for (const role of roles) {
+        const expectedRole = expectedRoles.get(role.role)
+        if (!expectedRole
+          || role.type !== expectedRole.type
+          || !annotationOwned(role)
+          || role.parentInstanceId !== annotationNodeId(instance)
+          || role.parentId !== annotationNodeId(instance)
+          || role.parentType !== 'INSTANCE'
+          || role.parentName !== instance.name) errors.push(`Annotation-Views: invalid Role ${view.name}/${instance.name}/${role.role || '<unnamed>'}`)
+      }
+    }
+    for (const residue of view.standIns || []) {
+      if (!annotationOwned(residue) || residue.parentId !== annotationNodeId(view) || residue.visible !== false) errors.push(`Annotation-Views: visible or unowned residue ${view.name}/${residue.name || '<unnamed>'}`)
+    }
+  }
+
+  annotationValidateResources(inventory, errors)
+  annotationValidateUntouched(inventory, new Set(expectedSectionByName.keys()), new Set(entries.map(entry => entry.displayName)), errors)
+  annotationValidateUniqueIds(inventory, errors)
+  return { valid: errors.length === 0, errors }
+}
+
+function annotationViewExpectedMarker(entry) {
+  return { owner: PLUGIN_ORIGIN, ondaAnnotationKind: entry.annotation.kind, ondaAnnotationView: entry.contract.name }
+}
+
+function annotationInstanceExpectedMarker(contract) {
+  return { owner: PLUGIN_ORIGIN, ondaAnnotationInstance: contract.name }
+}
+
+function annotationExpectedChildIds(view, entry) {
+  const copies = new Map((view.copyNodes || []).map(copy => [copy.role, copy]))
+  const instances = new Map((view.instances || []).map(instance => [instance.name, instance]))
+  const ordered = [
+    ...Object.keys(entry.contract.copyContracts).map(role => copies.get(role)),
+    ...entry.contract.instances.map(contract => instances.get(contract.name)),
+  ]
+  return ordered.every(Boolean) ? ordered.map(annotationNodeId) : null
+}
+
+export function buildAnnotationViewRecoveryActions(inventory = {}) {
+  const validation = validateAnnotationViewMutationInventory(inventory)
+  if (!validation.valid) throw new Error(validation.errors.join('\n'))
+  const actions = []
+  const sections = inventory.sections || []
+  const views = inventory.views || []
+  for (const annotation of annotationBatchDefinitions(inventory.batchIndex)) {
+    const section = sections.find(candidate => candidate.name === annotation.sectionName)
+    if (!section) {
+      actions.push({ type: 'create-section', sectionName: annotation.sectionName })
+      continue
+    }
+    for (const contract of annotation.views) {
+      const entry = {
+        annotation,
+        contract,
+        displayName: `${annotation.definition.label} / ${contract.name}`,
+      }
+      const view = views.find(candidate => candidate.sectionName === annotation.sectionName && candidate.kind === annotation.kind && candidate.viewName === contract.name)
+      if (!view) {
+        actions.push({ type: 'create-view', viewName: entry.displayName })
+        continue
+      }
+      if (!annotationSameValue(view.pluginData, annotationViewExpectedMarker(entry))) actions.push({ type: 'repair-view-marker', viewName: entry.displayName })
+      if (view.width !== contract.width || view.padding !== contract.padding || view.layoutMode !== contract.layoutMode || view.cornerRadius !== 6) actions.push({ type: 'repair-view-geometry', viewName: entry.displayName })
+      const paints = annotationExpectedPaints(contract.theme)
+      if (!annotationSameValue(view.fills, paints.fills) || !annotationSameValue(view.strokes, paints.strokes)) actions.push({ type: 'repair-view-paints', viewName: entry.displayName })
+      const bindings = annotationExpectedBindings(inventory, contract.theme)
+      if (view.theme !== contract.theme || !annotationSameValue(view.fillBindings, [bindings.surface]) || !annotationSameValue(view.strokeBindings, [bindings.border])) actions.push({ type: 'repair-view-bindings', viewName: entry.displayName })
+      if (!annotationSameValue(view.effects || [], []) || (view.effectStyleId || '') !== '') actions.push({ type: 'repair-view-effect', viewName: entry.displayName })
+
+      const regions = view.layoutRegions || []
+      for (const regionContract of contract.regions) {
+        const region = regions.find(candidate => candidate.name === regionContract.name)
+        if (!region) {
+          actions.push({ type: 'create-region', viewName: entry.displayName, regionName: regionContract.name })
+          continue
+        }
+        if (region.layoutMode !== regionContract.layoutMode || region.width !== regionContract.width || region.padding !== regionContract.padding) actions.push({ type: 'repair-region-layout', viewName: entry.displayName, regionName: regionContract.name })
+        if (!annotationSameValue(region.fillBindings, [bindings.surface]) || !annotationSameValue(region.strokeBindings, [bindings.border])) actions.push({ type: 'repair-region-bindings', viewName: entry.displayName, regionName: regionContract.name })
+      }
+
+      const content = regions.find(region => region.name === 'Content')
+      if (!content) continue
+      const copies = view.copyNodes || []
+      for (const [role, characters] of Object.entries(contract.copyContracts)) {
+        const copy = copies.find(candidate => candidate.role === role)
+        if (!copy) {
+          actions.push({ type: 'create-copy', viewName: entry.displayName, role })
+          continue
+        }
+        if (copy.characters !== characters || !annotationSameValue(copy.pluginData, { owner: PLUGIN_ORIGIN, ondaAnnotationCopy: role })) actions.push({ type: 'repair-copy', viewName: entry.displayName, role })
+        if (copy.width !== contract.width - contract.padding * 2 || copy.height !== 22 || copy.order !== Object.keys(contract.copyContracts).indexOf(role)) actions.push({ type: 'repair-copy-layout', viewName: entry.displayName, role })
+        if (!annotationSameValue(copy.fillBindings, [bindings.text])) actions.push({ type: 'repair-copy-bindings', viewName: entry.displayName, role })
+      }
+
+      const instances = view.instances || []
+      for (const [instanceIndex, instanceContract] of contract.instances.entries()) {
+        const instance = instances.find(candidate => candidate.name === instanceContract.name)
+        if (!instance) {
+          actions.push({ type: 'create-instance', viewName: entry.displayName, instanceName: instanceContract.name })
+          continue
+        }
+        const link = annotationComponentLink(inventory, instanceContract)
+        if (!link || ['mainComponentId', 'componentSetId', 'componentSetName', 'variantName'].some(key => instance[key] !== link[key])) actions.push({ type: 'relink-instance', viewName: entry.displayName, instanceName: instanceContract.name })
+        const roleCharacters = Object.fromEntries((instance.roleDescendants || []).filter(role => role.type === 'TEXT').map(role => [role.role, role.characters]))
+        if (!annotationSameValue(instance.roleCopy, instanceContract.roleCopy) || !annotationSameValue(roleCharacters, instanceContract.roleCopy)) actions.push({ type: 'repair-instance-copy', viewName: entry.displayName, instanceName: instanceContract.name })
+        if (instance.width !== contract.width - contract.padding * 2 || instance.height !== instanceContract.expectedHeight || instance.order !== Object.keys(contract.copyContracts).length + instanceIndex) actions.push({ type: 'repair-instance-geometry', viewName: entry.displayName, instanceName: instanceContract.name })
+        if (!annotationSameValue(instance.fillBindings, [bindings.surface]) || !annotationSameValue(instance.strokeBindings, [bindings.border]) || (instance.roleDescendants || []).some(role => role.type === 'TEXT' && !annotationSameValue(role.fillBindings, [bindings.text]))) actions.push({ type: 'repair-instance-bindings', viewName: entry.displayName, instanceName: instanceContract.name })
+        const effect = annotationExpectedEffect(inventory, instanceContract)
+        if (!effect || !annotationSameValue(instance.effects || [], effect.effects) || (instance.effectStyleId || '') !== effect.effectStyleId) actions.push({ type: 'repair-instance-effect', viewName: entry.displayName, instanceName: instanceContract.name })
+        if (!annotationSameValue(instance.pluginData, annotationInstanceExpectedMarker(instanceContract))) actions.push({ type: 'repair-instance-marker', viewName: entry.displayName, instanceName: instanceContract.name })
+      }
+      const expectedChildIds = annotationExpectedChildIds(view, entry)
+      if (expectedChildIds && !annotationSameValue(content.childIds || [], expectedChildIds)) actions.push({ type: 'repair-child-order', viewName: entry.displayName, regionName: 'Content' })
+    }
+  }
+  return actions
+}
+
+export function canonicalAnnotationViewMutationSnapshot(inventory = {}) {
+  return canonicalize({
+    batchIndex: inventory.batchIndex,
+    command: inventory.command,
+    targetPage: inventory.targetPage || {},
+    sections: inventory.sections || [],
+    views: inventory.views || [],
+    untouchedPageChildren: inventory.untouchedPageChildren || [],
+    untouchedPageDescendants: inventory.untouchedPageDescendants || [],
+    components: inventory.components || inventory.componentSets || [],
+    variables: inventory.variables || [],
+    effectStyles: inventory.effectStyles || [],
+  })
+}
+
+export async function executeGuardedAnnotationViewBatch({ command, phases, preflight, requireContext, collectCurrentInventory, resolveInventoryNodes = async () => null, mutate }) {
+  const transition = validatePhaseTransition(command, phases)
+  if (!transition.ok) throw new Error(transition.warning)
+  const preflightInventory = await preflight()
+  const preflightValidation = validateAnnotationViewMutationInventory(preflightInventory)
+  if (!preflightValidation.valid) throw new Error(`Annotation preflight inventory invalid.\n${preflightValidation.errors.join('\n')}`)
+  const preflightSnapshot = canonicalAnnotationViewMutationSnapshot(preflightInventory)
+  const context = await requireContext()
+  if (typeof collectCurrentInventory !== 'function') throw new Error('Annotation TOCTOU current inventory collector is missing.')
+  const currentInventory = await collectCurrentInventory(context)
+  const currentValidation = validateAnnotationViewMutationInventory(currentInventory)
+  if (!currentValidation.valid) throw new Error(`Annotation current inventory invalid.\n${currentValidation.errors.join('\n')}`)
+  const currentSnapshot = canonicalAnnotationViewMutationSnapshot(currentInventory)
+  if (!annotationSameValue(preflightSnapshot, currentSnapshot)) throw new Error('Annotation inventory changed after preflight.')
+  const resolvedInventoryNodes = await resolveInventoryNodes(context, currentInventory)
+  const writeBarrierInventory = await collectCurrentInventory(context)
+  const writeBarrierValidation = validateAnnotationViewMutationInventory(writeBarrierInventory)
+  if (!writeBarrierValidation.valid) throw new Error(`Annotation inventory invalid before annotation write barrier.\n${writeBarrierValidation.errors.join('\n')}`)
+  if (!annotationSameValue(currentSnapshot, canonicalAnnotationViewMutationSnapshot(writeBarrierInventory))) throw new Error('Annotation inventory changed before annotation write barrier.')
+  return mutate(context, writeBarrierInventory, resolvedInventoryNodes)
 }
 
 export function validateSecondaryViewMutationInventory(inventory = {}) {
