@@ -108,6 +108,13 @@ import {
 } from './annotation-operations.mjs'
 import { ondaIcon } from './onda-icons.mjs'
 import { bilanzVorlesetext } from './anmerkung-wortlaut.mjs'
+import {
+  bausteinNamen,
+  bausteinRollen,
+  bestandAusAltenRollen,
+  pruefeBausteinBedarf,
+  versucheBausteinlauf,
+} from './bausteinlauf-model.mjs'
 
 const BLOCK_TYPES = [
   ['paragraph', 'Freier Absatz'],
@@ -440,8 +447,20 @@ function enforceExclusiveLayers(workspace) {
   }
 }
 
+// EINE Stelle, an der Bloecke entstehen. Vorher rief workspace.js an 19 Stellen direkt
+// getEditorBlocks mit ctx.editor auf -- eine davon zu vergessen hiesse, dort still ohne
+// Rollen zu arbeiten, ohne dass ein Test anschlaegt. Genau so ist die Luecke entstanden,
+// die dieser Umbau schliesst.
+function bausteinBestand(workspace = activeWorkspace()) {
+  return workspace?.bausteinarten || null
+}
+
+function aktuelleBloecke(editor = ctx?.editor) {
+  return getEditorBlocks(editor, bausteinRollen(bausteinBestand()))
+}
+
 function syncActiveBlock(workspace) {
-  const blocks = getEditorBlocks(ctx.editor)
+  const blocks = aktuelleBloecke()
   const currentId = getActiveBlockId(ctx.editor)
 
   if (renderedDocId !== ctx.activeDoc()?.id) {
@@ -485,7 +504,7 @@ function selectBlock(block) {
 }
 
 function focusBlock(blockId) {
-  const block = getEditorBlocks(ctx.editor).find(candidate => candidate.id === blockId)
+  const block = aktuelleBloecke().find(candidate => candidate.id === blockId)
   if (!block) return
   selectBlock(block)
   const workspace = activeWorkspace()
@@ -533,7 +552,7 @@ function insertBlock(afterBlockId, role) {
   const workspace = activeWorkspace()
   if (workspace) workspace.activeBlockId = insertedId
   closeInsertMenu({ restoreFocus: false })
-  const block = getEditorBlocks(ctx.editor).find(candidate => candidate.id === insertedId)
+  const block = aktuelleBloecke().find(candidate => candidate.id === insertedId)
   if (block) ctx.editor.commands.setTextSelection(block.pos + 1)
   refreshWorkspace()
   persistWorkspace()
@@ -715,7 +734,7 @@ function renderStructureNav() {
   let list = nav.querySelector('.structure-nav-list')
   if (!list) { list = createNode('div', 'structure-nav-list'); nav.append(list) }
 
-  const blocks = getEditorBlocks(ctx.editor).filter(block => block.id)
+  const blocks = aktuelleBloecke().filter(block => block.id)
   const ids = blocks.map(block => block.id)
   const orderChanged = structureNavState?.docId !== doc.id
     || structureNavState.ids.length !== ids.length
@@ -771,7 +790,7 @@ function erweiterungStelleNode(erweiterung, stelle, index) {
       if (!ziel || typeof ctx?.ops?.openDoc !== 'function') return
       ctx.ops.openDoc(stelle.docId)
       requestAnimationFrame(() => {
-        const treffer = getEditorBlocks(ctx.editor)
+        const treffer = aktuelleBloecke()
           .filter(block => String(block.text || '').includes(String(stelle.text || '')))
         if (treffer.length === 1 && treffer[0].id) focusBlock(treffer[0].id)
       })
@@ -1656,13 +1675,13 @@ function openProjectUnderstandingModal(opener) {
     context: ctx,
     createNode,
     openDialog: openOndaDialog,
-    getBlocks: () => getEditorBlocks(ctx.editor),
+    getBlocks: () => aktuelleBloecke(),
   })
   const languageUi = createLanguageUi({
     context: ctx,
     createNode,
     openDialog: openOndaDialog,
-    getBlocks: () => getEditorBlocks(ctx.editor),
+    getBlocks: () => aktuelleBloecke(),
     applyCorrections: corrections => replaceAnchoredTexts(ctx.editor, corrections),
   })
   openOndaDialog({ id: 'pvModal', title: 'Projektverständnis', opener, build: body => {
@@ -1738,7 +1757,7 @@ function zeigeBudgetPause(workspace) {
 }
 
 function docPlainText() {
-  return getEditorBlocks(ctx.editor)
+  return aktuelleBloecke()
     .map(block => String(block.text || '').trim())
     .filter(Boolean)
     .join('\n\n')
@@ -2478,7 +2497,7 @@ function reconcilePersistedEditingFinding() {
     return { kind: 'stale', editingFinding: stale }
   }
 
-  const result = reconcileEditingFinding(editing, getEditorBlocks(ctx.editor))
+  const result = reconcileEditingFinding(editing, aktuelleBloecke())
   const nextEditing = result.editingFinding
   const changed = editing.status !== nextEditing.status || editing.staleReason !== nextEditing.staleReason
   workspace.editingFinding = nextEditing
@@ -2684,7 +2703,7 @@ function undoLatestRejection() {
 
 function authorizedFindingBlock(finding) {
   if (!finding?.blockId) return null
-  return resolveFindingBlock(finding, getEditorBlocks(ctx.editor))
+  return resolveFindingBlock(finding, aktuelleBloecke())
 }
 
 function handleSuggestionOwnVersion(finding) {
@@ -2728,7 +2747,7 @@ function completeOwnVersion(expectedFindingId) {
 
   const finding = doc.findings.find(candidate => candidate.id === editing.findingId)
   if (!finding || finding.status !== 'open') return
-  const completion = completeEditingFinding(editing, getEditorBlocks(ctx.editor))
+  const completion = completeEditingFinding(editing, aktuelleBloecke())
   if (completion.kind !== 'accept') return
 
   workspace.editingFinding = null
@@ -2859,7 +2878,7 @@ function renderSuggestion(finding, blockId) {
 
 function annotationDocumentSnapshot(doc = ctx?.activeDoc()) {
   const title = document.getElementById('title')?.value ?? doc?.title ?? ''
-  const blocks = getEditorBlocks(ctx?.editor).map(block => ({
+  const blocks = aktuelleBloecke().map(block => ({
     id: block.id,
     type: block.type,
     role: block.role,
@@ -3126,7 +3145,7 @@ function renderLocalFinding() {
   const previousFindingId = previous?.dataset.findingId || previous?.dataset.annotationKind || null
   const inputState = captureInputState(ui.localLayer, '.aura-dialogue__input')
 
-  const blocks = getEditorBlocks(ctx.editor)
+  const blocks = aktuelleBloecke()
   const resolution = currentPassageFinding(doc, blocks)
   const finding = resolution.finding
   const blockId = resolution.block?.id || null
@@ -3274,7 +3293,7 @@ function closeAgentWidget({ dismiss = true, restoreFocus = true } = {}) {
 function renderUnplacedFindingList() {
   const doc = ctx?.activeDoc()
   if (!doc) return null
-  const items = unplacedPassageFindings(doc, getEditorBlocks(ctx.editor))
+  const items = unplacedPassageFindings(doc, aktuelleBloecke())
   if (!items.length) return null
 
   const section = createNode('section', 'unplaced-findings')
@@ -3965,7 +3984,7 @@ function ergaenzeEchteInitiative(workspace, finding, jetzt) {
 async function fuehreHinweislaufAus({ grund = 'pause' } = {}) {
   const doc = ctx?.activeDoc()
   const workspace = activeWorkspace()
-  const blocks = doc ? getEditorBlocks(ctx.editor) : []
+  const blocks = doc ? aktuelleBloecke() : []
   const docText = doc ? baueDocText(blocks) : ''
   const protokoll = workspace ? hinweislaufProtokoll(workspace) : null
   const signatur = seedBodySignature(docText)
@@ -4080,7 +4099,7 @@ async function fuehreErweiterungslaufAus({ vonHand = false } = {}) {
   const doc = ctx?.activeDoc()
   const workspace = activeWorkspace()
   if (doc) ensureErweiterungen(doc)
-  const blocks = doc ? getEditorBlocks(ctx.editor) : []
+  const blocks = doc ? aktuelleBloecke() : []
   const docText = doc ? baueDocText(blocks) : ''
   const docId = doc?.id ?? null
   const project = dokumentProjekt(doc)
@@ -4169,7 +4188,7 @@ function planeErweiterungslauf() {
     const aktuell = initiativeInputState(docId)
     if (!aktuell || aktuell.generation !== generation) return
     if (!editorViewIsVisibleFor(docId) || isComposing) return
-    const signatur = erweiterungsSignatur(docId, baueDocText(getEditorBlocks(ctx.editor)))
+    const signatur = erweiterungsSignatur(docId, baueDocText(aktuelleBloecke()))
     if (!darfAutomatischLaufen(signatur, letzteErweiterungsSignatur)) return
     fuehreErweiterungslaufAus({ vonHand: false })
   }, Math.max(24, restzeit))
@@ -4252,7 +4271,7 @@ function planeHinweislauf() {
     lastInputAt: inputState?.lastInputAt,
     editorSichtbar: editorViewIsVisibleFor(docId),
     isComposing,
-    leseSignatur: () => seedBodySignature(baueDocText(getEditorBlocks(ctx.editor))),
+    leseSignatur: () => seedBodySignature(baueDocText(aktuelleBloecke())),
     letzteSignatur: workspace ? hinweislaufProtokoll(workspace).signatur : null,
     idleMs: AGENT_IDLE_MS,
   })
@@ -4392,7 +4411,7 @@ export function initWorkspace(context) {
   annotationController = createAnnotationController({
     getFindings: () => {
       const doc = ctx?.activeDoc()
-      return doc ? visiblePassageFindingRecords(doc, getEditorBlocks(ctx.editor)).map(record => record.finding) : []
+      return doc ? visiblePassageFindingRecords(doc, aktuelleBloecke()).map(record => record.finding) : []
     },
     getWorkspace: () => activeWorkspace(),
     persist: () => persistWorkspace(),

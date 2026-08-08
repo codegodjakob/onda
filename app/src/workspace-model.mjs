@@ -147,18 +147,19 @@ export function ensureWorkspaceState(doc) {
   return current
 }
 
-export function collectBlockSnapshots(docJson) {
+// rollen: Map<blockId, funktion> aus doc.workspace.bausteinarten (bausteinlauf-model.mjs).
+// Das alte Merkmal node.attrs.semanticRole wird bewusst NICHT mehr gelesen: Seit dem
+// 7. August 2026 liegen die Bausteinarten neben dem Text, und zwei Quellen für dieselbe
+// Angabe sind eine Quelle zu viel. Bestehende Dokumente verlieren nichts —
+// bestandAusAltenRollen hebt alte Merkmale beim ersten Laden in die Ablage.
+export function collectBlockSnapshots(docJson, rollen = null) {
   return (docJson && Array.isArray(docJson.content) ? docJson.content : []).map((node, index) => {
     const text = textOf(node).trim()
-    const role = node.type === 'heading' ? 'heading' : (node.attrs && node.attrs.semanticRole) || 'paragraph'
-    return {
-      id: (node.attrs && node.attrs.blockId) || null,
-      index,
-      type: node.type,
-      role,
-      text,
-      excerpt: text.slice(0, 160),
-    }
+    const id = (node.attrs && node.attrs.blockId) || null
+    const role = node.type === 'heading'
+      ? 'heading'
+      : (id && rollen && rollen.get(id)) || 'paragraph'
+    return { id, index, type: node.type, role, text, excerpt: text.slice(0, 160) }
   })
 }
 
