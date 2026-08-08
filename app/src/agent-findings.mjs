@@ -4,6 +4,7 @@
 
 import { istIntegritaetsfrage, istVonDerTextartAusgeschlossen } from './textart-regeln.mjs'
 import { normalizeAnnotationFinding } from './annotation-contract.mjs'
+import { WOERTLICH_BEHALTEN, verdichteEntscheidungen } from './lauf-bilanz.mjs'
 
 // Mapping abgeleitet aus dem bestehenden Code (reasoning-model.mjs):
 // INTEGRITY_CATEGORIES = fact/source/citation/method/logic; Passage-Findings mit
@@ -137,12 +138,30 @@ export function hinweisZuFinding(hinweis, ankerErgebnis, blockId, docText, jetzt
 
 // Volatiler Prompt-Teil: was bereits entschieden wurde, darf nie wieder
 // vorgeschlagen werden (Spec §5). Kompakt, ohne Zeitstempel im Cache-Präfix.
+//
+// WICHTIG (Issue #13, Task 2): Die harte Garantie gegen wiederholte Hinweise ist NICHT diese
+// Liste, sondern der CLIENTSEITIGE Dedupe (`dedupeHinweise`, anchor-verify.mjs). Der arbeitet
+// in `verarbeiteHinweisantwort` (hinweislauf-model.mjs) weiterhin auf der VOLLEN
+// findings/decisions-Liste dieses Dokuments -- er ruft diese Funktion gar nicht auf und bleibt
+// von der folgenden Verdichtung unberuehrt. Was hier folgt, ist reine Heuristik fuer den
+// PROMPT ans Modell: eine Erinnerungshilfe, kein Tor. Eine Verdichtung dieser Liste kann also
+// nie eine Wiederholung DURCHLASSEN, die der Dedupe sonst gestoppt haette.
+//
+// Frueher wuchs diese Liste linear mit der Entscheidungsgeschichte (ein Eintrag pro je
+// entschiedenem Finding, fuer immer). Jetzt bleiben nur die WOERTLICH_BEHALTEN juengsten
+// Entscheidungen einzeln lesbar (per `verdichteEntscheidungen`, lauf-bilanz.mjs); alles
+// Aeltere faellt je Kategorie in eine Summenzeile `{ kategorie, summe: { angenommen,
+// verworfen } }`. Beide Zeilenarten leben im SELBEN Ausgabe-Array -- die Funktionssignatur
+// (ein Array) bleibt unveraendert, nur die Elemente ab dem 13. aeltesten sind jetzt Summen
+// statt Einzelzeilen. Eine einzelne Zeile hat `entscheidung` (Status-String), eine Summenzeile
+// hat stattdessen `summe` (Zaehlobjekt) -- am Feldnamen ist die Art einer Zeile eindeutig zu
+// erkennen, ohne dass ein drittes Unterscheidungsfeld noetig waere.
 export function fasseEntscheidungenZusammen(findings, decisions) {
   const proFinding = new Map()
   ;(decisions || []).forEach(decision => {
     if (decision?.findingId) proFinding.set(decision.findingId, decision)
   })
-  return (findings || [])
+  const eintraege = (findings || [])
     .filter(finding => finding && finding.status && finding.status !== 'open')
     .map(finding => ({
       anker: String(finding.target || ''),
@@ -150,7 +169,17 @@ export function fasseEntscheidungenZusammen(findings, decisions) {
       kurz: String(finding.short || finding.text || ''),
       entscheidung: String(finding.status || ''),
       begruendung: String(proFinding.get(finding.id)?.reason || ''),
+      // Nur fuer die Alterssortierung in verdichteEntscheidungen -- wird dort wieder
+      // entfernt, bevor die woertlichen Zeilen zurueckkommen (kein Zeitstempel im Prompt).
+      at: proFinding.get(finding.id)?.at,
     }))
+
+  const { woertlich, summen } = verdichteEntscheidungen(eintraege, WOERTLICH_BEHALTEN)
+  const summenZeilen = summen.map(({ kategorie, angenommen, verworfen }) => ({
+    kategorie,
+    summe: { angenommen, verworfen },
+  }))
+  return [...woertlich, ...summenZeilen]
 }
 
 export function fasseOffeneHinweiseZusammen(findings) {

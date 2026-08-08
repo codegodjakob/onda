@@ -14,6 +14,7 @@ import {
   verlaufFuerPrompt,
 } from '../src/chat-kontext.mjs'
 import { baueAnfrage } from '../src/agent-tasks.mjs'
+import { WOERTLICH_BEHALTEN } from '../src/lauf-bilanz.mjs'
 
 // PFLICHT (Lehre aus V-3/H-2, siehe verstaendnis-kontext.test.mjs / hinweis-kontext.test.mjs):
 // baueAnfrage (agent-tasks.mjs) konsumiert AUSSCHLIESSLICH {verstaendnis, docText, volatiles,
@@ -130,6 +131,58 @@ test('entscheidungsEintraege erkennt eigene Fassung, Verwerfen und fehlende Find
   assert.equal(eintraege[1].resultierenderWortlaut, 'Ursprünglicher Wortlaut')
   assert.equal(eintraege[2].kurztext, 'Hinweis nicht mehr vorhanden')
   assert.equal(kurzformEntscheidungen(doc, now)[0], 'Eigene Fassung übernommen: Hinweis')
+})
+
+// Issue #13, Task 2: dieselbe Verdichtung wie fasseEntscheidungenZusammen (agent-findings.mjs),
+// aber ueber die vier Entscheidungsarten (angenommen/verworfen/risiko/eigene) statt Kategorien.
+// Baut 20 Entscheidungen: art zyklisch ueber 4 feste Arten, at absteigend passend zur
+// Erstellungsreihenfolge (f-0 juengste), damit "die juengsten WOERTLICH_BEHALTEN bleiben
+// Einzelzeilen" unmittelbar an der Reihenfolge pruefbar ist.
+function baueEntscheidungenNachArt(anzahl) {
+  const findings = []
+  const decisions = []
+  for (let i = 0; i < anzahl; i += 1) {
+    const art = ['angenommen', 'verworfen', 'risiko', 'eigene'][i % 4]
+    const findingId = `f-${i}`
+    findings.push({ id: findingId, short: `Hinweis ${i}`, action: 'Vorschlag', target: `Anker ${i}` })
+    const basis = { id: `d-${i}`, findingId, at: anzahl - i } // i=0 -> groesster at-Wert
+    if (art === 'risiko') decisions.push({ ...basis, kind: 'reject', outcome: 'risk-accepted', reason: `Begruendung ${i}` })
+    else if (art === 'verworfen') decisions.push({ ...basis, kind: 'reject', outcome: 'dismissed' })
+    else if (art === 'eigene') decisions.push({ ...basis, kind: 'accept', outcome: 'resolved', appliedText: 'Eigene Formulierung' })
+    else decisions.push({ ...basis, kind: 'accept', outcome: 'resolved', appliedText: 'Vorschlag' })
+  }
+  return { doc: { findings, decisions }, arten: Array.from({ length: anzahl }, (unused, i) => ['angenommen', 'verworfen', 'risiko', 'eigene'][i % 4]) }
+}
+
+test('kurzformEntscheidungen: ab der 13. aeltesten Entscheidung eine Sammelzeile je Art', () => {
+  const now = 1_000_000
+  const { doc, arten } = baueEntscheidungenNachArt(20)
+  const zeilen = kurzformEntscheidungen(doc, now)
+
+  // 12 Einzelzeilen wie bisher plus genau eine Sammelzeile fuer die 8 aelteren.
+  assert.equal(zeilen.length, WOERTLICH_BEHALTEN + 1)
+  const einzelzeilen = zeilen.slice(0, WOERTLICH_BEHALTEN)
+  const sammelzeile = zeilen[WOERTLICH_BEHALTEN]
+
+  // Juengste zuerst: f-0..f-11 in genau dieser Reihenfolge (Hinweistext traegt den Index).
+  einzelzeilen.forEach((zeile, i) => assert.ok(zeile.includes(`Hinweis ${i}`), `Zeile ${i}: ${zeile}`))
+
+  // Die restlichen 8 (i=12..19, arten zyklisch) muessen vollstaendig in der Sammelzeile stehen.
+  const erwartet = { angenommen: 0, verworfen: 0, risiko: 0, eigene: 0 }
+  for (let i = WOERTLICH_BEHALTEN; i < 20; i += 1) erwartet[arten[i]] += 1
+  assert.equal(sammelzeile, 'Ältere Entscheidungen: 2 angenommen · 2 verworfen · 2 Risiko angenommen · 2 eigene Fassung')
+  assert.deepEqual(erwartet, { angenommen: 2, verworfen: 2, risiko: 2, eigene: 2 })
+
+  // Keine Abschneidung mit Auslassungszeichen irgendwo in der Ausgabe.
+  zeilen.forEach(zeile => assert.equal(zeile.includes('…'), false, zeile))
+})
+
+test('kurzformEntscheidungen: unter WOERTLICH_BEHALTEN Entscheidungen entsteht keine Sammelzeile', () => {
+  const now = 1_000_000
+  const { doc } = baueEntscheidungenNachArt(5)
+  const zeilen = kurzformEntscheidungen(doc, now)
+  assert.equal(zeilen.length, 5)
+  assert.equal(zeilen.some(zeile => zeile.startsWith('Ältere Entscheidungen:')), false)
 })
 
 test('kurzformHinweise liefert nur offene Hinweise mit Kategorie und Anker', () => {
