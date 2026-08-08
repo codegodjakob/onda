@@ -57,7 +57,11 @@ body.view-home .onda-library-sidebar { display: grid; }
   padding: var(--space-2) var(--space-4);
   border-radius: var(--radius-control);
   color: var(--text-secondary);
-  font: var(--type-label);
+  /* Eintraege ruhen bei 400 — mittleres Gewicht gehoert der Beschriftung darueber
+     ("Bibliothek", "Zuletzt bearbeitet") und dem, was gerade gewaehlt ist. Standen sie
+     auf 500, unterschied die Beschriftung von ihnen nur der Grad; die Regel dazu steht
+     bei --type-rubrik in onda-tokens.css. */
+  font: var(--type-body);
   text-align: left;
   transition: var(--transition-colors);
 }
@@ -68,6 +72,7 @@ body.view-home .onda-library-sidebar { display: grid; }
 .onda-library-nav__item.is-active {
   color: var(--text-primary);
   background: var(--bg-active);
+  font-weight: var(--fw-medium);
 }
 
 .onda-library-recent {
@@ -90,7 +95,6 @@ body.view-home .onda-library-sidebar { display: grid; }
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  font-weight: var(--fw-regular);
 }
 
 .onda-library-footer {
@@ -268,13 +272,21 @@ body.view-editor #editorView {
   background: transparent;
 }
 
+/* padding-top: 0, damit die erste Zeile der Leiste auf demselben Band liegt wie die
+   Topbar gegenueber. Die Klinke haengt fest am Fenster (style.css, .onda-topbar__lead);
+   stuende die Leiste 20px tiefer, stuende der Schriftzug unter der Klinke. */
 #editorView .onda-sidebar {
   width: var(--sidebar-width);
   height: 100%;
-  padding: var(--space-5) var(--space-4) var(--space-4);
+  padding: 0 var(--space-4) var(--space-4);
   border-right: 1px solid var(--border-subtle);
 }
 
+/* Drei Abschnitte — und alle drei Kopfzeilen muessen zu sehen sein, ohne dass jemand
+   scrollt. Bis zum 7.8.2026 rollte diese ganze Flaeche als ein Stueck: die 25 Zeilen
+   der Struktur schoben „Quellen" auf y=1651 in einem Kasten, der bei 912 endet. Auf dem
+   Schirm hatte die linke Spalte zwei Abschnitte, nicht drei.
+   Jetzt rollt nicht mehr die Spalte, sondern der BAUM in ihr. */
 .onda-project-nav {
   min-height: 0;
   display: flex;
@@ -282,9 +294,49 @@ body.view-editor #editorView {
   flex-direction: column;
   gap: var(--space-2);
   overflow-x: hidden;
+  /* auto statt hidden: die Kopfzeilen sind unantastbar (min-height unten), und wenn ein
+     Fenster so niedrig wird, dass selbst die drei Kopfzeilen nicht mehr passen, soll
+     man sie erreichen koennen statt sie zu verlieren. Im Normalfall rollt hier nichts. */
   overflow-y: auto;
   overscroll-behavior: contain;
   padding-bottom: var(--space-3);
+}
+
+/* Die beiden Abschnitte mit Baum teilen sich, was nach den Kopfzeilen uebrig ist.
+   min-height 60px = 16px Polster + 44px Kopfzeile: die Grenze, unter die kein Abschnitt
+   gedrueckt werden darf.
+
+   ZUGEKLAPPT nimmt ein Abschnitt nur seine Kopfzeile — flex: 0 0 auto, er waechst nicht.
+
+   AUFGEKLAPPT muss er wachsen DUERFEN. Vorher stand hier fuer beide Faelle
+   `flex: 0 1 auto` (schrumpfen ja, wachsen nein). Ergebnis: die Struktur mit ihren 25
+   Zeilen nahm die ganze Hoehe, und wer die Quellen aufklappte, bekam einen Kasten von
+   0 Pixeln Hoehe — der Inhalt war da, nur unsichtbar. Genau daran fiel
+   assertZweiGesten.
+
+   flex-basis 0 statt auto ist Absicht: sonst ginge die Verteilung von der vollen
+   Inhaltshoehe aus, und die 25 Struktur-Zeilen bekaemen wieder fast alles. So teilen
+   sich zwei offene Baeume den Platz, und jeder rollt in sich. */
+#editorView #structureNav,
+#editorView #materialNav {
+  min-height: calc(var(--space-4) + 44px);
+  flex: 0 0 auto;
+}
+
+#editorView #structureNav.hat-offenen-baum,
+#editorView #materialNav.hat-offenen-baum {
+  /* Kopfzeile plus mindestens zwei Zeilen — darunter waere ein offener Baum eine
+     Behauptung, kein Baum. */
+  min-height: calc(var(--space-4) + 44px + 44px);
+  flex: 1 1 0;
+}
+#editorView .onda-side-kopf { flex: none; }
+#editorView .structure-nav-list,
+#editorView .onda-side-baum {
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
 }
 
 #editorView .onda-side-footer { flex: none; }
@@ -306,7 +358,21 @@ body.view-editor #editorView {
   min-width: 0;
   padding-inline: max(var(--space-6), calc((100% - 1140px) / 2));
   scroll-padding-block: var(--space-10);
+  transition: padding var(--dur-slow) var(--ease-out);
 }
+
+/* DIE RUHIGE LAGE. Ist der Stift abgelegt, kommt keine Anmerkung mehr — dann traegt
+   der Rand rechts nichts mehr und ist bloss noch Leere, die den Text aus der Mitte
+   schiebt. Gemessen bei 1440px: die Schreibspalte stand 230px links der Fenstermitte.
+   Der Rand faellt also weg und der freie Platz gehoert beiden Seiten gleich.
+
+   Die Schreibspalte behaelt dabei ihre 680px auf den Millimeter — sie wird mittig
+   gestellt, nicht schmaler. Der Rand ist eine Nebenflaeche und weicht; der Text nie
+   (docs/PHILOSOPHIE.md §1, "Der Text ist das Produkt"). */
+#editorView.is-still #scroll {
+  padding-inline: max(var(--space-6), calc((100% - var(--container-reading)) / 2));
+}
+#editorView.is-still #page { --onda-anmerkungsrand: 0px; }
 
 /* DIE EINE massgebliche Regel fuer #page. Es gab zwei — hier und in style.css, gleiche
    Spezifitaet, und diese hier gewann, weil sie spaeter geladen wird. Genau daran ist der

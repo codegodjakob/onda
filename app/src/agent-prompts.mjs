@@ -209,3 +209,27 @@ Bevor du eine Erweiterung aufschreibst, prüfe sie:
 - Könntest du dieselbe Erweiterung auch zu einem ganz anderen Text sagen? Dann ist sie zu allgemein.
 
 Was übrig bleibt, ist selten. Findest du nichts Nicht-Naheliegendes, gib eine leere Liste zurück — das ist ein gültiges Ergebnis und kein Versagen.`
+
+// Die Quellen nach Thema ordnen. Der Auftrag ist NICHT „sortiere", sondern „erkenne, was
+// diese Quellen im Projekt gemeinsam tragen" — und der Unterschied ist der ganze Wert.
+// Ein Sprachmodell greift bei einer Quellenliste zuerst zur Bibliotheksrubrik („PDFs",
+// „Webseiten", „Sonstiges"): die kann jeder Mensch in einer Sekunde selbst bilden, und
+// genau deshalb hilft sie niemandem. Was hilft, ist die Gruppe, die man erst sieht,
+// nachdem jemand sie benannt hat.
+export const QUELLENTHEMEN_ANWEISUNG = `Du ordnest die Quellen eines Schreibprojekts nach Thema.
+
+So gehst du vor:
+- Ein Thema fasst Quellen zusammen, die im Projekt DASSELBE tragen — denselben Gegenstand, denselben Streitpunkt, dieselbe Rolle im Argument.
+- name ist zwei bis vier Wörter, in der Sprache des Projekts, ohne Artikel am Anfang. Er benennt den Gegenstand, nicht die Form: „Aufmerksamkeit im Alltag" ist ein Name, „PDF-Quellen" ist keiner.
+- warum ist EIN Satz: was diese Quellen für dieses Projekt gemeinsam tragen. Keine Aufzählung der Titel — die stehen schon da.
+- quellenIds enthält ausschließlich Kennungen aus der vorgelegten Liste. Erfinde nie eine, vergib nie dieselbe zweimal.
+- Eine Quelle, die in keine Gruppe gehört, lässt du weg. Sie steht dann sichtbar unter „Noch ohne Thema" — das ist die Wahrheit und besser als eine Sammelgruppe, die nichts zusammenfasst.
+- Bilde eher wenige, tragende Themen als viele kleine. Eine Gruppe mit einer einzigen Quelle ist nur dann eine, wenn diese Quelle im Projekt wirklich für sich steht.
+
+Was du nicht tust:
+- Du bildest keine Gruppe nach Dateityp, Herkunft, Jahr oder Aufnahmedatum. Das ist die naheliegende Ordnung und die einzige, die niemand braucht.
+- Du benennst keine Gruppe „Sonstiges", „Verschiedenes", „Weitere Quellen" oder ähnlich. Wer nirgends hingehört, bleibt ohne Thema.
+- Du beurteilst die Quellen nicht und empfiehlst nichts. Du ordnest.
+- Vom Menschen gesetzte Namen übernimmst du wörtlich, Zeichen für Zeichen. Ihn zu verbessern hieße, eine Entscheidung zu widerrufen.
+
+Findest du keine tragende Gemeinsamkeit, gib eine leere Liste zurück. Das ist ein gültiges Ergebnis.`

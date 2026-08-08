@@ -7,6 +7,7 @@ import { chromium } from 'playwright'
 import AxeBuilder from '@axe-core/playwright'
 
 import { ALL_ANNOTATION_KINDS } from '../src/annotation-contract.mjs'
+import { MINDEST_BREITE, MINDEST_HOEHE } from '../src/onda-blase.mjs'
 import { ensureProjectSidebarOpen } from './helpers/onda-navigation.mjs'
 
 const appRoot = resolve(fileURLToPath(new URL('..', import.meta.url)))
@@ -418,6 +419,14 @@ async function runShell(browser) {
 
   await assertTextNeverShrinks(page)
   await assertOrbStaysPut(page)
+  await assertBlaseWaechstAusDemOrb(page)
+  await assertKlinkeBleibtStehen(page)
+  await assertDreiAbschnitte(page)
+  await assertZweiGesten(page)
+  await assertTastwegFolgtDemBlick(page)
+  await assertBausteinHinzufuegen(page)
+  await assertQuellenFensterEineHandschrift(page)
+  await assertRuhigeLage(page)
 
   await page.setViewportSize({ width: 320, height: 760 })
   await page.waitForTimeout(50)
@@ -484,6 +493,169 @@ async function assertTextNeverShrinks(page) {
   })
 }
 
+// „Der Einklapp-Pfeil springt." Er sprang um 183px zur Seite und 14px nach oben,
+// weil es zwei Knöpfe in zwei verschiedenen Kästen waren. Gemessen wird deshalb genau
+// das: die Mitte der Klinke, eingeklappt wie ausgeklappt, auf den Pixel gleich.
+async function assertKlinkeBleibtStehen(page) {
+  const mitte = () => page.evaluate(() => {
+    const kasten = document.getElementById('sidebarToggle').getBoundingClientRect()
+    return {
+      x: Math.round(kasten.left + kasten.width / 2),
+      y: Math.round(kasten.top + kasten.height / 2),
+      breite: Math.round(kasten.width),
+      hoehe: Math.round(kasten.height),
+    }
+  })
+  const stand = async erwartet => page.waitForFunction(
+    wert => document.getElementById('sidebarToggle').getAttribute('aria-expanded') === wert,
+    erwartet,
+  )
+
+  for (const width of [1041, 1280, 1800]) {
+    await page.setViewportSize({ width, height: 900 })
+    await page.waitForTimeout(30)
+    if (await page.locator('#sidebarToggle').getAttribute('aria-expanded') === 'false') {
+      await page.locator('#sidebarToggle').click()
+    }
+    await stand('true')
+    await page.locator('#ondaSidebar').evaluate(async node => {
+      await Promise.all(node.getAnimations().map(animation => animation.finished.catch(() => {})))
+    })
+    const ausgeklappt = await mitte()
+    assert.ok(ausgeklappt.breite >= 44 && ausgeklappt.hoehe >= 44,
+      `Die Klinke ist bei ${width}px nur ${ausgeklappt.breite}×${ausgeklappt.hoehe}px`)
+
+    await page.locator('#sidebarToggle').click()
+    await stand('false')
+    await page.locator('#ondaSidebar').evaluate(async node => {
+      await Promise.all(node.getAnimations().map(animation => animation.finished.catch(() => {})))
+    })
+    const eingeklappt = await mitte()
+    assert.deepEqual(eingeklappt, ausgeklappt,
+      `Die Klinke springt bei ${width}px: ausgeklappt ${JSON.stringify(ausgeklappt)}, eingeklappt ${JSON.stringify(eingeklappt)}`)
+
+    await page.locator('#sidebarToggle').click()
+    await stand('true')
+  }
+}
+
+// „Die linke Spalte hat genau drei Abschnitte: Projektverständnis · Struktur · Quellen."
+// Erweiterungen und Erkanntes sind fort — sie kommen über Chat und Anmerkung.
+async function assertDreiAbschnitte(page) {
+  await page.setViewportSize({ width: 1280, height: 900 })
+  await ensureProjectSidebarOpen(page)
+  const namen = await page.locator('#ondaSidebar .onda-side-name').evaluateAll(nodes => nodes.map(node => ({
+    id: node.id,
+    text: node.textContent.replace(/\d+$/, '').trim(),
+    haspopup: node.getAttribute('aria-haspopup'),
+    hoehe: Math.round(node.getBoundingClientRect().height),
+  })))
+  assert.deepEqual(namen.map(eintrag => eintrag.text), ['Projektverständnis', 'Struktur', 'Quellen'])
+  namen.forEach(eintrag => {
+    assert.equal(eintrag.haspopup, 'dialog', `${eintrag.id} kündigt kein Fenster an`)
+    assert.ok(eintrag.hoehe >= 44, `${eintrag.id} ist nur ${eintrag.hoehe}px hoch`)
+  })
+  for (const weg of ['#erweiterungen', '#erkanntes', '#zurueckgehalten']) {
+    assert.equal(await page.locator(weg).count(), 0, `${weg} steht noch in der Seitenleiste`)
+  }
+  // Und das Erkannte ist trotzdem erreichbar — im Projektverständnis-Fenster.
+  await page.locator('#pvCard').click()
+  await page.locator('#pvModal').waitFor({ state: 'visible' })
+  await page.locator('#pvModal [data-blatt-id="erkanntes"]').click()
+  assert.equal(await page.locator('#pvModal .onda-erk-flaeche').count(), 1,
+    'Das Erkannte ist mit der Seitenleiste verschwunden statt umgezogen')
+  await page.keyboard.press('Escape')
+}
+
+// „Zwei Gesten, klar getrennt. Klick auf den NAMEN öffnet das Overlay, Klick auf den
+// PFEIL klappt den Baum auf und zu."
+async function assertZweiGesten(page) {
+  await page.setViewportSize({ width: 1280, height: 900 })
+  await ensureProjectSidebarOpen(page)
+
+  const sichtbar = () => page.locator('#structureNavList').isVisible()
+  assert.equal(await sichtbar(), true, 'Die Struktur steht zu Beginn offen')
+  await page.locator('#structureTree').click()
+  assert.equal(await sichtbar(), false, 'Der Pfeil klappt den Baum nicht zu')
+  assert.equal(await page.locator('#strukturModal').count(), 0, 'Der Pfeil hat ein Fenster geöffnet')
+  assert.equal(await page.locator('#structureTree').getAttribute('aria-expanded'), 'false')
+  await page.locator('#structureTree').click()
+  assert.equal(await sichtbar(), true)
+  assert.equal(await page.locator('#structureTree').getAttribute('aria-expanded'), 'true')
+
+  await page.locator('#structureOpen').click()
+  await page.locator('#strukturModal').waitFor({ state: 'visible' })
+  assert.equal(await sichtbar(), true, 'Der Name hat den Baum mit umgeklappt')
+  // Der Platz des Einfügemenüs: hier, nicht am Absatz.
+  assert.equal(await page.locator('#strukturBausteinNeu').count(), 1)
+  await page.keyboard.press('Escape')
+  assert.equal(await page.locator('#strukturModal').count(), 0)
+
+  // Und die Quellen genauso.
+  assert.equal(await page.locator('#materialTree').isVisible(), false)
+  await page.locator('#materialTreeToggle').click()
+  assert.equal(await page.locator('#materialTree').isVisible(), true)
+  assert.equal(await page.locator('#materialModal').count(), 0, 'Der Pfeil hat ein Fenster geöffnet')
+  await page.locator('#materialTreeToggle').click()
+}
+
+// „Links und rechts eingeklappt = ganz ruhig." Der Stift aus, die Leiste zu: dann
+// steht nur noch der Text — und zwar in der Mitte, nicht 230px daneben.
+async function assertRuhigeLage(page) {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await ensureProjectSidebarOpen(page)
+  const lesebreite = await page.evaluate(() => parseFloat(
+    getComputedStyle(document.documentElement).getPropertyValue('--container-reading'),
+  ))
+
+  await page.evaluate(() => {
+    const stift = document.getElementById('annotationPresence')
+    if (stift.getAttribute('aria-pressed') === 'true') stift.click()
+  })
+  if (await page.locator('#sidebarToggle').getAttribute('aria-expanded') === 'true') {
+    await page.locator('#sidebarToggle').click()
+  }
+  await page.locator('#ondaSidebar').evaluate(async node => {
+    await Promise.all(node.getAnimations().map(animation => animation.finished.catch(() => {})))
+  })
+  await page.waitForTimeout(420)
+
+  const lage = await page.evaluate(() => {
+    const spalte = document.querySelector('#editor .ProseMirror').getBoundingClientRect()
+    return {
+      breite: Math.round(spalte.width),
+      versatz: Math.round((spalte.left + spalte.width / 2) - window.innerWidth / 2),
+    }
+  })
+  assert.ok(lage.breite >= lesebreite, `Der Text ist in der ruhigen Lage auf ${lage.breite}px geschrumpft`)
+  assert.ok(Math.abs(lage.versatz) <= 2, `Der Text steht in der ruhigen Lage ${lage.versatz}px neben der Mitte`)
+
+  // Und nichts Schwebendes bleibt übrig außer den beiden Zeichen am Fensterrand.
+  const uebrig = await page.evaluate(() => [...document.querySelectorAll('#editorView *')]
+    .filter(node => {
+      // Die eingeklappte Leiste zählt nicht: sie steht außerhalb des Fensters und ist
+      // inert. Vorlesetexte zählen auch nicht — Zurückhaltung ist eine Frage der Augen.
+      if (node.closest('#ondaSidebar')) return false
+      const stil = getComputedStyle(node)
+      if (stil.position !== 'fixed' && stil.position !== 'absolute') return false
+      if (stil.visibility === 'hidden' || stil.display === 'none') return false
+      if (stil.pointerEvents === 'none' || Number(stil.opacity) === 0) return false
+      const kasten = node.getBoundingClientRect()
+      return kasten.width >= 8 && kasten.height >= 8
+    })
+    .map(node => node.id || node.className))
+  assert.deepEqual(uebrig.sort(), ['onda-topbar__aside', 'onda-topbar__lead'],
+    `In der ruhigen Lage schwebt noch etwas: ${JSON.stringify(uebrig)}`)
+
+  await page.evaluate(() => {
+    const stift = document.getElementById('annotationPresence')
+    if (stift.getAttribute('aria-pressed') === 'false') stift.click()
+  })
+  if (await page.locator('#sidebarToggle').getAttribute('aria-expanded') === 'false') {
+    await page.locator('#sidebarToggle').click()
+  }
+}
+
 // „Der Orb bleibt oben rechts. Fest, nicht mitwandernd."
 // Er wanderte aus zwei Gründen: der Stift schob ihn beim Erscheinen um 44px, und ab
 // 1712px schob ihn das Agentenfenster über padding-right an .onda-editor-col um 420px.
@@ -518,6 +690,123 @@ async function assertOrbStaysPut(page) {
     await page.waitForTimeout(30)
     assert.deepEqual(await abstand(), ruhe, `Der Orb wandert bei ${width}px, wenn das Agentenfenster zugeht`)
   }
+}
+
+// „Der Chat wächst aus dem Orb — nicht einblenden, nicht aufklappen, HERAUSWACHSEN."
+// Das ist keine Stimmung, das ist messbar: der Sitzkreis der Silhouette muss auf der
+// Tastfläche des Orbs liegen, und die zwei Kanten, an denen er sie berührt, dürfen
+// sich während des ganzen Wachsens nicht bewegen. Bewegen sie sich, ist es ein Zoom
+// mit transform-origin und kein Wachsen — genau der Fehler, den der Aufbau vermeidet.
+async function assertBlaseWaechstAusDemOrb(page) {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await page.waitForTimeout(30)
+  // Erst in den geschlossenen Zustand und die Faltung ganz abwarten. Wer den
+  // Mitschreiber vorher anwirft, zeichnet die Bilder des Zugehens mit auf und prüft
+  // hinterher die falsche Bewegung — dort führt die Höhe, hier soll die Breite führen.
+  await page.evaluate(() => {
+    if (document.getElementById('editorView').classList.contains('is-agent-open')) {
+      document.getElementById('ondaAura').click()
+    }
+  })
+  await page.waitForTimeout(500)
+  await page.evaluate(() => {
+    // Jedes gezeichnete Zwischenbild mitschreiben — geprüft wird die Bewegung, nicht
+    // nur ihr Ergebnis.
+    window.__blasenBilder = []
+    const pfad = document.querySelector('.onda-blase__pfad')
+    const beobachter = new MutationObserver(() => window.__blasenBilder.push(pfad.getAttribute('d')))
+    beobachter.observe(pfad, { attributes: true, attributeFilter: ['d'] })
+  })
+
+  await page.locator('#ondaAura').click()
+  await page.waitForTimeout(600)
+
+  const lage = await page.evaluate(() => {
+    const kasten = wahl => {
+      const r = document.querySelector(wahl).getBoundingClientRect()
+      return { links: r.left, oben: r.top, rechts: r.right, unten: r.bottom, breite: r.width, hoehe: r.height }
+    }
+    const orb = document.getElementById('ondaAura').getBoundingClientRect()
+    return {
+      blase: kasten('#ondaBlase'),
+      fenster: kasten('#agentWidget'),
+      // Der Orb trägt ein scale(1.04) — sein gemessener Kasten ist also gut 1px zu
+      // groß. Die Mitte verschiebt eine Skalierung nicht, also wird von dort aus
+      // gerechnet: die Tastfläche ist 44px, der Sitzradius folglich 22px.
+      orbMitte: { x: (orb.left + orb.right) / 2, y: (orb.top + orb.bottom) / 2 },
+      bilder: window.__blasenBilder || [],
+      obenAuf: document.elementFromPoint((orb.left + orb.right) / 2, (orb.top + orb.bottom) / 2)?.id,
+    }
+  })
+
+  const nah = (a, b, toleranz, was) => assert.ok(
+    Math.abs(a - b) <= toleranz,
+    `${was}: ${a.toFixed(2)} gegen ${b.toFixed(2)} (erlaubt ${toleranz}px)`,
+  )
+
+  // (a) Kontur und Fenster teilen sich exakt denselben Kasten. Nur so decken sich ihre
+  //     Koordinatensysteme, und nur dann schneidet der Pfad den Inhalt richtig zu.
+  for (const kante of ['links', 'oben', 'rechts', 'unten']) {
+    nah(lage.blase[kante], lage.fenster[kante], 0.5, `Kontur und Fenster stehen auseinander (${kante})`)
+  }
+
+  // (b) Die zwei Kanten, die der Sitz berührt, sind die Kanten der Orb-Tastfläche.
+  nah(lage.fenster.rechts, lage.orbMitte.x + 22, 0.5, 'Die Blase sitzt nicht an der rechten Orb-Kante')
+  nah(lage.fenster.oben, lage.orbMitte.y - 22, 0.5, 'Die Blase sitzt nicht an der oberen Orb-Kante')
+
+  // (c) Der gezeichnete Sitzkreis liegt auf dem Orb. Aus dem Pfad gelesen: die beiden
+  //     letzten Bögen enden am obersten und am rechtesten Punkt des Sitzes.
+  const sitzAusPfad = d => {
+    const boegen = [...d.matchAll(/A 22 22 0 0 1 (-?[\d.]+) (-?[\d.]+)/g)]
+    assert.equal(boegen.length, 2, `Der Pfad hat ${boegen.length} Sitzbögen statt zwei: ${d}`)
+    return { x: Number(boegen[0][1]), y: Number(boegen[1][2]) }
+  }
+  assert.ok(lage.bilder.length >= 10, `Nur ${lage.bilder.length} Zwischenbilder — die Blase springt statt zu wachsen`)
+  const letztes = sitzAusPfad(lage.bilder[lage.bilder.length - 1])
+  nah(lage.blase.links + letztes.x, lage.orbMitte.x, 1, 'Der Sitzkreis sitzt nicht auf dem Orb (x)')
+  nah(lage.blase.oben + letztes.y, lage.orbMitte.y, 1, 'Der Sitzkreis sitzt nicht auf dem Orb (y)')
+
+  // (d) Und er sitzt dort in JEDEM Zwischenbild. Der Ursprung ist nicht ein Punkt, an
+  //     dem eine Transformation ansetzt, sondern die zwei Kanten, die konstant bleiben.
+  const sitze = lage.bilder.map(sitzAusPfad)
+  const xWerte = new Set(sitze.map(punkt => punkt.x))
+  const yWerte = new Set(sitze.map(punkt => punkt.y))
+  assert.equal(xWerte.size, 1, `Der Sitz wandert waagerecht: ${[...xWerte].join(', ')}`)
+  assert.equal(yWerte.size, 1, `Der Sitz wandert senkrecht: ${[...yWerte].join(', ')}`)
+
+  // (e) Beim Wachsen führt die Breite. Beide starten gleichzeitig, die Breite hat die
+  //     kürzere Strecke — daraus wird ein Aufblühen zur Seite und dann nach unten.
+  const anteile = lage.bilder.map(d => {
+    // Die beiden 16er-Bögen sind die untere rechte und die untere linke Ecke: der eine
+    // endet auf der Unterkante, der andere auf der linken Kante.
+    const ecken = [...d.matchAll(/A 16 16 0 0 1 (-?[\d.]+) (-?[\d.]+)/g)]
+    const unten = Number(ecken[0][2])
+    const links = Number(ecken[1][1])
+    const spanne = (ist, klein, gross) => (ist - klein) / (gross - klein)
+    return {
+      breite: spanne(lage.blase.breite - 0.5 - links, MINDEST_BREITE, lage.blase.breite - 1),
+      hoehe: spanne(unten - 0.5, MINDEST_HOEHE, lage.blase.hoehe - 1),
+    }
+  }).filter(anteil => anteil.breite > 0.05 && anteil.breite < 0.95)
+  assert.ok(anteile.length >= 3, 'Zu wenige Zwischenbilder, um die Reihenfolge zu prüfen')
+  assert.ok(
+    anteile.every(anteil => anteil.breite >= anteil.hoehe - 0.02),
+    `Die Höhe läuft der Breite davon: ${JSON.stringify(anteile.slice(0, 4))}`,
+  )
+
+  // (f) Der Orb bleibt der Ursprung und liegt über der Blase — sonst verschluckte sie
+  //     genau die Schaltfläche, aus der sie kommt.
+  assert.equal(lage.obenAuf, 'ondaAura', `Über dem Orb liegt "${lage.obenAuf}"`)
+
+  // (g) Und danach ist nichts übrig: keine Kontur, keine Klassen am Fenster.
+  await page.locator('#ondaAura').click()
+  await page.waitForTimeout(500)
+  const danach = await page.evaluate(() => ({
+    konturVersteckt: document.getElementById('ondaBlase').hasAttribute('hidden'),
+    klassen: document.getElementById('agentWidget').className,
+  }))
+  assert.equal(danach.konturVersteckt, true, 'Die Kontur bleibt nach dem Schließen stehen')
+  assert.equal(danach.klassen, '', `Am Fenster bleibt "${danach.klassen}" hängen`)
 }
 
 async function assertOndaSurface(locator, name, { radius = '0px' } = {}) {
@@ -603,23 +892,77 @@ async function runAccessibility(browser) {
     assert.equal(await page.locator('#editor .ProseMirror').isVisible(), true)
   }
 
-  const mobileTargets = await page.locator('#sidebarReopen, #ondaAura').evaluateAll(nodes => nodes.map(node => {
-    const rect = node.getBoundingClientRect()
-    return { id: node.id, width: rect.width, height: rect.height }
-  }))
+  const mobileTargets = await page.locator('#sidebarToggle, #ondaAura, #structureTree, #materialTreeToggle')
+    .evaluateAll(nodes => nodes.map(node => {
+      const rect = node.getBoundingClientRect()
+      return { id: node.id, width: rect.width, height: rect.height }
+    }))
+  assert.equal(mobileTargets.length, 4, 'Klinke, Orb und die beiden Baum-Pfeile müssen da sein')
   mobileTargets.forEach(target => {
     assert.ok(target.width >= 44 && target.height >= 44, `${target.id}: ${target.width}×${target.height}px`)
   })
 
-  await page.locator('#sidebarReopen').focus()
-  await page.keyboard.press('Enter')
+  // EIN Knopf für beide Richtungen, tastaturbedienbar in beiden. Erst in einen
+  // bekannten Zustand bringen, sonst misst die Prüfung, was der Zufall gerade zeigt.
+  const klinkeSteht = async erwartet => {
+    await page.waitForFunction(
+      wert => document.getElementById('sidebarToggle').getAttribute('aria-expanded') === wert,
+      erwartet,
+    )
+  }
+  const klinkeDruecken = async () => {
+    await page.locator('#sidebarToggle').focus()
+    await page.keyboard.press('Enter')
+  }
+  if (await page.locator('#sidebarToggle').getAttribute('aria-expanded') === 'false') await klinkeDruecken()
+  await klinkeSteht('true')
   assert.equal(await page.locator('#ondaSidebar').isVisible(), true)
-  await page.locator('#sidebarCollapse').focus()
-  await page.keyboard.press('Enter')
-  await page.locator('#sidebarReopen').waitFor({ state: 'visible' })
+  await klinkeDruecken()
+  await klinkeSteht('false')
+  // Eingeklappt ist die Leiste auch nicht mehr zu ertasten — sonst wanderte der Fokus
+  // durch die Bedienelemente einer Fläche, die niemand sieht.
+  assert.equal(await page.locator('#ondaSidebar').evaluate(node => node.inert), true)
+  await klinkeDruecken()
+  await klinkeSteht('true')
+  assert.equal(await page.locator('#ondaSidebar').evaluate(node => node.inert), false)
 
   const motion = await page.locator('[data-annotation-form]').first().evaluate(node => getComputedStyle(node).animationDuration)
   assert.ok(parseFloat(motion) <= 0.001, `Reduzierte Bewegung dauert ${motion}`)
+
+  // Wer keine Bewegung will, bekommt keine — auch nicht das Wachsen der Sprechblase.
+  // Bei einer JS-Animation greift CSS nicht, also muss der Antrieb selbst nachfragen.
+  // Verlangt wird nicht weniger Bewegung, sondern KEINE: ein einziges gezeichnetes
+  // Bild, und zwar sofort das endgültige. Der Inhalt geht dabei nicht verloren — die
+  // Blase sieht identisch aus, sie kommt nur nicht.
+  await page.setViewportSize({ width: 1280, height: 900 })
+  await page.evaluate(() => {
+    window.__blasenBilder = []
+    const pfad = document.querySelector('.onda-blase__pfad')
+    const beobachter = new MutationObserver(() => window.__blasenBilder.push(pfad.getAttribute('d')))
+    beobachter.observe(pfad, { attributes: true, attributeFilter: ['d'] })
+  })
+  await page.locator('#ondaAura').click()
+  await page.waitForTimeout(400)
+  const ruhig = await page.evaluate(() => {
+    const fenster = document.getElementById('agentWidget')
+    const kasten = fenster.getBoundingClientRect()
+    return {
+      bilder: window.__blasenBilder,
+      klassen: fenster.className,
+      breite: kasten.width,
+      hoehe: kasten.height,
+      // assertReducedTransition in v2-smoke.mjs liest genau das — auf #agentWidget darf
+      // deshalb keine CSS-transition liegen, nur Animationen und rAF.
+      transition: getComputedStyle(fenster).transitionDuration,
+    }
+  })
+  assert.equal(ruhig.bilder.length, 1, `Die Blase zeichnet ${ruhig.bilder.length} Bilder statt einem`)
+  assert.equal(ruhig.klassen, 'hat-kontur', `Der Zuschnitt bleibt hängen: "${ruhig.klassen}"`)
+  assert.ok(parseFloat(ruhig.transition) <= 0.001, `Das Agentenfenster überblendet ${ruhig.transition}`)
+  const ecken = [...ruhig.bilder[0].matchAll(/A 16 16 0 0 1 (-?[\d.]+) (-?[\d.]+)/g)]
+  assert.ok(Math.abs(Number(ecken[1][1]) - 0.5) < 0.01, `Die Blase steht links bei ${ecken[1][1]} statt in Endgröße`)
+  assert.ok(Math.abs(Number(ecken[0][2]) - (ruhig.hoehe - 0.5)) < 0.01, `Die Blase steht unten bei ${ecken[0][2]} statt bei ${ruhig.hoehe - 0.5}`)
+  await page.locator('#ondaAura').click()
 
   const axe = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze()
   const severe = axe.violations.filter(item => ['critical', 'serious'].includes(item.impact))

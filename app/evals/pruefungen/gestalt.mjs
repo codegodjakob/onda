@@ -143,15 +143,15 @@ try {
 
   // --- DESIGN-04: keine Grossbuchstaben-Beschriftungen -----------------------
   const versalien = await page.evaluate(() => {
-    // Das Design System erlaubt Versalien ausdruecklich fuer 11-12px-Rubriken
-    // ('ALL-CAPS nur fuer Eyebrow-Labels mit --tracking-wider'). Verboten sind
-    // sie fuer Etiketten, die sich je Element WIEDERHOLEN — davon standen zehn
-    // gleichzeitig auf dem Schirm.
-    const istRubrik = e => e.matches('[class*=eyebrow], [class*=kicker]')
+    // Bis zum 7.8.2026 nahm diese Pruefung Rubriken ausdruecklich aus und war
+    // deshalb gruen, obwohl fuenf Versalien-Beschriftungen sichtbar auf dem Schirm
+    // standen. Die Ausnahme berief sich auf einen Satz im Design System, den Jakob
+    // aufgehoben hat ("ich find, es sieht sehr haesslich aus"). Ohne die Ausnahme
+    // prueft DESIGN-04 endlich das, was der Katalog woertlich verlangt: KEIN
+    // sichtbares Element wird per text-transform in Grossbuchstaben gesetzt.
     const treffer = [...document.querySelectorAll('*')].filter(e => {
       if (e.children.length || !e.offsetParent) return false
       if (getComputedStyle(e).textTransform !== 'uppercase') return false
-      if (istRubrik(e)) return false
       return e.getBoundingClientRect().width > 0
     })
     return { anzahl: treffer.length, beispiele: treffer.slice(0, 4).map(e => e.textContent.trim().slice(0, 22)) }

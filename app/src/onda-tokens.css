@@ -45,6 +45,25 @@
   --type-body:var(--fw-regular) var(--text-base)/var(--leading-normal) var(--font-sans);
   --type-label:var(--fw-medium) var(--text-base)/var(--leading-snug) var(--font-sans);
   --type-caption:var(--fw-regular) var(--text-xs)/var(--leading-snug) var(--font-sans);
+  /* Rubrik — die Beschriftung ueber einem Abschnitt ("Bibliothek", "Modelle").
+     Sie stand bis zum 7.8.2026 in Versalien; Jakob hat sie abgeschafft
+     ("ich find, es sieht sehr haesslich aus"). Versalien haben zwei Dinge auf
+     einmal gesagt: ich bin klein, und ich bin keine Fliesszeile. Faellt die
+     Grossschreibung, muessen Grad, Gewicht und Farbe das allein tragen —
+     kleinster Grad (12px) und mittleres Gewicht (500) gegen 400 im Fliesstext.
+     Kein neuer Grad, kein neues Gewicht, nur eine andere Mischung.
+
+     DIE REGEL DAHINTER, einmal geschrieben und ueberall dieselbe: eine Beschriftung
+     und der Eintrag unter ihr unterscheiden sich im GEWICHT (500 gegen 400) UND in
+     mindestens einem weiteren Merkmal — Grad oder Farbe. Zwei Merkmale, nie nur eines.
+     Ein einziger Gewichtsschritt bei gleicher Groesse und gleicher Farbe reicht nicht:
+     so stand die Seitenleiste am 7.8.2026 da, und "Warum es wichtig ist" las sich
+     genauso stark wie "Struktur" darueber. Welches das zweite Merkmal ist, haengt vom
+     Ort ab — im Baum ist der kleinste Grad schon erreicht, dort traegt die Farbe; in
+     der Bibliothek traegt der Grad. Mittleres Gewicht ist damit im ganzen Programm
+     fuer genau zweierlei reserviert: fuer eine Beschriftung, und fuer das, was gerade
+     GEWAEHLT ist. */
+  --type-rubrik:var(--fw-medium) var(--text-xs)/var(--leading-snug) var(--font-sans);
 
   --space-0:0; --space-px:1px; --space-05:2px; --space-1:4px; --space-2:8px; --space-3:12px;
   --space-4:16px; --space-5:20px; --space-6:24px; --space-7:32px; --space-8:40px; --space-9:48px;

@@ -19,6 +19,7 @@ import { buildExampleStructure, buildExampleNarrative, buildExampleCoach, buildE
 import { EXAMPLE_PROJECT_ID, migrateExampleSeed } from './example-seed.mjs'
 import { initGateway, runTask, hatSchluessel, setzeSchluessel, loescheSchluessel } from './agent-gateway.mjs'
 import { ensureProjectEvidenceShape } from './source-model.mjs'
+import { ensureQuellenThemen } from './quellen-thema-model.mjs'
 import { ensureProjectResearchShape } from './research-run.mjs'
 import { ensureMemoryStore, ensureProjectMemoryShape } from './memory-model.mjs'
 import { synchronizeProjectMemory } from './memory-dossier.mjs'
@@ -147,6 +148,10 @@ function ensureDocShape(d) {
 function ensureProjectShape(p) {
   if (!Array.isArray(p.material)) p.material = []
   ensureProjectEvidenceShape(p)
+  // Muss NACH ensureProjectEvidenceShape stehen: die Selbstheilung wirft Zuordnungen zu
+  // Quellen weg, die es nicht mehr gibt — dafuer muss p.sources vorher existieren, sonst
+  // gaelte jede Zuordnung als verwaist und der Baum waere beim Laden leer.
+  ensureQuellenThemen(p)
   ensureProjectResearchShape(p)
   ensureProjectMemoryShape(p)
   ensureArgumentModel(p)
@@ -613,7 +618,13 @@ export function boot() {
       StarterKit.configure({
         heading: { levels: [1, 2, 3] },
         bold: false,
-        italic: false,
+        // Kursiv ist die einzige Auszeichnung, die zurueckkommt (Jakob, 7.8.2026:
+        // "beim markieren erscheinen wenige werkzeuge — kursiv, zitat und was schon
+        // da ist"). Ein wissenschaftlicher deutscher Text braucht sie fuer Werktitel
+        // und fremdsprachige Ausdruecke, und der Ausgabeweg rechnet laengst damit
+        // (publication-export.mjs bildet em auf italic ab; der Zweig war bisher tot).
+        // Fett, durchgestrichen und Inline-Code bleiben aus — sie sind Betonung, und
+        // Betonung gehoert in den Satzbau, nicht in die Werkzeugleiste.
         strike: false,
         code: false,
       }),

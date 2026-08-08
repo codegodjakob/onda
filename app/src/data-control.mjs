@@ -107,6 +107,11 @@ function buildManifest(state) {
       texts: true,
       projects: true,
       sources: true,
+      // Die Themen, nach denen die Quellen stehen. Sie liegen im Projekt und reisen
+      // deshalb ohnehin mit — aber diese Liste ist eine BEHAUPTUNG von
+      // Vollstaendigkeit, und was sie verschweigt, gilt beim Auszug als nicht
+      // vorhanden. Wer sein Projekt mitnimmt, nimmt auch seine Ordnung mit.
+      quellenThemen: true,
       evidenceBundles: true,
       researchRuns: true,
       decisions: true,
