@@ -180,6 +180,45 @@ test('ein wiederkehrender Satz (treffer=3) wird nie von einem Einmal-Satz verdra
   assert.equal(wiederkehrer.treffer, 3)
 })
 
+// Randfall aus dem Kopf-Kommentar von wendeRegalDeckelAn, hier festgenagelt statt nur per
+// Ad-hoc-Probe geprueft (Nachtrag aus der Durchsicht von Task 2): diesmal ist das Regal NICHT
+// mit Einzelgaengern voll (das prueft der Test darueber), sondern mit lauter WIEDERKEHRERN --
+// jeder Satz schon mindestens zweimal begegnet. Kommt dann ein brandneuer Einmal-Satz dazu,
+// ist ER selbst der einzige mit treffer=1 und damit unausweichlich der Schwaechste im Regal:
+// er verdraengt sich in demselben Zug selbst, keiner der Wiederkehrer wird angetastet.
+test('Regal voll mit lauter Wiederkehrern (treffer>=2): ein neuer Einmal-Satz verdraengt sofort sich selbst', () => {
+  let store = frisch()
+  for (let i = 0; i < REGAL_DECKEL; i += 1) {
+    store = schreibeErkanntes(store, { satz: `Wiederkehrer Nummer ${i}.`, at: i * 2 + 1 }).store
+    store = schreibeErkanntes(store, { satz: `Wiederkehrer Nummer ${i}.`, at: i * 2 + 2 }).store
+  }
+  // Vorbedingung: das Regal ist randvoll und ausschliesslich mit Wiederkehrern.
+  const vorher = erkanntesListe(store)
+  assert.equal(vorher.length, REGAL_DECKEL)
+  assert.ok(vorher.every(gruppe => gruppe.treffer >= 2), 'die Vorbedingung: ALLE Eintraege sind Wiederkehrer')
+
+  const neuzugang = 'Ganz neuer Einmal-Satz.'
+  store = schreibeErkanntes(store, { satz: neuzugang, at: 9999 }).store
+
+  const liste = erkanntesListe(store)
+  assert.equal(liste.length, REGAL_DECKEL, 'das Regal bleibt bei REGAL_DECKEL, auch mit dem Neuzugang')
+
+  // Der Neuzugang selbst ist verdraengt, nicht irgendein Wiederkehrer.
+  const neuSchluessel = schluesselFuer(neuzugang)
+  assert.equal(liste.some(gruppe => gruppe.schluessel === neuSchluessel), false, 'der Neuzugang muss selbst verdraengt sein')
+  const neuEintrag = store.entries.find(eintrag => schluesselFuer(eintrag.content) === neuSchluessel)
+  assert.equal(neuEintrag.status, 'superseded')
+  assert.equal(typeof neuEintrag.supersededAt, 'number')
+
+  // ALLE urspruenglichen Wiederkehrer ueberleben unangetastet, mit unveraendertem treffer.
+  for (let i = 0; i < REGAL_DECKEL; i += 1) {
+    const schluessel = schluesselFuer(`Wiederkehrer Nummer ${i}.`)
+    const gruppe = liste.find(kandidat => kandidat.schluessel === schluessel)
+    assert.ok(gruppe, `Wiederkehrer ${i} muss ueberleben`)
+    assert.equal(gruppe.treffer, 2)
+  }
+})
+
 test('erneutes Merken eines ueberholten Satzes belebt ihn wieder, mit frischem treffer', () => {
   // Bestehendes Verhalten von schreibeErkanntes, hier nur festgehalten: eine neue
   // Begegnung ist immer ein neuer aktiver Eintrag, auch wenn der Schluessel schon
