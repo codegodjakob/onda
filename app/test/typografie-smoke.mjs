@@ -265,6 +265,185 @@ async function pruefeAuswahlLeiste(browser) {
   await context.close()
 }
 
+// ---------- Ganze Wörter ----------
+// „ich will, dass nirgendwo einfach der Text aufhört" (Jakob, 8.8.2026) gilt nicht nur
+// den drei Punkten am Ende. Ein Wort, das mitten entzweigebrochen wird, ist derselbe
+// Fehler in anderer Gestalt: Text wird verstümmelt, damit er in einen Kasten passt.
+//
+// Gemessen wird die VERMEIDBARE Trennung, und die erkennt man an zwei Dingen zugleich:
+//
+//   1. Das Wort FÄNGT eine Zeile AN und bricht trotzdem. Steht ein Wort mitten in einem
+//      Absatz, ist am Zeilenende naturgemäß nur noch ein Rest Platz — dass es dort
+//      getrennt wird, ist gewöhnlicher Fließtext und in deutscher Typografie richtig
+//      („Über-legung"). Wer eine Zeile anfängt, hat dagegen die ganze Breite vor sich.
+//   2. Es hätte in eine volle Zeile der Karte gepasst. Gerechnet wird ausdrücklich gegen
+//      die KARTE, nicht gegen die Spalte, in der das Wort gerade steht: Genau die zu
+//      schmale Spalte war ja der Fehler. Wer gegen sie prüft, erklärt den Fehler für
+//      unvermeidlich und meldet Grün.
+//
+// Beides zusammen heißt: Der Umbruch hat nichts erspart. Das Wort hatte Platz und wurde
+// trotzdem zerteilt. Ein wirklich zu langes Wort — länger als die Karte breit ist —
+// bleibt erlaubt; dort setzt die Silbentrennung einen Strich, und der sagt an, dass es
+// weitergeht.
+const gebrocheneWoerter = page => page.evaluate(() => {
+  const karte = [...document.querySelectorAll('.onda-annotation')].find(k => k.offsetParent)
+  if (!karte) return { fehler: 'keine sichtbare Anmerkungskarte — hier ist nichts zu messen' }
+
+  // Eine Probe mit demselben Schriftschnitt, die nicht umbrechen darf, sagt, wie breit
+  // ein Wort ungebrochen wäre.
+  const probe = document.createElement('span')
+  probe.style.cssText = 'position:fixed;left:-9999px;top:0;white-space:pre;visibility:hidden'
+  document.body.append(probe)
+  const natuerlicheBreite = (wort, stil) => {
+    probe.style.font = `${stil.fontStyle} ${stil.fontWeight} ${stil.fontSize} / ${stil.lineHeight} ${stil.fontFamily}`
+    probe.textContent = wort
+    return probe.getBoundingClientRect().width
+  }
+
+  // Wie viel Platz HÄTTE das Wort gehabt? Ausdrücklich nicht die Breite der Spalte, in
+  // der es gerade steht — die ist ja das Ergebnis des Layouts und damit der Fehler
+  // selbst. Gefragt ist die Karte: was bliebe, wenn dem Wort eine ganze Zeile gehörte.
+  // Gerechnet wird von der Innenbreite der Karte abwärts, abzüglich der Ränder aller
+  // Kästen, die zwischen ihr und dem Wort liegen.
+  const karteStil = getComputedStyle(karte)
+  const karteInnen = karte.getBoundingClientRect().width
+    - parseFloat(karteStil.paddingLeft) - parseFloat(karteStil.paddingRight)
+  const platzInDerKarte = element => {
+    let abzug = 0
+    for (let knoten = element; knoten && knoten !== karte; knoten = knoten.parentElement) {
+      const stil = getComputedStyle(knoten)
+      if (stil.display.startsWith('inline')) continue
+      abzug += parseFloat(stil.paddingLeft) + parseFloat(stil.paddingRight)
+        + parseFloat(stil.borderLeftWidth) + parseFloat(stil.borderRightWidth)
+        + parseFloat(stil.marginLeft) + parseFloat(stil.marginRight)
+    }
+    return karteInnen - abzug
+  }
+
+  // Fängt das Wort seine Zeile an? Verglichen wird mit der linken Innenkante des Kastens,
+  // in dem es steht — dem nächsten Vorfahr, der die Zeilen umbricht.
+  const faengtZeileAn = (element, ersteZeile) => {
+    let knoten = element
+    while (knoten && knoten !== karte && getComputedStyle(knoten).display.startsWith('inline')) {
+      knoten = knoten.parentElement
+    }
+    const stil = getComputedStyle(knoten || element)
+    const kante = (knoten || element).getBoundingClientRect().left
+      + parseFloat(stil.paddingLeft) + parseFloat(stil.borderLeftWidth)
+    return ersteZeile.left <= kante + 1
+  }
+
+  const funde = []
+  const lauf = document.createTreeWalker(karte, NodeFilter.SHOW_TEXT)
+  let knoten
+  while ((knoten = lauf.nextNode())) {
+    const eltern = knoten.parentElement
+    if (!eltern?.offsetParent) continue
+    const stil = getComputedStyle(eltern)
+    const platz = platzInDerKarte(eltern)
+    for (const treffer of (knoten.nodeValue || '').matchAll(/\S{2,}/g)) {
+      const bereich = document.createRange()
+      bereich.setStart(knoten, treffer.index)
+      bereich.setEnd(knoten, treffer.index + treffer[0].length)
+      const rechtecke = [...bereich.getClientRects()]
+      const zeilen = new Set(rechtecke.map(rechteck => Math.round(rechteck.top)))
+      if (zeilen.size < 2) continue
+      if (!faengtZeileAn(eltern, rechtecke[0])) continue
+      const breite = natuerlicheBreite(treffer[0], stil)
+      if (breite > platz) continue
+      funde.push(`„${treffer[0]}" in ${eltern.className || eltern.tagName}: `
+        + `${Math.round(breite)}px Wort in ${Math.round(platz)}px Platz, trotzdem auf ${zeilen.size} Zeilen`)
+    }
+  }
+  probe.remove()
+
+  // Und nichts läuft seitlich aus der Karte heraus: ein Wort, das nicht gebrochen wird,
+  // aber über den Rand steht, wäre nur die andere Hälfte desselben Fehlers.
+  const kr = karte.getBoundingClientRect()
+  const raus = [...karte.querySelectorAll('*')]
+    .filter(kind => kind.getBoundingClientRect().right > kr.right + 1)
+    .map(kind => kind.className || kind.tagName)
+
+  return { funde, raus, karteBreite: Math.round(kr.width) }
+})
+
+// Die zweite Hälfte der Regel, und sie braucht eine eigene Messung. Ob ein Umbruch
+// mitten im Wort einen Trennstrich gesetzt hat, lässt sich am gezeichneten Text NICHT
+// ablesen: der Strich ist kein Zeichen im Dokument, und die Rechtecke eines Bereichs
+// zählen ihn nicht mit (nachgemessen 8.8.2026 — Unterschied exakt 0). Gefragt wird
+// deshalb die Regel selbst, und zwar die WIRKSAME am laufenden Programm, nicht ihr
+// Wortlaut in der Datei: `overflow-wrap: anywhere` ist die Erlaubnis, an jeder
+// beliebigen Stelle zu schneiden, `hyphens: auto` die Anweisung, nach Silben zu trennen.
+//
+// Ausgenommen ist die Web-Adresse einer Quelle. Fehlt einer Quelle der Titel, steht ihre
+// nackte Adresse in der Zeile; die hat weder Leerzeichen noch Silben und liefe sonst
+// quer aus der Anmerkung. Dort ist „irgendwo brechen" richtig.
+const umbruchRegeln = page => page.evaluate(() => {
+  const karte = [...document.querySelectorAll('.onda-annotation')].find(k => k.offsetParent)
+  if (!karte) return { fehler: 'keine sichtbare Anmerkung — hier ist nichts zu messen' }
+  const erlaubt = knoten => knoten.closest('.aura-note__srclink')
+  const freibriefe = [karte, ...karte.querySelectorAll('*')]
+    .filter(knoten => knoten.offsetParent && !erlaubt(knoten))
+    .filter(knoten => getComputedStyle(knoten).overflowWrap === 'anywhere')
+    .map(knoten => knoten.className || knoten.tagName)
+  return { freibriefe, trennung: getComputedStyle(karte).hyphens }
+})
+
+async function pruefeGanzeWoerter(browser) {
+  const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, reducedMotion: 'reduce' })
+  const page = await context.newPage()
+  await oeffneBeispiel(page)
+  await page.locator('.onda-annotation').first().waitFor({ state: 'visible' })
+
+  const regeln = await umbruchRegeln(page)
+  assert.ok(!regeln.fehler, regeln.fehler)
+  assert.deepEqual(regeln.freibriefe, [],
+    'Diese Teile der Anmerkung dürfen Wörter an jeder beliebigen Stelle zerschneiden '
+    + `(overflow-wrap: anywhere): ${regeln.freibriefe.join(', ')}`)
+  assert.equal(regeln.trennung, 'auto',
+    `Die Anmerkung trennt nicht nach Silben (hyphens: ${regeln.trennung}) — ein zu langes `
+    + 'Wort bricht dann ohne Trennstrich um oder läuft seitlich heraus')
+
+  // Der gemeldete Fall: bei 1280px ist die Karte am schmalsten, weil rechts vom Absatz
+  // nur der Rest des Randes bleibt. Dort stand „Konzentati / on".
+  // Die anderen Breiten stehen daneben, weil die Karte mit dem Rand mitwächst: 1024px
+  // stellt sie unter den Text, 1440px gibt ihr die volle Wunschbreite.
+  for (const breite of [1280, 1440, 1024]) {
+    await page.setViewportSize({ width: breite, height: 900 })
+    await bildwechsel(page)
+    await page.waitForTimeout(150)
+    const stand = await gebrocheneWoerter(page)
+    assert.ok(!stand.fehler, `${breite}px: ${stand.fehler}`)
+    assert.deepEqual(stand.funde, [],
+      `${breite}px (Karte ${stand.karteBreite}px): Wörter mitten entzweigebrochen, obwohl sie ganz gepasst hätten:\n  `
+      + stand.funde.join('\n  '))
+    assert.deepEqual(stand.raus, [], `${breite}px: Teile der Anmerkung stehen über dem rechten Kartenrand`)
+  }
+
+  // Und der harte Fall: ein Wort, das selbst über die volle Kartenbreite nicht passt.
+  // Hier ist eine Trennung erlaubt — herauslaufen darf trotzdem nichts.
+  await page.setViewportSize({ width: 1280, height: 900 })
+  await bildwechsel(page)
+  await page.evaluate(() => {
+    const block = window.AIWT.__blockIdentityTestBridge.getBlocks().find(kandidat => kandidat.text.length > 24)
+    window.AIWT.__workspaceTestBridge.injectFinding({
+      id: 'typografie-langes-wort', kind: 'form', anmerkungsart: 'rechtschreibung', status: 'open',
+      placement: 'passage', blockId: block.id,
+      target: 'Benachrichtigungsunterbrechungen',
+      action: 'Aufmerksamkeitsunterbrechungen',
+      short: 'Ein Wort, das länger ist als die Karte breit.',
+      createdAt: -1,
+    })
+  })
+  await page.waitForTimeout(400)
+  const langes = await gebrocheneWoerter(page)
+  assert.ok(!langes.fehler, `langes Wort: ${langes.fehler}`)
+  assert.deepEqual(langes.funde, [],
+    `Langes Wort (Karte ${langes.karteBreite}px): vermeidbare Trennung:\n  ${langes.funde.join('\n  ')}`)
+  assert.deepEqual(langes.raus, [], 'Das lange Wort steht über dem rechten Kartenrand')
+  await context.close()
+}
+
 // ---------- Beschriftung gegen Eintrag ----------
 // Ohne Versalien trägt allein die Mischung aus Grad, Gewicht und Farbe. Ein einziger
 // Gewichtsschritt reicht nicht: am 7.8.2026 waren „Struktur" und „Warum es wichtig ist"
@@ -380,6 +559,7 @@ try {
   await pruefeVersalien(browser)
   await pruefeStufen(browser)
   await pruefeAuswahlLeiste(browser)
+  await pruefeGanzeWoerter(browser)
   await pruefeBeschriftungen(browser)
   console.log('Typografie smoke: PASS')
 } finally {
