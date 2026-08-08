@@ -3865,9 +3865,20 @@ function positionLocalSurface(blockId) {
   const scrollRect = ui.scroll?.getBoundingClientRect()
   if (layerRect.width <= 0 || blockRect.width <= 0) return
   const gutter = 16
+  // Wunschbreite und Mindestbreite sind zwei verschiedene Dinge. Bis zum 8.8.2026 stand
+  // hier nur die Wunschbreite, und danebenstehen hiess: 340px oder gar nicht. Bei 1280px
+  // Fensterbreite bleiben rechts vom Absatz 312px — zu wenig fuer die Schwelle, also fiel
+  // die Anmerkung unter den Text und spannte ueber dessen volle Breite (DESIGN-01,
+  // Issue #31: gemessen x=288 Breite=680, identisch mit der Textspalte).
+  //
+  // Der Text schrumpft nie (docs/PHILOSOPHIE.md): die Schreibspalte behaelt ihre Breite,
+  // die Nebenflaeche passt sich an. Also wird die Anmerkung schmaler, wenn der Rand
+  // schmaler ist — und faellt erst darunter, wenn nicht einmal die Mindestbreite passt.
+  // Unter 1040px bleibt es beim Darunter: dort ist kein Rand mehr, den man teilen koennte.
   const sideWidth = 340
+  const minSideWidth = 260
   const availableRight = layerRect.right - blockRect.right
-  const below = window.matchMedia('(max-width: 1040px)').matches || availableRight < sideWidth + 48
+  const below = window.matchMedia('(max-width: 1040px)').matches || availableRight < minSideWidth + 42
   const localWidth = below
     ? Math.max(0, Math.min(blockRect.width, layerRect.width - gutter * 2))
     : Math.min(sideWidth, availableRight - 42)
