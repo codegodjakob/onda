@@ -72,7 +72,7 @@ body.view-editor #editorView { display: flex; }
   mask-image: linear-gradient(to bottom, transparent 0, black 44px, black calc(100% - 44px), transparent 100%);
 }
 /* Bibliothek und Schreibansicht sprechen dieselbe Sprache: alle Maße hier stammen
-   aus den Gestaltungsmarken (design-system/tokens), keine frei gewaehlten Pixel mehr.
+   aus den Gestaltungsmarken (design/tokens), keine frei gewaehlten Pixel mehr.
    margin-inline statt der margin-Kurzform — 'margin: 0 auto' mischt eine Abstands-
    entscheidung mit einer Zentrierung, und nur die Zentrierung ist hier gemeint. */
 #homeInner {
