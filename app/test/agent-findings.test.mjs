@@ -207,7 +207,10 @@ test('fasseEntscheidungenZusammen und fasseOffeneHinweiseZusammen trennen entsch
 const KATEGORIEN_5 = Object.freeze(['fakt', 'logik', 'quelle', 'sprache', 'struktur'])
 const AUSGAENGE_3 = Object.freeze(['resolved', 'dismissed', 'risk-accepted'])
 
-function baueFindingsUndDecisions(anzahl) {
+// atVon(i, anzahl) bestimmt den Zeitstempel je Index -- als Funktion statt als feste Formel,
+// damit ein Aufrufer (Review-Nachtrag unten) eine `at`-Reihenfolge waehlen kann, die NICHT der
+// Array-Reihenfolge entspricht.
+function baueFindingsUndDecisions(anzahl, atVon = (i, n) => n - i) {
   const findings = []
   const decisions = []
   for (let i = 0; i < anzahl; i += 1) {
@@ -222,7 +225,7 @@ function baueFindingsUndDecisions(anzahl) {
     decisions.push({
       findingId: `f-${i}`,
       reason: `Begruendung ${i}`,
-      at: anzahl - i, // i=0 -> groesster at-Wert -> juengste Entscheidung
+      at: atVon(i, anzahl),
     })
   }
   return { findings, decisions }
@@ -261,11 +264,16 @@ test('fasseEntscheidungenZusammen: ab dem 13. aeltesten Eintrag verdichten sich 
   })
 })
 
-test('fasseEntscheidungenZusammen: bis WOERTLICH_BEHALTEN Eintraege bleibt die Ausgabe die alte Form', () => {
-  // Wenige Eintraege, at absteigend passend zur Erstellungsreihenfolge (kein Umsortieren noetig,
-  // damit die Reihenfolge exakt der alten map()-Ausgabe entspricht) -- Regressionsschutz:
-  // wer die Verdichtung einbaut, darf am Verhalten unterhalb der Schwelle nichts aendern.
-  const { findings, decisions } = baueFindingsUndDecisions(5)
+test('fasseEntscheidungenZusammen: bis WOERTLICH_BEHALTEN Eintraege bleibt die Ausgabe die alte Form (Array-Reihenfolge, unabhaengig vom Entscheidungsdatum)', () => {
+  // Review-Nachtrag: `at` bewusst NICHT deckungsgleich mit der Array-Reihenfolge (Finding 1
+  // ist am juengsten entschieden, Finding 2 am aeltesten, obwohl beide mittendrin im Array
+  // stehen). Eine Fixture, deren `at` einfach mit wachsendem Index faellt, kann eine
+  // Implementierung, die unterhalb der Schwelle trotzdem nach `at` sortiert, nicht von der
+  // korrekten unterscheiden -- beide liefern zufaellig dieselbe Reihenfolge. Die alte,
+  // unverdichtete Form kannte kein `at` und gab immer die Array-Reihenfolge zurueck; genau die
+  // wird hier erwartet, nicht die nach Datum sortierte.
+  const atAusserDerReihe = [300, 500, 100, 400, 200]
+  const { findings, decisions } = baueFindingsUndDecisions(5, i => atAusserDerReihe[i])
   const entscheidungen = fasseEntscheidungenZusammen(findings, decisions)
 
   const alteForm = findings.map((finding, i) => ({

@@ -269,6 +269,26 @@ test('verdichteEntscheidungen: die juengsten bleiben woertlich, aeltere werden K
   assert.equal(ausMuell.summen[0].angenommen, 1)
 })
 
+// Review-Nachtrag (Task 2): eine Fixture, deren `at` einfach mit wachsendem Index faellt,
+// kann eine Implementierung nicht von einer unterscheiden, die unterhalb der Schwelle
+// trotzdem sortiert -- beide liefern zufaellig dieselbe Reihenfolge. Diese Fixture bricht die
+// Deckungsgleichheit absichtlich: Eintrag 0 steht zuerst im Array, ist aber NICHT der
+// juengste (`at`). Die alte, unverdichtete Form kannte kein `at` und gab immer die
+// Eingabereihenfolge zurueck -- das muss unterhalb der Schwelle so bleiben.
+test('verdichteEntscheidungen: unterhalb der Schwelle bleibt die Eingabereihenfolge erhalten (kein Sortieren nach at)', () => {
+  const eintraege = [
+    { anker: 'A0', kategorie: 'fakt', kurz: '', entscheidung: 'resolved', begruendung: '', at: 300 },
+    { anker: 'A1', kategorie: 'fakt', kurz: '', entscheidung: 'resolved', begruendung: '', at: 500 },
+    { anker: 'A2', kategorie: 'fakt', kurz: '', entscheidung: 'resolved', begruendung: '', at: 100 },
+    { anker: 'A3', kategorie: 'fakt', kurz: '', entscheidung: 'resolved', begruendung: '', at: 400 },
+    { anker: 'A4', kategorie: 'fakt', kurz: '', entscheidung: 'resolved', begruendung: '', at: 200 },
+  ]
+  const ergebnis = verdichteEntscheidungen(eintraege, WOERTLICH_BEHALTEN)
+  assert.deepEqual(ergebnis.woertlich.map(e => e.anker), ['A0', 'A1', 'A2', 'A3', 'A4'])
+  assert.deepEqual(ergebnis.summen, [])
+  ergebnis.woertlich.forEach(eintrag => assert.equal('at' in eintrag, false))
+})
+
 // ---- WACHSTUM: der eigentliche Abnahme-Kern von #13 -------------------------------------
 
 test('WACHSTUM: die verdichtete Form waechst nicht linear mit der Entscheidungsgeschichte', () => {

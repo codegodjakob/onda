@@ -186,6 +186,21 @@ export function verdichteEntscheidungen(eintraege, woertlichBehalten = WOERTLICH
   const grenze = Number.isFinite(woertlichBehalten) ? Math.max(0, Math.trunc(woertlichBehalten)) : WOERTLICH_BEHALTEN
   const gueltig = (Array.isArray(eintraege) ? eintraege : []).filter(e => e && typeof e === 'object')
 
+  // Unterhalb der Schwelle gibt es nichts zu verdichten: die Funktion ist dann ein reiner
+  // Durchreicher in EINGABE-Reihenfolge (nur `at` gestrippt, leere Summen) -- byte-gleiche
+  // Ruecknahme in die alte, unverdichtete Prompt-Form (Regressionsschutz aus dem Plan). Die
+  // alte Form kannte kein `at` und gab immer die Aufrufer-Reihenfolge zurueck; ein Sortieren
+  // nach `at` waere hier eine Verhaltensaenderung, die kein Aufrufer angefordert hat -- erst
+  // AB der Verdichtung selbst (mehr Eintraege als `woertlichBehalten`) ist eine Alters-
+  // Reihenfolge ueberhaupt Teil des neuen Vertrags.
+  if (gueltig.length <= grenze) {
+    const woertlich = gueltig.map(eintrag => {
+      const { at, ...ohneZeit } = eintrag
+      return ohneZeit
+    })
+    return { woertlich, summen: [] }
+  }
+
   // Juengste zuerst. Eintraege ohne `at` (Task 2 ergaenzt es erst) sortieren als aelteste --
   // sie sollen nicht faelschlich fuer "aktuell" gehalten werden.
   const sortiert = [...gueltig].sort((a, b) => {
