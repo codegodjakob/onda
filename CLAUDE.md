@@ -9,7 +9,21 @@ macOS-Schlüsselbund und verlässt die App nie.
 nicht sofort miterklärt werden. Belege Behauptungen über das System am Code, nicht an
 den Spezifikationen — die lagen schon falsch (siehe `docs/VISION-GEGEN-GEBAUTES.md`).
 
-## Agent skills
+## Diese Datei wiederholt nichts
+
+Sie sagt nur, wo etwas steht. Was hier ein zweites Mal stünde, würde an einer der beiden
+Stellen altern — und niemand wüsste, an welcher.
+
+| Frage | Die Antwort steht in |
+|---|---|
+| Was ist Onda, wie startet man es, wie prüft man es? | `README.md` |
+| Welche Regeln gelten, und welcher Wächter erzwingt sie? | `KONVENTIONEN.md` |
+| Welche Ordner gibt es, und wie heißen die Dinge? | `CONTEXT.md` |
+| Welche Entscheidung wurde wann und warum getroffen? | `docs/adr/` |
+| Welches Papier unter `docs/` gilt noch, welches ist archiviert? | `docs/README.md` |
+| Wer arbeitet gerade woran? | `betrieb/LEITSTAND.md` und `betrieb/REVIERE.md` |
+
+## Was ein Agent hier zusätzlich wissen muss
 
 ### Issue tracker
 
@@ -27,27 +41,27 @@ Die fünf kanonischen Rollen, jedes Etikett heißt wie seine Rolle: `needs-triag
 Einzelner Kontext — `CONTEXT.md` und `docs/adr/` im Projektwurzelverzeichnis. Siehe
 `docs/agents/domain.md`.
 
-## Orientierung
-
-| Datei | Inhalt |
-|---|---|
-| `docs/PHILOSOPHIE.md` | Die Gestaltungsgrundsätze. Entschieden, nicht gesammelt — eine Oberfläche, die einem widerspricht, ist falsch |
-| `docs/ONDA-SYSTEM.md` | Das ganze System in 16 Kapiteln |
-| `docs/VISION-GEGEN-GEBAUTES.md` | Der Abstract gegen den Code geprüft |
-| `docs/REDESIGN-IDEEN.md` | Gesammelte Umgestaltungsideen, noch nichts entschieden |
-| `docs/ABNAHME-ETAPPE-A.md` | Abnahme der zehn Kriterien für den KI-Anschluss |
-| `docs/rueckmeldung/` | Jakobs Rückmeldungs-Karten (Quelle des Eval-Katalogs). Regel: Was der Eval-Katalog zitiert, ist versioniert |
-| `app/evals/v2-fertigzustand.json` | Der Eval-Katalog, der den Fertigzustand definiert — Anzahl und Stand frisch messen: `node evals/run-fertigzustand.mjs` |
-
-## Prüfen
+## Prüfen — die Kurzfassung
 
 ```
-cd app && npm test          # alle Tests; die Anzahl zeigt der Lauf selbst
-cd app && npm run build     # Bundle bauen
-cd mac && ./build.sh        # Mac-App bauen
-node evals/run-fertigzustand.mjs   # Fertigzustand frisch messen
-node evals/zeichne-stand.mjs       # Diagramm dazu
+cd app && npm run test:unit      # die Tests; die Anzahl zeigt der Lauf selbst
+cd app && npm run test:smoke     # die Rauchtests im Browser
+cd app && npm run build          # das Bündel bauen
+node betrieb/waechter/alle.mjs   # alle Wächter auf einmal
 ```
 
-Browser-Prüfungen brauchen einen lokalen Server auf Port 4173 (`cd app && python3 -m
-http.server 4173`).
+**Der Prüfserver ist nicht irgendein Dateiserver.** Browser-Prüfungen laufen gegen
+`http://127.0.0.1:4173/`, und dorthin gehört genau dieser eine Server:
+
+```
+cd app && npm run dev            # startet app/scripts/dev-server.mjs auf Port 4173
+```
+
+Er baut das Bündel beim Start und nach jeder Änderung neu (`app/scripts/dev-server.mjs`
+lädt dafür esbuild). Ein bloßer Dateiserver tut das nicht: `app/dist/` steht in
+`.gitignore`, ist also im frischen Baum leer. Wer die Prüfung gegen einen solchen Server
+laufen lässt, misst ein altes oder gar kein Bündel — und damit etwas anderes als den
+Code, den er gerade geschrieben hat.
+
+Die lange Fassung mit allen Läufen steht in `README.md`, die Regeln dahinter in
+`KONVENTIONEN.md`.

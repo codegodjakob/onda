@@ -1,8 +1,56 @@
-# Agentisches Schreibsystem
+# Onda — Landkarte und Fachvokabular
 
-Das Produkt unterstuetzt Menschen dabei, anspruchsvolle Texte zu verstehen, zu entwickeln, zu pruefen und selbst zu schreiben. Die Sprache trennt belegtes Wissen, die Einordnung des Agenten und konkrete Textvorschlaege konsequent voneinander.
+Zwei Dinge stehen hier, und sonst nichts: **wo im Baum was liegt**, und **wie die Dinge
+heißen, über die dieses Projekt spricht**.
 
-## Arbeit und Autorschaft
+Was hier bewusst **nicht** mehr steht, ist eine Liste der einzelnen Dateien. Diese Liste
+gab es bis zum 8. August 2026, und sie war zuletzt zur Hälfte falsch: Sie nannte 52 von
+92 Dateien in `app/src/` und kannte die übrigen 40 nicht. Eine Liste, die an einer Stelle
+gepflegt werden muss, altert genau so. Was eine einzelne Datei ist, sagt seit dem
+8. August die Datei selbst — der Kopfkommentar in ihrer ersten Zeile. Der kann nicht
+veralten, ohne dass man beim Lesen darüber stolpert.
+
+## Die Landkarte: sechs Ordner
+
+Im Wurzelverzeichnis liegen sechs Ordner. Jeder hat genau eine Bedeutung. Wer weiß, in
+welchem er gerade gräbt, weiß auch, wem er dabei ins Gehege kommt — die Regeln dazu
+stehen in `betrieb/REVIERE.md`.
+
+| Ordner | Was darin liegt | Was ausdrücklich nicht |
+|---|---|---|
+| `app/` | Das Programm selbst: Quelltext, Tests, Eval-Katalog, Bauwerkzeuge. Alles Ausführbare lebt hier — hier steht die Abhängigkeitsliste, aus der die App wirklich gebaut wird. | Keine Gestaltungsquellen, keine Betriebspapiere. |
+| `betrieb/` | Wie an diesem Projekt gearbeitet wird: die Wächter, der Leitstand (wer arbeitet gerade woran), die Reviere, die Vorhaben-Mappen. | Kein Programmcode, der ausgeliefert wird. |
+| `design/` | Die eine Gestaltungswahrheit: Marken, Bausteine, Vorlagen, Prototypen — und das Archiv der ersten Fassung. | Keine Schriftdateien mehr; die sind am 8.8.2026 entfernt worden. |
+| `docs/` | Die Papiere: Grundsätze, Systemhandbuch, Abnahmen, Recherche, Rückmeldungs-Karten, Entscheidungen. Was davon noch gilt, sagt `docs/README.md`. | Keine Wahrheit über den Code; die steht im Code. |
+| `mac/` | Die Mac-Hülle: Swift-Quellen und ihr Bauskript. | Nichts Deutschsprachiges, nichts Web-seitiges. |
+| `tools/` | Eigenständige Nebenwerkzeuge mit eigener Abhängigkeitskette. | Nichts, wovon die App zur Laufzeit abhängt. |
+
+Dazu die Papiere im Wurzelverzeichnis: `README.md` (was Onda ist und wie man es startet),
+`KONVENTIONEN.md` (die Hausordnung samt Wächter), `CLAUDE.md` (der Wegweiser für Agenten)
+und diese Datei. Die übrigen Wurzeldateien sind Werkzeugkram und tragen keinen Inhalt:
+`.editorconfig` und eine `package.json`, die nur weiterreicht — warum sie ausdrücklich
+kein npm-Arbeitsbereich ist, steht in `docs/adr/0003-kein-npm-arbeitsbereich-an-der-wurzel.md`.
+
+## Wo die Wahrheit über eine einzelne Datei steht
+
+In drei Stufen, von fein nach grob:
+
+1. **Im Kopfkommentar der Datei.** Jede `.mjs` unter `app/src/` sagt in ihrer ersten
+   Zeile selbst, was sie ist. Der Wächter `betrieb/waechter/kopfkommentar.mjs` besteht
+   darauf.
+2. **Im Namen.** Die Endung sagt die Art: `-model.mjs` rechnet und hält Zustand,
+   `-ui.mjs` ist Oberfläche, `-kontext.mjs` ist ein Kanal zum Sprachmodell.
+   `betrieb/waechter/ort.mjs` besteht darauf.
+3. **In den Entscheidungen.** Warum die Ordner so geschnitten sind, wie sie sind, steht
+   in `docs/adr/` — eine Datei je Entscheidung, angehängt und nie umgeschrieben.
+
+## Das Fachvokabular
+
+Die Begriffe, mit denen dieses Projekt über sich spricht. Wer einen davon in einem Issue,
+einem Testnamen oder einem Vorschlag verwendet, verwendet ihn so, wie er hier steht — und
+weicht nicht auf die Wörter unter _Avoid_ aus.
+
+### Arbeit und Autorschaft
 
 **Projekt**:
 Ein thematisch zusammenhaengender Arbeitsraum mit gemeinsamem Wissen, Entscheidungen, Quellen und mehreren Texten.
@@ -24,7 +72,7 @@ _Avoid_: Kernaussage, Prompt
 Eine vom Nutzer getroffene inhaltliche, methodische oder kommunikative Festlegung, die der Agent bei spaeteren Vorschlaegen beruecksichtigt.
 _Avoid_: Preference, Setting
 
-## Wissen und Belege
+### Wissen und Belege
 
 **Belegtes Wissen**:
 Eine Aussage, deren Herkunft, genaue Stuetzstelle, Reichweite und Unsicherheit im Projekt nachvollziehbar sind.
@@ -54,7 +102,7 @@ _Avoid_: verstecktes Modellwissen, globale Erinnerung
 Der ausdrueckliche Geltungsbereich einer Erinnerung: Text, Projekt, Thema oder Person. Themen- und persoenliche Erinnerungen gelangen nur nach bewusster Freigabe in ein anderes Projekt.
 _Avoid_: automatischer Wissenstransfer, universelles Profil
 
-## Agentische Zusammenarbeit
+### Agentische Zusammenarbeit
 
 **Hinweis**:
 Eine begruendete Beobachtung des Agenten zu einer konkreten Stelle oder zum Gesamttext, die eine Entscheidung des Nutzers ermoeglicht und den Text nie selbst veraendert.
@@ -96,55 +144,13 @@ _Avoid_: KI-Stilprofil, Humanizer-Einstellung
 Eine begruendete, korrigier- oder enthaltbare Annahme ueber Passagefunktion, rhetorisches Mittel oder moegliche Publikumswirkung. Ohne reale Reaktion ist sie kein Wirkungsnachweis.
 _Avoid_: Wirkungsscore, garantierte Leserreaktion
 
-## Implementierte Arbeitsoberflaeche
 
-Der interaktive V2-Stand ist eine fokussierte Schreiboberflaeche aus Vanilla JavaScript, Tiptap 2/ProseMirror und CSS. Er verwendet weiterhin die lokale Persistenz unter `aiwt.v2`; sichtbarer Arbeitszustand, Dialoge, Autorentscheidungen, Audits und Datenkontrollzustaende werden lokal gespeichert.
+## Wie die Oberfläche sich verhält
 
-### Architektur
+Das sind keine Wünsche, sondern der Stand, den die Rauchtests belegen. Sie stehen hier,
+weil sie das Vokabular oben in Verhalten übersetzen — nicht, weil hier der Ort für eine
+Architekturbeschreibung wäre. Die steht in `docs/ONDA-SYSTEM.md`.
 
-- `app/src/editor.js` migriert Dokumente auf Schema 12, initialisiert das inhaltlich reduzierte Tiptap-Schema und verbindet Bibliothek, Persistenz, Projektgedaechtnis, Argumentationsmodell, Sprachprofil, Schlussaudit und Workspace.
-- `app/src/example-seed.mjs` besitzt die konservative Beispielmigration. Seed-Texte tragen stabile Marker und eine normalisierte Body-Signatur.
-- `app/src/workspace-model.mjs` besitzt die reinen Workspace-Zustaende, Block-Snapshots, Finding-Zielaufloesung, Threads und Regeln fuer Agenteninitiativen.
-- `app/src/block-identity.js` vergibt stabile IDs an semantische Tiptap-Bloecke und kapselt Einfuegen, aktive Blockauswahl und bewusste Textuebernahmen.
-- `app/src/workspace.js` orchestriert Strukturablage, passagegebundene Hinweise, Vorschlaege, lokalen Dialog, allgemeines Agenten-Widget und Belegfenster.
-- `app/src/agent-gateway.mjs`, `agent-tasks.mjs` und `agent-transport.mjs` bilden den echten KI-Pfad: validierte Schemas, Streaming, Retry, Nutzungserfassung und denselben Transportvertrag fuer Browser und Mac-Bruecke.
-- `app/src/settings-model.mjs` besitzt Verbrauch und lokale Monatsgrenze. Automatische Laeufe stoppen an der Grenze; genau ein weiterer Lauf kann bewusst freigegeben werden.
-- `app/src/momente-model.mjs` besitzt die vollstaendige Tabelle, in welchem Moment eine Rueckmeldung sichtbar werden darf, samt Begruendungen und Ausloesebedingungen — bewusst an einer einzigen Stelle, damit Dokumentation und Programm nicht getrennt voneinander altern. Herleitung: `docs/DIE-DREI-MOMENTE.md`.
-- `app/src/erweiterung-model.mjs` und `app/src/erweiterungslauf-model.mjs` besitzen die drei Erweiterungsarten samt fester Stellenzahl, den zwei Gesten und der Verankerung; ungueltige Anker verwerfen die ganze Erweiterung. Gestalt und Belege: `docs/DIE-GESTALT-EINER-ERWEITERUNG.md`.
-- `app/src/eval-catalog.mjs` und `app/evals/v2-fertigzustand.json` machen den vollstaendigen Zielzustand als beobachtbare Evals maschinenlesbar; Anzahl und aktuellen Stand liefert der frische Messlauf (`node evals/run-fertigzustand.mjs`, Ergebnis in `app/evals/results/fertigzustand-latest.json`).
-- `app/src/source-model.mjs` besitzt typisierte Projektquellen, unveraenderliche Herkunftsreferenzen, SHA-256-Pruefsummen, feldweise Metadatenzustaende und eine Ereignishistorie fuer Korrekturen, Ruecknahmen und neue Versionen.
-- `app/src/locator-model.mjs` und `app/src/evidence-bundle.mjs` bilden exakte Seiten-, Abschnitts-, Text- und Zeitanker sowie claim-spezifische Belegbuendel mit Gegenbelegen, Grenzen, Reichweite, Unsicherheit und erlaubter Formulierungsstaerke.
-- `app/src/citation-audit.mjs` prueft direkte Zitate, Paraphrasen, bibliografische Identitaet und Verzeichniskonsistenz. `app/src/provenance-model.mjs` trennt Nutzertext, Agenteneinordnung, Recherchematerial, Fundstellen, belegtes Wissen und Evidenzentwuerfe.
-- `app/src/source-library-ui.mjs` besitzt die Projektquellenbibliothek und den Fundstellenreader; `workspace.js` bleibt deren duenne Orchestrierung.
-- `app/src/research-run.mjs` besitzt Recherchefrage, Claim-Bezug, Suchwege, Budget, Stopbedingungen und den persistierbaren Zustandsautomaten. `app/src/research-orchestrator.mjs` fuehrt nur vorab geplante, noch nicht erledigte Wege aus und haelt Pause, Fortsetzung und Fehler atomar.
-- `app/src/research-adapter.mjs` kapselt austauschbare Recherchewerkzeuge, legale Alternativwege, zustandsabhaengige Fehlwegdeduplizierung und ein normalisiertes, geheimnisfreies Werkzeugprotokoll.
-- `app/src/research-synthesis.mjs` trennt Metadaten, Abstracts und Originalfundstellen, erhaelt Widersprueche und uebergibt nur erneut am B1-Original verifizierte Kandidaten an das belegte Projektwissen. `app/src/research-ui.mjs` bildet den ruhigen Bedienfluss in den Projektquellen.
-- `app/src/memory-model.mjs` besitzt das unveraenderliche Ereignisjournal und genau vier Gedaechtnisebenen. `app/src/memory-dossier.mjs` verdichtet Projektzustaende deterministisch, erhaelt die vollstaendige Herkunft und speichert Korrekturen als neue Ereignisse.
-- `app/src/memory-retrieval.mjs` erzwingt Projektgrenzen, begruendete Auswahl, ausdrueckliche Freigaben und die Trennung von Projekt- und Autorenstimme. `app/src/memory-portability.mjs` besitzt lesbaren Export, Geheimnisredaktion und gezieltes Loeschen ohne Primaerdatenverlust.
-- `app/src/memory-ui.mjs` bildet das ruhige Projektdossier hinter dem Projektverstaendnis: Korrektur, Freigabe/Ablehnung, Export, zweistufiges Loeschen und bewusster Wiederaufbau.
-- `app/src/argument-model.mjs` und `app/src/claim-ledger.mjs` besitzen atomare, exakt verankerte Aussagen mit Beleglage, Unsicherheit, Gültigkeit, Herkunft und bindend korrigierbaren Beziehungen.
-- `app/src/argument-projection.mjs` leitet nur bei eindeutigen semantischen Rollen vorsichtige Stütz-, Gegen- und Definitionsbeziehungen ab. `app/src/argument-graph.mjs` besitzt gerichtete Abhängigkeiten, Grundursachen, Zyklen, begrenzte Auswirkungsanalyse und fingerprint-gebundene Regression.
-- `app/src/argument-deliberation.mjs` wählt ausschließlich belegte faire Gegenargumente, enthält sich bei fehlendem Material, erzeugt substanziell verschiedene Argumentationswege und erhält Kritik, Autorenantwort und Revision getrennt. `app/src/argument-ui.mjs` projiziert diese Zustände als ruhiges, korrigierbares Dossier hinter dem Projektverstaendnis.
-- `app/src/language-profile.mjs` besitzt das sichtbare Kontextprofil und eine fehlertolerante Migration. `app/src/language-diagnostics.mjs`, `language-modality.mjs` und `language-patterns.mjs` trennen Norm, Grammatik, Register, Modalität und Oberflächenmuster mit genauen Textankern.
-- `app/src/language-variant.mjs`, `orthography-rules.mjs` und `orthography.mjs` schützen Bedeutung, Faktenbezüge, Zitate, Links, Struktur, Eigennamen und geschützte Absichten. Die kleine Normautomatik ist opt-in, revalidiert den gesamten Plan und wendet ihn atomar in einer Undo-Transaktion an.
-- `app/src/effect-analysis.mjs` und `effect-fairness.mjs` modellieren Publikumszustand, Passagefunktion, rhetorische Mittel und persuasive Integritätsrisiken als begrenzte Hypothesen. `language-report.mjs` bewahrt vollständige, textisolierte Versionen und Nutzerentscheidungen; `language-ui.mjs` bildet das korrigierbare Sprach- und Wirkungsdossier.
-- `app/src/final-audit.mjs` vereinheitlicht alle Hinweisstatus, ordnet Integrität vor Stil ein und blockiert kritische offene wissenschaftliche Fakten-, Quellen-, Zitations-, Methoden- und Logikbefunde. Der Audit ist versioniert, zeitunabhaengig fingerprintbar und erteilt selbst keine Publikationsfreigabe.
-- `app/src/authorship-proof.mjs` beschreibt private Autorschafts- und KI-Beitraege ausschliesslich aus lokalen beobachtbaren Ereignissen. Die optionale KI-Nutzungserklaerung nennt belegte Taetigkeiten, aber keine Herkunfts-, Aufmerksamkeits- oder Verstaendniswahrscheinlichkeit.
-- `app/src/publication-export.mjs` erzeugt aus einem UI-freien kanonischen Publikationsbaum strukturtreue Markdown-, HTML- und JATS-Ausgaben. Ueberschriften, Listen, Zitate, Links, Fussnoten, Zitationen und Literatur bleiben erhalten; Editorattribute und hostile Markup werden nicht durchgereicht.
-- `app/src/data-control.mjs` besitzt den vollstaendigen lokalen Gesamtexport mit Domaenenmanifest, strukturellem Fingerprint, rekursiver Geheimnisredaktion, geschlossener Validierung, atomarem Wiederimport und leerem Loeschzustand. `audit-ui.mjs` orchestriert Audit, Risikoexport, Publikation, Sicherung, Import und zweistufige Loeschung.
-- `app/src/ui.js` besitzt Bibliothek, Titel, Auswahl-Bubble, Slash-Menue und globale Tastaturregeln. Die alten Rails und Panel-Initialisierungen sind nicht mehr Teil des erreichbaren Oberflaechenpfads.
-- `app/src/example.js` liefert den aktuellen Beispieldatensatz. Seine Agentenantworten und Rechercheangaben sind Demo-Fixtures, keine Ergebnisse produktiver Agentenlaeufe.
-
-### Beispielmigration
-
-- Der aktuelle Seed ist mit `exampleSeed: true`, `exampleSeedKey: calm-technology`, Seed-Version und Body-Signatur markiert.
-- Ein Versionswechsel ersetzt nur eine unveraenderte Seed-Fixture. Andere Texte und Projektmaterial im Beispielprojekt bleiben erhalten.
-- Wurde der markierte Seed inhaltlich bearbeitet, wird er vor dem Update als Nutzertext erhalten und entmarkiert; daneben entsteht eine frische Seed-Fixture. Dadurch ist ein Fixture-Reset sichtbar, ohne Nutzerschreibarbeit zu loeschen.
-- Ein alter unmarkierter Seed wird einmalig nur dann erkannt, wenn Projekt, Titel und die normalisierte eindeutige Fixture-Signatur exakt passen.
-
-Die alten Module `app/src/panels.js` und `app/src/structure.js` sind am 05.08.2026 geloescht worden (Issue #18): Sie waren nie Teil des Bundles, und die Eval-Pruefung ERWEITERUNG-04 misst seither das lebende Modul `workspace.js`. Die Git-Historie behaelt beide Dateien.
-
-### Interaktionsregeln
 
 - Der Text bleibt dominant. Ein aktiver Baustein wird ruhig hervorgehoben; neue Bausteine entstehen ueber kontextuelle Plus-Aktionen.
 - Die Strukturablage zeigt Vorschaukarten mit echtem Text in der einklappbaren linken Seitenleiste. Auf schmalen Viewports wird diese Leiste zum bewusst oeffnenden Off-Canvas-Drawer; geschlossen erhaelt der Editor die volle Breite und es entsteht kein horizontaler Overflow.
@@ -182,54 +188,6 @@ Die alten Module `app/src/panels.js` und `app/src/structure.js` sind am 05.08.20
 - `Escape` schliesst jeweils die tiefste aktive Ebene und fuehrt aus dem ruhigen Editorzustand zur Projektansicht zurueck.
 - Symbolbuttons besitzen zugaengliche Namen, Tastaturfokus bleibt sichtbar und `prefers-reduced-motion` begrenzt Bewegungen auf hoechstens 0,01 Sekunden.
 - Die Formulierung `volle Kraft, leise Präsentation` ist echter Beispiel-Nutzertext und kein zu entfernender Altoberflaechen-String.
-
-## Verifikation
-
-Aus `app/`:
-
-```bash
-npm test
-npm run build
-node test/v2-smoke.mjs
-node test/etappe-a-smoke.mjs
-node test/etappe-b1-smoke.mjs
-node test/etappe-b2-smoke.mjs
-node test/etappe-c1-smoke.mjs
-node test/etappe-c2-smoke.mjs
-AIWT_BROWSER=chromium node test/etappe-d1-smoke.mjs
-AIWT_BROWSER=firefox node test/etappe-d1-smoke.mjs
-AIWT_BROWSER=webkit node test/etappe-d1-smoke.mjs
-AIWT_BROWSER=chromium node test/etappe-d2-smoke.mjs
-AIWT_BROWSER=firefox node test/etappe-d2-smoke.mjs
-AIWT_BROWSER=webkit node test/etappe-d2-smoke.mjs
-node test/d2-accessibility.test.mjs
-node test/decision-log-smoke.mjs
-node test/performance-smoke.mjs
-npm run eval:b1-quality
-npm run eval:b2-quality
-npm run eval:c2-quality
-npm run eval:d1-quality
-npm run eval:d2-quality
-node evals/run-v2-evals.mjs --result evals/results/etappe-d2-latest.json  # frischer Nachlauf; der eingefrorene D2-Stand liegt in results/archiv/
-```
-
-Der Haupt-Smoke prueft die Zustaende `base`, `shelf`, `finding`, `suggestion`, `local-dialogue`, `agent` und `evidence` bei Desktop, Mobile und relevanten Zwischenbreiten. Er deckt Seed-Erhalt, Klartext-Patches, expliziten Own-Version-Abschluss, Integritaetsbestaetigung, stale/mehrdeutige Anker, Fokus, Escape-Kaskade, Reduced Motion, ARIA-Beziehungen, horizontalen Overflow, Streaming und die lokale Monatsgrenze ab.
-
-Die fokussierte Etappen-A-Eval beweist ausserdem: genau eine gebuendelte Einstiegsfrage im leeren Projekt, Verstehen vor Hinweisen, Verwurf eines erfundenen Modellankers, sichtbare Nutzung und bytegleicher Editorinhalt ohne Uebernahme. Die B1-Eval beweist den typisierten Quellenimport, exakte Fundstellen, Reload, Ruecknahmepropagation und die Trennung von Nutzertext, Agenteneinordnung, Recherchematerial und belegtem Wissen. Der kontrastive Qualitaetslauf fuer EVID-04 erreicht 5,0 von 5,0.
-
-Die B2-Eval beweist Plan-vor-Werkzeug, zustandsabhaengige Fehlwegdeduplizierung, Secret-Redaktion, Pause und Fortsetzung, atomare Uebernahme, Gegenbeleg- und Grenzensuche sowie Reload. RESEARCH-05 erreicht 5,0 von 5,0; bei unzureichender Evidenz schlaegt die ehrliche Enthaltung die plausible Erfindung im festen Kontrast mit 5 zu 0.
-
-Die C1-Eval beweist unveraenderliche Ereigniswahrheit, genau vier Gedaechtnisebenen, ein automatisch aufgebautes und korrigierbares Projektdossier, projektisoliertes Retrieval, explizite Freigabe/Ablehnung, getrennte Stimmen sowie vollstaendigen Export und kontrolliertes Loeschen ohne Primaerdatenverlust. Statuswechsel von Quellen und Belegen bleiben als eigene Ereignisse sichtbar; sensible Transfers enthalten vor Zustimmung keinen Inhalt.
-
-Die C2-Eval beweist atomare Claims, fünf explizite Relationstypen, bindende Claim- und Beziehungskorrekturen, Grundursachen, Zyklen, begrenzte Auswirkungsanalyse, ehrliche Regressionen, faire belegte Gegenargumente, substanziell verschiedene Wege und getrennte Prüfrunden. Quellenrücknahmen und Nutzerentscheidungen markieren nur echte gerichtete Abhängigkeiten; Gegenkanten lösen keine falsche Kaskade aus. Dokument-, Projekt-, Evidenz- und ID-Grenzen scheitern geschlossen. ARG-04 und ARG-07 erreichen in festen Mehrgenre-Rubriken jeweils 5,0; das belegtreue Gegenargument schlägt den Strohmann mit 5 zu 0.
-
-Die D1-Eval beweist ein explizites Sprachprofil, getrennte Diagnoseklassen, regionale und hausinterne Varianten, vorsichtige Modalitätskalibrierung, beweisbar bedeutungstreue Sprachvarianten, geschützte Struktur und eine atomare opt-in Normkorrektur. Publikumszustand, Passagefunktion, rhetorische Mittel und Fairness bleiben begründete, korrigier- oder enthaltbare Hypothesen. Der feste Mehrgenre-Korpus erreicht 5,0 von 5,0; die kontextsensitive Lösung schlägt den vollständig abgeleiteten pauschalen Humanizer mit 5 zu 0.
-
-Die D2-Eval beweist die feste Auditstatusmatrix, harte wissenschaftliche Integritaetsblocker, bewusste Risikoexporte, beobachtbare Autorschaft, optionale KI-Nutzungserklaerung, strukturtreue und UI-freie Publikationsformate sowie vollstaendige lokale Datenkontrolle. Der feste Abschlusskorpus erreicht in Runde 2 in allen fuenf Dimensionen 5,0 von 5,0; der kontextsensitive Ablauf schlaegt die stilgetriebene Scheinfertigstellung mit 5 zu 0.
-
-Der Gesamtlauf zum D2-Abschluss (gemessen am 31. Juli 2026) umfasste 446 bestandene Tests, den Produktionsbuild, den vollständigen V2-Lauf, alle Etappen-Smokes und 17 native Selbsttests. Die D1- und D2-Browserfluesse bestanden in Chromium, Firefox und WebKit. Axe meldete in sieben Kernzustaenden null WCAG-2.1-A/AA-Verstoesse; das manuelle Protokoll belegt Tastatur, Fokus, Escape-Rueckkehr, Zielgroessen, Fehlererholung, 390-Pixel-Reflow und 200-Prozent-Skalierung in allen drei Engines. Die Performanceprobe mass 15 Eingaben mit einer p95-Zeit bis zum naechsten Frame von 8,2 ms und ohne Long Task. Das D2-Ergebnis (Messlauf vom 30. Juli 2026, archiviert unter `app/evals/results/archiv/etappe-d2-latest.json`) fuehrte alle 77 Ziel-Evals: 71 bestanden und genau 6 externe Live-Gates offen; kein Eval blieb einer spaeteren Entwicklungsstufe zugeordnet. Der gewichtete D2-Exitwert betrug 5,0 von 5,0. Den aktuellen Gesamtstand liefert nicht dieses Dokument, sondern der frische Messlauf: `node evals/run-fertigzustand.mjs` (Ergebnis in `app/evals/results/fertigzustand-latest.json`).
-
-Vom Repository-Wurzelverzeichnis muss ausserdem `git diff --check` ohne Ausgabe enden. Der lokale Prototyp ist unter `http://127.0.0.1:4173/` erreichbar, solange der vorhandene statische Server laeuft.
 
 ## Noch nicht verbunden
 
