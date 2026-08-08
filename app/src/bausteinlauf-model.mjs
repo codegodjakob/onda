@@ -274,6 +274,9 @@ export async function versucheBausteinlauf({
   bestand = null,
   docText = '',
   verstaendnis = null,
+  // Das Projektwissen ({ project, doc, docs, memoryStore }) — darin steht die von Hand
+  // gesetzte Textsorte, aus der die Arten abzuleiten sind (Issue #36, Entscheidung 2).
+  onda = null,
   grenze = UMSCHREIB_GRENZE,
   sperreSetzen,
   hatSchluessel,
@@ -301,7 +304,7 @@ export async function versucheBausteinlauf({
     }
 
     // bedarf.offene bestimmt, welche Absätze das Modell überhaupt benennen soll.
-    const kontext = baueBausteinKontext({ verstaendnis, docText, blocks, bestand, offene: bedarf.offene })
+    const kontext = baueBausteinKontext({ verstaendnis, docText, blocks, bestand, offene: bedarf.offene, onda })
     setzeAgentStatus({ zustand: 'laeuft' })
     const { daten } = await runTask('bausteinarten', kontext)
     setzeAgentStatus({ zustand: 'bereit' })

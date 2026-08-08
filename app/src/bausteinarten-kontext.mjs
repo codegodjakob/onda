@@ -3,6 +3,7 @@
 // ({verstaendnis, docText, volatiles}). Vorbild: hinweis-kontext.mjs.
 import { BAUSTEINARTEN_ANWEISUNG } from './agent-prompts.mjs'
 import { benennbar } from './bausteinarten-vertrag.mjs'
+import { baueOndaBloecke } from './onda-kontext.mjs'
 
 export const ANRISS_ZEICHEN = 120
 
@@ -47,11 +48,23 @@ export function baueBausteinKontext({
   blocks = [],
   bestand = null,
   offene = null,
+  onda = null,
 } = {}) {
   const volatiles = [BAUSTEINARTEN_ANWEISUNG]
   const stand = bisherigerStand(bestand)
   if (stand) volatiles.push(stand)
   const verzeichnis = absatzVerzeichnis(blocks, offene)
   if (verzeichnis) volatiles.push(verzeichnis)
+
+  // Das Projektwissen, wie in jedem anderen Kanal auch (evals/pruefungen/kontext-alle-kanaele.mjs
+  // haelt zu, dass keiner blind laeuft). Hier traegt es mehr als anderswo: Darin steht die von
+  // Hand gesetzte Textsorte.
+  //
+  // Issue #36, Entscheidung 2: Es gibt EINE Wahrheit zur Textsorte, und das ist die gesetzte.
+  // Der Lauf leitet die Arten daraus ab, statt selbst eine zu erfinden -- eine geratene
+  // Textsorte wuerde sonst neben einer stehen, von der dem Modell ausdruecklich gesagt wird,
+  // sie sei "selbst gesetzt, nicht geraten" (onda-kontext.mjs).
+  if (onda) volatiles.push(...baueOndaBloecke(onda))
+
   return { verstaendnis, docText, volatiles }
 }

@@ -2,6 +2,8 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { UMSCHREIB_GRENZE } from '../src/bausteinarten-vertrag.mjs'
 import { pruefeBausteinBedarf, strukturSignatur } from '../src/bausteinlauf-model.mjs'
+import { baueBausteinKontext } from '../src/bausteinarten-kontext.mjs'
+import { updateLanguageProfile } from '../src/language-profile.mjs'
 
 function absatz(id, text, type = 'paragraph') {
   return { id, type, role: type === 'heading' ? 'heading' : 'paragraph', text, excerpt: text.slice(0, 160) }
@@ -552,3 +554,46 @@ test('ein Fehler wird gemeldet, nicht verschluckt — und die Sperre faellt', as
   assert.equal(aufbau.liestSperre(), false)
   assert.equal(status.at(-1).zustand, 'fehler')
 })
+
+// Issue #36, Entscheidung 2: Die von Hand gesetzte Textsorte muss den Lauf erreichen.
+// Der Lauf ist die einzige Stelle, die sie an den Kontextbau weiterreichen kann — bliebe
+// sie hier stehen, wäre der Kanal blind und das Modell würde die Textsorte doch wieder raten.
+test('der Lauf reicht das Projektwissen an den Kontextbau weiter', async () => {
+  let gesehen = null
+  // Ein echtes Profil, kein leeres: Ohne gesetzte Textsorte entstuende gar kein Wissensblock,
+  // und der Test wuerde auch dann bestehen, wenn nichts durchgereicht wird.
+  const onda = {
+    project: {
+      id: 'p1',
+      languageProfile: updateLanguageProfile({
+        profile: null, projectId: 'p1', changes: { genre: 'scientific' }, at: 1000,
+      }),
+    },
+  }
+  await versucheBausteinlauf({
+    hatDokument: true,
+    istBeispielprojekt: false,
+    laeuftBereits: false,
+    blocks: [{ id: 'b1', type: 'paragraph', role: 'paragraph', text: 'Ein Absatz.' }],
+    bestand: null,
+    docText: 'Ein Absatz.',
+    onda,
+    sperreSetzen: () => {},
+    hatSchluessel: async () => true,
+    istNochDasselbeDokument: () => true,
+    runTask: async (name, kontext) => { gesehen = kontext; return { daten: { textsorte: 'Essay', arten: [], zuordnung: [] } } },
+    setzeAgentStatus: () => {},
+  })
+  assert.ok(gesehen, 'der Lauf hat den Kontext nie gebaut')
+  assert.equal(gesehen.onda, undefined, 'onda gehört nicht in den fertigen Kontext, nur in seinen Bau')
+  // Der Beweis, dass es angekommen ist: baueBausteinKontext haengt daraus Bloecke an.
+  const ohne = kontextOhneWissen()
+  assert.ok(gesehen.volatiles.length > ohne, 'das Projektwissen ist unterwegs verlorengegangen')
+})
+
+function kontextOhneWissen() {
+  return baueBausteinKontext({
+    docText: 'Ein Absatz.',
+    blocks: [{ id: 'b1', type: 'paragraph', role: 'paragraph', text: 'Ein Absatz.' }],
+  }).volatiles.length
+}

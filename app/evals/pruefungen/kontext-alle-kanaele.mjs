@@ -27,6 +27,7 @@ import { baueErweiterungKontext } from '../../src/erweiterung-kontext.mjs'
 import { baueChatKontext } from '../../src/chat-kontext.mjs'
 import { baueVerstaendnisKontext } from '../../src/verstaendnis-kontext.mjs'
 import { baueQuellenKontext } from '../../src/quellen-kontext.mjs'
+import { baueBausteinKontext } from '../../src/bausteinarten-kontext.mjs'
 import { baueAnfrage } from '../../src/agent-tasks.mjs'
 import { updateLanguageProfile } from '../../src/language-profile.mjs'
 import { synchronizeClaimLedger } from '../../src/claim-ledger.mjs'
@@ -145,6 +146,18 @@ const KANAELE = Object.freeze({
     baue: onda => baueQuellenKontext({
       verstaendnis: { task: 'Aufsatz' },
       quellen: [{ id: 'q1', type: 'web', metadata: { title: { value: 'Eine Quelle' } } }],
+      onda,
+    }),
+  },
+  // Der Bausteinlauf braucht das Projektwissen dringender als jeder andere Kanal: Darin steht
+  // die von Hand gesetzte Textsorte, aus der er die Bausteinarten ableiten soll, statt selbst
+  // eine zu raten (Issue #36, Entscheidung 2).
+  bausteinarten: {
+    gecacht: 2,
+    baue: onda => baueBausteinKontext({
+      verstaendnis: { task: 'Aufsatz' },
+      docText: 'Dokumenttext',
+      blocks: [{ id: 'b1', type: 'paragraph', role: 'paragraph', text: 'Ein Absatz.' }],
       onda,
     }),
   },

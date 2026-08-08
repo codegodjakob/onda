@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { baueBausteinKontext, ANRISS_ZEICHEN } from '../src/bausteinarten-kontext.mjs'
 import { BAUSTEINARTEN_ANWEISUNG } from '../src/agent-prompts.mjs'
 import { baueAnfrage } from '../src/agent-tasks.mjs'
+import { updateLanguageProfile } from '../src/language-profile.mjs'
 
 const BLOCKS = [
   { id: 'b1', type: 'paragraph', role: 'paragraph', text: 'Die tragende Aussage.' },
@@ -79,4 +80,38 @@ test('baueAnfrage nimmt diesen Kontext ohne Verlust an', () => {
   const texte = anfrage.body.messages[0].content.map(block => block.text)
   assert.ok(texte.some(text => text.includes(BAUSTEINARTEN_ANWEISUNG)))
   assert.ok(texte.some(text => text.includes('<dokument>Text</dokument>')))
+})
+
+// Issue #36, Entscheidung 2: Es gibt EINE Wahrheit zur Textsorte — die von Hand gesetzte.
+// Der Bausteinlauf soll die Arten daraus ableiten, statt selbst eine zu erfinden. Der Weg
+// dorthin ist das Projektwissen: baueOndaBloecke trägt die Textsorte in den Auftrag.
+//
+// Ohne diesen Block wäre der Kanal blind — er würde als einziger von sechs ohne
+// Projektwissen laufen (evals/pruefungen/kontext-alle-kanaele.mjs).
+test('das Projektwissen reist mit — sonst raet der Lauf die Textsorte selbst', () => {
+  // project.id ist Pflicht: Ohne Kennung liefert textsorteBlock nichts (onda-kontext.mjs:144).
+  const onda = {
+    project: {
+      id: 'p-test',
+      languageProfile: updateLanguageProfile({
+        profile: null,
+        projectId: 'p-test',
+        changes: { genre: 'scientific' },
+        at: 1000,
+      }),
+    },
+  }
+  const mit = baueBausteinKontext({ docText: 'Text', blocks: BLOCKS, onda })
+  const ohne = baueBausteinKontext({ docText: 'Text', blocks: BLOCKS })
+  assert.ok(
+    mit.volatiles.length > ohne.volatiles.length,
+    'mit Projektwissen entsteht kein einziger zusaetzlicher Block',
+  )
+  const text = mit.volatiles.join('\n')
+  assert.match(text, /Wissenschaftliche Arbeit|Textsorte/, 'die gesetzte Textsorte erreicht das Modell nicht')
+})
+
+test('ohne Projektwissen bleibt der Auftrag unveraendert', () => {
+  const kontext = baueBausteinKontext({ docText: 'Text', blocks: BLOCKS, onda: null })
+  assert.equal(kontext.volatiles[0], BAUSTEINARTEN_ANWEISUNG)
 })
