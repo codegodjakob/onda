@@ -456,6 +456,7 @@
     "ONDA-UI-15": ["evals/run-onda-ui-quality.mjs"],
     "ONDA-UI-16": ["evals/run-onda-ui-quality.mjs"],
     "ONDA-UI-17": ["evals/run-onda-ui-quality.mjs"],
+    "ONDA-UI-18": ["evals/pruefungen/schluessel-leck.mjs"],
     "ONDA-UI-19": ["evals/run-onda-ui-quality.mjs"],
     "ONDA-UI-20": ["evals/run-onda-ui-quality.mjs"],
     "ONDA-UI-21": ["evals/run-onda-ui-quality.mjs"],
