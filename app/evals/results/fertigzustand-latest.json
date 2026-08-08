@@ -3,8 +3,8 @@
   "catalogVersion": "2026-08-05.3",
   "stage": "FERTIGZUSTAND",
   "iteration": 1,
-  "generatedAt": "2026-08-08T14:59:16.196Z",
-  "gitCommit": "377abc5eded80408721088d8acd6cce9913103b7",
+  "generatedAt": "2026-08-08T15:14:23.746Z",
+  "gitCommit": "4b527842178fa63a46fcaf262bfd958118f2f517",
   "rubricScores": {
     "truth": 5,
     "authorship": 5,
