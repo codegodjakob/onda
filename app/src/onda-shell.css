@@ -89,12 +89,13 @@ body.view-home .onda-library-sidebar { display: grid; }
   margin-top: var(--space-2);
 }
 
+/* Ein Dokumenttitel bricht um, statt zu kappen (Jakob, 8.8.2026: „ich will, dass
+   nirgendwo einfach der Text aufhört und dann Punkt, Punkt, Punkt kommt"). `min-height`
+   statt fester Höhe — die Zeile darf wachsen. */
 .onda-library-recent__item {
   min-height: 44px;
   display: block;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
 }
 
 .onda-library-footer {
@@ -272,13 +273,17 @@ body.view-editor #editorView {
   background: transparent;
 }
 
-/* padding-top: 0, damit die erste Zeile der Leiste auf demselben Band liegt wie die
-   Topbar gegenueber. Die Klinke haengt fest am Fenster (style.css, .onda-topbar__lead);
-   stuende die Leiste 20px tiefer, stuende der Schriftzug unter der Klinke. */
+/* Oben so viel Luft, wie das feste Band hoch ist. Vorher stand hier 0: die erste Zeile
+   der Leiste sollte auf demselben Band liegen wie die Topbar gegenueber, weil der
+   Schriftzug dort stand und neben der Klinke bleiben musste. Seit dem 8.8.2026 haengt
+   der Schriftzug selbst am Fenster (style.css, .onda-topbar__lead) — die Leiste faengt
+   jetzt sauber darunter an, sonst liegt ihre erste Zeile auf dem Schriftzug.
+   Diese Regel gewinnt gegen .onda-sidebar in style.css (hoehere Spezifitaet, spaeter
+   geladen); die Polsterung wird deshalb NUR hier gesetzt. */
 #editorView .onda-sidebar {
   width: var(--sidebar-width);
   height: 100%;
-  padding: 0 var(--space-4) var(--space-4);
+  padding: var(--topbar-height) var(--space-4) var(--space-4);
   border-right: 1px solid var(--border-subtle);
 }
 
@@ -480,9 +485,7 @@ body.view-editor #editorView {
   #home #doclist .dd {
     display: block;
     margin-top: var(--space-1);
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
+    overflow-wrap: anywhere;
   }
   #home #doclist .doc-status { display: none; }
 

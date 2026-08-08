@@ -127,7 +127,7 @@ body.view-editor #editorView { display: flex; }
 .doc .dt mark { background: var(--accentbg); color: var(--accent); border-radius: var(--radius-sm); padding: 0 var(--space-px); }
 .doc .dd {
   font-size: var(--text-xs); color: var(--text-secondary); margin-top: var(--space-05);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  overflow-wrap: anywhere;
 }
 .doc .trash-acts { flex: none; }
 .empty { padding: var(--space-6) var(--space-4); font-size: var(--text-base); color: var(--txt3); line-height: 1.6; }
@@ -174,7 +174,7 @@ body.view-editor #editorView { display: flex; }
 .toc-item {
   display: block; width: 100%; text-align: left;
   font-size: 12px; color: var(--txt2); padding: 4px 6px; border-radius: 6px;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  overflow-wrap: anywhere;
 }
 .toc-item:hover { background: var(--bg3); color: var(--txt); }
 .toc-l1 { font-weight: 500; color: var(--txt); }
@@ -194,9 +194,12 @@ body.view-editor #editorView { display: flex; }
 .finding-disclosure > summary::-webkit-details-marker { display: none; }
 .understanding-summary { display: flex; flex-direction: column; gap: 3px; }
 .understanding-label { font-size: 11px; font-weight: 500; color: var(--txt); }
+/* Kein `line-clamp`: der Browser setzt an der Klemmkante selbst drei Punkte, und die
+   sollen nirgends stehen (Jakob, 8.8.2026). Die Kurzfassung darf umbrechen — wird sie
+   zu lang, ist der Text zu lang, nicht die Zeile zu kurz. */
 .understanding-brief {
   font-size: 11.5px; line-height: 1.45; color: var(--txt3);
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  overflow-wrap: anywhere;
 }
 .project-understanding[open] .understanding-brief { display: none; }
 .understanding-body { display: flex; flex-direction: column; gap: 11px; padding: 14px 0 2px; }
@@ -915,12 +918,12 @@ body.zen #title:focus { opacity: 1; }
    so stark wie "Struktur" darueber. Die Spalte ist Navigation, kein Lesetext; der
    gerade bearbeitete Baustein wird durch seine Flaeche ausgezeichnet, nicht durch
    Schwaerze. */
+/* Zwei Zeilen als Untergrenze, keine als Obergrenze. `-webkit-line-clamp: 2` stand
+   hier bis zum 8.8.2026 und setzte an der zweiten Zeile drei Punkte; was den Anriss
+   kurz haelt, ist jetzt der erste Satz (blockAnriss in workspace.js), nicht der
+   Beschnitt. Eine Grenze im Text ist ehrlicher als eine Grenze im Kasten. */
 .block-preview-excerpt {
   min-height: calc(1.5em * 2);
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
   color: var(--text-secondary);
   font: var(--type-body);
   overflow-wrap: anywhere;
@@ -1065,23 +1068,16 @@ body.zen #title:focus { opacity: 1; }
   margin-left: calc(-1 * var(--sidebar-width));
 }
 
-/* Die erste Zeile der Leiste liegt auf demselben Band wie die Topbar, damit der
-   Schriftzug neben der festen Klinke steht und nicht darunter. Der Innenabstand
-   links macht der Klinke Platz: 20px Fensterrand + 44px Knopf + 8px Luft, abzueglich
-   der 16px, die die Leiste selbst schon einrueckt. */
+/* Die erste Zeile der Leiste sagt jetzt, WO man ist — nicht mehr, wie das Programm
+   heisst. Der Schriftzug ist ins feste Band gezogen, hier steht der Projektname.
+   Kein `padding-left` mehr: die Zeile faengt bei 16px an wie Projektverstaendnis,
+   Struktur und Quellen darunter. In dieser Ecke liefen vorher drei linke Kanten
+   nebeneinander her — Klinke bei 20, Schriftzug bei 72, alles andere bei 16.
+   Jetzt sind es zwei: das feste Band oben, die Spalte darunter. */
 .onda-brand {
   display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-height: var(--topbar-height);
-  padding-left: 56px;
-}
-.onda-brand .onda-wordmark {
-  flex: 1;
-  min-width: 0;
-  font: var(--fw-bold) var(--text-base)/1.2 var(--font-sans);
-  letter-spacing: var(--tracking-tight);
-  color: var(--text-primary);
+  align-items: flex-start;
+  padding-bottom: var(--space-2);
 }
 
 .onda-side-footer .onda-side-user {
@@ -1210,7 +1206,12 @@ body.zen #title:focus { opacity: 1; }
    breiten Leiste, der andere am linken Rand der Topbar; dazu zwei verschiedene
    Hoehenbaender (20px Leistenpolster gegen 56px Topbar) und ein Enthaltungsblock,
    der sich beim Einklappen selbst um die volle Leistenbreite verschiebt.
-   Am Fenster verankert kann keine der drei Ursachen ihn noch bewegen. */
+   Am Fenster verankert kann keine der drei Ursachen ihn noch bewegen.
+
+   Seit dem 8.8.2026 traegt dasselbe Band auch den Schriftzug. Er stand vorher in der
+   Leiste und fuhr beim Einklappen mit ihr hinaus; oben links wohnte er also nicht.
+   Am Kasten selbst aendert das nichts — `left` bleibt bei 20px, die Klinke steht auf
+   den Pixel genau dort, wo sie stand. Der Schriftzug reiht sich rechts daneben ein. */
 .onda-topbar__lead {
   position: fixed;
   top: 0;
@@ -1220,6 +1221,18 @@ body.zen #title:focus { opacity: 1; }
   height: var(--topbar-height);
   display: flex;
   align-items: center;
+  gap: var(--space-2);
+}
+
+/* `nowrap`: ein umbrechender Markenname ist kein Markenname mehr. Er ist kurz genug,
+   dass er nie umbrechen muss — die Regel gegen abgeschnittenen Text gilt dem Wortlaut
+   des Programms, nicht seinem Namen. */
+.onda-topbar__lead .onda-wordmark {
+  flex: none;
+  font: var(--fw-bold) var(--text-base)/1.2 var(--font-sans);
+  letter-spacing: var(--tracking-tight);
+  color: var(--text-primary);
+  white-space: nowrap;
 }
 
 #editorView #scroll {
@@ -2712,38 +2725,37 @@ button.onda-aura:focus-visible {
   letter-spacing: var(--tracking-wide);
 }
 
-/* Der Weg zurueck steht jetzt in der Fusszeile, neben Erscheinung und Einstellungen.
-   Deshalb `flex: 1` mit `min-width: 0` statt `width: fit-content`: der Projektname darf
-   den Platz nehmen, der da ist, muss aber weichen, bevor er die beiden Knoepfe rechts
-   aus der Leiste draengt. Ohne min-width:0 weigert sich ein Flex-Kind zu schrumpfen,
-   auch wenn text-overflow gesetzt ist — genau daran fehlte das Zahnrad. */
+/* Der Weg zurueck ist die oberste Zeile der Leiste und sagt zugleich, wo man ist.
+   In der Fusszeile war er eingeklemmt zwischen Erscheinung und Einstellungen: von
+   „Beispiel: Calm Technology" blieben dort 91 Pixel, elf Zeichen und drei Punkte.
+   Hier hat er die ganze Breite und darf umbrechen — abgeschnitten wird nichts mehr.
+
+   Der negative linke Rand hebt die Innenpolsterung auf: der Pfeil steht damit exakt
+   auf 16px, derselben Kante wie Projektverstaendnis, Struktur und Quellen darunter,
+   waehrend die Hoverflaeche ihre volle Breite behaelt. */
 .onda-side-back {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  flex: 1;
-  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  width: 100%;
   min-height: 44px;
-  margin: 0;
-  padding: var(--space-1) var(--space-2);
+  margin: 0 0 0 calc(-1 * var(--space-2));
+  padding: var(--space-2);
   border: 0;
   border-radius: var(--radius-control);
   background: transparent;
   color: var(--text-secondary);
   font: var(--type-label);
   text-align: left;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   cursor: pointer;
   transition: color var(--dur-quick) var(--ease-out), background var(--dur-quick) var(--ease-out);
 }
 .onda-side-back:hover { color: var(--text-primary); background: var(--bg-hover); }
 .onda-side-back:focus-visible { outline: 2px solid transparent; box-shadow: var(--shadow-focus); }
-/* Der Pfeil bleibt immer sichtbar, der Name kuerzt sich. Andersherum waere der Weg
-   zurueck bei langen Projektnamen unauffindbar. */
-.onda-side-back-chevron { flex: none; display: inline-flex; }
-.onda-side-back-label { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+/* Der Pfeil haelt die erste Zeile, auch wenn der Name auf zwei geht — mittig
+   ausgerichtet schwebte er bei einem langen Namen zwischen den Zeilen. */
+.onda-side-back-chevron { flex: none; display: inline-flex; padding-top: 2px; }
+.onda-side-back-label { min-width: 0; overflow-wrap: anywhere; }
 
 /* Der Name oben links ist ein Knopf, sieht aber aus wie der Schriftzug, der er ist. */
 .onda-wordmark-btn {
@@ -2825,7 +2837,7 @@ button.onda-aura:focus-visible {
   padding: 0 var(--space-2);
   color: var(--text-secondary);
   font: var(--type-caption);
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  overflow-wrap: anywhere;
 }
 /* „Noch nicht festgelegt" ist keine Auskunft, sondern ihr Fehlen — also tritt der Satz
    einen Farbschritt zurueck. Die Klasse sitzt am Satz selbst (renderProjectUnderstanding-
@@ -2855,7 +2867,7 @@ button.onda-aura:focus-visible {
 /* Quellen: der Name traegt die Zahl des Bestands. Das ist erlaubt und gemeint —
    docs/PHILOSOPHIE.md §1 verbietet Zahlen ueber ANMERKUNGEN, nicht ueber Material.
    Wie viele Quellen im Projekt liegen, ist eine Auskunft und keine Hausaufgabe. */
-.onda-material-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.onda-material-label { min-width: 0; overflow-wrap: anywhere; }
 .onda-material-count { flex: none; }
 
 /* ---------- Der Baum unter einem Abschnitt ----------
@@ -2913,7 +2925,7 @@ button.onda-aura:focus-visible {
 }
 .onda-baum-name:hover { color: var(--text-primary); background: var(--bg-hover); }
 .onda-baum-name:focus-visible { outline: 2px solid transparent; box-shadow: var(--shadow-focus); }
-.onda-baum-name-text { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.onda-baum-name-text { min-width: 0; overflow-wrap: anywhere; }
 
 /* Die Kinder sitzen unter dem Pfeil, der sie oeffnet — die Einrueckung ist genau
    dessen Breite, damit der Blick die Linie wiederfindet. */
@@ -2951,9 +2963,9 @@ button.onda-aura:focus-visible {
 .onda-baum-quelle:hover { color: var(--text-primary); background: var(--bg-hover); }
 .onda-baum-quelle:focus-visible { outline: 2px solid transparent; box-shadow: var(--shadow-focus); }
 /* Der Wortlaut steht in einer eigenen Spanne, wie bei der Gruppenzeile darueber: in
-   einem Flex-Kasten greift text-overflow am anonymen Kind nicht, der Titel liefe dann
-   ueber den Rand hinaus statt sauber abzubrechen. */
-.onda-baum-quelle-text { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+   einem Flex-Kasten braucht das Kind `min-width: 0`, sonst weigert es sich zu
+   schrumpfen und der Titel laeuft ueber den Rand hinaus, statt umzubrechen. */
+.onda-baum-quelle-text { min-width: 0; overflow-wrap: anywhere; }
 .onda-baum-leer {
   margin: 0;
   padding: var(--space-1) var(--space-2);
@@ -2961,12 +2973,18 @@ button.onda-aura:focus-visible {
   font: var(--type-caption);
 }
 
-/* Fußzeile */
+/* Fußzeile — seit dem 8.8.2026 nur noch zwei Zeichen ohne Wortlaut. Der Projektname,
+   der hier stand, ist nach oben gezogen; damit faellt die letzte Stelle in der Leiste
+   weg, an der Text abgeschnitten wurde. Die Knoepfe ruecken an die linke Kante: der
+   Name hielt sie vorher mit `flex: 1` nach rechts, ohne ihn stuenden sie im Nichts.
+   Der negative Rand setzt das erste Zeichen optisch auf 16px — dieselbe Kante wie
+   alles darueber; ein 44px-Knopf traegt sein Zeichen mittig, nicht am Rand. */
 .onda-side-footer {
   margin-top: auto;
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-1);
+  margin-left: -13px;
   padding: var(--space-5) 0 0;
 }
 
@@ -3114,9 +3132,7 @@ button.onda-aura:focus-visible {
 .onda-blaetter__eintrag-anriss {
   min-width: 0;
   flex: 1;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
   /* Secondary, nicht tertiary: auf dem hinterlegten Grund des gewaehlten Eintrags
      reisst tertiary bei 12px den Kontrast (axe color-contrast, gemessen 4.45:1). */
   color: var(--text-secondary);
@@ -4579,10 +4595,10 @@ button.onda-aura:focus-visible {
   max-width: 100%;
   min-height: 44px;
 }
+/* Kein `text-overflow` mehr: das Auswahlfeld nimmt sich mit `flex: 1 1 180px` im
+   umbrechenden Kasten notfalls eine eigene Zeile, statt seine Beschriftung zu kappen. */
 .language-correction-controls .language-select {
   appearance: none;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 .language-correction-controls .language-action {
   padding-inline: 6px;
