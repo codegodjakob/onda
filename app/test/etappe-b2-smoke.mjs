@@ -93,11 +93,50 @@ async function installAdapter(page, delay = 0) {
 
 async function createPlan(page) {
   await page.locator('#researchPlanOpen').click()
+  // Die URSACHE des Last-Flakes (deterministisch nachgewiesen auf Zweig
+  // claude/cranky-cori-c122aa, dd5a3e1): das Formular fokussiert das Fragefeld
+  // verzögert per requestAnimationFrame, und fill() schickt den Text an das
+  // gerade fokussierte Element. Feuert der Frame unter Last verspätet mitten
+  // im Ausfüllen, zieht er den Fokus zurück aufs Fragefeld — der Aussagetext
+  // landet im falschen Feld, das Pflichtfeld bleibt leer, das Speichern wird
+  // stumm blockiert. Darum: erst tippen, wenn der Autofokus angekommen ist.
+  await page.waitForFunction(() => document.activeElement?.id === 'researchQuestion')
   await page.locator('#researchQuestion').fill('Wie belastbar ist die Wirkung nach einer Sitzung?')
   await page.locator('#researchClaim').fill('In dieser Stichprobe war die Fehlerrate nach einer Sitzung niedriger.')
   await page.locator('#researchBudget').fill('9')
   await page.locator('#researchPlanSubmit').click()
-  await page.locator('#researchRunView[data-status="planned"]').waitFor()
+  // Beweissicherung, zusätzlich zur Fokus-Barriere oben: dieser Warteschritt lief
+  // unter paralleler Testlast zweimal in ein stummes 30-s-Timeout, weil das
+  // Pflichtfeld-Veto des Submits in der Statuszeile landet — und die las niemand.
+  // Sollte je wieder ETWAS den Plan blockieren, scheitert der Test jetzt sofort
+  // mit dem wörtlichen Grund statt mit einem leeren Timeout:
+  // 1. Gewartet wird auf BEIDE möglichen Ausgänge des Submits: den geplanten
+  //    Lauf ODER die Fehler-Statuszeile des Formulars.
+  // 2. Bei echtem Timeout hängt eine Diagnose (Feldwerte, Statuszeile,
+  //    Laufzustand) an der Fehlermeldung.
+  // 3. Das Fenster ist grosszuegig (60 s) fuer echte Verhungerung unter Last —
+  //    eine echte Regression scheitert bei jedem Fenster, nur eben mit Befund.
+  try {
+    await page.locator('#researchRunView[data-status="planned"], #researchPlanStatus:not(:empty)')
+      .first().waitFor({ timeout: 60_000 })
+  } catch (fehler) {
+    const diagnose = await page.evaluate(() => ({
+      formularDa: !!document.getElementById('researchPlanForm'),
+      laufStatus: document.getElementById('researchRunView')?.dataset?.status || null,
+      status: document.getElementById('researchPlanStatus')?.textContent || null,
+      frage: document.getElementById('researchQuestion')?.value ?? null,
+      aussage: document.getElementById('researchClaim')?.value ?? null,
+      budget: document.getElementById('researchBudget')?.value ?? null,
+    })).catch(evalFehler => ({ diagnoseFehler: evalFehler.message }))
+    fehler.message += `\nDiagnose beim Timeout: ${JSON.stringify(diagnose)}`
+    throw fehler
+  }
+  // Direkt aus dem Dokument lesen (kein Locator): im Erfolgsfall ist das Formular
+  // samt Statuszeile bereits ersetzt, ein wartender Locator wuerde hier stallen.
+  const statusText = await page.evaluate(() => document.getElementById('researchPlanStatus')?.textContent || '')
+  assert.equal(statusText.trim(), '',
+    `Plan wurde nicht angelegt — die Statuszeile meldet: "${statusText.trim()}"`)
+  await page.locator('#researchRunView[data-status="planned"]').waitFor({ timeout: 60_000 })
 }
 
 async function runResearchFlow(browser) {

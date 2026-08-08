@@ -80,14 +80,16 @@ export function buildExampleNarrative(struct) {
   ]
 }
 
+// Karten zum ganzen Text (placement 'document'). Auch hier steht die Anmerkungsart
+// ausdrücklich da — es ist genau die, die bisher aus category/sources erraten wurde.
 export function buildExampleCoach() {
   return [
-    { id: sid('c'), type: 'Struktur', category: 'structure', priority: 'critical', tone: 'warn', status: 'open', createdAt: Date.now(),
+    { id: sid('c'), type: 'Struktur', category: 'structure', anmerkungsart: 'faden', priority: 'critical', tone: 'warn', status: 'open', createdAt: Date.now(),
       text: 'Der Abschnitt „Beispiele" kommt vor den „Prinzipien" — die Argumentation trägt besser andersherum.',
       why: 'Deine geplante Struktur sieht Prinzipien → Beispiele vor. Im Text ist die Reihenfolge aktuell vertauscht. Leser brauchen erst den Maßstab („was heißt ruhig?"), dann die Anschauung — sonst wirken die Beispiele beliebig und ihre Pointe verpufft.',
       narrative: 'Im Faden „Methode: vom Prinzip zum Werkzeug" ist der erste Schritt „Maßstab setzen". Wird er übersprungen, bricht dieser Handlungsstrang an seiner ersten Stelle — die Narrative verlöre ihre Begründungslogik.',
       action: null, sources: [] },
-    { id: sid('c'), type: 'Inhalt', category: 'research', tone: 'idea', status: 'open', createdAt: Date.now(),
+    { id: sid('c'), type: 'Inhalt', category: 'research', anmerkungsart: 'beleg', tone: 'idea', status: 'open', createdAt: Date.now(),
       text: 'Zur Leitfrage passt Mark Weisers Aufsatz „The Coming Age of Calm Technology" (1996).',
       claim: 'Calm Technology kann Aufmerksamkeit schonen, indem Technik zwischen Zentrum und Peripherie wechselt.',
       gesamt: 'Calm Technology ist ein Gestaltungsprinzip: Technik bleibt in der Peripherie und tritt nur ins Zentrum, wenn sie gebraucht wird. Weiser & Brown prägten es 1996 am Xerox PARC, als das Büro von piependen Geräten geflutet wurde; Amber Case führte es 2015 zu acht Prinzipien weiter. Über alle Quellen hinweg ist der Kern derselbe — die knappste Ressource ist nicht Rechenleistung, sondern menschliche Aufmerksamkeit.',
@@ -132,7 +134,7 @@ export function buildExampleCoach() {
       ] },
 
     // Begriff + Zeitstrahl: hier ergeben Definition und Einordnung Sinn — kein Diagramm, keine Zitate.
-    { id: sid('c'), type: 'Inhalt', tone: 'idea', status: 'open', createdAt: Date.now(),
+    { id: sid('c'), type: 'Inhalt', anmerkungsart: 'beleg', tone: 'idea', status: 'open', createdAt: Date.now(),
       text: 'Bevor „Calm Technology" trägt, sollte „Ubiquitous Computing" kurz definiert und historisch eingeordnet werden.',
       claim: 'Calm Technology ist als Gestaltungsantwort auf die Idee des Ubiquitous Computing entstanden.',
       gesamt: 'Calm Technology ist die Gestaltungsantwort auf eine ältere Idee: dass Rechner in den Alltag verschwinden. Wer den Begriff „Ubiquitous Computing" kurz einführt, gibt der Definition ein Fundament — sonst hängt „ruhige Technik" in der Luft.',
@@ -160,7 +162,7 @@ export function buildExampleCoach() {
       ] },
 
     // Pro/Contra: eine zu absolute These — hier zählen Argumente von beiden Seiten, kein Diagramm.
-    { id: sid('c'), type: 'Inhalt', category: 'logic', priority: 'high', tone: 'warn', status: 'open', createdAt: Date.now(),
+    { id: sid('c'), type: 'Inhalt', category: 'logic', anmerkungsart: 'widerspruch', priority: 'high', tone: 'warn', status: 'open', createdAt: Date.now(),
       text: 'Deine These „Unterbrechung ist immer schädlich" ist zu absolut — es gibt starke Gegenbeispiele.',
       gesamt: 'Der Text behauptet, jede Unterbrechung schade. Das stimmt für Benachrichtigungs-Fluten, aber nicht ausnahmslos: Manche Unterbrechungen sind lebenswichtig. Eine These, die das einräumt, wirkt souveräner und ist schwerer angreifbar.',
       procontra: {
@@ -174,366 +176,294 @@ export function buildExampleCoach() {
   ]
 }
 
-// Anmerkungen am Text — eine je Anmerkungsart, damit jeder Anwendungsfall
-// durchgeklickt werden kann. Die Reihenfolge folgt den vier Kategorien:
-// Korrektur, Stil, Struktur, Inhalt. Danach die fuenf Arten der
-// Notizen-Betriebsart.
+// Anmerkungen am Text. Der Beispieltext trägt jede der 29 Anmerkungsarten aus
+// annotation-contract.mjs genau einmal — damit sich jede Gestalt am eigenen Text
+// ansehen und ausprobieren lässt.
 //
-// Jede Art fuellt die Felder, die IHRE Form braucht — nicht alle Felder:
-//   correction  target + action        (die Zeile "alt → neu")
-//   rewrite     action + meta          (meta ist der Beweis: "24 → 12 Wörter")
-//   insertion   action + label         (der Text, der in die Luecke kommt)
-//   slot        move.to                (wohin es soll)
-//   region      targets + suggestion   (alle Stellen, ein Vorschlag)
-//   source      sources[]              (Link, Ausschnitt, Fundstelle)
-//   compare     compare[]              (zwei Stellen nebeneinander)
-//   dialogue    short                  (eine Meinung, keine Operation)
-//   title       action                 (der neue Titel)
-//   card        short                  (nur ein Gedanke)
-// Wer ein Feld weglaesst, das die Form braucht, sieht eine halbe Karte —
-// example-abdeckung.test.mjs prueft deshalb beides: Vollstaendigkeit der Arten
-// UND dass jeder Anker woertlich im Text steht.
+// Drei Regeln, an die sich jeder Eintrag hält:
+// 1. anmerkungsart steht ausdrücklich da. Früher wurde sie aus kind/form geraten,
+//    und aus 24 möglichen Arten wurden dabei immer dieselben fünf.
+// 2. target steht wörtlich in buildExampleBody() und nur an einer einzigen Stelle —
+//    sonst findet die Anmerkung ihren Absatz nicht (workspace-model.mjs).
+// 3. Jeder Eintrag trägt die Felder, die seine Gestalt braucht: action bei Korrektur,
+//    Umschrift und Einschub, targets beim Bereich, compare beim Vergleich, sources
+//    beim Beleg, move beim Verschieben, heading beim Gliedern, thread beim Gespräch.
+//
+// kind bleibt daneben stehen ('form' für Sprachliches, 'inhalt' für Inhaltliches):
+// daraus leitet reasoning-model.mjs weiterhin die alte category ab.
 export function buildExampleLane() {
   return [
-    // ---- Korrektur: objektiv falsch, ein Klick genuegt ---------------------
-    { id: sid('l'), status: 'open', anmerkungsart: 'rechtschreibung',
-      target: 'Zeit vertreib',
-      short: 'Ein Wort, nicht zwei.',
-      why: 'Zusammengesetzte Substantive werden im Deutschen zusammengeschrieben. Die Getrenntschreibung stammt meist aus dem Englischen.',
-      action: 'Zeitvertreib' },
-    { id: sid('l'), status: 'open', anmerkungsart: 'grammatik',
-      target: 'Die Ergebnisse der Studie wurde',
-      short: 'Das Subjekt ist Plural.',
-      why: 'Das Prädikat richtet sich nach „Die Ergebnisse", nicht nach „der Studie" daneben.',
-      action: 'Die Ergebnisse der Studie wurden' },
-    { id: sid('l'), status: 'open', anmerkungsart: 'zeichensetzung',
-      target: 'früher weil',
-      short: 'Komma vor dem Nebensatz.',
-      why: 'Nebensätze werden im Deutschen durch Komma abgetrennt — auch die kurzen.',
-      action: 'früher, weil' },
-
-    // ---- Stil: Formulierung, Vorschlag zur Wahl ---------------------------
-    { id: sid('l'), status: 'open', anmerkungsart: 'wortwahl',
-      target: 'kriegt',
-      short: 'Umgangssprachlich für einen sonst gehobenen Text.',
-      why: 'Das Register des Textes ist durchgehend schriftsprachlich. Ein einzelnes umgangssprachliches Wort fällt auf und wirkt wie ein Versehen.',
-      action: 'erhält',
-      variants: ['erhält', 'bekommt', 'zurückgemeldet bekommt'] },
-    { id: sid('l'), status: 'open', anmerkungsart: 'satzstil',
-      target: 'Weil die Aufmerksamkeit, die wir am Morgen haben, wenn wir noch nicht abgelenkt sind, die wertvollste Ressource des Tages ist, sollte man sie mit derselben Selbstverständlichkeit schützen wie einen Termin.',
-      label: 'Schachtelsatz auflösen',
-      meta: '31 → 14 Wörter',
-      short: 'Drei Nebensätze vor dem Hauptsatz — die Aussage kommt zu spät.',
-      why: 'Der Leser muss 24 Wörter im Kopf behalten, bevor er erfährt, worum es geht. Zwei Sätze tragen dieselbe Aussage ohne diese Last.',
-      action: 'Am Morgen ist die Aufmerksamkeit am größten. Diese Zeit sollte man schützen wie einen Termin.' },
-    { id: sid('l'), status: 'open', anmerkungsart: 'absatzstil',
-      target: 'Wir planen montags. Wir schützen die Blöcke. Wir prüfen am Freitag. Wir passen an.',
-      label: 'Rhythmus lösen',
-      meta: '4 → 1 Satz',
-      short: 'Vier Sätze, vier gleiche Anfänge.',
-      why: 'Die Wiederholung derselben Satzform wirkt hier nicht als Stilmittel, sondern als Erschöpfung. Ein zusammengezogener Satz trägt dasselbe leichter.',
-      action: 'Geplant wird montags; die Blöcke bleiben geschützt, freitags folgt die Prüfung.' },
-    { id: sid('l'), status: 'open', anmerkungsart: 'straffen',
-      target: 'Es wurde eine Entscheidung getroffen, die Reihenfolge der Prinzipien zu ändern.',
-      label: 'Straffen',
-      meta: '11 → 5 Wörter',
-      short: 'Nominalstil und Passiv in einem Satz.',
-      why: 'Wer etwas entschieden hat, verschwindet hier hinter „es wurde". Ein Verb statt des Substantivs macht den Satz kürzer und ehrlicher.',
-      action: 'Wir ändern die Reihenfolge der Prinzipien.' },
-    { id: sid('l'), status: 'open', anmerkungsart: 'wiederholung',
-      target: 'Aufmerksamkeit',
-      targets: [{ text: 'Aufmerksamkeit' }],
-      count: 3,
-      short: 'Dasselbe Wort in drei aufeinanderfolgenden Sätzen.',
-      why: 'Dreimal dasselbe Wort auf engem Raum macht den Absatz zäh. Zwei Ersetzungen genügen — die erste Nennung darf stehen bleiben, sie führt den Begriff ein.',
-      suggestion: { from: '2. und 3. Stelle', to: 'Konzentration · Fokus' },
-      acceptLabel: 'Beide ersetzen',
+    // --- Korrektur: die drei eindeutigen Fehler --------------------------------------
+    { id: 'anm-rechtschreibung', kind: 'form', anmerkungsart: 'rechtschreibung', status: 'open',
+      blockId: 'b-calm-warum-1',
+      target: 'Konzentation',
+      short: '„Konzentation" ist ein Tippfehler.',
+      why: 'Das Wort heißt „Konzentration". Ein Fehler dieser Art kostet keine Überlegung — nur die Aufmerksamkeit derer, die ihn beim Lesen entdecken.',
       action: 'Konzentration' },
-    { id: sid('l'), status: 'open', anmerkungsart: 'ton',
-      target: 'Man sollte Blöcke schützen, sobald du deine Woche danach planst.',
-      short: 'Der Abschnitt wechselt zwischen „man" und „du".',
-      why: 'Die Anrede ist eine Entscheidung, die für den ganzen Text gilt. Ein Wechsel mitten im Satz liest sich, als spräche jemand anders weiter.',
-      suggestion: { from: 'man · du gemischt', to: 'durchgehend du' },
-      acceptLabel: 'Anrede vereinheitlichen',
-      action: 'Du solltest Blöcke schützen, sobald du deine Woche danach planst.' },
-    { id: sid('l'), status: 'open', anmerkungsart: 'stilmittel',
-      target: 'Der Rest des Vormittags gehört dann der Aufholjagd.',
-      label: 'Bild einfügen',
-      short: 'Die Zahl bleibt abstrakt, solange sie kein Bild bekommt.',
-      why: 'Ein Vergleich macht aus einer Größe eine Erfahrung. Der Mechanismus ist Konkretisierung: das Abstrakte bekommt einen Gegenstand, an dem es sich messen lässt. Prüffrage: Sieht die Leserin danach etwas, das sie vorher nur gewusst hat?',
-      action: 'Zwölf Unterbrechungen sind kein Sandkorn, sondern ein halber Vormittag.' },
-    { id: sid('l'), status: 'open', anmerkungsart: 'anglizismus',
-      target: 'Deadline',
-      short: 'Es gibt ein deutsches Wort dafür.',
-      why: 'Der Text kommt sonst ohne englische Begriffe aus. Ein einzelner fällt deshalb aus dem Ton.',
-      action: 'Abgabetermin' },
-    { id: sid('l'), status: 'open', anmerkungsart: 'terminologie',
-      target: 'Nutzer',
-      targets: [{ text: 'Nutzer' }, { text: 'Anwender' }, { text: 'User' }],
-      count: 3,
-      short: 'Drei Begriffe für dieselbe Sache.',
-      why: 'Wer drei Wörter für eine Sache verwendet, lässt den Leser rätseln, ob drei Sachen gemeint sind. Ein Begriff, durchgehalten, ist keine Armut, sondern Genauigkeit.',
-      compare: [
-        { ref: 'Nutzer', text: '7 Stellen' },
-        { ref: 'Anwender', text: '2 Stellen' },
-        { ref: 'User', text: '1 Stelle' },
-      ],
-      acceptLabel: 'Auf „Nutzer" vereinheitlichen',
-      action: 'Nutzer' },
+    { id: 'anm-grammatik', kind: 'form', anmerkungsart: 'grammatik', status: 'open',
+      blockId: 'b-calm-warum-1',
+      target: 'Wegen dem ständigen Nachfragen',
+      short: '„wegen" verlangt den Genitiv.',
+      why: '„Wegen dem" ist gesprochene Sprache. In einem Essay, der Sorgfalt behauptet, fällt der Dativ als Nachlässigkeit auf.',
+      action: 'Wegen des ständigen Nachfragens' },
+    { id: 'anm-zeichensetzung', kind: 'form', anmerkungsart: 'zeichensetzung', status: 'open',
+      blockId: 'b-calm-warum-2',
+      target: 'Man merkt erst dass',
+      short: 'Vor „dass" fehlt das Komma.',
+      why: 'Der Nebensatz beginnt mit „dass" und wird deshalb abgetrennt. Ohne Komma stolpert man beim Lesen genau dort, wo der Satz seine Pointe vorbereitet.',
+      action: 'Man merkt erst, dass' },
 
-    // ---- Struktur: Aufbau und Bewegung im Text ----------------------------
-    { id: sid('l'), status: 'open', anmerkungsart: 'verschieben',
-      target: 'Ein Kalender mit geschützten Blöcken kostet nichts und wirkt sofort.',
-      short: 'Steht bei den Beispielen, gehört zu den Gegenmitteln.',
-      why: 'Der Satz nennt ein Mittel, keine Beobachtung. Zwischen den Beispielen unterbricht er die Beweisführung; bei den Gegenmitteln stützt er sie.',
-      move: { to: 'Hinter „Was das fürs Schreiben heißt", zu den Gegenmitteln' },
-      action: 'Ein Kalender mit geschützten Blöcken kostet nichts und wirkt sofort.' },
-    { id: sid('l'), status: 'open', anmerkungsart: 'uebergang',
-      target: 'Eine gute Statusanzeige informiert, ohne sich in den Vordergrund zu drängen.',
-      label: 'Brücke einfügen',
-      short: 'Zwischen Forschung und Anwendung fehlt ein Satz.',
-      why: 'Der Text springt von der historischen Einordnung direkt zu den Regeln. Eine Frage dazwischen führt den Leser hinüber, statt ihn springen zu lassen.',
-      action: 'Was folgt daraus für den Arbeitstag?' },
-    { id: sid('l'), status: 'open', anmerkungsart: 'gliederung',
-      target: 'Der Effekt heißt Attention Residue und wirkt über Stunden.',
-      label: 'Zwischentitel hier',
-      short: 'Hier bricht das Thema, ohne dass es angekündigt wird.',
-      why: 'Ein Zwischentitel an der Bruchstelle gibt dem Leser die Landkarte, bevor er sie braucht.',
-      move: { to: 'Was hilft' },
-      action: 'Was hilft' },
-    { id: sid('l'), status: 'open', anmerkungsart: 'fluss',
-      target: 'Wir planen montags. Wir schützen die Blöcke.',
-      label: 'Sätze verbinden',
-      meta: '2 → 1 Satz',
-      short: 'Zwei kurze Sätze in Folge — der Rhythmus stockt.',
-      why: 'Kurze Sätze wirken, wenn sie selten sind. In Serie klingen sie gehackt.',
-      action: 'Geplant wird montags, und die Blöcke bleiben geschützt.' },
-    { id: sid('l'), status: 'open', anmerkungsart: 'faden',
-      target: 'Am Ende ist ruhige Technik keine Frage des Verzichts, sondern der Haltung: volle Kraft, leise Präsentation.',
-      short: 'Die Kernaussage „begrenzte Ressource" trägt bis Absatz vier — ab da übernehmen die Werkzeuge.',
-      why: 'Der Schluss verdichtet gut, greift aber die Leitfrage nicht ausdrücklich wieder auf. Ein Rückbezug im letzten Absatz schließt den Bogen, ohne etwas zu wiederholen.' },
-    { id: sid('l'), status: 'open', anmerkungsart: 'ueberschrift',
+    // --- Stil: Wort, Satz, Absatz, Bereich -------------------------------------------
+    { id: 'anm-wortwahl', kind: 'form', anmerkungsart: 'wortwahl', status: 'open',
+      blockId: 'b-calm-warum-1',
+      target: 'fragmentieren',
+      short: 'Fachwort raus, Wirkung rein.',
+      why: '„Fragmentieren" beschreibt den Vorgang korrekt, aber es bleibt abstrakt. Ein Alltagswort macht den Schaden fühlbar, statt ihn nur zu behaupten.',
+      action: 'zerteilen' },
+    { id: 'anm-satzstil', kind: 'form', anmerkungsart: 'satzstil', status: 'open',
+      blockId: 'b-calm-warum-3',
+      target: 'Dass die Technik, die uns umgibt, in dem Augenblick, in dem sie etwas von uns will, nur selten fragt, ob es gerade passt, ist kein Zufall, sondern eine Entscheidung am Reißbrett.',
+      short: 'Vier Einschübe vor dem Hauptverb — der Satz trägt sich selbst nicht.',
+      why: 'Bis das Prädikat kommt, hat die Leserin drei Nebensätze im Kopf behalten. Zwei Sätze halten dieselbe Aussage, ohne dass jemand mitzählen muss.',
+      action: 'Die Technik, die uns umgibt, fragt selten, ob es gerade passt. Das ist kein Zufall, sondern eine Entscheidung am Reißbrett.' },
+    { id: 'anm-straffen', kind: 'form', anmerkungsart: 'straffen', status: 'open',
+      blockId: 'b-calm-warum-3',
+      target: 'Das gilt in einer ganzen Reihe von Fällen, die man durchaus als typisch bezeichnen kann.',
+      short: 'Vierzehn Wörter für „fast immer".',
+      why: 'Die Absicherung „in einer ganzen Reihe von Fällen, die man durchaus als typisch bezeichnen kann" sagt nichts, was „fast immer" nicht auch sagt — sie macht die Aussage nur vorsichtiger, als sie gemeint ist.',
+      action: 'Das gilt fast immer.' },
+    { id: 'anm-absatzstil', kind: 'form', anmerkungsart: 'absatzstil', status: 'open',
+      blockId: 'b-calm-haltung',
+      target: 'Ein ruhiges Werkzeug verzichtet nicht auf Funktionen, es ordnet sie nur anders an, es zeigt sie dann, wenn sie gebraucht werden, es hält sie zurück, wenn sie stören würden, und es überlässt die Entscheidung darüber der Person, die schreibt.',
+      short: 'Ein Absatz, ein Satz, fünf gleichrangige Kommateile.',
+      why: 'Alles hängt an derselben Schnur, nichts wird betont. Mit einem kurzen Anfangssatz, einem Doppelpunkt und einem knappen Schluss bekommt der Absatz eine Kurve statt einer geraden Linie.',
+      action: 'Ein ruhiges Werkzeug verzichtet auf nichts. Es ordnet nur anders: zeigen, wenn es gebraucht wird; zurückhalten, wenn es stören würde. Wer schreibt, entscheidet.' },
+    { id: 'anm-wiederholung', kind: 'form', anmerkungsart: 'wiederholung', status: 'open',
+      blockId: 'b-calm-warum-2',
+      target: 'Aufmerksamkeit ist die eigentliche Währung dieser Jahre.',
+      short: '„Aufmerksamkeit" steht dreimal in drei Sätzen.',
+      why: 'Beim ersten Mal ist es der Begriff, beim dritten Mal ein Tick. Zwei der Nennungen lassen sich durch ein Pronomen ersetzen — der Absatz verliert nichts und gewinnt Tempo.',
+      targets: [
+        { blockId: 'b-calm-warum-2', text: 'Wer Aufmerksamkeit verliert', replacement: 'Wer sie verliert' },
+        { blockId: 'b-calm-warum-2', text: 'muss Aufmerksamkeit noch einmal aufbringen', replacement: 'muss sie noch einmal aufbringen' },
+      ],
+      action: 'Die erste Nennung bleibt, die beiden folgenden werden zu „sie".' },
+    { id: 'anm-ton', kind: 'form', anmerkungsart: 'ton', status: 'open',
+      blockId: 'b-calm-schreiben-3',
+      target: 'Wer einmal so gearbeitet hat, will nie wieder zurück.',
+      short: 'Zwei Sätze klingen nach Werbung statt nach Essay.',
+      why: 'Der Text argumentiert sonst nüchtern und überlässt das Urteil der Leserin. Diese beiden Sätze verkaufen — und der Bruch fällt stärker auf als die Behauptung selbst.',
+      targets: [
+        { blockId: 'b-calm-schreiben-3', text: 'Wer einmal so gearbeitet hat, will nie wieder zurück.', replacement: 'Wer so gearbeitet hat, merkt den Unterschied sofort.' },
+        { blockId: 'b-calm-schreiben-3', text: 'Das fühlt sich einfach großartig an.', replacement: 'Das ist keine Geschmacksfrage, sondern eine messbare Entlastung.' },
+      ],
+      action: 'Beide Sätze auf das zurückführen, was der Text belegen kann.' },
+    { id: 'anm-stilmittel', kind: 'form', anmerkungsart: 'stilmittel', status: 'open',
+      blockId: 'b-calm-beispiele',
+      stilmittelId: 'anapher',
+      target: 'Ein ruhiges Werkzeug meldet sich selten.',
+      short: 'Hier trägt eine Anapher: dreimal derselbe Auftakt.',
+      why: 'Die Anapher wiederholt den Satzanfang „Es meldet sich" und markiert damit jedes Glied als Fortsetzung derselben Reihe — die Form ersetzt das Bindewort. Prüffrage: Trägt jedes Glied eigenes Gewicht, oder füllt eines nur die Form?',
+      action: 'Ein ruhiges Werkzeug meldet sich selten. Es meldet sich spät. Es meldet sich nur einmal.' },
+    { id: 'anm-anglizismus', kind: 'form', anmerkungsart: 'anglizismus', status: 'open',
+      blockId: 'b-calm-schreiben-1',
+      target: 'den Workflow',
+      short: '„Workflow" ist das einzige englische Wort weit und breit.',
+      why: 'Der Text spricht sonst von Denkfluss, Peripherie und Aufmerksamkeit. Ein einzelner Anglizismus wirkt daneben wie aus einer anderen Textsorte hereingerutscht.',
+      action: 'den Arbeitsfluss' },
+    { id: 'anm-terminologie', kind: 'form', anmerkungsart: 'terminologie', status: 'open',
+      blockId: 'b-calm-geschichte-1',
+      target: 'dem Randbereich der Aufmerksamkeit',
+      short: 'Dieselbe Sache heißt dreimal anders.',
+      why: 'Peripherie, Randbereich, Hintergrund — die Leserin muss raten, ob drei Begriffe drei Dinge meinen. Der Text beginnt mit „Peripherie"; dabei sollte er bleiben.',
+      compare: [
+        { ref: 'Auftakt', text: 'in der Peripherie' },
+        { ref: 'Woher der Begriff kommt', text: 'dem Randbereich der Aufmerksamkeit' },
+        { ref: 'Was das fürs Schreiben heißt', text: 'Der Hintergrund bleibt dabei ruhig' },
+      ],
+      targets: [
+        { blockId: 'b-calm-geschichte-1', text: 'dem Randbereich der Aufmerksamkeit', replacement: 'der Peripherie der Aufmerksamkeit' },
+        { blockId: 'b-calm-schreiben-2', text: 'Der Hintergrund bleibt dabei ruhig', replacement: 'Die Peripherie bleibt dabei ruhig' },
+      ],
+      action: 'Überall „Peripherie" — der Begriff, mit dem der Text anfängt.' },
+
+    // --- Struktur: Reihenfolge, Übergänge, Gliederung, Fluss, Faden, Titel ------------
+    { id: 'anm-verschieben', kind: 'inhalt', anmerkungsart: 'verschieben', status: 'open',
+      blockId: 'b-calm-massstab',
+      target: 'Woran misst man Ruhe?',
+      short: 'Der Maßstab steht hinter den Beispielen — er gehört davor.',
+      why: 'Wer erst die Teekanne liest und danach erfährt, woran Ruhe gemessen wird, hat die Beispiele ohne Maßstab beurteilt. Umgestellt trägt der Abschnitt seine eigene Begründung.',
+      move: { fromBlockId: 'b-calm-massstab', toBlockId: 'b-calm-beispiele', position: 'before', to: 'Vor die Beispiele — der Maßstab kommt zuerst.' } },
+    { id: 'anm-uebergang', kind: 'inhalt', anmerkungsart: 'uebergang', status: 'open',
+      blockId: 'b-calm-schreiben-1',
+      target: 'Für Schreibsoftware heißt das:',
+      short: 'Zwischen Teekanne und Software fehlt die Brücke.',
+      why: 'Die Beispiele enden bei physischen Dingen, der nächste Abschnitt springt zur Software. Ein Satz, der das Gemeinsame benennt — informieren, ohne zu unterbrechen —, trägt den Sprung.',
+      action: 'Was Teekanne und Statusleuchte verbindet, ist ein Entwurfsprinzip: informieren, ohne zu unterbrechen. Für Schreibsoftware heißt das:' },
+    { id: 'anm-gliederung', kind: 'inhalt', anmerkungsart: 'gliederung', status: 'open',
+      blockId: 'b-calm-beispiele',
+      target: 'Die Teekanne pfeift erst, wenn das Wasser kocht.',
+      short: 'Zwei Absätze ohne Überschrift zwischen zwei Abschnitten.',
+      why: 'Beispiele und Maßstab bilden einen eigenen Gedanken, stehen aber unter der Überschrift zur Begriffsgeschichte. Eine Zwischenüberschrift macht den Aufbau im Inhaltsverzeichnis sichtbar.',
+      heading: { afterBlockId: 'b-calm-geschichte-2', id: 'b-calm-prinzipien-h', text: 'Wie es im Alltag aussieht', level: 2 },
+      action: 'Wie es im Alltag aussieht' },
+    { id: 'anm-fluss', kind: 'form', anmerkungsart: 'fluss', status: 'open',
+      blockId: 'b-calm-schreiben-2',
+      target: 'Das Werkzeug wartet. Es prüft im Stillen. Es sammelt. Es meldet sich erst später.',
+      short: 'Vier Hauptsätze hintereinander — der Absatz stockt.',
+      why: 'Jeder Satz beginnt neu, keiner verbindet sich mit dem vorigen. Als ein Satz gelesen, entsteht die Ruhe, von der der Absatz spricht.',
+      action: 'Das Werkzeug wartet, prüft im Stillen und sammelt, was ihm auffällt; melden wird es sich erst später.' },
+    { id: 'anm-faden', kind: 'inhalt', anmerkungsart: 'faden', status: 'open',
+      blockId: 'b-calm-schluss',
+      target: 'Am Ende ist ruhige Technik keine Frage des Verzichts',
+      short: 'Der Schluss löst die Leitfrage nicht ausdrücklich auf.',
+      why: 'Die Einleitung fragt, wie ein Schreibwerkzeug gestaltet sein muss, damit es das Denken unterstützt. Der Schluss deutet die Antwort nur an — ein Satz davor macht den Bogen sichtbar.',
+      action: 'Damit ist die Leitfrage beantwortet: Ein Werkzeug unterstützt das Denken genau dann, wenn es den Zeitpunkt seiner Meldungen dem Schreibenden überlässt.' },
+    { id: 'anm-ueberschrift', kind: 'inhalt', anmerkungsart: 'ueberschrift', status: 'open',
+      blockId: 'b-calm-auftakt',
       target: 'Calm Technology',
-      short: 'Der Titel benennt das Thema, nicht die These.',
-      why: 'Ein Titel, der die These trägt, macht neugierig und verpflichtet den Text zugleich. „Calm Technology" ist ein Etikett; es kann alles Mögliche bedeuten.',
-      action: 'Die begrenzte Ressource' },
+      short: 'Der Titel nennt den Begriff, nicht die These.',
+      why: '„Calm Technology" ist ein Stichwort. Wer den Begriff nicht kennt, erfährt aus dem Titel nichts — ein Titel mit These lädt eher zum Lesen ein.',
+      action: 'Ruhige Technik: warum gute Werkzeuge schweigen können' },
 
-    // ---- Inhalt: Substanz und Belege --------------------------------------
-    { id: sid('l'), status: 'open', anmerkungsart: 'beleg',
-      target: 'Nach jeder Unterbrechung dauert es 23 Minuten, bis die Konzentration wieder trägt.',
-      n: 1,
-      short: 'Zahl ohne Quelle. Ein passender Beleg liegt vor:',
-      why: 'Eine Zahl, die das Argument trägt, braucht ihre Herkunft im Satz daneben. Ohne sie ist sie eine Behauptung im Gewand einer Messung.',
+    // --- Inhalt: Gespräch, Belege, Widerspruch, Lücke, Verständlichkeit ---------------
+    { id: 'anm-anmerkung', kind: 'inhalt', anmerkungsart: 'anmerkung', status: 'open',
+      blockId: 'b-calm-schluss',
+      target: 'volle Kraft, leise Präsentation',
+      short: 'Die Formel steht im Nebensatz — sie könnte allein stehen.',
+      why: 'Die Antithese ist der Merksatz des ganzen Textes. Ob sie als eigener Schlusssatz stärker wirkt, entscheidet der Klang — das ist eine Frage an dich, keine Korrektur.',
+      thread: [{ id: 'message-anm-anmerkung-0', role: 'agent', at: 0,
+        text: 'Die Formel „volle Kraft, leise Präsentation" hängt gerade hinter einem Doppelpunkt. Als eigener Satz gesetzt, bekäme sie eine Pause davor. Willst du sie so stehen lassen oder freistellen?' }] },
+    { id: 'anm-beleg', kind: 'inhalt', anmerkungsart: 'beleg', status: 'open',
+      blockId: 'b-calm-geschichte-1',
+      target: 'beschrieb er 1996',
+      short: 'Die Jahreszahl trägt das Argument — hier gehört die Quelle hin.',
+      why: 'Dein Belegmaßstab verlangt für historische Aussagen eine sichtbare Primärquelle. Der Aufsatz von 1996 ist genau das: die Stelle, an der der Begriff zum ersten Mal steht.',
       sources: [{
-        label: 'Mark, G. u. a. (2008): The Cost of Interrupted Work',
+        label: 'Weiser & Brown (1996): The Coming Age of Calm Technology',
         type: 'Primärquelle',
-        url: 'https://ics.uci.edu/~gmark/chi08-mark.pdf',
+        url: 'https://calmtech.com/papers',
         contentType: 'original-excerpt',
-        content: 'Nach einer Unterbrechung dauert es im Mittel rund 23 Minuten, bis Probanden die ursprüngliche Aufgabe mit vergleichbarer Konzentration fortsetzen.',
-        citation: 'Mark, G., Gudith, D., & Klocke, U. (2008). The Cost of Interrupted Work. CHI 2008.',
+        content: 'The most potentially interesting, challenging, and profound change implied by the ubiquitous computing era is a focus on calm.',
+        citation: 'Weiser, M., & Brown, J. S. (1996). The Coming Age of Calm Technology.',
         verificationStatus: 'demo',
-        locator: 'Demo-Fundstelle: Ergebnisteil',
-        limits: 'Die Studie misst Büroarbeit, nicht Schreibarbeit im Besonderen.',
-      }],
-      acceptLabel: 'Als Fußnote einfügen',
-      action: 'Nach jeder Unterbrechung dauert es 23 Minuten, bis die Konzentration wieder trägt (Mark u. a. 2008).' },
-    { id: sid('l'), status: 'open', anmerkungsart: 'faktencheck',
-      target: 'sechs Prozent',
-      n: 2,
-      short: 'Weicht von der angegebenen Quelle ab.',
-      why: 'Die Zahl im Text und die Zahl in der Quelle stimmen nicht überein. Eine Abweichung von knapp zwei Punkten ist bei einer Marktangabe kein Rundungsfehler.',
+        locator: 'Demo-Fundstelle: Aufsatz, einleitender Abschnitt',
+        limits: 'Die Quelle belegt den Ursprung des Begriffs, nicht die Wirkung einer bestimmten Software.',
+      }] },
+    { id: 'anm-faktencheck', kind: 'inhalt', anmerkungsart: 'faktencheck', status: 'open',
+      blockId: 'b-calm-geschichte-2',
+      target: 'in zwölf Prinzipien',
+      short: 'Amber Case nennt acht Prinzipien, nicht zwölf.',
+      why: 'Eine falsche Zahl an einer prüfbaren Stelle beschädigt das Vertrauen in alle anderen Angaben des Textes — auch in die richtigen.',
+      action: 'in acht Prinzipien',
       sources: [{
-        label: 'Marktbericht Q3 2026 — Branchenverband',
-        type: 'Bericht',
-        url: 'https://example.org/marktbericht-q3-2026',
-        contentType: 'excerpt',
-        content: 'Der Gesamtmarkt legte im dritten Quartal um 4,1 Prozent zu.',
-        citation: 'Branchenverband (2026). Marktbericht Q3 2026.',
+        label: 'Case, A. (2015): Calm Technology — Principles',
+        type: 'Buch',
+        url: 'https://calmtech.com',
+        contentType: 'summary',
+        content: 'Amber Case fasst den Ansatz in acht Gestaltungsprinzipien für aufmerksamkeitsarme Technik.',
+        citation: 'Case, A. (2015). Calm Technology. O’Reilly Media.',
         verificationStatus: 'demo',
-        locator: 'Demo-Fundstelle: Kennzahlen',
-      }],
-      acceptLabel: 'Auf 4,1 Prozent korrigieren',
-      action: 'vier Komma eins Prozent' },
-    { id: sid('l'), status: 'open', anmerkungsart: 'widerspruch',
-      target: 'eine ganze Stunde',
-      n: 3,
-      short: 'Zwei Angaben zur gleichen Sache.',
-      why: 'Weiter oben stehen 23 Minuten, hier eine Stunde. Beides kann nicht stimmen; der Leser merkt es und verliert das Vertrauen in beide Zahlen.',
+        locator: 'Demo-Angabe: Buchzusammenfassung ohne live geprüfte Seite',
+      }] },
+    { id: 'anm-widerspruch', kind: 'inhalt', anmerkungsart: 'widerspruch', status: 'open',
+      blockId: 'b-calm-warum-3',
+      target: 'Jede Unterbrechung ist ein Verlust, ausnahmslos.',
+      short: 'Zwei Stellen im Text widersprechen einander.',
+      why: 'Oben steht „ausnahmslos", unten steht die Ausnahme. Ein Leser, der beides bemerkt, traut ab da keiner der beiden Stellen mehr — die abgeschwächte Fassung ist außerdem die haltbarere.',
       compare: [
-        { ref: 'Absatz 3', text: '23 Minuten' },
-        { ref: 'Absatz 8', text: 'eine ganze Stunde' },
+        { ref: 'Warum es wichtig ist', text: 'Jede Unterbrechung ist ein Verlust, ausnahmslos.' },
+        { ref: 'Ein Einwand', text: 'es gibt Meldungen, die unterbrechen müssen' },
       ],
-      acceptLabel: 'Auf 23 Minuten angleichen',
-      action: 'rund eine halbe Stunde' },
-    { id: sid('l'), status: 'open', anmerkungsart: 'anmerkung',
-      target: 'Wer früh Nachrichten liest, verschenkt den besten Teil des Tages.',
-      short: 'Die Behauptung ist stark — hast du ein Beispiel aus deinem Alltag? Zwei Sätze würden sie tragen.',
-      why: 'Eine zugespitzte Behauptung überzeugt, wenn sie an einer Erfahrung hängt. Ohne Beispiel bleibt sie eine Meinung, die man teilen kann oder nicht.' },
-    { id: sid('l'), status: 'open', anmerkungsart: 'luecke',
-      target: 'Wer im Support arbeitet, kennt den Einwand.',
-      short: 'Bereitschaftsdienste können Blöcke nicht schützen. Soll ich einen Absatz dazu vorschlagen?',
-      why: 'Der Text nennt den Einwand, ohne ihn zu beantworten. Ein Leser aus genau diesem Feld liest das als Ausweichen.' },
-    { id: sid('l'), status: 'open', anmerkungsart: 'verstaendlichkeit',
-      target: 'Attention Residue',
-      label: 'Erklärung einfügen',
-      short: 'Der Fachbegriff wird benutzt, bevor er erklärt ist.',
-      why: 'Ein Begriff, den nur das Fach kennt, kostet den übrigen Leser einen Absatz Aufmerksamkeit — genau die Ressource, um die es hier geht.',
-      action: '— der Teil der Aufmerksamkeit, der bei der alten Aufgabe hängen bleibt' },
+      action: 'Die meisten Unterbrechungen sind ein Verlust.' },
+    { id: 'anm-luecke', kind: 'inhalt', anmerkungsart: 'luecke', status: 'open',
+      blockId: 'b-calm-einwand',
+      target: 'Ein Rauchmelder, der höflich wartet, ist ein schlechter Rauchmelder',
+      short: 'Der Einwand bleibt beim Notfall stehen.',
+      why: 'Neben dem Notfall gibt es Arbeit, die aus Unterbrechungen besteht: Pflege, Leitstelle, Kundendienst. Für diese Menschen ist „ruhig" kein Ziel, sondern ein Hindernis — das Gegenargument macht deine These belastbarer.',
+      thread: [{ id: 'message-anm-luecke-0', role: 'agent', at: 0,
+        text: 'Der Rauchmelder ist der offensichtliche Einwand. Der unbequemere: Für wen ist Unterbrechung die Arbeit selbst — und gilt dein Maßstab für die auch?' }] },
+    { id: 'anm-verstaendlichkeit', kind: 'inhalt', anmerkungsart: 'verstaendlichkeit', status: 'open',
+      blockId: 'b-calm-geschichte-1',
+      target: 'den Begriff Ubiquitous Computing',
+      short: '„Ubiquitous Computing" fällt ohne Erklärung.',
+      why: 'Der Begriff trägt den ganzen historischen Abschnitt, wird aber vorausgesetzt. Ein Halbsatz genügt — er kostet nichts und rettet alle, die den Ausdruck zum ersten Mal lesen.',
+      action: 'den Begriff Ubiquitous Computing — die Idee, dass Rechenkraft unsichtbar in Alltagsdinge wandert, statt auf einem Bildschirm zu sitzen' },
 
-    // ---- Notizen-Betriebsart: hier wird NICHT korrigiert -------------------
-    { id: sid('l'), status: 'open', anmerkungsart: 'ausformulieren',
-      target: 'Kerngedanke: Aufmerksamkeit ist keine Fähigkeit, sondern eine Bedingung, die man gestaltet',
-      label: 'Ausformulieren',
-      short: 'Das ist schon die These — sie steht nur noch als Stichwort da.',
-      why: 'Der Gedanke trägt einen ganzen Abschnitt. Als Satz geschrieben, wird sichtbar, was er verlangt und was er nicht behauptet.',
-      action: 'Aufmerksamkeit ist keine Fähigkeit, die man hat oder nicht hat. Sie ist eine Bedingung, die sich gestalten lässt — und damit eine Frage des Entwurfs, nicht des Charakters.' },
-    { id: sid('l'), status: 'open', anmerkungsart: 'buendeln',
-      target: '→ Teekanne pfeift erst wenn relevant. Statusleuchte informiert ohne zu unterbrechen. beides dasselbe Prinzip?',
-      short: 'Die beiden Beispiele und die Frage danach gehören zusammen.',
-      why: 'Du hast die Antwort schon mitgeschrieben: „beides dasselbe Prinzip". Zusammengefasst ist es ein Baustein statt drei loser Notizen.',
-      move: { to: 'Zu einem Block: Beispiele + gemeinsames Prinzip' } },
-    { id: sid('l'), status: 'open', anmerkungsart: 'nachfrage',
-      target: 'irgendwo unterbringen: der Unterschied zwischen leise und langsam. leise ist nicht weniger Kraft',
-      short: 'Meinst du damit den Einwand, ruhige Technik sei ein Verzicht?',
-      why: 'Die Notiz klingt nach einer Abgrenzung gegen einen Vorwurf. Wenn ja, gehört sie in die Nähe der These und nicht ans Ende.' },
-    { id: sid('l'), status: 'open', anmerkungsart: 'ordnen',
-      target: 'Weiser 1988 ubiquitous computing / Weiser + Brown 1996 calm / Case 2015 acht Prinzipien',
-      short: 'Die Reihenfolge stimmt schon — sie steht nur mitten in den Beispielen.',
-      why: 'Eine Zeitleiste ist Fundament, kein Beleg. Vor die Beispiele gezogen, gibt sie ihnen den Rahmen.',
-      move: { to: 'Vor die Beispiele, als Fundament' } },
-    { id: sid('l'), status: 'open', anmerkungsart: 'aufgreifen',
-      target: 'offene Frage aus dem Gespräch letzte Woche: gilt das auch für Bereitschaftsdienste',
-      short: 'Dieser Faden ist noch offen — im Text taucht der Einwand auf, die Antwort nicht.',
-      why: 'Du hast die Frage zweimal notiert, einmal hier und einmal im Text („Wer im Support arbeitet"). Zweimal notiert heißt meistens: sie lässt dich nicht los.' },
+    // --- Notizen: die fünf Arten für lose Gedanken -----------------------------------
+    { id: 'anm-ausformulieren', kind: 'inhalt', anmerkungsart: 'ausformulieren', status: 'open',
+      blockId: 'b-calm-notiz-2',
+      target: 'der Unterschied zwischen Stille und Ruhe',
+      short: 'Aus dem Stichwort lässt sich ein Absatz machen.',
+      why: 'Die Notiz enthält bereits die Unterscheidung, nur noch nicht ausgesprochen. So formuliert, ist sie ein Baustein für den Abschnitt über die Haltung.',
+      action: 'Stille ist die Abwesenheit von Geräusch. Ruhe ist die Abwesenheit von Zwang. Ein Werkzeug darf sich melden — solange es nichts erzwingt.' },
+    { id: 'anm-buendeln', kind: 'inhalt', anmerkungsart: 'buendeln', status: 'open',
+      blockId: 'b-calm-notiz-6',
+      target: 'die Ampel, die nur bei Rot etwas verlangt',
+      short: 'Diese Notiz gehört zur Beispielsammlung weiter oben.',
+      why: 'Teekanne, Statusleuchte, Armbanduhr und Ampel sind dieselbe Sorte Beleg. Beieinander sieht man, ob die Reihe trägt oder ob ein Beispiel zu viel ist.',
+      move: { fromBlockId: 'b-calm-notiz-6', toBlockId: 'b-calm-notiz-1', position: 'after', to: 'Direkt unter die Notiz mit Teekanne und Statusleuchte' } },
+    { id: 'anm-nachfrage', kind: 'inhalt', anmerkungsart: 'nachfrage', status: 'open',
+      blockId: 'b-calm-notiz-3',
+      target: 'aber der Ton passt vielleicht nicht',
+      short: 'Wessen Ton ist gemeint?',
+      why: 'Die Notiz kann zweierlei heißen: Harris’ eigener Ton passt nicht zu deinem Text, oder dein Text müsste seinen Ton ändern, um ihn zu zitieren. Das entscheidet, ob die Quelle bleibt.',
+      thread: [{ id: 'message-anm-nachfrage-0', role: 'agent', at: 0,
+        text: 'Meinst du, dass Tristan Harris’ Tonfall zu alarmierend für deinen Essay ist — oder dass dein Essay zu ruhig ist, um ihn zu zitieren?' }] },
+    { id: 'anm-ordnen', kind: 'inhalt', anmerkungsart: 'ordnen', status: 'open',
+      blockId: 'b-calm-notiz-5',
+      target: 'Der Maßstab ist noch nicht zu Ende gedacht',
+      short: 'Die offenste Frage steht ganz unten.',
+      why: 'Die anderen Notizen sind Fundstücke, diese eine ist eine offene Baustelle. Oben stehend, ist sie beim nächsten Öffnen das Erste, was du siehst.',
+      move: { fromBlockId: 'b-calm-notiz-5', toBlockId: 'b-calm-notizen-h', position: 'after', to: 'An den Anfang der Notizen, direkt unter die Überschrift' } },
+    { id: 'anm-aufgreifen', kind: 'inhalt', anmerkungsart: 'aufgreifen', status: 'open',
+      blockId: 'b-calm-notiz-5',
+      target: 'im Text steht bisher nur die halbe Antwort',
+      short: 'Ein angefangener Gedanke wartet seit dem letzten Durchgang.',
+      why: 'Die Notiz nennt eine Lücke, die der Text tatsächlich hat: Der Maßstab misst Unterbrechungen, aber nicht, was ein Werkzeug im gleichen Zug gewinnt. Der Faden ist noch offen.',
+      thread: [{ id: 'message-anm-aufgreifen-0', role: 'agent', at: 0,
+        text: 'Die halbe Antwort steht im Abschnitt über den Maßstab. Die andere Hälfte hast du hier notiert, aber nie in den Text geholt — willst du das jetzt?' }] },
   ]
 }
 
-// Der Beispieltext ist eine Testkulisse, die sich nicht als eine anfuehlen soll.
-// Jakob liest ihn wirklich, wenn er die Rueckmeldung prueft — Blindtext waere
-// wertlos, weil sich an ihm nicht beurteilen laesst, ob ein Hinweis hilft.
+// Der Beispieltext. Jeder Baustein trägt seine Kennung schon hier im Quelltext:
+// Verschieben, Gliedern und Mehrfachersetzungen brauchen eine Kennung, die vor dem
+// ersten Öffnen feststeht — sonst hätten diese Anmerkungen kein Ziel. Die Kennungen
+// überleben das Laden (block-identity.js) und werden in der Seed-Signatur
+// ausgeblendet (example-seed.mjs), zählen also nicht als Änderung.
 //
-// Er traegt deshalb echte, absichtliche Schwaechen: einen falsch geschriebenen
-// Zeitvertreib, einen Schachtelsatz, eine Zahl ohne Quelle, einen Widerspruch
-// zu einer frueheren Zahl, dreimal dasselbe Wort, drei Begriffe fuer dieselbe
-// Sache. Jede davon ist der Anker genau einer Anmerkungsart — welche wo haengt,
-// steht in buildExampleLane(), und example-abdeckung.test.mjs prueft, dass
-// jeder Anker woertlich hier vorkommt.
+// Der Text enthält absichtlich Schwächen: einen Tippfehler, einen Dativ nach „wegen",
+// ein fehlendes Komma, eine falsche Zahl, einen Widerspruch, einen Anglizismus, drei
+// Namen für dieselbe Sache. Sie sind die echten Anlässe der Anmerkungen oben — ohne
+// sie wären die Anmerkungen Behauptungen über einen Text, der sie gar nicht hergibt.
 export function buildExampleBody() {
-  return '<p>Calm Technology beschreibt Technik, die in der Peripherie bleibt und Aufmerksamkeit nur beansprucht, wenn sie wirklich gebraucht wird.</p>'
-
-    + '<h2>Warum es wichtig ist</h2>'
-    + '<p>Ständige Benachrichtigungen fragmentieren die Aufmerksamkeit und zerreißen den Denkfluss. Der eigentliche Schaden ist nicht die einzelne Meldung, sondern die Summe der kleinen Unterbrechungen über den Tag.</p>'
-    + '<p>Nach jeder Unterbrechung dauert es 23 Minuten, bis die Konzentration wieder trägt. Der Rest des Vormittags gehört dann der Aufholjagd. Die Ergebnisse der Studie wurde 2009 veröffentlicht und seither mehrfach bestätigt.</p>'
-    + '<p>Die Aufmerksamkeit zerfällt in Bruchstücke, und mit der Aufmerksamkeit die Qualität. Wer seine Aufmerksamkeit schützt, schützt seine Arbeit.</p>'
-    + '<p>Weil die Aufmerksamkeit, die wir am Morgen haben, wenn wir noch nicht abgelenkt sind, die wertvollste Ressource des Tages ist, sollte man sie mit derselben Selbstverständlichkeit schützen wie einen Termin. Trotzdem behandeln wir sie wie einen Vorrat, aus dem man beliebig schöpfen kann — ein teurer Zeit vertreib.</p>'
-
-    + '<h2>Was die Forschung sagt</h2>'
-    + '<p>Weiser und Brown beschrieben schon 1996, wie Technik zwischen Zentrum und Peripherie der Aufmerksamkeit wechseln kann. Eine gute Statusanzeige informiert, ohne sich in den Vordergrund zu drängen.</p>'
-    + '<p>Der Markt für solche Werkzeuge wuchs im selben Zeitraum um sechs Prozent. Bis ein unterbrochener Gedanke wieder trägt, vergeht eine ganze Stunde.</p>'
-    + '<p>Der Effekt heißt Attention Residue und wirkt über Stunden. Es wurde eine Entscheidung getroffen, die Reihenfolge der Prinzipien zu ändern.</p>'
-
-    + '<h2>Was das fürs Schreiben heißt</h2>'
-    + '<p>Für Schreibsoftware bedeutet das: Werkzeuge erscheinen im Kontext, Hinweise sammeln sich leise, nichts drängt sich in den Fluss. Im Text stehen Nutzer, Anwender und User nebeneinander.</p>'
-    + '<p>Man sollte Blöcke schützen, sobald du deine Woche danach planst. Wer sich daran hält, gewinnt zwei ruhige Tage. Bis zur Deadline bleiben dann noch zwei Tage Luft.</p>'
-    + '<p>Wir planen montags. Wir schützen die Blöcke. Wir prüfen am Freitag. Wir passen an.</p>'
-    + '<p>Ein Kalender mit geschützten Blöcken kostet nichts und wirkt sofort. Wer im Support arbeitet, kennt den Einwand. Wer früh Nachrichten liest, verschenkt den besten Teil des Tages.</p>'
-    + '<p>Er kam früher weil er die Zahlen selbst sehen wollte. Wer dann noch Rückmeldung kriegt, arbeitet an einem Text, den er längst abgeschlossen hätte.</p>'
-
-    + '<p>Am Ende ist ruhige Technik keine Frage des Verzichts, sondern der Haltung: volle Kraft, leise Präsentation.</p>'
-}
-
-// Der Notiz-Text ist bewusst roh: Stichworte, Fragmente, Pfeile. In der
-// Notizen-Betriebsart wird NICHT korrigiert — kein Rechtschreib-, kein
-// Grammatik-, kein Zeichensetzungshinweis. Lose Gedanken duerfen lose bleiben.
-// Deshalb braucht dieser Modus einen eigenen Text: an fertigen Saetzen liesse
-// sich nicht zeigen, dass der Agent sie hier in Ruhe laesst.
-export function buildExampleNotizen() {
-  return '<p>Kerngedanke: Aufmerksamkeit ist keine Fähigkeit, sondern eine Bedingung, die man gestaltet</p>'
-    + '<p>→ Teekanne pfeift erst wenn relevant. Statusleuchte informiert ohne zu unterbrechen. beides dasselbe Prinzip?</p>'
-    + '<p>Weiser 1988 ubiquitous computing / Weiser + Brown 1996 calm / Case 2015 acht Prinzipien</p>'
-    + '<p>irgendwo unterbringen: der Unterschied zwischen leise und langsam. leise ist nicht weniger Kraft</p>'
-    + '<p>offene Frage aus dem Gespräch letzte Woche: gilt das auch für Bereitschaftsdienste</p>'
-}
-
-// Die acht Hinweisarten des Agenten — die Einordnung, mit der er jeden Hinweis
-// versieht (kiKategorie). Vier davon zaehlen zur Integritaet: fakt, quelle,
-// methode, logik. Sie stehen am Text, nicht am Dokument, damit Jakob sie an der
-// Stelle sieht, auf die sie sich beziehen.
-export function buildExampleHinweisarten() {
-  const hinweis = (kiKategorie, anker, beobachtung, relevanz, folge, muster) => ({
-    id: sid('h'), status: 'open', createdAt: 0,
-    kiKategorie,
-    target: anker,
-    short: beobachtung,
-    why: `${relevanz} ${folge}`,
-    muster,
-    integritaet: ['fakt', 'quelle', 'methode', 'logik'].includes(kiKategorie),
-  })
   return [
-    hinweis('fakt', 'sechs Prozent',
-      'Die Zahl weicht von der Quelle ab.',
-      'Eine falsche Zahl in einem belegten Absatz beschädigt auch die richtigen daneben.',
-      'Bleibt sie, prüft ein aufmerksamer Leser den ganzen Abschnitt gegen.',
-      'Eine Zahl, die aus einer Quelle stammt, muss mit ihr übereinstimmen — auch in der Rundung.'),
-    hinweis('quelle', 'Nach jeder Unterbrechung dauert es 23 Minuten, bis die Konzentration wieder trägt.',
-      'Der tragende Befund hat keine Herkunft.',
-      'Das Publikum sind Fachleute; sie lesen Zahlen als Messungen und suchen die Studie.',
-      'Ohne Beleg bleibt der Satz eine Behauptung im Gewand einer Messung.',
-      'Eine Zahl, die das Argument trägt, braucht ihre Herkunft im Satz daneben.'),
-    hinweis('methode', '2009 veröffentlicht und seither mehrfach bestätigt',
-      '„Mehrfach bestätigt" nennt weder wie oft noch von wem.',
-      'Das Wort behauptet Konsens, ohne ihn zu zeigen.',
-      'Bleibt es, kann der Text einen Konsens vortäuschen, den es so nicht gibt.',
-      'Wer Bestätigung behauptet, nennt Zahl und Herkunft — sonst ist es Rhetorik.'),
-    hinweis('logik', 'eine ganze Stunde',
-      'Widerspricht der Angabe weiter oben.',
-      'Zwei Zahlen für dieselbe Sache lassen den Leser wählen, welcher er glaubt.',
-      'Er glaubt dann keiner von beiden.',
-      'Zwei Angaben zur gleichen Größe im selben Text müssen zusammenpassen oder sich ausdrücklich unterscheiden.'),
-    hinweis('struktur', 'Ein Kalender mit geschützten Blöcken kostet nichts und wirkt sofort.',
-      'Ein Gegenmittel steht zwischen den Beispielen.',
-      'Der Abschnitt soll das Problem zeigen; eine Lösung darin nimmt der Beweisführung den Zug.',
-      'Der Leser hält die Lösung für einen Teil des Problems.',
-      'Ein Satz gehört dorthin, wo seine Funktion gebraucht wird — nicht dorthin, wo er einem einfiel.'),
-    hinweis('wirkung', 'Wer früh Nachrichten liest, verschenkt den besten Teil des Tages.',
-      'Die stärkste Behauptung des Textes steht ohne Beispiel.',
-      'Zugespitzte Sätze überzeugen über eine Erfahrung, nicht über die Zuspitzung.',
-      'Ohne Beispiel liest sie sich als Meinung, die man teilen kann oder nicht.',
-      'Je stärker die Behauptung, desto konkreter muss der Beleg daneben sein.'),
-    hinweis('erklaerung', 'Der Effekt heißt Attention Residue und wirkt über Stunden.',
-      'Der Fachbegriff wird benutzt, bevor er erklärt ist.',
-      'Der Text richtet sich auch an Leser außerhalb des Fachs.',
-      'Sie überlesen den Begriff und verlieren den Grund des Absatzes mit.',
-      'Ein Fachwort beim ersten Auftreten in einem Halbsatz erklären — oder es weglassen.'),
-    hinweis('sprache', 'Wir planen montags. Wir schützen die Blöcke. Wir prüfen am Freitag. Wir passen an.',
-      'Vier Sätze mit demselben Anfang — eine Anapher, die hier nicht trägt.',
-      'Der Mechanismus der Anapher ist Verstärkung durch Wiederkehr. Verstärkt wird hier aber nichts, es werden nur vier gleichrangige Schritte aufgezählt.',
-      'Prüffrage: Steigert sich etwas von Satz zu Satz? Wenn nein, ist die Figur Dekoration.',
-      'Eine Wiederholungsfigur trägt nur, wenn sich über die Wiederholungen hinweg etwas steigert.'),
-  ]
-}
-
-// Die drei Erweiterungsarten. Eine Erweiterung ist KEIN Mangel — sie sagt nicht,
-// was fehlt, sondern was noch möglich wäre. Die Ankerzahl folgt der Art:
-// weiterfuehrung genau einer, verbindung genau zwei, feld keiner.
-export function buildExampleErweiterungen() {
-  return [
-    { id: sid('e'), art: 'weiterfuehrung', status: 'neu', createdAt: 0,
-      stellen: [{ text: 'Wer seine Aufmerksamkeit schützt, schützt seine Arbeit.', index: null, laenge: null, blockId: null, docId: null, docTitel: '' }],
-      gedanke: 'Der Satz macht Aufmerksamkeit zu etwas, das man schützen kann — also zu einer Bedingung, nicht zu einer Eigenschaft. Damit wird ihre Verteilung eine Frage der Macht: Wer darf ungestört arbeiten und wer nicht? In vielen Organisationen ist die Ruhe nach Rang verteilt, ohne dass das je entschieden wurde.',
-      muster: 'Wer eine Eigenschaft zur Bedingung erklärt, macht sie verhandelbar — und damit zur Frage, wer über sie verfügt.' },
-    { id: sid('e'), art: 'feld', status: 'neu', createdAt: 0,
-      stellen: [],
-      gedanke: 'Die Architektur kennt dasselbe Problem seit Jahrzehnten unter dem Namen Großraumbüro. Was dort über Sichtachsen, Rückzugsorte und akustische Zonen gelernt wurde, lässt sich auf Oberflächen übertragen: auch ein Bildschirm hat Zonen, in denen man arbeitet, und Zonen, aus denen etwas ruft.',
-      muster: 'Ein Problem, das in der eigenen Disziplin neu wirkt, ist in einer älteren oft schon durchgearbeitet.' },
-    { id: sid('e'), art: 'verbindung', status: 'neu', createdAt: 0,
-      stellen: [
-        { text: 'Aufmerksamkeit nur beansprucht, wenn sie wirklich gebraucht wird.', index: null, laenge: null, blockId: null, docId: null, docTitel: '' },
-        { text: 'volle Kraft, leise Präsentation', index: null, laenge: null, blockId: null, docId: null, docTitel: '' },
-      ],
-      gedanke: 'Der erste und der letzte Satz sagen dasselbe, einmal als Definition und einmal als Formel. Diese Klammer trägt den Text bereits — sie ließe sich ausdrücklich machen, indem der Schluss die Eingangsformulierung wörtlich aufgreift und umdreht.',
-      muster: 'Wenn Anfang und Ende dieselbe Aussage in verschiedener Form tragen, ist die Klammer schon da und muss nur sichtbar gemacht werden.' },
-  ]
+    '<p data-block-id="b-calm-auftakt">Calm Technology beschreibt Technik, die in der Peripherie bleibt und Aufmerksamkeit nur beansprucht, wenn sie wirklich gebraucht wird. Der Gedanke ist über dreißig Jahre alt; die Erfahrung, die ihn nötig macht, ist täglich neu.</p>',
+    '<h2 data-block-id="b-calm-warum-h">Warum es wichtig ist</h2>',
+    '<p data-block-id="b-calm-warum-1">Ständige Benachrichtigungen fragmentieren die Konzentation und zerreißen den Denkfluss. Der eigentliche Schaden ist nicht die einzelne Meldung, sondern die Summe der kleinen Unterbrechungen über den Tag. Wegen dem ständigen Nachfragen bleibt am Abend das Gefühl, viel getan und wenig gedacht zu haben.</p>',
+    '<p data-block-id="b-calm-warum-2">Aufmerksamkeit ist die eigentliche Währung dieser Jahre. Wer Aufmerksamkeit verliert, verliert nicht nur Zeit, sondern den Faden; und wer den Faden verliert, muss Aufmerksamkeit noch einmal aufbringen, um ihn wiederzufinden. Man merkt erst dass diese Rechnung nicht aufgeht, wenn der Nachmittag vorbei ist.</p>',
+    '<p data-block-id="b-calm-warum-3">Dass die Technik, die uns umgibt, in dem Augenblick, in dem sie etwas von uns will, nur selten fragt, ob es gerade passt, ist kein Zufall, sondern eine Entscheidung am Reißbrett. Das gilt in einer ganzen Reihe von Fällen, die man durchaus als typisch bezeichnen kann. Jede Unterbrechung ist ein Verlust, ausnahmslos.</p>',
+    '<h2 data-block-id="b-calm-geschichte-h">Woher der Begriff kommt</h2>',
+    '<p data-block-id="b-calm-geschichte-1">Mark Weiser prägte am Xerox PARC den Begriff Ubiquitous Computing. Gemeinsam mit John Seely Brown beschrieb er 1996, wie Technik zwischen dem Zentrum und dem Randbereich der Aufmerksamkeit wechseln kann.</p>',
+    '<p data-block-id="b-calm-geschichte-2">Amber Case hat den Ansatz zwei Jahrzehnte später in zwölf Prinzipien übersetzt. Sie sind bis heute die brauchbarste Prüfliste für alle, die etwas bauen, das sich melden könnte.</p>',
+    '<p data-block-id="b-calm-beispiele">Die Teekanne pfeift erst, wenn das Wasser kocht. Eine Statusleuchte informiert, ohne sich in den Vordergrund zu drängen. Ein ruhiges Werkzeug meldet sich selten.</p>',
+    '<p data-block-id="b-calm-massstab">Woran misst man Ruhe? An der Zahl der Unterbrechungen, die ein Werkzeug erzwingt, und an der Zeit, die es kostet, den Faden wiederzufinden. Ohne diesen Maßstab bleibt jedes Beispiel Geschmackssache.</p>',
+    '<h2 data-block-id="b-calm-schreiben-h">Was das fürs Schreiben heißt</h2>',
+    '<p data-block-id="b-calm-schreiben-1">Für Schreibsoftware heißt das: Werkzeuge erscheinen im Kontext, Hinweise sammeln sich leise, nichts drängt sich in den Fluss. Eine Rechtschreibprüfung, die jeden Tippfehler sofort anstreicht, unterbricht öfter als sie hilft; eine, die ihre Funde am Rand sammelt, stört den Workflow nicht.</p>',
+    '<p data-block-id="b-calm-schreiben-2">Das Werkzeug wartet. Es prüft im Stillen. Es sammelt. Es meldet sich erst später. Der Hintergrund bleibt dabei ruhig, und vorn steht weiter der Satz, an dem gerade gearbeitet wird.</p>',
+    '<p data-block-id="b-calm-schreiben-3">Wer einmal so gearbeitet hat, will nie wieder zurück. Das fühlt sich einfach großartig an. Nüchtern betrachtet verschiebt sich nur, wann eine Information erscheint — und genau darin liegt der ganze Unterschied.</p>',
+    '<p data-block-id="b-calm-haltung">Ein ruhiges Werkzeug verzichtet nicht auf Funktionen, es ordnet sie nur anders an, es zeigt sie dann, wenn sie gebraucht werden, es hält sie zurück, wenn sie stören würden, und es überlässt die Entscheidung darüber der Person, die schreibt.</p>',
+    '<h2 data-block-id="b-calm-einwand-h">Ein Einwand</h2>',
+    '<p data-block-id="b-calm-einwand">So absolut lässt sich das nicht halten. Ein Rauchmelder, der höflich wartet, ist ein schlechter Rauchmelder; es gibt Meldungen, die unterbrechen müssen.</p>',
+    '<p data-block-id="b-calm-schluss">Am Ende ist ruhige Technik keine Frage des Verzichts, sondern der Haltung: volle Kraft, leise Präsentation.</p>',
+    '<h2 data-block-id="b-calm-notizen-h">Notizen für den nächsten Durchgang</h2>',
+    '<p data-block-id="b-calm-notiz-1">— Teekanne, Statusleuchte, Armbanduhr: Dinge, die informieren, ohne zu rufen.</p>',
+    '<p data-block-id="b-calm-notiz-2">— irgendwo unterbringen: der Unterschied zwischen Stille und Ruhe</p>',
+    '<p data-block-id="b-calm-notiz-3">— Amber Case zitieren? evtl. auch Tristan Harris, aber der Ton passt vielleicht nicht</p>',
+    '<p data-block-id="b-calm-notiz-4">— Gegenprobe: Wo wäre ruhige Technik gefährlich? Medizin, Auto, Baustelle</p>',
+    '<p data-block-id="b-calm-notiz-5">— Der Maßstab ist noch nicht zu Ende gedacht; im Text steht bisher nur die halbe Antwort.</p>',
+    '<p data-block-id="b-calm-notiz-6">— noch ein Beispiel: die Ampel, die nur bei Rot etwas verlangt</p>',
+  ].join('')
 }
 
 export function buildExampleMaterial() {

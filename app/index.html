@@ -67,52 +67,67 @@
 
     <!-- Schreibansicht: Der Text bleibt dominant; Rahmen (Seitenleiste, Aura) sind ruhig. -->
     <section id="editorView">
+      <!-- Die Klinke der Seitenleiste. EIN Knopf statt zweier, und wie der Orb
+           gegenüber am Fenster verankert: eingeklappt wie ausgeklappt dieselbe Stelle.
+           Zwei Knöpfe in zwei verschiedenen Kästen können nicht gleich stehen — der
+           eine hing an der rechten Innenkante der Leiste, der andere am linken Rand der
+           Topbar, und die Leiste selbst wandert beim Einklappen um ihre volle Breite.
+
+           Sie steht VOR der Seitenleiste im Dokument, weil sie auf dem Schirm ganz
+           links oben steht: der Tastaturweg muss der gleiche sein wie der Blick
+           (WCAG 2.4.3). Stand sie hinter der Leiste, kam der sichtbar erste Knopf als
+           fünfunddreißigster. Der Platz bleibt davon unberührt — position:fixed. -->
+      <div class="onda-topbar__lead">
+        <button id="sidebarToggle" class="onda-icon-btn" type="button" aria-controls="ondaSidebar" aria-expanded="true"></button>
+      </div>
+
       <aside id="ondaSidebar" class="onda-sidebar">
         <div class="onda-brand">
-          <span class="onda-wordmark">Onda</span>
-          <button id="sidebarCollapse" class="onda-icon-btn" title="Seitenleiste einklappen" aria-label="Seitenleiste einklappen" aria-controls="ondaSidebar" aria-expanded="true"></button>
+          <!-- Der Name ist der Weg nach Hause. Wer oben links auf das Logo klickt,
+               erwartet die Übersicht — das ist in jedem Programm so. -->
+          <button id="ondaHome" class="onda-wordmark onda-wordmark-btn" type="button" title="Zur Übersicht" aria-label="Zur Projekt- und Dokumentübersicht">Onda</button>
         </div>
 
+        <!-- Genau drei Abschnitte: Projektverständnis · Struktur · Quellen.
+             Jeder hat dieselbe Kopfzeile mit zwei getrennten Gesten: der NAME öffnet
+             das Fenster zum Nachschauen, der PFEIL daneben klappt den Baum auf und zu.
+             Projektverständnis hat keinen Baum — dort führt nur der Name weiter. -->
         <nav class="onda-project-nav" aria-label="Projekt">
-          <button id="sidebarBack" class="onda-side-back" title="Zur Projektübersicht" aria-label="Zur Projektübersicht">
-            <span class="onda-side-back-chevron" aria-hidden="true"></span>
-            <span class="onda-side-back-label">Projekt</span>
-          </button>
-
           <section class="onda-side-section">
-            <span class="onda-eyebrow">Projektverständnis</span>
-            <button id="pvCard" class="onda-pv-card" aria-haspopup="dialog" aria-controls="pvModal">
-              <span class="onda-pv-title">Projektverständnis</span>
-              <span class="onda-pv-claim">Noch nicht festgelegt</span>
-            </button>
+            <div class="onda-side-kopf">
+              <button id="pvCard" class="onda-side-name" type="button" aria-haspopup="dialog" aria-controls="pvModal">Projektverständnis</button>
+            </div>
+            <p id="pvClaim" class="onda-side-claim"></p>
           </section>
 
           <div id="structureNav" class="onda-side-section" role="navigation" aria-label="Struktur">
-            <span class="onda-eyebrow">Struktur</span>
+            <div class="onda-side-kopf">
+              <button id="structureOpen" class="onda-side-name" type="button" aria-haspopup="dialog" aria-controls="strukturModal">Struktur</button>
+              <button id="structureTree" class="onda-side-pfeil" type="button" aria-expanded="true" aria-controls="structureNavList" aria-label="Struktur zuklappen"></button>
+            </div>
+            <div id="structureNavList" class="structure-nav-list"></div>
           </div>
 
-          <div id="zurueckgehalten" class="onda-side-zurueck" hidden></div>
-
-          <section id="erweiterungen" class="onda-side-section onda-side-erweiterungen" aria-label="Erweiterungen">
-            <span class="onda-eyebrow">Erweiterungen</span>
-          </section>
-
-          <section id="erkanntes" class="onda-side-section onda-side-erkanntes" aria-label="Erkanntes">
-            <span class="onda-eyebrow">Erkanntes</span>
-          </section>
-
-          <section class="onda-side-section onda-side-material">
-            <span class="onda-eyebrow">Material</span>
-            <button id="materialSources" class="onda-material-btn">
-              <span class="onda-material-label">Quellen im Projekt</span>
-              <span id="materialSourcesCount" class="onda-badge">0</span>
-            </button>
+          <section id="materialNav" class="onda-side-section">
+            <div class="onda-side-kopf">
+              <button id="materialSources" class="onda-side-name" type="button" aria-haspopup="dialog" aria-controls="materialModal">
+                <span class="onda-material-label">Quellen</span>
+                <span id="materialSourcesCount" class="onda-badge onda-material-count">0</span>
+              </button>
+              <button id="materialTreeToggle" class="onda-side-pfeil" type="button" aria-expanded="false" aria-controls="materialTree" aria-label="Quellen aufklappen"></button>
+            </div>
+            <div id="materialTree" class="onda-side-baum" hidden></div>
           </section>
         </nav>
 
+        <!-- Unten links stand der eigene Name mit Bildzeichen. Wer allein an seinem
+             Rechner schreibt, muss nicht daran erinnert werden, wer er ist. An seiner
+             Stelle steht jetzt der Weg zurück zur Übersicht. -->
         <div class="onda-side-footer">
-          <span class="onda-avatar" aria-hidden="true">J</span>
-          <span class="onda-side-user">Jakob</span>
+          <button id="sidebarBack" class="onda-side-back" type="button" title="Zur Übersicht" aria-label="Zur Projekt- und Dokumentübersicht">
+            <span class="onda-side-back-chevron" aria-hidden="true"></span>
+            <span class="onda-side-back-label">Projekt</span>
+          </button>
           <button id="themeToggle" class="onda-icon-btn" title="Erscheinung wechseln" aria-label="Erscheinung wechseln"></button>
           <button id="kiSettings" class="onda-icon-btn" title="KI-Anschluss" aria-label="KI-Anschluss einrichten" aria-haspopup="dialog" aria-controls="kiModal"></button>
         </div>
@@ -120,42 +135,37 @@
 
       <div class="onda-editor-col">
         <header class="onda-topbar">
-          <button id="sidebarReopen" class="onda-icon-btn" title="Seitenleiste einblenden" aria-label="Seitenleiste einblenden" aria-controls="ondaSidebar" aria-expanded="false" hidden></button>
-          <button id="ondaAura" class="onda-aura" title="Agentengespräch öffnen" aria-label="Agentengespräch öffnen" aria-controls="agentWidget" aria-expanded="false"></button>
+          <div class="onda-topbar__aside">
+            <!-- Der andere Stift (docs/PHILOSOPHIE.md §1). Das EINZIGE Bedienelement fuer
+                 Anmerkungen: es sagt, dass welche da sind, und blendet sie aus und ein.
+                 Es erscheint nur, wenn es etwas zu sagen gibt. -->
+            <button id="annotationPresence" class="onda-presence" type="button" aria-pressed="true" hidden></button>
+            <button id="ondaAura" class="onda-aura" title="Agentengespräch öffnen" aria-label="Agentengespräch öffnen" aria-controls="agentWidget" aria-expanded="false"></button>
+          </div>
         </header>
-        <section id="annotationReviewBar" class="onda-review-bar" aria-label="Anmerkungen zum Text" hidden>
-          <div class="onda-review-bar__summary">
-            <span class="onda-review-bar__eyebrow">Anmerkungen</span>
-            <span id="annotationReviewSummary">Keine offenen Anmerkungen</span>
-            <span id="annotationRejectionNotice" class="onda-review-bar__notice" hidden>
-              <span id="annotationRejectionText"></span>
-              <button id="annotationRejectionUndo" type="button">Entscheidung zurücknehmen</button>
-            </span>
-          </div>
-          <div class="onda-review-bar__actions">
-            <div class="onda-mode-switch" role="group" aria-label="Arbeitsmodus">
-              <button type="button" data-annotation-mode="text" aria-pressed="true">Text</button>
-              <button type="button" data-annotation-mode="notiz" aria-pressed="false">Notizen</button>
-            </div>
-            <button id="annotationBulkAccept" class="onda-review-control" type="button" hidden>Sichere Korrekturen übernehmen</button>
-            <button id="annotationQuietToggle" class="onda-review-control" type="button" aria-pressed="false">Ruhig</button>
-            <div class="onda-review-nav" role="group" aria-label="Zwischen Anmerkungen wechseln">
-              <button id="annotationPrevious" class="onda-review-icon" type="button" aria-label="Vorherige Anmerkung"></button>
-              <button id="annotationNext" class="onda-review-icon" type="button" aria-label="Nächste Anmerkung"></button>
-            </div>
-            <button id="annotationUndo" class="onda-review-control" type="button" disabled>Rückgängig</button>
-          </div>
-        </section>
         <div id="scroll" role="region" aria-label="Schreibfläche">
           <div id="page">
             <textarea id="title" rows="1" placeholder="Titel" spellcheck="false"></textarea>
             <div id="editor"></div>
           </div>
         </div>
-        <div id="blockInsertLayer"></div>
         <aside id="localAgentLayer"></aside>
       </div>
 
+      <!-- Die Silhouette der Sprechblase. Eine eigene Fläche, nicht ein Kind des
+           Fensters — aus zwei Gründen: der drop-shadow würde sonst vom overflow:hidden
+           des Fensters abgeschnitten, und das Fenster behält so seine hidden-Semantik,
+           während die Kontur ihre eigene Bewegung hat. Sie trägt keinen Wortlaut; was
+           sie zeigt, ist reine Form (docs/PHILOSOPHIE.md §1: Zurückhaltung gilt den
+           Augen, nicht der Zugänglichkeit — hier gibt es nichts vorzulesen). -->
+      <svg id="ondaBlase" hidden aria-hidden="true" focusable="false">
+        <defs>
+          <clipPath id="ondaBlaseSchnitt" clipPathUnits="userSpaceOnUse">
+            <path class="onda-blase__schnitt" d="" />
+          </clipPath>
+        </defs>
+        <path class="onda-blase__pfad" d="" />
+      </svg>
       <aside id="agentWidget" hidden aria-label="Agentengespräch"></aside>
       <aside id="evidenceWindow" hidden aria-label="Quellen und Fundstellen"></aside>
       <div id="agentLiveStatus" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true"></div>

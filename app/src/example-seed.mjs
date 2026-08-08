@@ -12,19 +12,27 @@ export function seedBodySignature(body) {
   return `fnv1a-${(hash >>> 0).toString(16).padStart(8, '0')}-${value.length}`
 }
 
-// Signatures of every "Calm Technology" example body the app shipped BEFORE the
-// exampleSeed marker fields existed. Such a doc carries no exampleSeed* markers,
-// so once the hardcoded example drifts, matching only against the CURRENT body
-// no longer recognises it — and it gets duplicated instead of replaced on a
-// version bump. Matching these historical signatures too lets an old, pristine,
-// content-drifted seed be replaced in place. This is a closed set: every doc
-// created since the marker system carries markers, so no new unmarked example
-// bodies can ever appear. (Signatures computed from git history of
-// buildExampleBody; earlier versions rendered the title as a leading <h1>.)
+// Die Signaturen ALLER Beispieltexte, die die App jemals ausgeliefert hat — außer
+// dem aktuellen, der als legacyBody hereingereicht wird.
+//
+// Warum es diese Liste gibt: Ein Beispieltext ohne exampleSeed*-Marker (angelegt,
+// bevor es die Marker gab, oder mit verlorenen Markern) wird nur daran erkannt, dass
+// sein Wortlaut Zeichen für Zeichen einer ausgelieferten Fassung entspricht. Ohne
+// diese Wiedererkennung legt ein Versionssprung ein ZWEITES Beispiel daneben, statt
+// das alte zu ersetzen.
+//
+// Pflegeregel: Wer buildExampleBody() ändert, trägt hier die Signatur der bisherigen
+// Fassung nach. Sonst verliert die Liste bei jeder Änderung genau die Fassung, die
+// gerade die verbreitetste ist. Ein Eintrag ist ungefährlich: er greift nur bei einem
+// zeichengenau gleichen Text im Beispielprojekt unter dem Titel „Calm Technology" —
+// ein selbst geschriebener oder auch nur angefasster Text passt nie darauf.
+//
+// Die Signatur berechnet seedBodySignature(), die data-block-id-Kennungen ausblendet.
 export const LEGACY_SEED_SIGNATURES = new Set([
-  'fnv1a-a75d3829-894', // pre-Onda baseline: <h1> title + full body
-  'fnv1a-1501da66-422', // earlier: <h1> title + shorter body
-  'fnv1a-b4667bd3-290', // earliest stored example
+  'fnv1a-1c206f0f-870', // Onda-Fassung bis Beispielversion 9: fünf Absätze, fünf Anmerkungsarten
+  'fnv1a-a75d3829-894', // davor: <h1>-Titel + derselbe Text
+  'fnv1a-1501da66-422', // davor: <h1>-Titel + kürzerer Text
+  'fnv1a-b4667bd3-290', // die älteste gespeicherte Fassung
 ])
 
 function isLegacySeed(doc, legacyBody) {

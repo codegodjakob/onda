@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "catalogVersion": "2026-08-05.3",
   "stage": "FERTIGZUSTAND",
-  "iteration": 3,
-  "generatedAt": "2026-08-06T20:10:17.415Z",
-  "gitCommit": "ecfa356b6381092e242b8b323cdc1bd4520a0a48",
+  "iteration": 1,
+  "generatedAt": "2026-08-08T12:33:41.474Z",
+  "gitCommit": "3aa5084eab4f630c235d64440e8b7976de3cde45",
   "rubricScores": {
     "truth": 5,
     "authorship": 5,
@@ -24,22 +24,15 @@
     "access_privacy": "Automatisierte Drei-Engine-, Zoom-, Zielgrößen-, Export- und Geheimnisprüfungen bestehen; echte assistive Nutzung bleibt extern, daher Deckel 4,5."
   },
   "coverage": {
-    "passed": 147,
+    "passed": 142,
     "applicable": 147,
-    "ratio": 1
+    "ratio": 0.966
   },
   "loops": [
     {
       "iteration": 1,
-      "passed": 141,
-      "failed": 6,
-      "externalOpen": 5,
-      "weightedScore": 4.88
-    },
-    {
-      "iteration": 3,
-      "passed": 147,
-      "failed": 0,
+      "passed": 142,
+      "failed": 5,
       "externalOpen": 5,
       "weightedScore": 4.88
     }
@@ -1344,12 +1337,13 @@
       "DESIGN-06": {
         "title": "Die Umgestaltungsentscheidungen sind getroffen",
         "gate": "hard",
-        "automation": "file-inspection",
+        "automation": "integration",
         "given": "docs/REDESIGN-IDEEN.md sammelt Punkte mit Status offen, vereinbart oder verworfen.",
         "when": "Die Umsetzung eines Punktes beginnt.",
         "then": "Dieser Punkt trägt den Status vereinbart oder verworfen mit einer Begründung. Kein Punkt wird umgesetzt, solange er auf offen steht — die Entscheidung liegt beim Nutzer, nicht bei der Umsetzung.",
         "evidence": [
-          "Datei-Prüfung: Statustabelle in docs/REDESIGN-IDEEN.md enthält keinen Eintrag 'open' für einen Punkt, dessen Eval bereits bestanden wird"
+          "Datei-Prüfung: Statustabelle in docs/REDESIGN-IDEEN.md enthält keinen Eintrag 'open' für einen Punkt, dessen Eval bereits bestanden wird",
+          "Frische Messung im selben Lauf: ob ein Punkt umgesetzt ist, wird durch Starten der Gestalt-Prüfung jetzt ermittelt — nicht aus dem Ergebnisstand eines früheren Laufs gelesen"
         ],
         "source": [
           "Anweisung 2026-07-31: erst sammeln, dann umsetzen"
@@ -3951,58 +3945,63 @@
     },
     {
       "id": "DESIGN-01",
-      "status": "passed",
+      "status": "failed",
       "evidence": [
         {
           "kind": "browser",
           "path": "evals/results/laeufe/evals-pruefungen-gestalt-mjs.log",
           "command": "node evals/pruefungen/gestalt.mjs"
         }
-      ]
+      ],
+      "note": "Gebundene Prüfung in diesem Lauf fehlgeschlagen: evals/pruefungen/gestalt.mjs"
     },
     {
       "id": "DESIGN-02",
-      "status": "passed",
+      "status": "failed",
       "evidence": [
         {
           "kind": "browser",
           "path": "evals/results/laeufe/evals-pruefungen-gestalt-mjs.log",
           "command": "node evals/pruefungen/gestalt.mjs"
         }
-      ]
+      ],
+      "note": "Gebundene Prüfung in diesem Lauf fehlgeschlagen: evals/pruefungen/gestalt.mjs"
     },
     {
       "id": "DESIGN-03",
-      "status": "passed",
+      "status": "failed",
       "evidence": [
         {
           "kind": "browser",
           "path": "evals/results/laeufe/evals-pruefungen-gestalt-mjs.log",
           "command": "node evals/pruefungen/gestalt.mjs"
         }
-      ]
+      ],
+      "note": "Gebundene Prüfung in diesem Lauf fehlgeschlagen: evals/pruefungen/gestalt.mjs"
     },
     {
       "id": "DESIGN-04",
-      "status": "passed",
+      "status": "failed",
       "evidence": [
         {
           "kind": "browser",
           "path": "evals/results/laeufe/evals-pruefungen-gestalt-mjs.log",
           "command": "node evals/pruefungen/gestalt.mjs"
         }
-      ]
+      ],
+      "note": "Gebundene Prüfung in diesem Lauf fehlgeschlagen: evals/pruefungen/gestalt.mjs"
     },
     {
       "id": "DESIGN-05",
-      "status": "passed",
+      "status": "failed",
       "evidence": [
         {
           "kind": "browser",
           "path": "evals/results/laeufe/evals-pruefungen-gestalt-mjs.log",
           "command": "node evals/pruefungen/gestalt.mjs"
         }
-      ]
+      ],
+      "note": "Gebundene Prüfung in diesem Lauf fehlgeschlagen: evals/pruefungen/gestalt.mjs"
     },
     {
       "id": "DESIGN-06",

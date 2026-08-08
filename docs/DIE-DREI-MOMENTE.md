@@ -44,7 +44,14 @@ versteckt sich auch nicht" weiter unten.
 |---|---|---|
 | **sofort** | Immer. Sobald etwas da ist, ist es zu sehen. | — |
 | **beim Innehalten** | Ein Satz- oder Absatzende und danach 0,3 Sekunden Ruhe — oder 3 Sekunden Ruhe an beliebiger Stelle. | `INNEHALTEN_AN_GRENZE_MS = 300`, `INNEHALTEN_MS = 3000` |
-| **beim Aufschauen** | 45 Sekunden Ruhe, oder die Schreibansicht verlassen — oder von Hand angefordert. | `AUFSCHAUEN_MS = 45000` |
+| **beim Aufschauen** | 45 Sekunden Ruhe, die Schreibansicht verlassen — oder gerade über einen Hinweis entschieden. | `AUFSCHAUEN_MS = 45000` |
+
+Der dritte Fall hieß bis zum 7. August 2026 „von Hand angefordert" und meinte eine Zeile
+in der Seitenleiste: „N Hinweise warten aufs Aufschauen — jetzt zeigen." Die Zeile zählte
+Anmerkungen und ist mit `docs/PHILOSOPHIE.md` §1 gefallen. Geblieben ist der Gedanke
+dahinter: wer gerade über einen Hinweis entscheidet, schreibt nicht — der nächste darf
+sofort folgen, statt 45 Sekunden Ruhe abzuwarten. Einen Knopf dafür gibt es nicht und
+soll es nicht geben.
 
 Alle drei Zahlen stehen in `app/src/momente-model.mjs`, Zeilen 62–64. Die Entscheidung
 selbst trifft die Funktion `aktuellerMoment` (Zeilen 88–107).

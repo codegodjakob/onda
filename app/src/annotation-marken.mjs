@@ -1,5 +1,14 @@
 // Onda — wo im Text eine Anmerkung markiert wird.
 //
+// NOCH NICHT VERDRAHTET. Diese Rechnung ist fertig und geprueft
+// (test/annotation-marken.test.mjs, neun Faelle), aber der Editor benutzt sie
+// noch nicht: er markiert weiterhin den ganzen Absatz. Beim Zusammenfuehren am
+// 08.08.2026 hatten zwei Sitzungen dieselbe Flaeche bearbeitet; die
+// absatzweite Fassung auf main gewann, weil sie mit dem uebrigen Umbau
+// verwoben war. Wer die Marke auf die STELLE setzen will, findet hier die
+// fertige Zutat — es fehlt nur die Inline-Dekoration im localFindingPlugin
+// (workspace.js) und der Zugriff auf das Finding im Plugin-Zustand.
+//
 // Das Design System markiert die STELLE, nicht den Absatz: "Trotzdem behandeln
 // wir sie wie einen Vorrat — ein teurer [Zeit vertreib]." Vier Kategorien, vier
 // Prinzipien, ohne Farbcode (components/annotation/Mark.jsx):

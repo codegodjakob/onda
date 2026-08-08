@@ -15,13 +15,15 @@ import { ensureErweiterungen } from './erweiterung-model.mjs'
 import { ensureWorkspaceState } from './workspace-model.mjs'
 import { DEFAULT_SETTINGS, normalizeSettings } from './settings-model.mjs'
 import { BlockIdentity, ensureTopLevelBlockIds, getActiveBlockId, getEditorBlocks, insertSemanticBlock, replaceAnchoredText, replaceAnchoredTexts, replaceFindingTarget } from './block-identity.js'
-import { buildExampleStructure, buildExampleNarrative, buildExampleCoach, buildExampleLane, buildExampleBody, buildExampleMaterial, buildExampleUnderstanding, buildExampleAgentMessages, buildExampleNotizen, buildExampleHinweisarten, buildExampleErweiterungen } from './example.js'
+import { buildExampleStructure, buildExampleNarrative, buildExampleCoach, buildExampleLane, buildExampleBody, buildExampleMaterial, buildExampleUnderstanding, buildExampleAgentMessages } from './example.js'
 import { EXAMPLE_PROJECT_ID, migrateExampleSeed } from './example-seed.mjs'
-import { NOTE_ANNOTATION_KINDS } from './annotation-contract.mjs'
-import { initGateway, runTask, hatSchluessel, setzeSchluessel, loescheSchluessel } from './agent-gateway.mjs'
+import { initGateway, hatSchluessel, setzeSchluessel, loescheSchluessel } from './agent-gateway.mjs'
 import { ensureProjectEvidenceShape } from './source-model.mjs'
+import { ensureQuellenThemen } from './quellen-thema-model.mjs'
 import { ensureProjectResearchShape } from './research-run.mjs'
 import { ensureMemoryStore, ensureProjectMemoryShape } from './memory-model.mjs'
+import { normalisiereLaufJournal } from './lauf-journal.mjs'
+import { initLaufTor } from './lauf-tor.mjs'
 import { synchronizeProjectMemory } from './memory-dossier.mjs'
 import { ensureArgumentModel } from './argument-model.mjs'
 import { ensureLanguageProfile } from './language-profile.mjs'
@@ -69,6 +71,8 @@ const NATIVE = !!(window.webkit && window.webkit.messageHandlers && window.webki
 const DEFAULTS = DEFAULT_SETTINGS
 const TRASH_DAYS = 30
 const SCHEMA = 12
+// 10: Der Beispieltext trägt jetzt jede der 29 Anmerkungsarten. Ohne diesen Schritt
+// behielten alle, die die App schon benutzen, die alte Fassung mit fünf Arten.
 const EX_VERSION = 10
 
 // Schmaler Rückkanal der nativen saveimg-Brücke. Der frühere Bildeditor ist
@@ -90,6 +94,12 @@ export const state = {
   activeProject: null,
   settings: { ...DEFAULTS },
   memoryStore: ensureMemoryStore(null),
+  // Eigener Top-Level-Bereich in data.json, NICHT im memoryStore: die Maschinen-Buchführung
+  // über bezahlte KI-Läufe (Issue #12) gehört nicht in den Consent-gebundenen Ereignisspeicher
+  // des Gedächtnisses — das würde eine zweite Bedeutung in denselben Speicher mischen.
+  // `laufJournal` folgt stattdessen exakt dem Muster von `settings`/`memoryStore`, bleibt aber
+  // IN data.json (Leitplanke: keine neue Wahrheit neben data.json).
+  laufJournal: normalisiereLaufJournal(null),
   editor: null,
   native: NATIVE,
 }
@@ -146,6 +156,10 @@ function ensureDocShape(d) {
 function ensureProjectShape(p) {
   if (!Array.isArray(p.material)) p.material = []
   ensureProjectEvidenceShape(p)
+  // Muss NACH ensureProjectEvidenceShape stehen: die Selbstheilung wirft Zuordnungen zu
+  // Quellen weg, die es nicht mehr gibt — dafuer muss p.sources vorher existieren, sonst
+  // gaelte jede Zuordnung als verwaist und der Baum waere beim Laden leer.
+  ensureQuellenThemen(p)
   ensureProjectResearchShape(p)
   ensureProjectMemoryShape(p)
   ensureArgumentModel(p)
@@ -204,6 +218,7 @@ function load() {
   state.active = d ? d.active : null
   state.settings = normalizeSettings(d && d.settings)
   state.memoryStore = ensureMemoryStore(d && d.memoryStore)
+  state.laufJournal = normalisiereLaufJournal(d && d.laufJournal)
   // Projekte: bestehende Texte wandern in ein Standard-Projekt (Migration).
   state.projects = (d && Array.isArray(d.projects) && d.projects.length) ? d.projects : []
   if (!state.projects.length) {
@@ -225,16 +240,6 @@ function load() {
     createProject: buildExampleProjectSeed,
     createSeed: buildExampleDocumentSeed,
   })
-  // Der Notiz-Text ist ein zweites Dokument und laeuft bewusst NEBEN der
-  // Beispiel-Migration: die kennt genau einen Seed und seine Signaturen. Ein
-  // eigener Marker haelt ihn auseinander und verhindert, dass er sich bei jedem
-  // Start vermehrt. Wer ihn loescht, bekommt ihn nicht zurueck — er ist dann
-  // im Papierkorb und traegt seinen Marker weiter.
-  if (!state.docs.some(x => x.exampleNotesSeed === true)) {
-    const notizen = buildExampleNotesSeed()
-    notizen.exampleNotesSeed = true
-    state.docs.push(notizen)
-  }
   state.activeProject = (d && d.activeProject && state.projects.some(p => p.id === d.activeProject))
     ? d.activeProject : state.projects[0].id
   purgeTrash()
@@ -263,28 +268,9 @@ function buildExampleDocumentSeed() {
   return ensureDocShape({
     id: uid(), title: 'Calm Technology', body: buildExampleBody(), updated: now(), projectId: EXAMPLE_PROJECT_ID,
     structure: struct, narrative: buildExampleNarrative(struct),
-    // Der Beispieltext soll JEDEN Anwendungsfall zeigen (Jakobs dritter
-    // Auftrag). buildExampleHinweisarten liefert die acht Hinweisarten des
-    // Agenten, buildExampleLane die 24 Text-Anmerkungsarten,
-    // buildExampleErweiterungen die drei Erweiterungsarten. Was hier fehlt,
-    // kann Jakob nicht durchklicken — test/example-abdeckung.test.mjs zaehlt nach.
-    coach: [...buildExampleCoach(), ...buildExampleHinweisarten()],
-    lane: buildExampleLane(),
-    erweiterungen: buildExampleErweiterungen(),
+    coach: buildExampleCoach(), lane: buildExampleLane(),
     provenance: { actor: 'demo', action: 'example-seed', createdAt: now() },
     workspace: { agent: { messages: buildExampleAgentMessages() } },
-  })
-}
-
-// Die Notizen-Betriebsart braucht einen eigenen Text: an fertigen Saetzen
-// liesse sich nicht zeigen, dass der Agent hier NICHT korrigiert.
-function buildExampleNotesSeed() {
-  return ensureDocShape({
-    id: uid(), title: 'Notizen: Calm Technology', body: buildExampleNotizen(), updated: now(),
-    projectId: EXAMPLE_PROJECT_ID,
-    lane: buildExampleLane().filter(eintrag => NOTE_ANNOTATION_KINDS.includes(eintrag.anmerkungsart)),
-    workspace: { annotationMode: 'notiz' },
-    provenance: { actor: 'demo', action: 'example-seed', createdAt: now() },
   })
 }
 
@@ -311,6 +297,7 @@ function baueSpeicherlast() {
     projects: state.projects, activeProject: state.activeProject,
     settings: state.settings,
     memoryStore: state.memoryStore,
+    laufJournal: state.laufJournal,
   })
 }
 
@@ -641,7 +628,13 @@ export function boot() {
       StarterKit.configure({
         heading: { levels: [1, 2, 3] },
         bold: false,
-        italic: false,
+        // Kursiv ist die einzige Auszeichnung, die zurueckkommt (Jakob, 7.8.2026:
+        // "beim markieren erscheinen wenige werkzeuge — kursiv, zitat und was schon
+        // da ist"). Ein wissenschaftlicher deutscher Text braucht sie fuer Werktitel
+        // und fremdsprachige Ausdruecke, und der Ausgabeweg rechnet laengst damit
+        // (publication-export.mjs bildet em auf italic ab; der Zweig war bisher tot).
+        // Fett, durchgestrichen und Inline-Code bleiben aus — sie sind Betonung, und
+        // Betonung gehoert in den Satzbau, nicht in die Werkzeugleiste.
         strike: false,
         code: false,
       }),
@@ -686,12 +679,16 @@ export function boot() {
   // Der Transport wird je Aufruf gewählt (Mac-Brücke, sonst Browser-Direktweg).
   initGateway({ getSettings: () => state.settings, persist })
 
+  // Das Lauf-Tor: der einzige Weg zu runTask (Issue #12). Liest/schreibt state.laufJournal,
+  // löst Speicherungen über persist bzw. den debounced scheduleSave aus.
+  initLaufTor({ getJournal: () => state.laufJournal, persist, scheduleSave })
+
   const ctx = {
     editor: state.editor, state,
     ops: { newDoc, openDoc, duplicateDoc, trashDoc, restoreDoc, deleteForever, newProject, renameProject, openProject },
     persist, scheduleSave, flushSave, exportMd, downloadFile, importLocalState, deleteAllLocalData,
     docTitle, activeDoc, autoGrowTitle, activeProjectObj, showHomeView,
-    gateway: { runTask, hatSchluessel, setzeSchluessel, loescheSchluessel },
+    gateway: { hatSchluessel, setzeSchluessel, loescheSchluessel },
   }
   initUI(ctx)
   initOndaShell(ctx)

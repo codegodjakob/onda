@@ -125,7 +125,7 @@ export function createSourceLibraryUi({
   function buildSourceImportForm(body, project, statusText = '') {
     const form = createNode('form', 'source-import-form')
     form.setAttribute('aria-label', 'Quelle aufnehmen')
-    const heading = createNode('h3', 'source-section-title', 'Quelle aufnehmen')
+    const heading = createNode('h3', 'onda-blaetter__tiefe-titel source-section-title', 'Quelle aufnehmen')
     const type = createNode('select', 'source-form-control')
     Object.entries(SOURCE_TYPE_LABELS).forEach(([value, label]) => {
       const option = document.createElement('option')
@@ -164,7 +164,7 @@ export function createSourceLibraryUi({
     const notSupported = createNode('textarea', 'source-form-control source-form-text')
     notSupported.rows = 2
     notSupported.placeholder = 'Welche naheliegende Aussage trägt diese Quelle ausdrücklich nicht?'
-    const submit = createNode('button', 'source-import-submit', 'Quelle aufnehmen')
+    const submit = createNode('button', 'onda-blaetter__eintrag source-import-submit', 'Quelle aufnehmen')
     submit.id = 'sourceImport'
     submit.type = 'submit'
     const status = createNode('p', 'source-import-status', statusText)
@@ -275,7 +275,7 @@ export function createSourceLibraryUi({
     const reader = createNode('section', 'source-reader')
     reader.id = 'sourceReader'
     reader.dataset.locatorKind = locator.kind
-    const back = createNode('button', 'source-reader-back', 'Zur Quellenliste')
+    const back = createNode('button', 'onda-blaetter__eintrag source-reader-back', 'Zur Quellenliste')
     back.prepend(ondaIcon('arrow-left', { size: 16 }))
     back.id = 'sourceReaderBack'
     back.type = 'button'
@@ -358,7 +358,8 @@ export function createSourceLibraryUi({
   
   function buildSourceLibraryList(body, project) {
     const section = createNode('section', 'source-library')
-    section.append(createNode('h3', 'source-section-title', `Aufgenommene Quellen · ${project.sources.length}`))
+    // Kein Zaehler in der Ueberschrift: die Liste darunter sagt selbst, wie viele es sind.
+    section.append(createNode('h3', 'onda-blaetter__tiefe-titel source-section-title', 'Aufgenommene Quellen'))
     if (!project.sources.length) {
       section.append(createNode('p', 'onda-material-empty', 'Noch keine überprüfbare Quelle aufgenommen.'))
     }
@@ -386,7 +387,7 @@ export function createSourceLibraryUi({
       )
       const locators = createNode('div', 'source-library-locators')
       ;(source.locators || []).forEach(locator => {
-        const open = createNode('button', 'source-locator-open', `${locatorLabel(locator)} öffnen`)
+        const open = createNode('button', 'onda-blaetter__eintrag source-locator-open', `${locatorLabel(locator)} öffnen`)
         open.type = 'button'
         open.dataset.locatorKind = locator.kind
         open.addEventListener('click', () => renderSourceReader(body, project, source, locator))
@@ -411,7 +412,7 @@ export function createSourceLibraryUi({
         ))
       }
       if (source.status === 'active') {
-        const retract = createNode('button', 'source-retract', 'Als zurückgezogen markieren')
+        const retract = createNode('button', 'onda-blaetter__eintrag source-retract', 'Als zurückgezogen markieren')
         retract.type = 'button'
         retract.addEventListener('click', () => {
           const event = {

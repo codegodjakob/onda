@@ -154,6 +154,40 @@ export const ERWEITERUNGEN_SCHEMA = Object.freeze({
   additionalProperties: false,
 })
 
+// Die Themen, nach denen die Quellen im Projekt stehen. Absichtlich KEIN Feld fuer
+// „Sonstiges" und keine Pflicht, jede Quelle unterzubringen: was der Agent nicht
+// zuordnen kann, faellt heraus und steht sichtbar unter „Noch ohne Thema"
+// (quellen-thema-model.mjs). Eine erzwungene Vollzuordnung waere eine Ordnung, die
+// keine ist.
+export const QUELLENTHEMEN_SCHEMA = Object.freeze({
+  type: 'object',
+  properties: {
+    gruppen: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          name: {
+            type: 'string',
+            description: 'Zwei bis vier Wörter, benennt den gemeinsamen Gegenstand — nie die Form '
+              + '(„PDF-Quellen") und nie eine Restrubrik („Sonstiges").',
+          },
+          warum: { type: 'string', description: 'Ein Satz: was diese Quellen für dieses Projekt gemeinsam tragen.' },
+          quellenIds: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Ausschließlich Kennungen aus der vorgelegten Liste. Nie eine erfinden, nie eine doppelt vergeben.',
+          },
+        },
+        required: ['name', 'warum', 'quellenIds'],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ['gruppen'],
+  additionalProperties: false,
+})
+
 // Feldnamen exakt wie das Understanding-Modell (reasoning-model.mjs ensureProjectUnderstanding).
 // Achtung fuer den Konsumenten: im gespeicherten Modell ist audience eine LISTE —
 // der Verteiler zerlegt den String beim Uebernehmen (Vertrag: audience:string).
@@ -188,6 +222,13 @@ export const TASK_TABLE = Object.freeze({
   // Faehigkeit, die ein Routine-Modell nicht hat -- es liefert zuverlaessig den
   // erwartbaren Gedanken, also den einen, den die Autorin oder der Autor schon hatte.
   erweiterungen: Object.freeze({ modell: 'stark', maxTokens: 32000, stream: false, schema: ERWEITERUNGEN_SCHEMA }),
+  // Quellenthemen laufen aus demselben Grund auf dem starken Modell wie die
+  // Erweiterungen: der ganze Wert haengt daran, die naheliegende Ordnung zu
+  // verwerfen. Ein Routine-Modell liefert zuverlaessig „Web-Quellen" und
+  // „Sonstiges" — die Bibliotheksrubrik, die jeder Mensch selbst hinbekommt.
+  // Die Ausgabe ist klein (Namen, ein Satz, Kennungen), 8000 reichen weit; nur
+  // gedacht wird viel, und das teilt sich das Budget (siehe oben).
+  quellenthemen: Object.freeze({ modell: 'stark', maxTokens: 8000, stream: false, schema: QUELLENTHEMEN_SCHEMA }),
   chat: Object.freeze({ modell: 'stark', maxTokens: 64000, stream: true }),
   titel: Object.freeze({ modell: 'routine', maxTokens: 256, stream: false }),
   zusammenfassung: Object.freeze({ modell: 'routine', maxTokens: 2000, stream: false }),

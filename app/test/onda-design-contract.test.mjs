@@ -132,14 +132,19 @@ test('Projektstruktur ist eine ruhige Liste statt eines Kartenstapels', async ()
   const css = await readFile(styleUrl, 'utf8')
   const list = ruleBody(css, '.structure-nav-list')
   const preview = ruleBody(css, '\n.block-preview {\n  border-bottom:')
-  const material = ruleBody(css, '#materialSources')
+  // Seit dem 7. August 2026 ist #materialSources kein Listeneintrag mehr, sondern der
+  // NAME des Abschnitts (Jakob: drei Abschnitte, zwei Gesten je Kopfzeile). Die
+  // Eigenschaft, um die es hier geht, wandert deshalb mit: die Kopfzeile ist eine
+  // flache Fläche und kein Kärtchen — kein Rahmen, kein Schatten.
+  const name = ruleBody(css, '.onda-side-name {')
 
   assert.match(list, /gap:\s*0/)
   assert.match(preview, /border-bottom:\s*1px solid var\(--border-subtle\)/)
   assert.match(preview, /border-radius:\s*var\(--radius-none\)/)
   assert.match(preview, /box-shadow:\s*none/)
-  assert.match(material, /border-radius:\s*var\(--radius-none\)/)
-  assert.match(material, /box-shadow:\s*none/)
+  assert.match(name, /border:\s*0/)
+  assert.match(name, /box-shadow:\s*none/)
+  assert.match(name, /background:\s*transparent/)
 })
 
 test('Alle kompakten Aktionen behalten mindestens 44 Pixel Trefferfläche', async () => {
@@ -151,38 +156,135 @@ test('Alle kompakten Aktionen behalten mindestens 44 Pixel Trefferfläche', asyn
 
   assert.match(ruleBody(shell, '.onda-library-nav__item,'), /min-height:\s*44px/)
   assert.match(ruleBody(shell, '.onda-library-recent__item {'), /min-height:\s*44px/)
-  assert.match(ruleBody(annotations, '.onda-mode-switch button'), /min-height:\s*44px/)
-  assert.match(ruleBody(annotations, '.onda-review-control, .onda-review-icon'), /min-height:\s*44px/)
+  // Der Stift ist klein gezeichnet, aber nicht klein zu treffen: 18px Symbol in einer
+  // 44px-Flaeche. Er hat die Trefferflaeche der gesamten Anmerkungsleiste geerbt, die
+  // hier bis zum 7. August 2026 stand (docs/PHILOSOPHIE.md §1).
+  assert.match(ruleBody(css, '.onda-presence {'), /width:\s*44px;\s*height:\s*44px/)
   assert.match(ruleBody(css, '.agent-chat-send,\n.surface-close'), /width:\s*44px;\s*height:\s*44px/)
   assert.match(ruleBody(css, '.suggestion-action {'), /width:\s*44px;\s*height:\s*44px/)
   assert.match(ruleBody(css, '.onda-btn {'), /min-height:\s*44px/)
   assert.match(ruleBody(css, '.onda-icon-btn {'), /width:\s*44px;\s*height:\s*44px/)
+  // Der Quellenbaum wiederholt die zwei Gesten der Abschnittszeile eine Ebene tiefer.
+  // Beide Flaechen messen 44px: leichter wird die Gruppenzeile durch Schriftgrad und
+  // Farbe, nicht durch eine Trefferflaeche, die der Finger verfehlt.
+  assert.match(ruleBody(css, '.onda-baum-pfeil {'), /width:\s*44px;\s*height:\s*44px/)
+  assert.match(ruleBody(css, '.onda-baum-name {'), /min-height:\s*44px/)
+  // Das Blatt zwischen den beiden Geschwistern: die Quellenzeile ist ein echter Knopf
+  // (type=button, aria-haspopup=dialog, sie oeffnet das Quellen-Fenster) und stand
+  // trotzdem auf 32px — die einzige Bedienflaeche im Haus unter der eigenen Grenze.
+  assert.match(ruleBody(css, '.onda-baum-quelle {'), /min-height:\s*44px/)
 })
 
-test('Nur echte Ebenen tragen Schatten und der Modusumschalter bleibt eine Pille', async () => {
+test('Nur echte Ebenen tragen Schatten', async () => {
+  const css = await readFile(styleUrl, 'utf8')
+  // #pvCard war eine Kachel, .onda-erw eine Erweiterungs-Karte. Beide Flächen gibt es
+  // nicht mehr: die Kachel ist der Abschnittsname geworden, die Karte spricht im Chat.
+  // Was bleibt, ist die Regel — in der Seitenleiste liegt nichts übereinander, also
+  // trägt dort auch nichts einen Schatten.
+  const sectionName = ruleBody(css, '.onda-side-name {')
+  const treeEntry = ruleBody(css, '.onda-baum-quelle {')
+  const treeGroup = ruleBody(css, '.onda-baum-name {')
+
+  // POSITIV geprueft, nicht negativ. `doesNotMatch(/box-shadow: var(--shadow/)` stand
+  // hier einmal fuer beide Baumzeilen — und war nicht zu brechen, weil in keiner der
+  // beiden Regeln ueberhaupt eine box-shadow-Zeile steht. Eine Zusicherung, die nicht
+  // fehlschlagen kann, nagelt nichts fest. Also muss `box-shadow: none` dastehen: dann
+  // faellt die Pruefung, sobald jemand die Zeile herausnimmt oder einen Schatten setzt.
+  assert.match(sectionName, /box-shadow:\s*none/)
+  assert.match(treeEntry, /box-shadow:\s*none/)
+  // Die Gruppenzeile ist eine Flaeche, kein Kaertchen: kein Rahmen, kein Schatten,
+  // kein eigener Grund. Die Ebene traegt die Einrueckung, nicht ein Kasten.
+  assert.match(treeGroup, /border:\s*0/)
+  assert.match(treeGroup, /background:\s*transparent/)
+  assert.match(treeGroup, /box-shadow:\s*none/)
+})
+
+test('Anmerkungen trennen ruhiges Zeichen von schwebender Detailfläche', async () => {
   const [annotations, css] = await Promise.all([
     readFile(annotationsUrl, 'utf8'),
     readFile(styleUrl, 'utf8'),
   ])
-  const modeSwitch = ruleBody(annotations, '.onda-mode-switch {')
-  const projectUnderstanding = ruleBody(css, '#pvCard {')
-  const extension = ruleBody(css, '.onda-erw {')
+  const zeichen = ruleBody(css, '.onda-presence {')
+  const annotation = ruleBody(annotations, '\n.onda-annotation {\n')
 
-  assert.match(modeSwitch, /border-radius:\s*var\(--radius-pill\)/)
-  assert.match(projectUnderstanding, /box-shadow:\s*none/)
-  assert.match(extension, /box-shadow:\s*none/)
-})
+  // Das Zeichen ist keine Flaeche: kein Grund, keine Kante, kein Schatten. Es steht in
+  // der Topbar wie ein Stift auf dem Tisch (docs/PHILOSOPHIE.md §1).
+  assert.match(zeichen, /background:\s*transparent/)
+  assert.match(zeichen, /border:\s*0/)
+  assert.doesNotMatch(zeichen, /box-shadow:/)
 
-test('Anmerkungen trennen ruhige Steuerung von schwebender Detailfläche', async () => {
-  const css = await readFile(annotationsUrl, 'utf8')
-  const reviewBar = ruleBody(css, '.onda-review-bar')
-  const annotation = ruleBody(css, '\n.onda-annotation {\n')
-
-  assert.match(reviewBar, /border-radius:\s*var\(--radius-panel\)/)
-  assert.doesNotMatch(reviewBar, /box-shadow:/)
+  // Die Anmerkung selbst schwebt — sie ist die Detailflaeche und darf Tiefe haben.
   assert.match(annotation, /border-radius:\s*var\(--radius-overlay\)/)
   assert.match(annotation, /box-shadow:\s*var\(--shadow-md\)/)
   assert.doesNotMatch(annotation, /shadow-glow/)
+})
+
+test('Über dem Text steht keine Leiste — das Zeichen zählt nicht und trägt trotzdem den vollen Wortlaut', async () => {
+  const [html, annotations, shell, workspace] = await Promise.all([
+    readFile(indexUrl, 'utf8'),
+    readFile(annotationsUrl, 'utf8'),
+    readFile(shellUrl, 'utf8'),
+    readFile(new URL('../src/workspace.js', import.meta.url), 'utf8'),
+  ])
+
+  // Der Grundsatz, hart geprüft: die Leiste und alle fünf Bedienelemente sind fort.
+  // Was hier wieder auftaucht, hat docs/PHILOSOPHIE.md §1 gebrochen.
+  for (const spur of [
+    'annotationReviewBar',
+    'annotationReviewSummary',
+    'annotationQuietToggle',
+    'annotationBulkAccept',
+    'annotationUndo',
+    'annotationPrevious',
+    'annotationNext',
+    'data-annotation-mode',
+  ]) {
+    assert.doesNotMatch(html, new RegExp(spur), `Die Anmerkungsleiste ist zurück: ${spur}`)
+  }
+  for (const regel of ['.onda-review-bar', '.onda-mode-switch', '.onda-review-control']) {
+    assert.equal(annotations.includes(`${regel} {`), false, `CSS der Anmerkungsleiste ist zurück: ${regel}`)
+    assert.equal(shell.includes(`${regel} {`), false, `CSS der Anmerkungsleiste ist zurück: ${regel}`)
+  }
+
+  // Genau EIN Bedienelement für Anmerkungen, und es blendet sie nur aus und ein.
+  assert.match(html, /id="annotationPresence"/)
+  assert.match(workspace, /getElementById\('annotationPresence'\), 'click', toggleQuietAnnotations/)
+
+  // Für die Augen keine Zahl, für Vorlesegeräte der volle Wortlaut. Beides muss
+  // gleichzeitig gelten — sonst ist die Ruhe eine Auslassung.
+  const zeichnen = workspace.slice(workspace.indexOf('function renderAnnotationPresence'))
+    .slice(0, workspace.slice(workspace.indexOf('function renderAnnotationPresence')).indexOf('\n}\n') + 3)
+  assert.doesNotMatch(zeichnen, /textContent\s*=/, 'Das Zeichen schreibt Text — es soll nur ein Stift sein')
+  assert.match(zeichnen, /aria-label/)
+  assert.match(zeichnen, /bilanzVorlesetext/)
+})
+
+test('Die Ankunft einer Anmerkung ist langsamer als jede andere Bewegung im Haus', async () => {
+  const [tokens, annotations, css] = await Promise.all([
+    readFile(tokensUrl, 'utf8'),
+    readFile(annotationsUrl, 'utf8'),
+    readFile(styleUrl, 'utf8'),
+  ])
+
+  const dauer = Number(tokens.match(/--dur-ankunft:\s*(\d+)ms/)?.[1])
+  const versatz = Number(tokens.match(/--versatz-ankunft:\s*(\d+)ms/)?.[1])
+  const langsamste = Math.max(...[...tokens.matchAll(/--dur-(?:fast|quick|normal|slow|slower):\s*(\d+)ms/g)]
+    .map(treffer => Number(treffer[1])))
+
+  // "Das soll nicht so plötzlich kommen" — messbar gemacht: die Ankunft ist länger als
+  // jede andere Dauer im Haus (docs/PHILOSOPHIE.md §1).
+  assert.ok(dauer > langsamste, `Die Ankunft (${dauer}ms) ist nicht langsamer als --dur-slower (${langsamste}ms)`)
+  assert.ok(versatz > 0, 'Ohne Versatz erscheinen Punkt und Anmerkung gleichzeitig')
+
+  // Der Versatz gehört der Anmerkung, nicht dem Punkt: erst zeichnet der Stift im
+  // Text, dann tritt die Anmerkung daneben.
+  assert.match(ruleBody(annotations, '\n.onda-annotation {\n'), /animation:\s*onda-annotation-in[^;]*var\(--versatz-ankunft\)/)
+  assert.match(ruleBody(css, '.has-local-finding::before'), /animation:\s*onda-ankunft-punkt/)
+
+  // Wer keine Bewegung will, bekommt keine — auch nicht diese.
+  const ruhe = tokens.slice(tokens.indexOf('prefers-reduced-motion'))
+  assert.match(ruhe, /--dur-ankunft:\s*1ms/)
+  assert.match(ruhe, /--versatz-ankunft:\s*0ms/)
 })
 
 test('Echte Popups nutzen Overlay-Radius und neutrale Tiefe ohne Aura', async () => {
@@ -200,4 +302,51 @@ test('Echte Popups nutzen Overlay-Radius und neutrale Tiefe ohne Aura', async ()
     assert.match(body, /box-shadow:\s*var\(--shadow-(?:md|lg)\)/, `${name} braucht neutrale Tiefe`)
     assert.doesNotMatch(body, /shadow-glow/, `${name} darf nicht wie der KI-Einstieg leuchten`)
   }
+})
+
+test('Die Sprechblase trägt dieselbe Fläche, Linie und Tiefe wie das Fenster, das sie ersetzt', async () => {
+  const [css, tokens, html] = await Promise.all([
+    readFile(styleUrl, 'utf8'),
+    readFile(tokensUrl, 'utf8'),
+    readFile(indexUrl, 'utf8'),
+  ])
+
+  // Das Gerüst steht im HTML, nicht im JavaScript: ohne JS ist #agentWidget genau das
+  // rechteckige Fenster von vorher, und die leere Kontur stört dabei nicht.
+  assert.match(html, /id="ondaBlase"[^>]*hidden/, 'Die Kontur muss versteckt beginnen')
+  assert.match(html, /clipPathUnits="userSpaceOnUse"/)
+  assert.match(html, /class="onda-blase__schnitt"/)
+  assert.match(html, /class="onda-blase__pfad"/)
+
+  // Fläche und Haarlinie sind dieselben Werte wie am Fenster — sonst sähe man beim
+  // Umschalten zwischen Kontur und Fenster einen Sprung in der Farbe.
+  const pfad = ruleBody(css, '.onda-blase__pfad')
+  assert.match(pfad, /fill:\s*var\(--bg-surface\)/)
+  assert.match(pfad, /stroke:\s*var\(--border-subtle\)/)
+  assert.match(pfad, /stroke-width:\s*1\b/)
+  assert.doesNotMatch(pfad, /shadow-glow/, 'Die Blase leuchtet nicht — nur der Orb leuchtet')
+
+  // Zwei Schreibweisen desselben Schattens: box-shadow am Fenster, drop-shadow an der
+  // Kontur. Laufen die Zahlen auseinander, wechselt die Tiefe beim Umschalten.
+  const schattenTeile = wert => [...wert.matchAll(/(-?[\d.]+\w*)\s+(-?[\d.]+\w*)\s+(-?[\d.]+\w*)\s+(rgba?\([^)]*\))/g)]
+    .map(treffer => treffer.slice(1).join(' ').replace(/\s+/g, '').toLowerCase())
+  const tokenSchatten = bereich => schattenTeile(bereich.match(/--shadow-lg:([^;]+)/)[1])
+  const blasenSchatten = bereich => schattenTeile(bereich.match(/--blase-schatten:([^;]+)/)[1])
+
+  const hellTokens = tokens.slice(0, tokens.indexOf('[data-theme="dark"]'))
+  const dunkelTokens = tokens.slice(tokens.indexOf('[data-theme="dark"]'))
+  const dunkelStart = css.indexOf('[data-theme="dark"] #editorView')
+  assert.notEqual(dunkelStart, -1, 'Die Blase hat keinen dunklen Schatten')
+
+  assert.deepEqual(blasenSchatten(css.slice(0, dunkelStart)), tokenSchatten(hellTokens),
+    'Der helle Blasenschatten weicht von --shadow-lg ab')
+  assert.deepEqual(blasenSchatten(css.slice(dunkelStart)), tokenSchatten(dunkelTokens),
+    'Der dunkle Blasenschatten weicht von --shadow-lg ab')
+
+  // Der Fehler, den man garantiert übersieht: ondaHintIn verschiebt den ganzen Kasten
+  // um 6px und koppelte den Sitz für 240ms vom Orb ab.
+  const konturFenster = ruleBody(css, '#agentWidget.hat-kontur')
+  assert.match(konturFenster, /animation:\s*none/, 'Die Ankunftsbewegung reißt den Sitz vom Orb los')
+  assert.match(konturFenster, /background:\s*transparent/)
+  assert.doesNotMatch(konturFenster, /border-radius/, 'Der Radius bleibt am Fenster stehen — er ist die Rückfallebene')
 })

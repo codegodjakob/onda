@@ -66,7 +66,10 @@ export const AUFSCHAUEN_MS = 45000
 export const AUSLOESER = Object.freeze({
   sofort: 'Immer. Sobald etwas da ist, ist es zu sehen.',
   innehalten: `Satz- oder Absatzende und ${INNEHALTEN_AN_GRENZE_MS} ms Ruhe — oder ${INNEHALTEN_MS / 1000} s Ruhe an beliebiger Stelle.`,
-  aufschauen: `${AUFSCHAUEN_MS / 1000} s Ruhe, oder die Schreibansicht verlassen — oder von Hand angefordert.`,
+  // „von Hand" heisst NICHT: es gibt einen Knopf dafuer. Es heisst: wer gerade ueber
+  // einen Hinweis entschieden hat, schaut ohnehin auf — dann muss der naechste nicht
+  // erst 45 Sekunden warten. Abgeholt wird nichts (docs/PHILOSOPHIE.md §1).
+  aufschauen: `${AUFSCHAUEN_MS / 1000} s Ruhe, die Schreibansicht verlassen — oder gerade über einen Hinweis entschieden.`,
 })
 
 // Ein Satzende ist ein EREIGNIS: das Zeichen, das gerade getippt wurde. Nicht der

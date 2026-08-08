@@ -13,8 +13,56 @@ rm -rf ../app/dist
 (cd ../app && npm install --no-audit --no-fund --silent && npm run build)
 test -f ../app/dist/editor.bundle.js || { echo "FEHLER: Bundle fehlt"; exit 1; }
 
+# Die Rauchtests brauchen einen laufenden Server — von allein startet sich nur
+# einer von dreizehn einen. Bis zum 8. August 2026 fielen alle anderen still auf
+# Port 4173 zurueck, also auf irgendeinen Server, den irgendwann irgendwer von Hand
+# gestartet hatte. Das geht auf zwei Arten schief, und beide sind hier passiert:
+#   1. Laeuft dort nichts, ist JEDE Browser-Pruefung rot. Der Bau bricht ab, obwohl
+#      am Code nichts fehlt — und Jakob behaelt tagelang die alte App, ohne dass
+#      irgendwo steht, warum.
+#   2. Laeuft dort der Server einer ANDEREN Arbeitskopie, misst das Pflicht-Tor
+#      fremden Code und laesst durch. Ein Tor, das den falschen Stand prueft, ist
+#      kein Tor.
+# Der Bau bringt seinen Pruefserver deshalb selbst mit — so wie es der Pruef-Lauf
+# auf GitHub seit dem 7. August tut (.github/workflows/pruefung.yml).
+echo "— starte Pruefserver …"
+PRUEFPORT=""
+for kandidat in $(seq 4200 4260); do
+	if ! nc -z 127.0.0.1 "$kandidat" >/dev/null 2>&1; then PRUEFPORT="$kandidat"; break; fi
+done
+[ -n "$PRUEFPORT" ] || { echo "FEHLER: kein freier Port zwischen 4200 und 4260."; exit 1; }
+
+# Genommen wird der Server des Projekts (app/scripts/dev-server.mjs) und nicht
+# irgendein Fremdwerkzeug: er liefert dieselben MIME-Typen wie beim Entwickeln und
+# baut mit denselben esbuild-Einstellungen wie `npm run build` — er kann das eben
+# gebaute Bundle also nicht durch ein anderes ersetzen. Der Port MUSS als
+# `--port=…` uebergeben werden; ein nacktes Argument verwirft cliPort() still.
+node ../app/scripts/dev-server.mjs --port="$PRUEFPORT" > /tmp/onda-bau-server.log 2>&1 &
+PRUEFSERVER=$!
+# Der Server muss auch dann sterben, wenn ein Tor weiter unten fehlschlaegt.
+trap 'kill "$PRUEFSERVER" 2>/dev/null || true' EXIT
+
+# Warten, bis er wirklich antwortet. Ohne das rennt der erste Test gegen eine
+# geschlossene Tuer, und der Bau ist aus einem Grund rot, der nichts mit dem Code
+# zu tun hat — genau die Sorte Fehlalarm, die hier schon Tage gekostet hat.
+for _ in $(seq 1 60); do
+	if curl -sf -o /dev/null "http://127.0.0.1:${PRUEFPORT}/index.html"; then break; fi
+	sleep 1
+done
+if ! curl -sf -o /dev/null "http://127.0.0.1:${PRUEFPORT}/index.html"; then
+	echo "FEHLER: Pruefserver kam in 60 Sekunden nicht hoch. Sein Protokoll:"
+	cat /tmp/onda-bau-server.log
+	exit 1
+fi
+echo "  Pruefserver antwortet auf Port ${PRUEFPORT}."
+
 echo "— Pflicht-Tor 1: Testsuite …"
-(cd ../app && npm test)
+# AIWT_URL ausdruecklich setzen, statt sich auf den eingebauten Rueckfall zu
+# verlassen: dann steht schwarz auf weiss da, gegen welchen Server gemessen wird.
+(cd ../app && AIWT_URL="http://127.0.0.1:${PRUEFPORT}/" npm test)
+
+kill "$PRUEFSERVER" 2>/dev/null || true
+trap - EXIT
 
 # Erst jetzt wird das App-Paket angefasst: schlägt oben ein Tor fehl,
 # liegt die bisherige App noch unverändert da.

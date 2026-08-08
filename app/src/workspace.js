@@ -27,7 +27,15 @@ import {
 import { Plugin, PluginKey } from '@tiptap/pm/state'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import { applySettings } from './ui.js'
-import { hatSchluessel, setzeSchluessel, loescheSchluessel, runTask } from './agent-gateway.mjs'
+import { hatSchluessel, setzeSchluessel, loescheSchluessel } from './agent-gateway.mjs'
+// Das Lauf-Tor (Issue #12): Sperre, Signatur, Buchung und Journal fuer jeden bezahlten
+// Lauf. Alle vier Kanaele (Interview, Chat, Hinweis, Erweiterung, Task 8 schliesst die
+// Reihe) laufen jetzt ausschliesslich hierueber — kein Kanal importiert runTask mehr
+// direkt aus agent-gateway.mjs, jeder bekommt es als Parameter von fuehreLaufAus'
+// laufFn (siehe starteVerstaendnisEntwurf/sendeInterviewAntwort, sendeAgentenChat/
+// sendeLocalChat, fuehreHinweislaufAus, fuehreErweiterungslaufAus).
+import { fuehreLaufAus, kanalGesperrt, merkeKarteGezeigt, torJournal } from './lauf-tor.mjs'
+import { letzteBezahlteSignatur } from './lauf-journal.mjs'
 import { aktuellerAgentStatus, beiAgentStatus, setzeAgentStatus, statuszeileFuer } from './agent-status.mjs'
 import { EXAMPLE_PROJECT_ID, seedBodySignature } from './example-seed.mjs'
 import { MODELLE, TASK_TABLE } from './agent-tasks.mjs'
@@ -88,34 +96,52 @@ import {
   gibNaechstenAutomatiklaufFrei,
 } from './settings-model.mjs'
 import { createSourceLibraryUi } from './source-library-ui.mjs'
+import {
+  OHNE_THEMA,
+  OHNE_THEMA_NAME,
+  benenneThemaUm,
+  beschreibeThema,
+  ensureQuellenThemen,
+  legeThemaAn,
+  loescheThema,
+  themenBaum,
+  uebernimmThemenvorschlag,
+  verschiebeQuelle,
+} from './quellen-thema-model.mjs'
+// quellenTitel liegt im Kontext-Bauer, weil dort schon entschieden ist, wie eine Quelle
+// heisst (metadata.title.value, source-model.mjs). Zwei Fassungen waeren zwei Namen fuer
+// dieselbe Quelle — im Prompt der eine, auf dem Schirm der andere.
+import { quellenTitel } from './quellen-kontext.mjs'
+import { darfAutomatischOrdnen, quellenSignatur, versucheQuellenlauf } from './quellenlauf-model.mjs'
 import { createMemoryUi } from './memory-ui.mjs'
 import { createArgumentUi } from './argument-ui.mjs'
 import { createLanguageUi } from './language-ui.mjs'
 import { analyzeArgumentImpact } from './argument-graph.mjs'
 import { createAuditUi } from './audit-ui.mjs'
 import {
-  acceptsKindInMode,
   annotationSignature,
   annotationSummary,
   createAnnotationController,
   createSuppressionStore,
 } from './annotation-controller.mjs'
 import { renderAnnotation } from './annotation-components.mjs'
-import { resolveAnnotationPresentation } from './annotation-contract.mjs'
+import { ANNOTATION_DEFINITIONS, resolveAnnotationPresentation } from './annotation-contract.mjs'
 import {
   invertAnnotationOperation,
   planAnnotationOperation,
   validateAnnotationOperation,
 } from './annotation-operations.mjs'
 import { ondaIcon } from './onda-icons.mjs'
-import { blaseAmOrbAusrichten, blaseAnhaengen } from './onda-blase-dom.mjs'
+import { bilanzVorlesetext } from './anmerkung-wortlaut.mjs'
 import {
-  KNOTEN_PLATZHALTER,
-  markenBereich,
-  markenBereiche,
-  markiertAlleVorkommen,
-} from './annotation-marken.mjs'
-import { VARIANTEN, VARIANTEN_ERKLAERUNG, VARIANTEN_LABEL, bilanzText, bilanzVorlesetext, normalisiereVariante, punkteFuer } from './bilanz-varianten.mjs'
+  BEWEGUNG,
+  blaseIstMoeglich,
+  erzeugeKontur,
+  kurveOut,
+  kurveStandard,
+  laesseBlaseWachsen,
+  tokenDauer,
+} from './onda-blase.mjs'
 
 const BLOCK_TYPES = [
   ['paragraph', 'Freier Absatz'],
@@ -138,12 +164,8 @@ let lastContext = null
 let renderedDocId = null
 let decoratedDocId = null
 let decoratedBlockId = null
-let insertTrigger = null
 let insertMenu = null
-let hoveredBlockId = null
-let hoverTimer = null
 let typingTimer = null
-let triggerFrame = null
 let isTyping = false
 let isComposing = false
 let structureNavState = null
@@ -151,38 +173,64 @@ let localDecoratedDocId = null
 let localDecoratedFindingId = null
 let localDecoratedBlockId = null
 let localDecoratedSpacing = 0
-// Die aktuell markierte Anmerkung selbst — das Plugin braucht sie, um die
-// STELLE im Absatz zu finden statt nur den Absatz.
-let localDecoratedFinding = null
+let localDecoratedAbsatzweit = false
 let localFeedbackError = null
 let localPositionFrame = null
 let localSummaryFocusRequest = null
+// Wem gehoert Befehl+Z gerade? Seit die Anmerkungsleiste fort ist
+// (docs/PHILOSOPHIE.md §1), gibt es keinen Rueckgaengig-Knopf mehr — die Taste muss
+// beides koennen. Sie nimmt eine uebernommene Anmerkung zurueck, solange die Anmerkung
+// das Letzte war, was geschah. Sobald wieder getippt wird, gehoert sie dem Text.
+// Ohne diese Unterscheidung wuerde Befehl+Z nach zwanzig geschriebenen Woertern eine
+// Anmerkung von vorhin zurueckholen — und genau das erwartet niemand.
+let letzteAenderungWarAnmerkung = false
 let agentInitiativeTimer = null
-// Echter Hinweislauf (Etappe A, Spec §5): genau ein Lauf gleichzeitig; hinweislaufTimer ist
-// der Zeitgeber-Griff fuer den Pausen-Ausloeser (planeHinweislauf/clearHinweislaufTimer, H-3).
-let hinweislaufAktiv = false
+// Echter Hinweislauf (Etappe A, Spec §5): genau ein Lauf gleichzeitig. Die Lauf-Sperre selbst
+// (frueher hier als hinweislaufAktiv) lebt jetzt im Lauf-Tor (lauf-tor.mjs, Task 7) —
+// kanalGesperrt('hinweis') fragt sie ab, fuehreLaufAus setzt/loest sie synchron. Hier bleibt nur
+// noch hinweislaufTimer, der Zeitgeber-Griff fuer den Pausen-Ausloeser (planeHinweislauf/
+// clearHinweislaufTimer, H-3).
 let hinweislaufTimer = null
 // Zweiter Kanal (Erweiterungen): eigene Sperre, damit ein Erweiterungslauf und ein
 // Hinweislauf einander nicht ausschliessen -- es sind zwei verschiedene Fragen an
 // denselben Text, und der Cache-Praefix ist derselbe, also kostet der zweite wenig.
-let erweiterungslaufAktiv = false
+// Die Sperre selbst (frueher hier als erweiterungslaufAktiv) lebt jetzt im Lauf-Tor
+// (lauf-tor.mjs, Task 8) — kanalGesperrt('erweiterung') fragt sie ab, fuehreLaufAus
+// setzt/loest sie synchron. Hier bleibt nur noch erweiterungslaufTimer, der
+// Zeitgeber-Griff fuer den Aufschauen-Ausloeser (planeErweiterungslauf/
+// clearErweiterungslaufTimer).
 let erweiterungslaufTimer = null
+// Dritter Lauf (Quellenthemen): wieder eine eigene Sperre. Er fragt etwas ganz anderes
+// als die beiden ueber ihm -- nicht nach dem Text, sondern nach dem Material des
+// Projekts -- und darf deshalb auch neben ihnen laufen.
+let letzteQuellenSignatur = null
 // Zeitgeber fuer den Momentwechsel: wenn genug Ruhe vergangen ist, darf mehr sichtbar
 // werden. Ohne diesen Zeitgeber erschiene das Zurueckgehaltene erst beim naechsten
 // Tastendruck -- also genau dann nicht, wenn man aufschaut.
 let momentTimer = null
-// Von Hand aufgeschaut: gilt bis zum naechsten Tastendruck. Ohne diesen Griff hiesse
-// 'zurueckgehalten' in der Praxis 'unauffindbar' -- wer nie 45 Sekunden Pause macht,
-// bekaeme eine Strukturfrage nie zu sehen.
+// Aufgeschaut, ohne 45 Sekunden Pause. Gilt bis zum naechsten Tastendruck.
+// Es gibt dafuer KEINEN Griff in der Oberflaeche und soll auch keinen geben — Anmerkungen
+// werden nicht abgeholt (docs/PHILOSOPHIE.md §1). Gesetzt wird der Merker allein daran,
+// dass jemand gerade ueber einen Hinweis ENTSCHIEDEN hat (decideAndAdvance): wer
+// Rueckmeldung durcharbeitet, schreibt nicht, und der naechste Hinweis darf sofort
+// folgen. Bis zum 7.8.2026 stand hier ein Versprechen auf eine Zeile in der
+// Seitenleiste ("N Hinweise warten aufs Aufschauen — jetzt zeigen"); die zaehlte
+// Anmerkungen und ist mit der Flaeche gefallen.
 let momentVonHand = false
 // Was einmal auf dem Schirm stand, bleibt stehen. Der Moment entscheidet ueber das
 // ERSTE Erscheinen, nicht ueber das Bleiben — sonst verschwindet eine Karte, die man
 // gerade liest, sobald man wieder tippt. Wird mit dem Dokument zurueckgesetzt.
 let gezeigteHinweise = { docId: null, ids: new Set() }
 
-function merkeGezeigt(docId, findingId) {
+function merkeGezeigt(docId, findingId, { art, moment } = {}) {
   if (gezeigteHinweise.docId !== docId) gezeigteHinweise = { docId, ids: new Set() }
-  if (findingId) gezeigteHinweise.ids.add(findingId)
+  if (!findingId) return
+  const istErstesMal = !gezeigteHinweise.ids.has(findingId)
+  gezeigteHinweise.ids.add(findingId)
+  // Erstes Erscheinen je Karte wandert zusaetzlich ins Journal (Messpunkt fuer die
+  // spaetere Momente-Kalibrierung, Issue #12-Kommentar) -- das fluechtige Set hier
+  // bleibt unveraendert die Anzeige-Wahrheit, der Journal-Eintrag ist rein additiv.
+  if (istErstesMal) merkeKarteGezeigt({ findingId, art, moment })
 }
 
 function schonGezeigt(docId, findingId) {
@@ -190,19 +238,34 @@ function schonGezeigt(docId, findingId) {
 }
 let agentLiveFrame = null
 let agentPresenceFocusRequest = false
+// Die Sprechblase: was sie gerade zeigt (offen/zu), ihr Zeichengeraet, der laufende
+// Antrieb und der Beobachter, der ihre Masse nachfuehrt.
+let blaseSteht = null // null = noch nie gezeichnet; sonst true/false
+let blaseKontur = null
+let blaseAntriebStoppen = null
+let blaseBeobachter = null
+// Nur Fassung B des Abgangs: haelt renderAgentWidget davon ab, den Inhalt abzuraeumen,
+// waehrend sich die Blase noch zusammenfaltet.
+let blaseFaeltZurueck = false
 let pendingParagraphBoundaryDocId = null
 let evidenceFocusRequest = false
 let evidenceReturnFindingId = null
 let riskConfirmationFocusRequest = false
 let ondaDialog = null
-// Verständnis-Interview: einmal je Projekt+Dokument prüfen, genau ein Lauf gleichzeitig.
+// Verständnis-Interview: einmal je Projekt+Dokument prüfen. Die Lauf-Sperre selbst
+// (frueher hier als interviewLaufAktiv) lebt jetzt im Lauf-Tor (lauf-tor.mjs) —
+// kanalGesperrt('interview') fragt sie ab, fuehreLaufAus setzt/loest sie synchron.
 let interviewPruefKey = null
-let interviewLaufAktiv = false
 let interviewStatus = null // null | 'laeuft' | ruhiger Fehlertext für die Statuszeile
 let pausierterAutomatiklauf = null
-// Echter Chat (Etappe A, Bereich C): genau ein Lauf gleichzeitig, app-weit (Panel und,
-// ab Task C-3, auch die Randkarten-Gespraeche teilen sich dieses Feld ueber fuehreChatLauf).
-let laufenderChatLauf = null
+// Echter Chat (Etappe A, Bereich C; Tor-Anschluss Task 6): die SPERRE wohnt jetzt im Tor
+// (lauf-tor.mjs, kanalGesperrt('chat')/fuehreLaufAus) — hier lebt nur noch der
+// Stream-Zustand, app-weit EIN Feld (Panel und Randkarten-Gespraeche teilen es sich
+// weiterhin ueber fuehreChatLauf).
+//
+// Das Akzent-Menue, das der Zweig hier noch mitbrachte, kommt NICHT zurueck: main hat
+// es abgeschafft, Sky ist der einzige Akzent (onda-design-contract.test.mjs).
+let chatStream = null
 
 const AGENT_IDLE_MS = 3000
 const AGENT_BOUNDARY_IDLE_MS = 300
@@ -238,20 +301,6 @@ function activeBlockPlugin() {
   })
 }
 
-// Die Textstellen, die im markierten Absatz eine Marke bekommen. Der
-// Platzhalter zaehlt Nicht-Text-Knoten mit: ein Bild ist eine Position im
-// Dokument, aber null Zeichen im Text — ohne ihn verschieben sich alle Marken
-// dahinter um genau diese Knoten.
-function markenFuerBlock(node, findingState) {
-  const finding = findingState?.finding
-  if (!finding) return []
-  const text = node.textBetween(0, node.content.size, undefined, KNOTEN_PLATZHALTER)
-  if (!text) return []
-  if (markiertAlleVorkommen(finding)) return markenBereiche(text, finding)
-  const einzeln = markenBereich(text, finding)
-  return einzeln ? [einzeln] : []
-}
-
 function localFindingPlugin() {
   return new Plugin({
     key: localFindingKey,
@@ -265,19 +314,13 @@ function localFindingPlugin() {
         const local = []
         transaction.doc.forEach((node, offset) => {
           if (node.attrs.blockId === findingState.blockId) {
-            local.push(Decoration.node(offset, offset + node.nodeSize, { class: 'has-local-finding' }))
-            // Die Marke sitzt auf der STELLE, nicht auf dem Absatz — so macht es
-            // das Design System (components/annotation/Mark.jsx). Vier Kategorien,
-            // vier Prinzipien: Rahmen, Flaeche, angehobener Block, Akzentflaeche.
-            markenFuerBlock(node, findingState).forEach(marke => {
-              // +1: die Position 0 eines Knotens ist seine oeffnende Marke, der
-              // Text beginnt erst dahinter.
-              local.push(Decoration.inline(
-                offset + 1 + marke.von,
-                offset + 1 + marke.bis,
-                { class: `aura-mark aura-mark--${marke.kategorie}`, 'data-marke-nummer': marke.nummer ?? '' },
-              ))
-            })
+            // Gilt die Anmerkung dem ganzen Absatz oder einer Stelle in ihm? Nur im
+            // ersten Fall wird der Absatz selbst angedeutet — sonst zeigt der Punkt am
+            // Rand auf ihn, obwohl nur ein Wort gemeint ist.
+            const klassen = findingState.absatzweit
+              ? 'has-local-finding hat-absatzweite-anmerkung'
+              : 'has-local-finding'
+            local.push(Decoration.node(offset, offset + node.nodeSize, { class: klassen }))
             if (findingState.spacing > 0) {
               local.push(Decoration.widget(offset + node.nodeSize, () => {
                 const spacer = document.createElement('div')
@@ -303,24 +346,36 @@ function localFindingPlugin() {
   })
 }
 
-function setLocalFindingDecoration(blockId, spacing = 0, force = false, finding = localDecoratedFinding) {
+// Welche Anmerkungsarten gelten dem ganzen Absatz? Die Antwort steht schon im Vertrag:
+// ANNOTATION_DEFINITIONS gibt jeder Art einen scope — Wort, Satz, Absatz, Abschnitt.
+// Nur die letzten beiden meinen den Absatz als Ganzes und duerfen ihn andeuten.
+const ABSATZWEITE_REICHWEITEN = new Set(['Absatz', 'Abschnitt'])
+
+function istAbsatzweit(finding) {
+  if (!finding) return false
+  const art = ANNOTATION_DEFINITIONS[finding.anmerkungsart]
+  return ABSATZWEITE_REICHWEITEN.has(art?.scope)
+}
+
+// Die Reichweite gehoert zur gerade gezeigten Anmerkung, nicht zum Aufruf. Sie hier zu
+// merken statt sie durch vier Aufrufstellen zu reichen, haelt die Aufrufe schlank —
+// und keine von ihnen kennt die Anmerkung ueberhaupt.
+let aktuelleAnmerkungIstAbsatzweit = false
+
+function setLocalFindingDecoration(blockId, spacing = 0, force = false) {
+  const absatzweit = Boolean(blockId) && aktuelleAnmerkungIstAbsatzweit
   const nextSpacing = blockId ? Math.max(0, Math.ceil(spacing)) : 0
-  const nextFinding = blockId ? finding : null
-  if (
-    !force
+  if (!force
     && localDecoratedBlockId === blockId
     && localDecoratedSpacing === nextSpacing
-    && localDecoratedFinding === nextFinding
-  ) return false
+    && localDecoratedAbsatzweit === absatzweit) return false
   localDecoratedBlockId = blockId
   localDecoratedSpacing = nextSpacing
-  localDecoratedFinding = nextFinding
+  localDecoratedAbsatzweit = absatzweit
   ctx.editor.view.dispatch(ctx.editor.state.tr.setMeta(localFindingKey, {
     blockId,
     spacing: nextSpacing,
-    // Die Anmerkung reist mit: ohne sie weiss das Plugin nicht, WELCHE Stelle
-    // im Absatz es markieren soll, und faellt auf den ganzen Absatz zurueck.
-    finding: nextFinding,
+    absatzweit,
   }))
   return true
 }
@@ -330,18 +385,19 @@ function elements() {
     view: document.getElementById('editorView'),
     sidebar: document.getElementById('ondaSidebar'),
     back: document.getElementById('sidebarBack'),
-    collapse: document.getElementById('sidebarCollapse'),
-    reopen: document.getElementById('sidebarReopen'),
+    // EIN Knopf fuer beide Richtungen. Zwei koennten nie an derselben Stelle stehen.
+    toggle: document.getElementById('sidebarToggle'),
     structureNav: document.getElementById('structureNav'),
+    structureNavList: document.getElementById('structureNavList'),
+    structureTree: document.getElementById('structureTree'),
+    materialTree: document.getElementById('materialTree'),
+    materialTreeToggle: document.getElementById('materialTreeToggle'),
     scroll: document.getElementById('scroll'),
-    insertLayer: document.getElementById('blockInsertLayer'),
     localLayer: document.getElementById('localAgentLayer'),
     agentPresence: document.getElementById('ondaAura'),
     agentWidget: document.getElementById('agentWidget'),
+    blase: document.getElementById('ondaBlase'),
     evidenceWindow: document.getElementById('evidenceWindow'),
-    erweiterungen: document.getElementById('erweiterungen'),
-    erkanntes: document.getElementById('erkanntes'),
-    zurueckgehalten: document.getElementById('zurueckgehalten'),
   }
 }
 
@@ -424,6 +480,185 @@ function persistWorkspace() {
 function setLayerVisibility(node, visible) {
   if (!node) return
   node.hidden = !visible
+}
+
+// ---------- Die Sprechblase waechst aus dem Orb ----------
+//
+// Das Belegfenster bekommt davon NICHTS ab, und zwar mit Absicht: es wird geoeffnet,
+// indem man eine Anmerkung im Text vertieft, nicht ueber den Orb. Eine Blase, die aus
+// dem Orb waechst, obwohl sie zu einer Randkarte gehoert, behauptete eine falsche
+// Herkunft. Ein Nebeneinander kann ohnehin nicht auftreten — enforceExclusiveLayers
+// schliesst das eine, sobald das andere aufgeht.
+
+// Ob die Kontur ueberhaupt zeichnen darf. Der Umschaltpunkt steht im Stil (--blase-an
+// wird im Mobilblock auf 0 gesetzt), nicht hier — sonst gaebe es zwei Wahrheiten
+// darueber, ab wann das Fenster noch am Orb sitzt.
+function blaseIstAngeschaltet(blase) {
+  if (!blase) return false
+  return getComputedStyle(blase).getPropertyValue('--blase-an').trim() !== '0'
+}
+
+// ACHTUNG: `element.hidden = …` gibt es nur an HTMLElement. #ondaBlase ist ein
+// SVG-Element — dort legt dieselbe Zeile bloss eine Eigenschaft an, die niemand liest,
+// und das Attribut bleibt stehen. Die Kontur waere dann nie zu sehen gewesen.
+function blaseZeigen(blase, sichtbar) {
+  if (!blase) return
+  if (sichtbar) blase.removeAttribute('hidden')
+  else blase.setAttribute('hidden', '')
+}
+
+function blaseKurve() {
+  // Zwei Fassungen zum Umschalten, damit die Wahl am laufenden Programm faellt:
+  // a = --ease-standard (Bewegung ueber die Flaeche), b = --ease-out (der Standard
+  // fuer kleine Hinweise). Voreingestellt ist a.
+  return document.documentElement.dataset.blaseKurve === 'b' ? kurveOut : kurveStandard
+}
+
+function blaseAntriebAbbrechen() {
+  blaseAntriebStoppen?.()
+  blaseAntriebStoppen = null
+  blaseFaeltZurueck = false
+}
+
+function blaseMisstUndZeichnet(fenster, blase) {
+  const kasten = fenster.getBoundingClientRect()
+  if (!blaseIstMoeglich(kasten.width, kasten.height)) return null
+  if (!blaseKontur || blaseKontur.svg !== blase) blaseKontur = erzeugeKontur(blase)
+  blaseKontur?.setzeMasse(kasten.width, kasten.height)
+  return blaseKontur
+}
+
+function blaseAusschalten(fenster, blase) {
+  blaseAntriebAbbrechen()
+  blaseZeigen(blase, false)
+  fenster?.classList.remove('hat-kontur', 'waechst', 'faellt-zurueck')
+  // Fassung B haelt das Fenster waehrend der Faltung sichtbar. Bricht sie ab, muss es
+  // dorthin zurueck, wo setLayerVisibility es haben will — sonst bliebe eine leere
+  // Huelle stehen.
+  if (fenster) fenster.hidden = !blaseSteht
+}
+
+function blaseFolgt(offen) {
+  // Gleichstand zuerst: refreshWorkspace laeuft bei jedem Tastendruck. Ohne diese
+  // Sperre — noch VOR jedem getComputedStyle — finge die Blase bei jedem Zeichen von
+  // vorne an zu wachsen an, und jeder Tastendruck kostete eine Stilberechnung.
+  if (blaseSteht === offen) return
+  const ui = elements()
+  const blase = ui.blase
+  const fenster = ui.agentWidget
+  if (!blase || !fenster) return
+
+  if (!blaseIstAngeschaltet(blase)) {
+    blaseSteht = offen
+    blaseAusschalten(fenster, blase)
+    return
+  }
+
+  const ersterLauf = blaseSteht === null
+  blaseSteht = offen
+  blaseAntriebAbbrechen()
+  fenster.hidden = !offen
+
+  if (!offen) {
+    if (!blaseKontur || ersterLauf) {
+      blaseZeigen(blase, false)
+      fenster.classList.remove('hat-kontur', 'waechst', 'faellt-zurueck')
+      return
+    }
+    fenster.classList.remove('waechst')
+    // Fassung B des Abgangs: der Inhalt verblasst mit, statt in einem Bild zu
+    // verschwinden. Dafuer muss das Fenster die Faltung ueberleben — refreshWorkspace
+    // hat es zu diesem Zeitpunkt schon versteckt — UND sein Inhalt muss stehen bleiben.
+    // renderAgentWidget raeumt gleich hinterher ab; ohne die Sperre faltete sich eine
+    // leere Huelle, und die Fassung waere von Fassung A nicht zu unterscheiden.
+    const weich = document.documentElement.dataset.blaseAbgang === 'b'
+    if (weich) {
+      blaseFaeltZurueck = true
+      fenster.hidden = false
+      fenster.classList.add('faellt-zurueck')
+    }
+    const dauerBreite = tokenDauer(BEWEGUNG.zu.breite)
+    const dauerHoehe = tokenDauer(BEWEGUNG.zu.hoehe)
+    blaseAntriebStoppen = laesseBlaseWachsen(blaseKontur, {
+      auf: false,
+      kurve: blaseKurve(),
+      ruhig: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches || false,
+      dauerBreite,
+      dauerHoehe,
+      fertig: () => {
+        blaseAntriebStoppen = null
+        blaseZeigen(blase, false)
+        fenster.classList.remove('hat-kontur', 'faellt-zurueck')
+        if (!weich) return
+        blaseFaeltZurueck = false
+        fenster.hidden = true
+        renderAgentWidget()
+      },
+    })
+    return
+  }
+
+  // Erst die Klasse, dann messen: hat-kontur aendert nur Farben und das obere Polster,
+  // nicht die Masse des Kastens — aber gemessen wird trotzdem der Zustand, der auch
+  // gezeigt wird.
+  fenster.classList.add('hat-kontur')
+  const kontur = blaseMisstUndZeichnet(fenster, blase)
+  if (!kontur) {
+    // Zu klein fuer eine Silhouette, die aufgeht. Dann bleibt das Fenster es selbst.
+    fenster.classList.remove('hat-kontur', 'waechst', 'faellt-zurueck')
+    blaseZeigen(blase, false)
+    return
+  }
+  fenster.classList.remove('faellt-zurueck')
+  fenster.classList.add('waechst')
+  kontur.zeichne(0, 0)
+  blaseZeigen(blase, true)
+
+  const dauerBreite = tokenDauer(BEWEGUNG.auf.breite)
+  const dauerHoehe = tokenDauer(BEWEGUNG.auf.hoehe)
+  blaseAntriebStoppen = laesseBlaseWachsen(kontur, {
+    auf: true,
+    kurve: blaseKurve(),
+    ruhig: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches || false,
+    dauerBreite,
+    dauerHoehe,
+    fertig: () => {
+      blaseAntriebStoppen = null
+      // Der Zuschnitt faellt weg, sobald er nichts mehr freizulegen hat — sonst kappte
+      // er spaeter Fokusringe an den Raendern.
+      fenster.classList.remove('waechst')
+    },
+  })
+}
+
+// Die Masse aendern sich auch ohne Zustandswechsel: 100dvh reagiert auf die
+// Fensterhoehe und auf die Adressleiste mobiler Browser, und unter 761px faellt die
+// Kontur ganz weg. Ohne diesen Beobachter entkoppelte sie sich dann stillschweigend
+// vom Fenster.
+function blaseBeobachten() {
+  const ui = elements()
+  if (!ui.agentWidget || !ui.blase || typeof ResizeObserver !== 'function') return () => {}
+  const beobachter = new ResizeObserver(() => {
+    if (!blaseSteht || blaseAntriebStoppen) return
+    if (!blaseIstAngeschaltet(ui.blase)) {
+      blaseAusschalten(ui.agentWidget, ui.blase)
+      return
+    }
+    ui.agentWidget.classList.add('hat-kontur')
+    const kontur = blaseMisstUndZeichnet(ui.agentWidget, ui.blase)
+    if (!kontur) {
+      blaseAusschalten(ui.agentWidget, ui.blase)
+      return
+    }
+    kontur.zeichne(1, 1)
+    blaseZeigen(ui.blase, true)
+  })
+  beobachter.observe(ui.agentWidget)
+  blaseBeobachter = beobachter
+  return () => {
+    beobachter.disconnect()
+    if (blaseBeobachter === beobachter) blaseBeobachter = null
+  }
 }
 
 function hasLocalDepth(workspace) {
@@ -552,6 +787,10 @@ function insertBlock(afterBlockId, role) {
   const block = getEditorBlocks(ctx.editor).find(candidate => candidate.id === insertedId)
   if (block) ctx.editor.commands.setTextSelection(block.pos + 1)
   refreshWorkspace()
+  // Der Oeffner des Menues steht in der Struktur-Ansicht. Ohne diese Zeile bliebe das
+  // offene Fenster stehen, als waere nichts geschehen — der neue Baustein taeuchte
+  // erst nach dem Schliessen auf.
+  ondaDialog?.onDocChange?.()
   persistWorkspace()
 }
 
@@ -620,6 +859,29 @@ function openInsertMenu(afterBlockId, opener) {
 // Drei Zustaende je Baustein: nichts gesetzt (Voreinstellung nach Rolle), ausdruecklich
 // offen, ausdruecklich zu. Die ausdrueckliche Wahl schlaegt die Voreinstellung.
 let strukturKlappen = { docId: null, offen: new Set(), zu: new Set() }
+
+// Aus demselben Grund nicht im Dokument: ob ein Baum in der Seitenleiste gerade offen
+// steht, ist eine Frage des Hinschauens. Die Struktur steht offen, weil sie der Weg
+// durch den Text ist; die Quellen liegen zu, weil sie Material sind und nicht Weg.
+const seitenBaeume = { struktur: true, quellen: false }
+
+function setzeSeitenBaum(name, offen) {
+  seitenBaeume[name] = offen
+  const ui = elements()
+  const [knopf, flaeche, wort, abschnittId] = name === 'struktur'
+    ? [ui.structureTree, ui.structureNavList, 'Struktur', 'structureNav']
+    : [ui.materialTreeToggle, ui.materialTree, 'Quellen', 'materialNav']
+  if (flaeche) flaeche.hidden = !offen
+  // Der Abschnitt muss selbst wissen, dass sein Baum offen steht — nur dann darf er in
+  // der Spalte wachsen (onda-shell.css). Ohne das klappte der Baum zwar auf, bekam aber
+  // null Hoehe, weil die Struktur mit ihren 25 Zeilen schon alles genommen hatte.
+  document.getElementById(abschnittId)?.classList.toggle('hat-offenen-baum', offen)
+  if (!knopf) return
+  knopf.setAttribute('aria-expanded', String(offen))
+  knopf.setAttribute('aria-label', offen ? `${wort} zuklappen` : `${wort} aufklappen`)
+  knopf.title = offen ? `${wort} zuklappen` : `${wort} aufklappen`
+  knopf.replaceChildren(ondaIcon('chevron-right', { size: 16 }))
+}
 
 function setzeStrukturDokument(docId) {
   if (strukturKlappen.docId === docId) return
@@ -729,7 +991,7 @@ function renderStructureNav() {
   const doc = ctx.activeDoc()
   if (!doc) return
   let list = nav.querySelector('.structure-nav-list')
-  if (!list) { list = createNode('div', 'structure-nav-list'); nav.append(list) }
+  if (!list) { list = createNode('div', 'structure-nav-list'); list.id = 'structureNavList'; nav.append(list) }
 
   const blocks = getEditorBlocks(ctx.editor).filter(block => block.id)
   const ids = blocks.map(block => block.id)
@@ -745,170 +1007,115 @@ function renderStructureNav() {
   })
 }
 
-// --- Erweiterungen in der Seitenspalte --------------------------------------
-// Warum hier und nicht am Text: eine Erweiterung ist kein offener Posten. Sie darf
-// nicht neben der Zeile stehen und darauf warten, entschieden zu werden -- dann waere
-// sie eine Forderung wie jede Korrektur. Sie liegt in der Peripherie, findbar, ohne
-// sich aufzudraengen, und wer sie anklickt, kommt an die Stelle, um die es geht.
-const offeneErweiterungsKarten = new Set()
+// ---------- Die Struktur-Ansicht ----------
+// Das Einfuegemenue hatte bis zum 7. August 2026 ein Plus am Absatz als Oeffner. Das
+// Plus ist fort (Jakob verstand es schlicht nicht), das Menue lebt — und sein Platz
+// ist hier: wer die Struktur ansieht, ist in der Verfassung, einen Baustein
+// hinzuzufuegen. Beim Schreiben ist man das nicht.
+let strukturBlaetter = null
 
+function blockAnriss(text) {
+  const roh = String(text || '').trim()
+  if (!roh) return 'Noch leer'
+  return roh.length > 60 ? `${roh.slice(0, 59).trimEnd()}…` : roh
+}
+
+// Schreibt den Text eines Bausteins zurueck in den Editor. Nur echte Textbloecke:
+// bei einem Zitat oder einer Liste steckt der Text eine Ebene tiefer, und ihn dort
+// flach zu ueberschreiben, machte aus dem Zitat einen Absatz.
+function schreibeBlockText(blockId, text) {
+  const block = getEditorBlocks(ctx?.editor).find(kandidat => kandidat.id === blockId)
+  if (!block || !block.isTextblock) return false
+  const node = ctx.editor.state.doc.nodeAt(block.pos)
+  if (!node) return false
+  const von = block.pos + 1
+  const bis = block.pos + node.nodeSize - 1
+  const tr = ctx.editor.state.tr
+  if (text) tr.insertText(text, von, bis)
+  else if (bis > von) tr.delete(von, bis)
+  else return true
+  ctx.editor.view.dispatch(tr)
+  return true
+}
+
+function openStrukturModal(opener) {
+  const doc = ctx?.activeDoc()
+  if (!doc) return
+  strukturBlaetter = openOndaBlaetter({
+    id: 'strukturModal',
+    title: 'Struktur',
+    opener,
+    eintraege: (liste, { gewaehlt, waehle, eintrag }) => {
+      const blocks = getEditorBlocks(ctx.editor).filter(block => block.id)
+      if (!blocks.length) {
+        liste.append(createNode('p', 'onda-blaetter__tiefe-hinweis', 'Noch keine Textabschnitte.'))
+        return
+      }
+      const offen = blocks.some(block => block.id === gewaehlt) ? gewaehlt : blocks[0].id
+      blocks.forEach(block => {
+        liste.append(eintrag(block.id, ROLE_LABELS.get(block.role) || 'Freier Absatz', {
+          anriss: blockAnriss(block.excerpt || block.text),
+          gewaehlt: offen === block.id,
+          onWaehle: () => waehle(block.id),
+        }))
+      })
+    },
+    fuss: (flaeche, { gewaehlt }) => {
+      const blocks = getEditorBlocks(ctx.editor).filter(block => block.id)
+      const nach = blocks.some(block => block.id === gewaehlt) ? gewaehlt : blocks[blocks.length - 1]?.id
+      const knopf = createNode('button', 'onda-blaetter__eintrag', 'Baustein hinzufügen')
+      knopf.id = 'strukturBausteinNeu'
+      knopf.type = 'button'
+      knopf.setAttribute('aria-haspopup', 'menu')
+      knopf.disabled = !nach
+      knopf.addEventListener('click', event => openInsertMenu(nach, event.currentTarget))
+      flaeche.append(knopf)
+    },
+    tiefe: (tief, gewaehlt) => {
+      const blocks = getEditorBlocks(ctx.editor).filter(block => block.id)
+      const block = blocks.find(kandidat => kandidat.id === gewaehlt) || blocks[0]
+      if (!block) {
+        tief.append(createNode('p', 'onda-blaetter__tiefe-hinweis', 'Noch keine Textabschnitte.'))
+        return
+      }
+      tief.append(createNode('h3', 'onda-blaetter__tiefe-titel', ROLE_LABELS.get(block.role) || 'Freier Absatz'))
+      if (block.isTextblock) {
+        bearbeitbaresFeld(tief, 'Text dieses Bausteins', block.text || '', wert => {
+          schreibeBlockText(block.id, wert)
+          const anriss = strukturBlaetter?.panel
+            ?.querySelector(`[data-blatt-id="${escapedSelectorValue(block.id)}"] .onda-blaetter__eintrag-anriss`)
+          if (anriss) anriss.textContent = blockAnriss(wert)
+        }, { line: true })
+      } else {
+        tief.append(createNode(
+          'p',
+          'onda-blaetter__tiefe-hinweis',
+          'Dieser Baustein trägt eine eigene Form — Zitat, Liste oder Bild. Er lässt sich '
+          + 'im Text selbst ändern, damit die Form dabei erhalten bleibt.',
+        ))
+        tief.append(createNode('p', 'onda-blaetter__tiefe-hinweis', block.text || ''))
+      }
+      const springen = createNode('button', 'onda-blaetter__eintrag', 'Im Text anzeigen')
+      springen.type = 'button'
+      springen.addEventListener('click', () => { closeOndaDialog({ restoreFocus: false }); focusBlock(block.id) })
+      tief.append(springen)
+    },
+  })
+}
+
+// --- Erweiterungen: der zweite Kanal -----------------------------------------
+// Bis zum 7. August 2026 hatte dieser Kanal eine eigene Flaeche in der Seitenleiste.
+// Jakob hat sie gestrichen, und zwar mit Begruendung: "erkanntes und
+// erweiterungsanmerkungen sind sachen die der agent im chat oder als anmerkung
+// kommuniziert, das sind ja sachen die proaktiv umgesetzt werden koennen/sollen."
+// Eine Erweiterung ist also kein Inventar, das man durchsieht, sondern etwas, das
+// jemand sagt. Sie geht deshalb den Weg, den es dafuer schon gibt: den Chat.
+//
+// Das Datenmodell dahinter (erweiterung-model.mjs, erweiterungslauf-model.mjs) ist
+// vollstaendig geblieben — nur die Flaeche ist fort.
 function erweiterungAnriss(text) {
   const satz = String(text || '').split(/(?<=[.!?])\s/)[0] || ''
   return satz.length > 96 ? `${satz.slice(0, 95).trimEnd()}…` : satz
-}
-
-function erweiterungStelleNode(erweiterung, stelle, index) {
-  // Eine Stelle liegt entweder im offenen Text oder in einem anderen Text desselben
-  // Projekts (erweiterung-model.mjs). Der zweite Fall traegt einen docTitel und KEINE
-  // blockId. Der fremde Text wird deshalb zuerst geoeffnet und die Stelle danach aus dem
-  // gespeicherten Wortlaut neu aufgeloest. Der alte Index ist nur Historie; geraten wird
-  // auch beim Sprung nicht.
-  const ausFremdemText = Boolean(stelle.docId)
-  const grundLabel = erweiterung.art === 'verbindung'
-    ? (index === 0 ? 'Erste Stelle' : 'Zweite Stelle')
-    : 'Zur Stelle'
-  const label = ausFremdemText
-    ? `${grundLabel} — aus „${stelle.docTitel || 'einem anderen Text'}“`
-    : grundLabel
-
-  const knopf = createNode('button', 'onda-erw-stelle')
-  knopf.type = 'button'
-  if (ausFremdemText) knopf.classList.add('is-fremd')
-  knopf.append(
-    createNode('span', 'onda-erw-stelle-label', label),
-    createNode('span', 'onda-erw-stelle-zitat', erweiterungAnriss(stelle.text) || stelle.text),
-  )
-  knopf.disabled = !stelle.blockId && !stelle.docId
-  if (stelle.blockId) {
-    knopf.addEventListener('click', () => focusBlock(stelle.blockId))
-  } else if (stelle.docId) {
-    knopf.addEventListener('click', () => {
-      const ziel = ctx?.state?.docs?.find(doc => doc?.id === stelle.docId && !doc.trashed)
-      if (!ziel || typeof ctx?.ops?.openDoc !== 'function') return
-      ctx.ops.openDoc(stelle.docId)
-      requestAnimationFrame(() => {
-        const treffer = getEditorBlocks(ctx.editor)
-          .filter(block => String(block.text || '').includes(String(stelle.text || '')))
-        if (treffer.length === 1 && treffer[0].id) focusBlock(treffer[0].id)
-      })
-    })
-  }
-  return knopf
-}
-
-function erweiterungKarte(doc, erweiterung) {
-  const karte = createNode('article', 'onda-erw')
-  karte.dataset.art = erweiterung.art
-  karte.dataset.erweiterungId = erweiterung.id
-  if (erweiterung.status === 'gemerkt') karte.classList.add('is-gemerkt')
-
-  const offen = offeneErweiterungsKarten.has(erweiterung.id)
-  const kopf = createNode('button', 'onda-erw-kopf')
-  kopf.type = 'button'
-  kopf.setAttribute('aria-expanded', offen ? 'true' : 'false')
-  kopf.append(createNode('span', 'onda-erw-art', ART_LABEL[erweiterung.art]))
-  // Zugeklappt traegt der Kopf den ersten Satz, aufgeklappt nur noch die Art:
-  // sonst stuende derselbe Satz zweimal untereinander -- derselbe Fehler wie
-  // vorher in der Struktur-Spalte, nur an einer anderen Stelle.
-  if (!offen) kopf.append(createNode('span', 'onda-erw-anriss', erweiterungAnriss(erweiterung.gedanke)))
-  // Vorlesegeraete bekommen den Anriss immer, auch aufgeklappt — dort ist die
-  // Wiederholung keine Doppelung, sondern die Beschriftung des Knopfes.
-  kopf.setAttribute('aria-label', `${ART_LABEL[erweiterung.art]}: ${erweiterungAnriss(erweiterung.gedanke)}`)
-  kopf.addEventListener('click', () => {
-    if (offeneErweiterungsKarten.has(erweiterung.id)) offeneErweiterungsKarten.delete(erweiterung.id)
-    else offeneErweiterungsKarten.add(erweiterung.id)
-    renderErweiterungen()
-  })
-  karte.append(kopf)
-
-  if (!offen) return karte
-
-  const koerper = createNode('div', 'onda-erw-koerper')
-  koerper.append(createNode('p', 'onda-erw-was', ART_ERKLAERUNG[erweiterung.art]))
-  koerper.append(createNode('p', 'onda-erw-gedanke', erweiterung.gedanke))
-
-  // Das Muster ist der eigentliche Ertrag: der Einzelfall hilft einmal, das Prinzip
-  // beim naechsten Text von allein.
-  const muster = createNode('p', 'onda-erw-muster')
-  muster.append(
-    createNode('span', 'onda-erw-muster-label', 'Muster'),
-    createNode('span', 'onda-erw-muster-text', erweiterung.muster),
-  )
-  koerper.append(muster)
-
-  if (erweiterung.stellen.length) {
-    const stellen = createNode('div', 'onda-erw-stellen')
-    erweiterung.stellen.forEach((stelle, index) => {
-      stellen.append(erweiterungStelleNode(erweiterung, stelle, index))
-    })
-    koerper.append(stellen)
-  }
-
-  const gesten = createNode('div', 'onda-erw-gesten')
-  const merken = createNode('button', 'onda-erw-geste', erweiterung.status === 'gemerkt' ? 'Gemerkt' : 'Merken')
-  merken.type = 'button'
-  merken.disabled = erweiterung.status === 'gemerkt'
-  merken.addEventListener('click', () => {
-    merkeErweiterung(doc, erweiterung.id)
-    // Das Prinzip starb bisher auf der Karte. Es ist der einzige Teil einer
-    // Erweiterung, der beim naechsten Text von allein wieder trueggt -- also gehoert
-    // es der Person, nicht dem Dokument.
-    merkeErkanntes(erweiterung.muster, 'erweiterung', erweiterung.stellen?.[0]?.text || '', 'idee')
-    ctx?.scheduleSave()
-    refreshWorkspace()
-  })
-  const weglegen = createNode('button', 'onda-erw-geste is-still', 'Weglegen')
-  weglegen.type = 'button'
-  weglegen.addEventListener('click', () => {
-    legeErweiterungWeg(doc, erweiterung.id)
-    offeneErweiterungsKarten.delete(erweiterung.id)
-    ctx?.scheduleSave()
-    renderErweiterungen()
-  })
-  gesten.append(merken, weglegen)
-  koerper.append(gesten)
-
-  karte.append(koerper)
-  return karte
-}
-
-// Was auf seinen Moment wartet, bleibt auffindbar. Ohne diese Zeile waere die
-// Zurueckhaltung eine Unterschlagung: wer nie lange genug pausiert, saehe eine
-// Strukturfrage nie. Die Zeile drueckt nicht — sie steht da und laesst sich ziehen.
-function renderZurueckgehalten() {
-  const ui = elements()
-  const bereich = ui.zurueckgehalten
-  const doc = ctx?.activeDoc()
-  if (!bereich) return
-  if (!doc) { bereich.hidden = true; return }
-
-  const moment = momentJetzt(doc.id)
-  const wartend = (doc.findings || []).filter(finding => (
-    finding?.status === 'open'
-    && finding.placement === 'passage'
-    && !darfErscheinen(artVon(finding), moment, schonGezeigt(doc.id, finding.id))
-  ))
-
-  if (!wartend.length) { bereich.hidden = true; bereich.replaceChildren(); return }
-
-  const knopf = createNode('button', 'onda-zurueck-knopf')
-  knopf.type = 'button'
-  knopf.append(
-    createNode('span', 'onda-zurueck-zahl', String(wartend.length)),
-    createNode(
-      'span',
-      'onda-zurueck-text',
-      wartend.length === 1
-        ? 'Hinweis wartet aufs Aufschauen — jetzt zeigen'
-        : 'Hinweise warten aufs Aufschauen — jetzt zeigen',
-    ),
-  )
-  knopf.addEventListener('click', () => {
-    momentVonHand = true
-    refreshWorkspace()
-  })
-  bereich.replaceChildren(knopf)
-  bereich.hidden = false
 }
 
 // Der einzige Weg, auf dem etwas in den Personen-Speicher gelangt. Bewusst EINE
@@ -930,13 +1137,22 @@ function merkeErkanntes(satz, herkunft, beleg = '', dimension = 'allgemein') {
   return ergebnis.eintrag
 }
 
-// Die leiseste Flaeche der Spalte. Kein Angebot, keine Aufgabe — ein Rueckblick.
+// Die leiseste Flaeche, die es gibt. Kein Angebot, keine Aufgabe — ein Rueckblick.
 // Jede Zeile ist mit einer Geste zurueckzunehmen; ohne das wiederholte sich ein
 // falscher Satz in jedem kuenftigen Text, und der Speicher vergiftete sich selbst.
-function renderErkanntes() {
-  const bereich = elements().erkanntes
-  if (!bereich || !ctx?.state) return
-  const eyebrow = bereich.querySelector('.onda-eyebrow')
+//
+// Seit dem 7. August 2026 steht der Rueckblick nicht mehr in der Seitenleiste. Er ist
+// kein proaktives Angebot, das der Agent im Chat sagen koennte, sondern ein Blick
+// zurueck auf den Personenspeicher — sein Platz ist deshalb das
+// Projektverstaendnis-Fenster, in dem auch das Projektgedaechtnis liegt. Die Flaeche
+// merkt sich hier, damit die Gesten (bestaetigen, zuruecknehmen) sich selbst neu
+// zeichnen koennen, ohne das ganze Fenster neu aufzubauen.
+let erkanntesFlaeche = null
+
+function renderErkanntes(ziel = erkanntesFlaeche) {
+  const bereich = ziel
+  if (!bereich || !bereich.isConnected || !ctx?.state) return
+  erkanntesFlaeche = bereich
   const liste = erkanntesListe(ctx.state.memoryStore)
   const entwicklung = projiziereAutorentwicklung(ctx.state.memoryStore)
   if (!Array.isArray(ctx.state.memoryStore.voiceProposals)) ctx.state.memoryStore.voiceProposals = []
@@ -1096,7 +1312,7 @@ function renderErkanntes() {
     const gesten = createNode('div', 'onda-rueckkopplung-gesten')
     const zustimmen = createNode(
       'button',
-      'onda-erw-geste',
+      'onda-erk-geste',
       kalibrierung.status === 'approved' ? 'Wird berücksichtigt' : 'Bei der Darreichung berücksichtigen',
     )
     zustimmen.type = 'button'
@@ -1112,7 +1328,7 @@ function renderErkanntes() {
     })
     const ablehnen = createNode(
       'button',
-      'onda-erw-geste is-still',
+      'onda-erk-geste is-still',
       kalibrierung.status === 'approved' ? 'Nicht mehr berücksichtigen' : 'Nicht verwenden',
     )
     ablehnen.type = 'button'
@@ -1131,40 +1347,39 @@ function renderErkanntes() {
     kinder.push(details)
   }
 
-  bereich.replaceChildren(...(eyebrow ? [eyebrow, ...kinder] : kinder))
+  bereich.replaceChildren(...kinder)
 }
 
+// Der Kanal spricht jetzt im Chat statt in einer eigenen Spalte. Eine Erweiterung ist
+// etwas, das jemand SAGT — "mir faellt da noch was ein" —, kein Posten in einem Regal.
+//
+// Die Nachricht traegt die Kennung der Erweiterung. Ohne das stuende sie bei jedem
+// Zeichnen ein zweites Mal im Verlauf; so findet sie sich wieder und bleibt eine.
+// Gezaehlt wird nichts.
 function renderErweiterungen() {
-  const ui = elements()
-  const bereich = ui.erweiterungen
   const doc = ctx?.activeDoc()
-  if (!bereich || !doc) return
+  const workspace = activeWorkspace()
+  if (!doc || !workspace) return
   ensureErweiterungen(doc)
 
-  const eyebrow = bereich.querySelector('.onda-eyebrow')
-  const liste = sichtbareErweiterungen(doc)
-  const kinder = []
-
-  if (!liste.length) {
-    kinder.push(createNode(
-      'p',
-      'onda-erw-leer',
-      'Hier sammelt sich, was der Text noch hergibt: Weiterführungen, Nachbargebiete, '
-      + 'Verbindungen. Es kommt beim Aufschauen, nicht beim Schreiben.',
-    ))
-  } else {
-    liste.forEach(erweiterung => kinder.push(erweiterungKarte(doc, erweiterung)))
-  }
-
-  // Jeder Moment kann auch von Hand gezogen werden — proaktiv heisst nicht,
-  // warten zu muessen.
-  const fragen = createNode('button', 'onda-erw-fragen', 'Was fällt dir noch ein?')
-  fragen.type = 'button'
-  fragen.disabled = erweiterungslaufAktiv || istBeispielDokument(doc)
-  fragen.addEventListener('click', () => { starteErweiterungslauf() })
-  kinder.push(fragen)
-
-  bereich.replaceChildren(...(eyebrow ? [eyebrow, ...kinder] : kinder))
+  sichtbareErweiterungen(doc).forEach(erweiterung => {
+    const id = `erweiterung-${erweiterung.id}`
+    if (workspace.agent.messages.some(vorhanden => vorhanden.id === id)) return
+    const anriss = erweiterungAnriss(erweiterung.gedanke) || erweiterung.gedanke
+    workspace.agent.messages.push({
+      id,
+      status: 'new',
+      // 0 heisst: KEINE zusaetzliche Wartezeit ueber die drei Momente hinaus
+      // (scheduleAgentInitiative rechnet `earliestAt - now` gegen die Schreibpause).
+      // Die Nachricht kommt also, wenn man ohnehin aufschaut — nicht sofort, aber auch
+      // nicht erst auf Aufforderung. Der Kommentar behauptete hier einmal, sie halte
+      // sich ganz zurueck; das stimmte nicht, und ein Kanal, den niemand sieht, waere
+      // auch nicht das, was Jakob gemeint hat („der Agent kommuniziert es im Chat").
+      earliestAt: 0,
+      text: `${ART_LABEL[erweiterung.art]}: ${anriss}\n\n${ART_ERKLAERUNG[erweiterung.art]}\n\nMuster: ${erweiterung.muster}`,
+      thread: [],
+    })
+  })
 }
 
 function closeOndaDialog({ restoreFocus = true } = {}) {
@@ -1182,10 +1397,18 @@ function dialogFocusables(panel) {
     .filter(node => !node.disabled && node.offsetParent !== null)
 }
 
-function openOndaDialog({ id, title, opener, build }) {
+// breit: die Blaetter-Vorlage. Grosses Fenster ueber dem Text, der Text bleibt am
+// Rand sichtbar und abgedunkelt — man weiss, dass man nur nachschaut.
+// onDocChange: das offene Fenster zeichnet sich nach, wenn sich das Dokument unter ihm
+// aendert (Baustein hinzugefuegt). Ohne das stuende die Liste veraltet da.
+function openOndaDialog({ id, title, opener, build, breit = false, onDocChange = null }) {
   closeOndaDialog({ restoreFocus: false })
   const scrim = createNode('div', 'onda-dialog-scrim')
   const panel = createNode('section', 'onda-dialog')
+  if (breit) {
+    scrim.classList.add('onda-dialog-scrim--breit')
+    panel.classList.add('onda-dialog--breit')
+  }
   panel.id = id
   panel.setAttribute('role', 'dialog')
   panel.setAttribute('aria-modal', 'true')
@@ -1211,6 +1434,10 @@ function openOndaDialog({ id, title, opener, build }) {
   const keyHandler = event => {
     if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeOndaDialog(); return }
     if (event.key !== 'Tab') return
+    // Das Einfuegemenue haengt an #editorView, nicht im Fenster. Ohne diese Ausnahme
+    // risse die Fokusfalle den Tastaturweg aus dem gerade geoeffneten Menue zurueck
+    // ins Fenster, und das Menue waere mit der Tastatur nicht zu bedienen.
+    if (insertMenu?.node.contains(document.activeElement)) return
     const items = dialogFocusables(panel)
     if (!items.length) return
     const first = items[0]
@@ -1220,35 +1447,512 @@ function openOndaDialog({ id, title, opener, build }) {
   }
   document.addEventListener('keydown', keyHandler, true)
   document.getElementById('editorView').append(scrim)
-  ondaDialog = { scrim, panel, opener: opener || document.activeElement, keyHandler }
+  ondaDialog = { scrim, panel, opener: opener || document.activeElement, keyHandler, onDocChange }
   requestAnimationFrame(() => { (dialogFocusables(panel)[0] || close).focus({ preventScroll: true }) })
   return panel
 }
 
+// Die Blaetter-Vorlage: EIN Fenster fuer alle drei Abschnitte. Links die Eintraege,
+// rechts der vertiefende Text zum gewaehlten — und rechts darf ueberall
+// hineingeschrieben werden.
+//
+// Der gewaehlte Eintrag lebt hier und nicht im Dokument: welche Zeile gerade offen
+// steht, ist eine Frage des Hinschauens und keine Eigenschaft des Textes.
+function openOndaBlaetter({ id, title, opener, eintraege, tiefe, fuss = null, onDocChange = null }) {
+  let gewaehlt = null
+  let spalte = null
+  let liste = null
+  let fussFlaeche = null
+  let tief = null
+
+  const zeichneTiefe = () => {
+    if (!tief) return
+    // Tippt jemand gerade rechts, nicht neu aufbauen: sonst springt der Cursor.
+    if (tief.contains(document.activeElement)) return
+    tief.replaceChildren()
+    tiefe(tief, gewaehlt)
+  }
+
+  const waehle = schluessel => {
+    gewaehlt = schluessel
+    zeichneListe()
+    zeichneTiefe()
+  }
+
+  function zeichneListe() {
+    if (!liste) return
+    // Der Fokus muss den Neuaufbau ueberleben, und zwar in BEIDEN Stuecken der linken
+    // Spalte: „Baustein hinzufuegen" steht seit dem Umbau im festen Fuss und nicht mehr
+    // in der Liste — ohne die Kennung faellt der Fokus nach dem Einfuegen ins Nichts.
+    const merker = merkeFokus()
+    liste.replaceChildren()
+    eintraege(liste, { gewaehlt, waehle, eintrag: blattEintrag })
+    if (fuss && fussFlaeche) {
+      fussFlaeche.replaceChildren()
+      fuss(fussFlaeche, { gewaehlt })
+    }
+    holeFokus(merker)
+  }
+
+  function merkeFokus() {
+    const aktiv = document.activeElement
+    if (!spalte?.contains(aktiv)) return null
+    return { blatt: aktiv?.dataset?.blattId || null, kennung: aktiv?.id || null }
+  }
+
+  function holeFokus(merker) {
+    if (!merker) return
+    const ziel = (merker.blatt
+      && liste.querySelector(`[data-blatt-id="${escapedSelectorValue(merker.blatt)}"]`))
+      || (merker.kennung && document.getElementById(merker.kennung))
+    ziel?.focus({ preventScroll: true })
+  }
+
+  const panel = openOndaDialog({
+    id,
+    title,
+    opener,
+    breit: true,
+    onDocChange: () => { zeichneListe(); zeichneTiefe(); onDocChange?.() },
+    build: body => {
+      body.classList.add('onda-blaetter')
+      spalte = createNode('div', 'onda-blaetter__spalte')
+      liste = blaetterListe(id)
+      fussFlaeche = createNode('div', 'onda-blaetter__fuss')
+      spalte.append(liste, fussFlaeche)
+      tief = blaetterTiefe(id)
+      body.append(spalte, tief)
+      zeichneListe()
+      zeichneTiefe()
+    },
+  })
+  return { panel, waehle, zeichne: () => { zeichneListe(); zeichneTiefe() } }
+}
+
+// Die beiden Spalten. Bewusst KEINE Registerkarten-Rollen (tablist/tab/tabpanel):
+// in der linken Spalte stehen neben den Eintraegen auch Rubriken und Knoepfe, die
+// eigene Fenster oeffnen — role="tablist" verlangt aber ausschliesslich Registerkarten
+// als Kinder, und axe meldet das zu Recht als kritischen Fehler. Die Auswahl sagt
+// aria-current, und das gilt an jedem Element.
+function blaetterListe(id) {
+  const liste = createNode('div', 'onda-blaetter__liste')
+  liste.id = `${id}-liste`
+  liste.setAttribute('aria-label', 'Einträge')
+  return liste
+}
+
+function blaetterTiefe(id) {
+  const tief = createNode('div', 'onda-blaetter__tiefe')
+  tief.id = `${id}-tiefe`
+  tief.setAttribute('role', 'region')
+  tief.setAttribute('aria-label', 'Der gewählte Eintrag')
+  return tief
+}
+
+// Ein Eintrag der linken Spalte. Name plus, wo es hilft, ein Anriss des Inhalts.
+function blattEintrag(schluessel, name, { anriss = '', gewaehlt = false, onWaehle = null } = {}) {
+  const knopf = createNode('button', 'onda-blaetter__eintrag')
+  knopf.type = 'button'
+  knopf.dataset.blattId = schluessel
+  if (gewaehlt) knopf.setAttribute('aria-current', 'true')
+  knopf.append(createNode('span', 'onda-blaetter__eintrag-name', name))
+  if (anriss) knopf.append(createNode('span', 'onda-blaetter__eintrag-anriss', anriss))
+  if (onWaehle) knopf.addEventListener('click', onWaehle)
+  return knopf
+}
+
+// Die Zahl am Namen zaehlt BESTAND, keine Anmerkungen. docs/PHILOSOPHIE.md §1 verbietet
+// das Zaehlen von Anmerkungen — wie viele Quellen im Projekt liegen, ist eine Auskunft.
 function renderMaterialEntry() {
   const button = document.getElementById('materialSources')
   if (!button) return
   const project = dokumentProjekt()
   const count = Array.isArray(project?.sources) ? project.sources.length : 0
   button.setAttribute('aria-haspopup', 'dialog')
-  button.replaceChildren(
-    createNode('span', 'onda-material-label', 'Quellen im Projekt'),
-    createNode('span', 'onda-badge onda-material-count', String(count)),
-  )
+  const zaehler = createNode('span', 'onda-badge onda-material-count', String(count))
+  zaehler.id = 'materialSourcesCount'
+  button.replaceChildren(createNode('span', 'onda-material-label', 'Quellen'), zaehler)
 }
 
-function openProjectSourcesModal(opener) {
+// Welche Themen im Baum offen stehen. Wie strukturKlappen bewusst NICHT im Dokument:
+// ob eine Gruppe gerade aufgeklappt ist, ist eine Frage des Hinschauens und keine
+// Eigenschaft des Projekts — sie gehoert nicht in eine Datei, die man exportiert.
+// Beim Projektwechsel faellt der Merker, weil die Kennungen dann andere meinen.
+let quellenKlappen = { projectId: null, offen: new Set() }
+
+function quellenKlappenFuer(projectId) {
+  if (quellenKlappen.projectId !== projectId) quellenKlappen = { projectId, offen: new Set() }
+  return quellenKlappen.offen
+}
+
+// Der Baum unter „Quellen": nach Thema, so wie der Agent sie gebildet und benannt hat.
+// Dieselben zwei Gesten wie eine Abschnittszeile darueber, eine Ebene tiefer: der PFEIL
+// klappt die Gruppe auf und zu, der NAME oeffnet das Quellen-Fenster bei dieser Gruppe.
+// Ein einziger Knopf koennte keins von beidem ankuendigen — aria-expanded und
+// aria-haspopup widersprechen sich am selben Element.
+//
+// Bewusst KEINE Zahl an der Gruppenzeile, obwohl der Abschnittsname darueber eine
+// traegt: die Gesamtzahl ist eine Auskunft, sechs Zahlen untereinander sind eine
+// Punktetafel. Wie viele in einer Gruppe liegen, sagt der aufgeklappte Baum selbst —
+// und Vorlesegeraete bekommen es IMMER gesagt, im Namen des Knopfes (harte Regel 3).
+function renderMaterialTree() {
+  const baum = elements().materialTree
+  if (!baum) return
+  const project = dokumentProjekt()
+  if (!project) { baum.replaceChildren(); return }
+  const offen = quellenKlappenFuer(project.id)
+  const gruppen = themenBaum(project)
+  const kinder = []
+  if (!gruppen.length) {
+    kinder.push(createNode('p', 'onda-baum-leer', 'Noch keine Quellen im Projekt.'))
+  }
+  gruppen.forEach(gruppe => {
+    const flaeche = createNode('div', 'onda-baum-thema')
+    const kopf = createNode('div', 'onda-baum-kopf')
+    const kinderId = `quellenBaum-${gruppe.id}`
+    const istOffen = offen.has(gruppe.id)
+    const anzahl = gruppe.quellen.length
+    const quellenWort = anzahl === 1 ? '1 Quelle' : `${anzahl} Quellen`
+
+    const pfeil = createNode('button', 'onda-baum-pfeil')
+    pfeil.type = 'button'
+    pfeil.dataset.themaId = gruppe.id
+    pfeil.setAttribute('aria-expanded', String(istOffen))
+    pfeil.setAttribute('aria-controls', kinderId)
+    pfeil.setAttribute('aria-label', `${gruppe.name} ${istOffen ? 'zuklappen' : 'aufklappen'}`)
+    pfeil.title = istOffen ? 'Zuklappen' : 'Aufklappen'
+    pfeil.append(ondaIcon('chevron-right', { size: 14 }))
+    pfeil.addEventListener('click', () => {
+      if (offen.has(gruppe.id)) offen.delete(gruppe.id)
+      else offen.add(gruppe.id)
+      renderMaterialTree()
+      // Der Fokus bleibt am Pfeil, den man gerade gedrueckt hat — sonst faellt er beim
+      // Neuaufbau auf den Seitenanfang, und Tastaturbedienung waere unbrauchbar.
+      elements().materialTree
+        ?.querySelector(`.onda-baum-pfeil[data-thema-id="${escapedSelectorValue(gruppe.id)}"]`)
+        ?.focus({ preventScroll: true })
+    })
+
+    const name = createNode('button', 'onda-baum-name')
+    name.type = 'button'
+    name.dataset.themaId = gruppe.id
+    name.setAttribute('aria-haspopup', 'dialog')
+    name.setAttribute('aria-controls', 'materialModal')
+    name.setAttribute('aria-label', `${gruppe.name} öffnen, ${quellenWort}`)
+    name.append(createNode('span', 'onda-baum-name-text', gruppe.name))
+    name.addEventListener('click', event => openProjectSourcesModal(event.currentTarget, gruppe.id))
+
+    kopf.append(pfeil, name)
+    flaeche.append(kopf)
+
+    const kinderFlaeche = createNode('div', 'onda-baum-kinder')
+    kinderFlaeche.id = kinderId
+    kinderFlaeche.setAttribute('role', 'group')
+    kinderFlaeche.setAttribute('aria-label', gruppe.name)
+    kinderFlaeche.hidden = !istOffen
+    gruppe.quellen.forEach(quelle => {
+      const knopf = createNode('button', 'onda-baum-quelle')
+      knopf.append(createNode('span', 'onda-baum-quelle-text', quellenTitel(quelle)))
+      knopf.type = 'button'
+      knopf.dataset.quelleId = quelle.id
+      knopf.setAttribute('aria-haspopup', 'dialog')
+      knopf.setAttribute('aria-controls', 'materialModal')
+      knopf.addEventListener('click', event => {
+        openProjectSourcesModal(event.currentTarget, quelle.id)
+      })
+      kinderFlaeche.append(knopf)
+    })
+    if (!gruppe.quellen.length) {
+      kinderFlaeche.append(createNode('p', 'onda-baum-leer', 'Noch nichts hier.'))
+    }
+    flaeche.append(kinderFlaeche)
+    kinder.push(flaeche)
+  })
+  baum.replaceChildren(...kinder)
+}
+
+// Das Quellen-Fenster in derselben Blaetter-Gestalt wie die anderen beiden: links die
+// Eintraege, rechts die Vertiefung. Es baut die Vertiefung ABSICHTLICH selbst und
+// nicht ueber openOndaBlaetter — die Quellenbibliothek zeichnet sich beim Aufnehmen,
+// Lesen und Zurueckgehen selbst in denselben Knoten. Wuerde die Vorlage ihn bei jedem
+// Listen-Neuaufbau leeren, riss sie der Bibliothek den Boden unter den Fuessen weg.
+function openProjectSourcesModal(opener, gewuenschterEintrag = null) {
   const project = dokumentProjekt()
   const sourceLibrary = createSourceLibraryUi({
     context: ctx,
     createNode,
-    onCountChange: renderMaterialEntry,
+    onCountChange: () => { renderMaterialEntry(); renderMaterialTree() },
     safeHttpsUrl,
     openSecureExternal,
   })
-  openOndaDialog({ id: 'materialModal', title: 'Quellen im Projekt', opener, build: body => {
-    sourceLibrary.renderProjectSourceLibrary(body, project)
-  }})
+  // 'bibliothek' ist die Voreinstellung: wer die Quellen oeffnet, will meistens die
+  // ganze Bibliothek und nicht eine einzelne Zeile. gewuenschterEintrag ist entweder
+  // eine Quellen- oder eine Themenkennung — beide fuehren in dieselbe rechte Tafel.
+  let gewaehlt = gewuenschterEintrag || 'bibliothek'
+  let liste = null
+  let fussFlaeche = null
+  let tief = null
+
+  // Eine Meldezeile, die den Neuaufbau ueberlebt: ein Vorlesegeraet kuendigt nur an,
+  // was sich in einem Knoten aendert, den es schon kennt. Wuerde sie bei jedem
+  // Zeichnen neu entstehen, saehe niemand je, dass Onda gerade ordnet.
+  const meldung = createNode('p', 'onda-blaetter__meldung')
+  meldung.id = 'quellenMeldung'
+  meldung.setAttribute('role', 'status')
+  meldung.setAttribute('aria-live', 'polite')
+  meldung.hidden = true
+  const melde = text => {
+    meldung.textContent = text || ''
+    meldung.hidden = !text
+  }
+
+  const istThema = schluessel => (
+    schluessel === OHNE_THEMA || ensureQuellenThemen(project).some(thema => thema.id === schluessel)
+  )
+
+  // Die rechte Tafel einer GRUPPE: ihr Name, der Satz darunter, ihre Quellen — und der
+  // Weg, sie wieder loszuwerden. Beides darf der Mensch aendern; wo er es tut, gehoert
+  // die Gruppe ihm, und der naechste Lauf des Agenten laesst sie in Ruhe.
+  const zeichneThema = themaId => {
+    const gruppe = themenBaum(project).find(kandidat => kandidat.id === themaId)
+    if (!gruppe) { gewaehlt = 'bibliothek'; zeichneTiefe(); return }
+    const istOhneThema = gruppe.id === OHNE_THEMA
+
+    tief.append(createNode('h3', 'onda-blaetter__tiefe-titel', gruppe.name))
+    if (istOhneThema) {
+      tief.append(createNode(
+        'p',
+        'onda-blaetter__tiefe-hinweis',
+        'Diese Quellen hat noch niemand einem Thema zugeordnet. Das ist kein Mangel — '
+        + 'wähle eine aus und gib ihr ein Thema, oder lass Onda die Quellen ordnen.',
+      ))
+    } else {
+      bearbeitbaresFeld(tief, 'Name der Gruppe', gruppe.name, wert => {
+        benenneThemaUm(project, gruppe.id, wert)
+        ctx?.scheduleSave()
+        renderMaterialTree()
+        const zeile = liste?.querySelector(`[data-thema-id="${escapedSelectorValue(gruppe.id)}"] .onda-blaetter__eintrag-name`)
+        if (zeile) zeile.textContent = String(wert || '').trim() || gruppe.name
+      }, { kurz: true })
+      bearbeitbaresFeld(tief, 'Was diese Quellen gemeinsam tragen', gruppe.warum || '', wert => {
+        beschreibeThema(project, gruppe.id, wert)
+        ctx?.scheduleSave()
+      })
+    }
+
+    const quellenFlaeche = createNode('div', 'onda-quellen-gruppe')
+    quellenFlaeche.append(createNode('span', 'onda-pv-label', 'Quellen in dieser Gruppe'))
+    if (!gruppe.quellen.length) {
+      quellenFlaeche.append(createNode('p', 'onda-material-empty', 'Noch keine Quelle hier.'))
+    }
+    gruppe.quellen.forEach(quelle => {
+      const knopf = createNode('button', 'onda-blaetter__eintrag', quellenTitel(quelle))
+      knopf.type = 'button'
+      knopf.addEventListener('click', () => { gewaehlt = quelle.id; zeichneListe(); zeichneTiefe() })
+      quellenFlaeche.append(knopf)
+    })
+    tief.append(quellenFlaeche)
+
+    if (!istOhneThema) {
+      const weg = createNode('button', 'onda-blaetter__eintrag onda-blaetter__eintrag--still', 'Gruppe auflösen')
+      weg.type = 'button'
+      weg.dataset.themaId = gruppe.id
+      // „Aufloesen", nicht „loeschen": die Quellen bleiben, nur die Kiste geht. Der
+      // Wortlaut sagt genau das, damit niemand fuerchtet, sein Material zu verlieren.
+      weg.setAttribute('aria-label', `Gruppe ${gruppe.name} auflösen — die Quellen bleiben und stehen dann ohne Thema`)
+      weg.addEventListener('click', () => {
+        const ergebnis = loescheThema(project, gruppe.id)
+        ctx?.scheduleSave()
+        gewaehlt = 'bibliothek'
+        // Der Fokus steht auf einem Knopf, den es gleich nicht mehr gibt — und er steht
+        // in der rechten Tafel. Ohne ihn vorher wegzunehmen, greift die Tipp-Sperre in
+        // zeichneTiefe, und dort stuende weiter eine Gruppe, die schon aufgeloest ist.
+        weg.blur()
+        renderMaterialTree()
+        zeichneListe()
+        zeichneTiefe()
+        // Und danach an eine Stelle, die es noch gibt: ein Fenster ohne Fokus faengt
+        // den Tastaturweg nicht mehr, und die Eingabetaste liefe ins Leere.
+        liste?.querySelector('[data-blatt-id="bibliothek"]')?.focus({ preventScroll: true })
+        if (ergebnis) {
+          const anzahl = ergebnis.freigewordene.length
+          melde(anzahl
+            ? `„${ergebnis.name}" ist aufgelöst. ${anzahl === 1 ? 'Die Quelle steht' : `Die ${anzahl} Quellen stehen`} jetzt ohne Thema.`
+            : `„${ergebnis.name}" ist aufgelöst.`)
+        }
+      })
+      tief.append(weg)
+    }
+  }
+
+  // Die rechte Tafel einer QUELLE: was sie ist, und in welchem Thema sie liegt.
+  const zeichneQuelle = quelle => {
+    tief.append(createNode('h3', 'onda-blaetter__tiefe-titel', quellenTitel(quelle)))
+    if (quelle.claim) tief.append(createNode('p', 'onda-blaetter__tiefe-hinweis', quelle.claim))
+
+    const gruppen = themenBaum(project)
+    const aktuelles = gruppen.find(gruppe => gruppe.quellen.some(kandidat => kandidat.id === quelle.id))
+
+    // Verschieben ohne Ziehen: Ziehen ist auf dem Trackpad zaeh und fuer Vorlesegeraete
+    // tot. Eine Auswahlliste kann beides und sagt zugleich, welche Gruppen es gibt.
+    const feld = createNode('div', 'onda-pv-field')
+    const labelRow = createNode('div', 'onda-pv-label-row')
+    labelRow.append(createNode('span', 'onda-pv-label', 'Thema'))
+    feld.append(labelRow)
+    const wahl = createNode('select', 'onda-quellen-thema-wahl')
+    wahl.setAttribute('aria-label', `Thema von ${quellenTitel(quelle)}`)
+    ensureQuellenThemen(project).forEach(thema => {
+      const option = createNode('option', '', thema.name)
+      option.value = thema.id
+      wahl.append(option)
+    })
+    const ohne = createNode('option', '', OHNE_THEMA_NAME)
+    ohne.value = OHNE_THEMA
+    wahl.append(ohne)
+    wahl.value = aktuelles && aktuelles.id !== OHNE_THEMA ? aktuelles.id : OHNE_THEMA
+    wahl.addEventListener('change', () => {
+      verschiebeQuelle(project, quelle.id, wahl.value)
+      ctx?.scheduleSave()
+      renderMaterialTree()
+      zeichneListe()
+      zeichneTiefe()
+      const ziel = wahl.value === OHNE_THEMA
+        ? OHNE_THEMA_NAME
+        : (ensureQuellenThemen(project).find(thema => thema.id === wahl.value)?.name || OHNE_THEMA_NAME)
+      melde(`„${quellenTitel(quelle)}" steht jetzt unter „${ziel}".`)
+    })
+    feld.append(wahl)
+    tief.append(feld)
+
+    const zurueck = createNode('button', 'onda-blaetter__eintrag', 'Zur ganzen Quellenbibliothek')
+    zurueck.type = 'button'
+    zurueck.addEventListener('click', () => { gewaehlt = 'bibliothek'; zeichneListe(); zeichneTiefe() })
+    tief.append(zurueck)
+  }
+
+  const zeichneTiefe = () => {
+    if (!tief) return
+    // Tippt jemand gerade rechts in ein Feld, nicht neu aufbauen: sonst springt der
+    // Cursor mitten im Wort weg. Dieselbe Regel wie in der Blaetter-Vorlage.
+    if (tief.contains(document.activeElement)) return
+    tief.replaceChildren()
+    if (gewaehlt === 'bibliothek') {
+      sourceLibrary.renderProjectSourceLibrary(tief, project)
+      return
+    }
+    if (istThema(gewaehlt)) { zeichneThema(gewaehlt); return }
+    const quelle = (project?.sources || []).find(kandidat => kandidat.id === gewaehlt)
+    if (!quelle) { sourceLibrary.renderProjectSourceLibrary(tief, project); return }
+    zeichneQuelle(quelle)
+  }
+
+  function zeichneListe() {
+    if (!liste) return
+    liste.replaceChildren()
+    liste.append(blattEintrag('bibliothek', 'Quellenbibliothek', {
+      gewaehlt: gewaehlt === 'bibliothek',
+      onWaehle: () => { gewaehlt = 'bibliothek'; zeichneListe(); zeichneTiefe() },
+    }))
+    themenBaum(project).forEach(gruppe => {
+      // Die Gruppe ist selbst ein Eintrag und keine tote Rubrik mehr: nur so kommt man
+      // an ihren Namen, ihren Satz und den Weg, sie aufzuloesen.
+      const gruppenKnopf = blattEintrag(gruppe.id, gruppe.name, {
+        anriss: gruppe.warum || '',
+        gewaehlt: gewaehlt === gruppe.id,
+        onWaehle: () => { gewaehlt = gruppe.id; zeichneListe(); zeichneTiefe() },
+      })
+      gruppenKnopf.classList.add('onda-blaetter__eintrag--gruppe')
+      gruppenKnopf.dataset.themaId = gruppe.id
+      liste.append(gruppenKnopf)
+      gruppe.quellen.forEach(quelle => {
+        const eintrag = blattEintrag(quelle.id, quellenTitel(quelle), {
+          gewaehlt: gewaehlt === quelle.id,
+          onWaehle: () => { gewaehlt = quelle.id; zeichneListe(); zeichneTiefe() },
+        })
+        eintrag.classList.add('onda-blaetter__eintrag--kind')
+        liste.append(eintrag)
+      })
+    })
+    zeichneFuss()
+  }
+
+  // Der feste Streifen unter der Liste — dieselbe Stelle wie im Struktur-Fenster.
+  function zeichneFuss() {
+    if (!fussFlaeche) return
+    fussFlaeche.replaceChildren()
+    const ordnen = createNode('button', 'onda-blaetter__eintrag', 'Nach Thema ordnen')
+    ordnen.id = 'quellenOrdnen'
+    ordnen.type = 'button'
+    ordnen.disabled = kanalGesperrt('quellen')
+    ordnen.addEventListener('click', async () => {
+      melde('Onda ordnet die Quellen …')
+      ordnen.disabled = true
+      const ergebnis = await fuehreQuellenlaufAus({ vonHand: true })
+      renderMaterialTree()
+      zeichneListe()
+      zeichneTiefe()
+      melde(quellenlaufMeldung(ergebnis))
+    })
+    const neu = createNode('button', 'onda-blaetter__eintrag', 'Gruppe anlegen')
+    neu.id = 'quellenGruppeNeu'
+    neu.type = 'button'
+    neu.addEventListener('click', () => {
+      const thema = legeThemaAn(project, 'Neue Gruppe')
+      ctx?.scheduleSave()
+      gewaehlt = thema.id
+      renderMaterialTree()
+      zeichneListe()
+      zeichneTiefe()
+      // Direkt ins Namensfeld: eine Gruppe, die „Neue Gruppe" heisst, ist noch keine.
+      requestAnimationFrame(() => tief?.querySelector('.onda-pv-input')?.focus({ preventScroll: true }))
+    })
+    fussFlaeche.append(ordnen, neu, meldung)
+  }
+
+  openOndaDialog({
+    id: 'materialModal',
+    title: 'Quellen im Projekt',
+    opener,
+    breit: true,
+    build: body => {
+      body.classList.add('onda-blaetter')
+      const spalte = createNode('div', 'onda-blaetter__spalte')
+      liste = blaetterListe('materialModal')
+      fussFlaeche = createNode('div', 'onda-blaetter__fuss')
+      spalte.append(liste, fussFlaeche)
+      tief = blaetterTiefe('materialModal')
+      body.append(spalte, tief)
+      zeichneListe()
+      zeichneTiefe()
+    },
+  })
+
+  // Der Agent ordnet von allein, sobald sich die Quellenmenge seit dem letzten Mal
+  // geaendert hat — niemand soll einen Knopf druecken muessen, damit Ordnung entsteht
+  // (docs/PHILOSOPHIE.md §1). Kein Schluessel, zu wenige Quellen oder dieselbe Menge
+  // wie beim letzten Lauf heisst: es passiert nichts, still und ohne Kosten.
+  ordneQuellenBeiBedarf().then(ergebnis => {
+    if (!ergebnis?.gestartet || !ondaDialog || ondaDialog.panel?.id !== 'materialModal') return
+    renderMaterialTree()
+    zeichneListe()
+    zeichneTiefe()
+    melde(quellenlaufMeldung(ergebnis))
+  })
+}
+
+function quellenlaufMeldung(ergebnis) {
+  if (!ergebnis?.gestartet) {
+    if (ergebnis?.grund === 'kein-schluessel') return 'Ohne KI-Anschluss ordnet Onda nicht — die Quellen stehen so, wie du sie gelegt hast.'
+    if (ergebnis?.grund === 'zu-wenige') return 'Bei so wenigen Quellen ist die Liste selbst schon die Ordnung.'
+    if (ergebnis?.grund === 'keine-quellen') return 'Es liegt noch keine Quelle im Projekt.'
+    if (ergebnis?.grund === 'beispielprojekt') return 'Im Beispielprojekt ordnet Onda nicht.'
+    if (ergebnis?.grund === 'monatsbudget-erreicht') return 'Die lokale Monatsgrenze ist erreicht.'
+    return ''
+  }
+  if (!ergebnis.erfolg) return 'Onda konnte gerade nicht ordnen. Deine Gruppen sind unberührt.'
+  const anzahl = ergebnis.gruppen?.length || 0
+  if (!anzahl) return 'Onda hat keine tragende Gemeinsamkeit gefunden. Die Quellen stehen unverändert.'
+  return anzahl === 1 ? 'Onda hat ein Thema gebildet.' : `Onda hat ${anzahl} Themen gebildet.`
 }
 
 // ---------- Einstellungen: KI-Anschluss (Bereich U) ----------
@@ -1569,19 +2273,26 @@ function toggleTheme() {
   syncThemeToggle()
 }
 
+// Der Abschnittsname heisst wie der Abschnitt, immer. Was das Projekt gerade sein
+// will, steht als stiller Satz darunter — kein zweiter Knopf, sondern eine Auskunft.
 function renderProjectUnderstandingCard() {
   const card = document.getElementById('pvCard')
+  const claim = document.getElementById('pvClaim')
   if (!card) return
   const project = dokumentProjekt()
   const understanding = project ? ensureProjectUnderstanding(project) : null
   const task = understanding?.task?.trim() || ''
-  const effect = understanding?.desiredEffect?.trim() || ''
   card.setAttribute('aria-haspopup', 'dialog')
   card.classList.toggle('is-empty', !task)
-  card.replaceChildren(
-    createNode('span', 'onda-pv-card-title', task || 'Projektverständnis öffnen'),
-    createNode('span', 'onda-pv-card-claim', effect || 'Aufgabe, Zielgruppe und beabsichtigte Wirkung festhalten'),
-  )
+  card.textContent = 'Projektverständnis'
+  // Der Leerzustand steht am Satz selbst und nicht mehr am Knopf darueber. Die Regel
+  // hiess `#pvCard.is-empty + .onda-side-claim` und konnte nie greifen: #pvCard steckt
+  // in .onda-side-kopf und hat gar kein naechstes Geschwisterelement — „Noch nicht
+  // festgelegt" stand deshalb genauso kraeftig da wie ein wirklich gesetzter Satz.
+  if (claim) {
+    claim.classList.toggle('is-empty', !task)
+    claim.textContent = task || 'Noch nicht festgelegt'
+  }
 }
 
 function splitList(value, byLine) {
@@ -1616,12 +2327,17 @@ export function openFinalAudit(opener = null) {
 //
 // Die Anzeige wird beim Tippen sofort nachgezogen, aber NUR am Tag, nie am Textfeld:
 // ein Neuaufbau des Textfeldes wuerde den Cursor wegspringen lassen.
-function understandingField(body, label, value, onCommit, { line = false, geschuetzt = false, onLoesen = null } = {}) {
+//
+// kurz: ein einzeiliges Feld statt eines Textkastens. Ein Gruppenname ist eine Zeile;
+// ein fuenfzeiliger Kasten dafuer laedt zu etwas ein, was gar nicht hineingehoert, und
+// die Eingabetaste macht darin einen Absatz statt fertig zu sein.
+function bearbeitbaresFeld(body, label, value, onCommit, { line = false, kurz = false, geschuetzt = false, onLoesen = null } = {}) {
   const row = createNode('div', 'onda-pv-field')
   const labelRow = createNode('div', 'onda-pv-label-row')
   labelRow.append(createNode('span', 'onda-pv-label', label))
 
-  const field = createNode('textarea', 'onda-pv-input')
+  const field = createNode(kurz ? 'input' : 'textarea', 'onda-pv-input')
+  if (kurz) field.type = 'text'
   const tag = createNode('button', 'onda-tag onda-tag--loesbar', 'bindend')
   tag.type = 'button'
   tag.title = 'Wieder für den Agenten freigeben'
@@ -1636,22 +2352,52 @@ function understandingField(body, label, value, onCommit, { line = false, geschu
     onLoesen()
     zeigeSchutz(false)
   })
-  labelRow.append(tag)
+  // Ohne Rueckweg gibt es kein Tag: sonst stuende ein Knopf da, der nichts tut.
+  tag.hidden = true
+  if (onLoesen) labelRow.append(tag)
   row.append(labelRow)
 
-  field.rows = line ? 3 : 2
+  if (!kurz) field.rows = line ? 8 : 5
   field.value = value
-  zeigeSchutz(geschuetzt)
-  field.addEventListener('input', () => { onCommit(field.value); zeigeSchutz(true) })
+  if (onLoesen) zeigeSchutz(geschuetzt)
+  else field.setAttribute('aria-label', label)
+  field.addEventListener('input', () => { onCommit(field.value); if (onLoesen) zeigeSchutz(true) })
   row.append(field)
   body.append(row)
+  return field
 }
+
+// Das Projektverstaendnis-Fenster in der Blaetter-Vorlage: links die Eintraege, rechts
+// der vertiefende Text, in den hineingeschrieben werden darf.
+//
+// Das Erkannte ist hier einer der Eintraege. Es hatte bis zum 7. August 2026 eine
+// eigene Flaeche in der Seitenleiste; die faellt mit ihr. Es ist aber kein proaktives
+// Angebot, das der Agent im Chat sagen koennte, sondern ein Rueckblick auf den
+// Personenspeicher — und Rueckblicke gehoeren dorthin, wo auch das Projektgedaechtnis
+// liegt. Ohne diesen Umzug waeren Stimmenmerkmale, Autorentwicklung und der
+// Rueckkopplungs-Block unerreichbar geworden.
+let pvBlaetter = null
+
+// label = wie der Eintrag heisst (links in der Liste, oben als Ueberschrift).
+// feld  = was in das Textfeld darunter gehoert.
+// Beides muss verschieden sein: bis zum 7.8.2026 stand hier zweimal derselbe Wortlaut
+// untereinander — Ueberschrift "Aufgabe", sechs Pixel darunter noch einmal "Aufgabe".
+// Die Struktur-Ansicht macht es seit jeher richtig vor ("Freier Absatz" / "Text dieses
+// Bausteins"): die Ueberschrift sagt, WO man ist, der Feldname sagt, WAS man schreibt.
+const PV_FELDER = [
+  { schluessel: 'task', label: 'Aufgabe', feld: 'Was dieser Text leisten soll', lese: u => u.task, schreibe: (u, wert) => { u.task = wert } },
+  { schluessel: 'audience', label: 'Zielgruppe', feld: 'Für wen er geschrieben ist', lese: u => u.audience.join(', '), schreibe: (u, wert) => { u.audience = splitList(wert, false) } },
+  { schluessel: 'desiredEffect', label: 'Beabsichtigte Wirkung', feld: 'Was er beim Lesen bewirken soll', lese: u => u.desiredEffect, schreibe: (u, wert) => { u.desiredEffect = wert } },
+  { schluessel: 'evidenceStandard', label: 'Belegstandard', feld: 'Wie streng belegt werden muss', lese: u => u.evidenceStandard, schreibe: (u, wert) => { u.evidenceStandard = wert } },
+  { schluessel: 'protectedIntentions', label: 'Geschützte Absicht', feld: 'Was unangetastet bleiben soll — eine je Zeile', zeilen: true, lese: u => u.protectedIntentions.join('\n'), schreibe: (u, wert) => { u.protectedIntentions = splitList(wert, true) } },
+  { schluessel: 'openQuestions', label: 'Offene Frage', feld: 'Was noch offen ist — eine je Zeile', zeilen: true, lese: u => u.openQuestions.join('\n'), schreibe: (u, wert) => { u.openQuestions = splitList(wert, true) } },
+]
 
 function openProjectUnderstandingModal(opener) {
   const project = dokumentProjekt()
   if (!project) return
   const u = ensureProjectUnderstanding(project)
-  // Jede Nutzer-Korrektur im Modal ist bindend: der geschuetzt-Merker sorgt dafür,
+  // Jede Nutzer-Korrektur im Fenster ist bindend: der geschuetzt-Merker sorgt dafür,
   // dass die KI dieses Feld in Folge-Läufen nie mehr überschreibt (mergeVerstaendnis
   // liest ihn; verstaendnisEingabe gibt ihn über baueVerstaendnisKontext mit).
   const commit = feld => {
@@ -1681,33 +2427,72 @@ function openProjectUnderstandingModal(opener) {
     getBlocks: () => getEditorBlocks(ctx.editor),
     applyCorrections: corrections => replaceAnchoredTexts(ctx.editor, corrections),
   })
-  openOndaDialog({ id: 'pvModal', title: 'Projektverständnis', opener, build: body => {
-    understandingField(body, 'Aufgabe', u.task, value => { u.task = value; commit('task') }, { geschuetzt: istGeschuetzt('task'), onLoesen: () => loesen('task') })
-    understandingField(body, 'Zielgruppe', u.audience.join(', '), value => { u.audience = splitList(value, false); commit('audience') }, { geschuetzt: istGeschuetzt('audience'), onLoesen: () => loesen('audience') })
-    understandingField(body, 'Beabsichtigte Wirkung', u.desiredEffect, value => { u.desiredEffect = value; commit('desiredEffect') }, { geschuetzt: istGeschuetzt('desiredEffect'), onLoesen: () => loesen('desiredEffect') })
-    understandingField(body, 'Belegstandard', u.evidenceStandard, value => { u.evidenceStandard = value; commit('evidenceStandard') }, { geschuetzt: istGeschuetzt('evidenceStandard'), onLoesen: () => loesen('evidenceStandard') })
-    understandingField(body, 'Geschützte Absicht', u.protectedIntentions.join('\n'), value => { u.protectedIntentions = splitList(value, true); commit('protectedIntentions') }, { line: true, geschuetzt: istGeschuetzt('protectedIntentions'), onLoesen: () => loesen('protectedIntentions') })
-    understandingField(body, 'Offene Frage', u.openQuestions.join('\n'), value => { u.openQuestions = splitList(value, true); commit('openQuestions') }, { line: true, geschuetzt: istGeschuetzt('openQuestions'), onLoesen: () => loesen('openQuestions') })
-    const tools = createNode('div', 'onda-pv-tools')
-    const memory = createNode('button', 'onda-pv-memory', 'Projektgedächtnis öffnen')
-    memory.id = 'memoryOpen'
-    memory.type = 'button'
-    memory.addEventListener('click', () => memoryUi.open(project, document.getElementById('pvCard')))
-    const argument = createNode('button', 'onda-pv-argument', 'Argumentation prüfen')
-    argument.id = 'argumentOpen'
-    argument.type = 'button'
-    argument.addEventListener('click', () => argumentUi.open(project, document.getElementById('pvCard')))
-    const language = createNode('button', 'onda-pv-language', 'Sprache und Wirkung prüfen')
-    language.id = 'languageOpen'
-    language.type = 'button'
-    language.addEventListener('click', () => languageUi.open(project, document.getElementById('pvCard')))
-    const audit = createNode('button', 'onda-pv-audit', 'Schlussaudit und Export öffnen')
-    audit.id = 'auditOpen'
-    audit.type = 'button'
-    audit.addEventListener('click', () => openFinalAudit(document.getElementById('pvCard')))
-    tools.append(memory, argument, language, audit)
-    body.append(tools)
-  }})
+
+  const werkzeuge = [
+    ['memoryOpen', 'Projektgedächtnis öffnen', () => memoryUi.open(project, document.getElementById('pvCard'))],
+    ['argumentOpen', 'Argumentation prüfen', () => argumentUi.open(project, document.getElementById('pvCard'))],
+    ['languageOpen', 'Sprache und Wirkung prüfen', () => languageUi.open(project, document.getElementById('pvCard'))],
+    ['auditOpen', 'Schlussaudit und Export öffnen', () => openFinalAudit(document.getElementById('pvCard'))],
+  ]
+
+  pvBlaetter = openOndaBlaetter({
+    id: 'pvModal',
+    title: 'Projektverständnis',
+    opener,
+    eintraege: (liste, { gewaehlt, waehle, eintrag }) => {
+      const offen = gewaehlt || PV_FELDER[0].schluessel
+      PV_FELDER.forEach(feld => {
+        liste.append(eintrag(feld.schluessel, feld.label, {
+          anriss: erweiterungAnriss(feld.lese(u)),
+          gewaehlt: offen === feld.schluessel,
+          onWaehle: () => waehle(feld.schluessel),
+        }))
+      })
+      liste.append(eintrag('erkanntes', 'Erkanntes', {
+        anriss: '',
+        gewaehlt: offen === 'erkanntes',
+        onWaehle: () => waehle('erkanntes'),
+      }))
+      liste.append(createNode('p', 'onda-blaetter__gruppe', 'Werkzeuge'))
+      werkzeuge.forEach(([id, label, oeffne]) => {
+        const knopf = createNode('button', 'onda-blaetter__eintrag', label)
+        knopf.id = id
+        knopf.type = 'button'
+        knopf.setAttribute('aria-haspopup', 'dialog')
+        knopf.addEventListener('click', oeffne)
+        liste.append(knopf)
+      })
+    },
+    tiefe: (tief, gewaehlt) => {
+      const schluessel = gewaehlt || PV_FELDER[0].schluessel
+      if (schluessel === 'erkanntes') {
+        tief.append(createNode('h3', 'onda-blaetter__tiefe-titel', 'Erkanntes'))
+        tief.append(createNode(
+          'p',
+          'onda-blaetter__tiefe-hinweis',
+          'Was du beim Schreiben erkannt hast — je ein Satz, der beim nächsten Text wieder trägt.',
+        ))
+        const flaeche = createNode('div', 'onda-erk-flaeche')
+        tief.append(flaeche)
+        renderErkanntes(flaeche)
+        return
+      }
+      const feld = PV_FELDER.find(kandidat => kandidat.schluessel === schluessel) || PV_FELDER[0]
+      tief.append(createNode('h3', 'onda-blaetter__tiefe-titel', feld.label))
+      bearbeitbaresFeld(tief, feld.feld, feld.lese(u), wert => {
+        feld.schreibe(u, wert)
+        commit(feld.schluessel)
+        // Der Anriss links zieht mit, ohne dass rechts neu gezeichnet wird —
+        // sonst spränge der Cursor bei jedem Tastendruck.
+        const anriss = pvBlaetter?.panel?.querySelector(`[data-blatt-id="${feld.schluessel}"] .onda-blaetter__eintrag-anriss`)
+        if (anriss) anriss.textContent = erweiterungAnriss(feld.lese(u))
+      }, {
+        line: Boolean(feld.zeilen),
+        geschuetzt: istGeschuetzt(feld.schluessel),
+        onLoesen: () => loesen(feld.schluessel),
+      })
+    },
+  })
 }
 
 // ---------- Verständnis-Interview (Etappe A, Fähigkeit 1) ----------
@@ -1852,9 +2637,11 @@ function uebernimmVerstaendnis(project, daten) {
 
 function refreshProjectUnderstandingModal() {
   if (!ondaDialog || ondaDialog.panel?.id !== 'pvModal') return
-  // Tippt der Nutzer gerade im Modal, nicht neu aufbauen — seine Eingabe ist bindend.
+  // Tippt der Nutzer gerade im Fenster, nicht neu aufbauen — seine Eingabe ist bindend.
   if (ondaDialog.panel.contains(document.activeElement)) return
-  openProjectUnderstandingModal(ondaDialog.opener)
+  // Nachzeichnen statt neu oeffnen: sonst spraenge die Wahl links auf den ersten
+  // Eintrag zurueck, waehrend jemand gerade beim sechsten steht.
+  pvBlaetter?.zeichne()
 }
 
 // Duenner Aufrufer: die gesamte Entscheidung (Beispielprojekt-Sperre, offenes
@@ -1887,79 +2674,101 @@ function pruefeVerstaendnisInterview() {
   persistWorkspace()
 }
 
-async function starteVerstaendnisEntwurf(projectId, docId) {
-  if (interviewLaufAktiv) return
-  interviewLaufAktiv = true
-  interviewStatus = 'laeuft'
-  // Ausserhalb des try deklariert, damit der catch-Zweig bei einem fehlgeschlagenen
-  // Lauf noch weiss, fuer welches Projekt/welche Nachricht der Fehlertext sichtbar
-  // gemacht werden muss (Fix-Runde 1, Finding 1).
-  let project = null
-  try {
-    const schluesselDa = await hatSchluessel()
-    if (!ctx || ctx.activeDoc()?.id !== docId) { interviewStatus = null; return }
-    project = ctx.state.projects.find(candidate => candidate.id === projectId)
-    const workspace = activeWorkspace()
-    if (!project || !workspace) { interviewStatus = null; return }
-    if (!schluesselDa) {
-      // Offline-Würde: kein Entwurf möglich — die feste Eröffnungsfrage steht
-      // trotzdem bereit; die Antwort darauf scheitert später ruhig per Statuszeile.
-      interviewStatus = null
-      const message = ensureInterviewMessage(workspace, project)
-      if (!message.text) message.text = INTERVIEW_EROEFFNUNG
-      persistWorkspace()
-      return
-    }
-    const kostenfreigabe = beansprucheAutomatikKosten('verstaendnis', { projectId, docId })
-    if (!kostenfreigabe.erlaubt) {
-      interviewStatus = BUDGET_PAUSE_TEXT
-      const message = ensureInterviewMessage(workspace, project)
-      message.text = BUDGET_PAUSE_TEXT
-      persistWorkspace()
-      return
-    }
-    // Projektweite Kostenbremse (Fix-Runde 1, Finding 2): VOR dem bezahlten Aufruf
-    // setzen und sofort persistieren, damit sie auch bei einem Fehlschlag gilt —
-    // kein zweiter bezahlter Versuch über weitere Dokumente desselben Projekts.
-    markiereEntwurfVersucht(ensureProjectUnderstanding(project))
-    persistWorkspace()
-    // Bereich W (Aura/Statuszeile) atmet ausschliesslich am echten Gateway-Zustand
-    // (applyAuraState liest aktuellerAgentStatus().zustand === 'laeuft') — dieser
-    // Aufruf ist der erste echte runTask-Aufruf im Panel, darum wird er hier gesetzt.
-    setzeAgentStatus({ zustand: 'laeuft' })
-    const { daten } = await runTask('verstaendnis', verstaendnisEingabe('entwurf'))
-    setzeAgentStatus({ zustand: 'bereit' })
-    if (!ctx) return
-    uebernimmVerstaendnis(project, daten)
-    interviewStatus = null
-    const antwort = String(daten.antwortText || '').trim()
-    if (antwort && ctx.activeDoc()?.id === docId) {
-      const message = ensureInterviewMessage(activeWorkspace(), project)
-      message.text = antwort
-      appendThreadMessage(message.thread, 'agent', antwort, Date.now())
-      announceAgentStatus(antwort)
-    }
-    ctx.persist()
-    refreshProjectUnderstandingModal()
-  } catch (fehler) {
-    interviewStatus = interviewFehlerText(fehler)
-    setzeAgentStatus({ zustand: 'fehler', fehlerTyp: fehler?.typ })
-    // Sichtbarkeit erzwingen (Fix-Runde 1, Finding 1): ohne eine existierende
-    // Nachricht kehrt renderAgentWidget vor dem interviewStatus-Absatz zurück, und
-    // der Fehlertext bliebe unsichtbar — bei bereits gesetztem Prüf-Gate ohne jede
-    // Wiederholmöglichkeit. Der Nutzer bekommt so den ruhigen Fehlertext UND das
-    // Eingabefeld; kein automatischer Retry, kein Kosten-Risiko.
-    if (ctx && project && ctx.activeDoc()?.id === docId) {
-      const workspace = activeWorkspace()
-      if (workspace) {
-        ensureInterviewMessage(workspace, project)
-        persistWorkspace()
-      }
-    }
-  } finally {
-    interviewLaufAktiv = false
-    if (ctx) refreshWorkspace()
+// Kleiner FNV-1a-Hash fuer Signaturen aus freiem Nutzertext — Muster wie einfacherHash
+// in erweiterungslauf-model.mjs, hier lokal, weil auch der Chat-Kanal (Task 6) ihn
+// braucht. Dient nur der Journal-Kennzeichnung, nicht einer Doppelbezahl-Sperre
+// (der Interview-Kanal laeuft ohne einmalJeSignatur — siehe unten).
+function fnvSignatur(text) {
+  let hash = 2166136261
+  const value = String(text || '')
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index)
+    hash = Math.imul(hash, 16777619)
   }
+  return (hash >>> 0).toString(36)
+}
+
+async function starteVerstaendnisEntwurf(projectId, docId) {
+  // Sperre, Buchung und Journal laufen jetzt durchs Lauf-Tor (lauf-tor.mjs) — hier
+  // bleibt nur noch der fachliche Rumpf. kanalGesperrt/fuehreLaufAus ersetzen das
+  // frühere interviewLaufAktiv; die Signatur wird SYNCHRON hier gebildet (vor jedem
+  // await), weil docPlainText() den gerade aktiven Doc liest und das an dieser Stelle
+  // im Aufruf noch derselbe Doc ist, fuer den der Lauf gedacht ist.
+  if (kanalGesperrt('interview')) return
+  interviewStatus = 'laeuft'
+  const signatur = `${docId}:${seedBodySignature(docPlainText())}`
+  await fuehreLaufAus({ kanal: 'interview', ausloeser: 'entwurf', signatur }, async ({ runTask }) => {
+    // Ausserhalb des try deklariert, damit der catch-Zweig bei einem fehlgeschlagenen
+    // Lauf noch weiss, fuer welches Projekt/welche Nachricht der Fehlertext sichtbar
+    // gemacht werden muss (Fix-Runde 1, Finding 1).
+    let project = null
+    try {
+      const schluesselDa = await hatSchluessel()
+      if (!ctx || ctx.activeDoc()?.id !== docId) { interviewStatus = null; return }
+      project = ctx.state.projects.find(candidate => candidate.id === projectId)
+      const workspace = activeWorkspace()
+      if (!project || !workspace) { interviewStatus = null; return }
+      if (!schluesselDa) {
+        // Offline-Würde: kein Entwurf möglich — die feste Eröffnungsfrage steht
+        // trotzdem bereit; die Antwort darauf scheitert später ruhig per Statuszeile.
+        interviewStatus = null
+        const message = ensureInterviewMessage(workspace, project)
+        if (!message.text) message.text = INTERVIEW_EROEFFNUNG
+        persistWorkspace()
+        return
+      }
+      const kostenfreigabe = beansprucheAutomatikKosten('verstaendnis', { projectId, docId })
+      if (!kostenfreigabe.erlaubt) {
+        interviewStatus = BUDGET_PAUSE_TEXT
+        const message = ensureInterviewMessage(workspace, project)
+        message.text = BUDGET_PAUSE_TEXT
+        persistWorkspace()
+        return
+      }
+      // Projektweite Kostenbremse (Fix-Runde 1, Finding 2): VOR dem bezahlten Aufruf
+      // setzen und sofort persistieren, damit sie auch bei einem Fehlschlag gilt —
+      // kein zweiter bezahlter Versuch über weitere Dokumente desselben Projekts.
+      markiereEntwurfVersucht(ensureProjectUnderstanding(project))
+      persistWorkspace()
+      // Bereich W (Aura/Statuszeile) atmet ausschliesslich am echten Gateway-Zustand
+      // (applyAuraState liest aktuellerAgentStatus().zustand === 'laeuft') — dieser
+      // Aufruf ist der erste echte runTask-Aufruf im Panel, darum wird er hier gesetzt.
+      setzeAgentStatus({ zustand: 'laeuft' })
+      const { daten } = await runTask('verstaendnis', verstaendnisEingabe('entwurf'))
+      setzeAgentStatus({ zustand: 'bereit' })
+      if (!ctx) return { erfolg: true }
+      uebernimmVerstaendnis(project, daten)
+      interviewStatus = null
+      const antwort = String(daten.antwortText || '').trim()
+      if (antwort && ctx.activeDoc()?.id === docId) {
+        const message = ensureInterviewMessage(activeWorkspace(), project)
+        message.text = antwort
+        appendThreadMessage(message.thread, 'agent', antwort, Date.now())
+        announceAgentStatus(antwort)
+      }
+      ctx.persist()
+      refreshProjectUnderstandingModal()
+      return { erfolg: true }
+    } catch (fehler) {
+      interviewStatus = interviewFehlerText(fehler)
+      setzeAgentStatus({ zustand: 'fehler', fehlerTyp: fehler?.typ })
+      // Sichtbarkeit erzwingen (Fix-Runde 1, Finding 1): ohne eine existierende
+      // Nachricht kehrt renderAgentWidget vor dem interviewStatus-Absatz zurück, und
+      // der Fehlertext bliebe unsichtbar — bei bereits gesetztem Prüf-Gate ohne jede
+      // Wiederholmöglichkeit. Der Nutzer bekommt so den ruhigen Fehlertext UND das
+      // Eingabefeld; kein automatischer Retry, kein Kosten-Risiko.
+      if (ctx && project && ctx.activeDoc()?.id === docId) {
+        const workspace = activeWorkspace()
+        if (workspace) {
+          ensureInterviewMessage(workspace, project)
+          persistWorkspace()
+        }
+      }
+      return { erfolg: false, fehler: fehler?.typ }
+    } finally {
+      if (ctx) refreshWorkspace()
+    }
+  })
 }
 
 // Composer-Routing: solange istInterviewAktiv() wahr ist, gehört jede Eingabe im
@@ -1971,118 +2780,71 @@ async function sendeInterviewAntwort(message, text) {
   // Projekt VOR jedem await ueber das Dokument aufloesen: die Antwort gehoert dem
   // Projekt, fuer das sie gestellt wurde — auch wenn danach umgeblaettert wird.
   const project = dokumentProjekt()
-  if (!project || interviewLaufAktiv) return
+  if (!project || kanalGesperrt('interview')) return
   appendThreadMessage(message.thread, 'user', text, Date.now())
-  interviewLaufAktiv = true
+  // Kein await zwischen dem Anhaengen und fuehreLaufAus: die Sperre selbst setzt
+  // das Tor synchron beim Aufruf (lauf-tor.mjs) — hier bleibt nur noch die
+  // sichtbare "laeuft"-Statuszeile, wie zuvor ohne Luecke.
   interviewStatus = 'laeuft'
   announceAgentStatus('Agent denkt nach …')
   persistWorkspace()
   refreshWorkspace()
-  try {
-    // Bereich W (Aura/Statuszeile) atmet ausschliesslich am echten Gateway-Zustand
-    // (applyAuraState liest aktuellerAgentStatus().zustand === 'laeuft') — wie in
-    // starteVerstaendnisEntwurf muss jeder echte runTask-Aufruf ihn setzen (U-5-Aura).
-    setzeAgentStatus({ zustand: 'laeuft' })
-    const { daten } = await runTask('verstaendnis', verstaendnisEingabe('antwort', text))
-    setzeAgentStatus({ zustand: 'bereit' })
-    if (!ctx) return
-    uebernimmVerstaendnis(project, daten)
-    interviewStatus = null
-    const antwort = String(daten.antwortText || '').trim()
-    if (antwort) {
-      appendThreadMessage(message.thread, 'agent', antwort, Date.now())
-      message.text = antwort
-      announceAgentStatus(antwort)
-    }
-    // Sind task + audience + desiredEffect jetzt gefüllt, ist das Interview
-    // abgeschlossen — der nächste Composer-Beitrag geht in den normalen Chat.
-    ctx.persist()
-    refreshProjectUnderstandingModal()
-  } catch (fehler) {
-    interviewStatus = interviewFehlerText(fehler)
-    setzeAgentStatus({ zustand: 'fehler', fehlerTyp: fehler?.typ })
-    announceAgentStatus(interviewStatus)
-  } finally {
-    interviewLaufAktiv = false
-    if (ctx) refreshWorkspace()
-  }
-}
-
-function scheduleTriggerRender() {
-  if (triggerFrame) cancelAnimationFrame(triggerFrame)
-  triggerFrame = requestAnimationFrame(() => {
-    triggerFrame = null
-    renderInsertTrigger()
-  })
-}
-
-function renderInsertTrigger() {
-  const ui = elements()
-  const workspace = activeWorkspace()
-  if (!ui.insertLayer || !workspace) return
-
-  if (!insertTrigger) {
-    insertTrigger = createNode('button', 'block-insert-trigger')
-    insertTrigger.append(ondaIcon('plus', { size: 18 }))
-    insertTrigger.id = 'blockInsertTrigger'
-    insertTrigger.type = 'button'
-    insertTrigger.title = 'Textbaustein einfügen'
-    insertTrigger.setAttribute('aria-label', 'Textbaustein nach dem aktiven Abschnitt einfügen')
-    insertTrigger.addEventListener('click', () => {
-      const activeBlockId = activeWorkspace()?.activeBlockId
-      if (activeBlockId) openInsertMenu(activeBlockId, insertTrigger)
-    })
-    insertTrigger.addEventListener('pointerenter', () => {
-      clearTimeout(hoverTimer)
-      hoveredBlockId = activeWorkspace()?.activeBlockId || null
-      renderInsertTrigger()
-    })
-    insertTrigger.addEventListener('pointerleave', () => scheduleHoverClear())
-    ui.insertLayer.append(insertTrigger)
-  }
-
-  const activeBlock = blockElement(workspace.activeBlockId)
-  if (!activeBlock || document.body.classList.contains('view-home')) {
-    insertTrigger.hidden = true
-    return
-  }
-
-  insertTrigger.hidden = false
-  insertTrigger.classList.toggle('is-block-hovered', hoveredBlockId === workspace.activeBlockId)
-  insertTrigger.classList.toggle('is-typing', isTyping)
-  insertTrigger.dataset.afterBlockId = workspace.activeBlockId
-
-  const layerRect = ui.insertLayer.getBoundingClientRect()
-  const blockRect = activeBlock.getBoundingClientRect()
-  const activeSelectorId = escapedSelectorValue(workspace.activeBlockId)
-  const feedbackSurfaces = [...(ui.localLayer?.querySelectorAll(`[data-block-id="${activeSelectorId}"]`) || [])]
-    .filter(node => !node.hidden && getComputedStyle(node).visibility !== 'hidden')
-    .map(node => node.getBoundingClientRect())
-  const boundaryBottom = feedbackSurfaces.reduce(
-    (bottom, rect) => Math.max(bottom, rect.bottom),
-    blockRect.bottom,
+  await fuehreLaufAus(
+    { kanal: 'interview', ausloeser: 'antwort', signatur: fnvSignatur(text) },
+    async ({ runTask }) => {
+      try {
+        // Bereich W (Aura/Statuszeile) atmet ausschliesslich am echten Gateway-Zustand
+        // (applyAuraState liest aktuellerAgentStatus().zustand === 'laeuft') — wie in
+        // starteVerstaendnisEntwurf muss jeder echte runTask-Aufruf ihn setzen (U-5-Aura).
+        setzeAgentStatus({ zustand: 'laeuft' })
+        const { daten } = await runTask('verstaendnis', verstaendnisEingabe('antwort', text))
+        setzeAgentStatus({ zustand: 'bereit' })
+        if (!ctx) return { erfolg: true }
+        uebernimmVerstaendnis(project, daten)
+        interviewStatus = null
+        const antwort = String(daten.antwortText || '').trim()
+        if (antwort) {
+          appendThreadMessage(message.thread, 'agent', antwort, Date.now())
+          message.text = antwort
+          announceAgentStatus(antwort)
+        }
+        // Sind task + audience + desiredEffect jetzt gefüllt, ist das Interview
+        // abgeschlossen — der nächste Composer-Beitrag geht in den normalen Chat.
+        ctx.persist()
+        refreshProjectUnderstandingModal()
+        return { erfolg: true }
+      } catch (fehler) {
+        interviewStatus = interviewFehlerText(fehler)
+        setzeAgentStatus({ zustand: 'fehler', fehlerTyp: fehler?.typ })
+        announceAgentStatus(interviewStatus)
+        return { erfolg: false, fehler: fehler?.typ }
+      } finally {
+        if (ctx) refreshWorkspace()
+      }
+    },
   )
-  insertTrigger.style.left = `${Math.max(6, blockRect.left - layerRect.left - 34)}px`
-  insertTrigger.style.top = `${boundaryBottom - layerRect.top + 8}px`
 }
 
-function scheduleHoverClear() {
-  clearTimeout(hoverTimer)
-  hoverTimer = setTimeout(() => {
-    if (insertTrigger?.matches(':hover') || insertTrigger === document.activeElement) return
-    hoveredBlockId = null
-    renderInsertTrigger()
-  }, 120)
-}
+// Hier schwebte ein Plus am linken Rand des Absatzes, in dem gerade geschrieben wurde.
+// Es oeffnete das Menue "Art des Textbausteins". Jakob am 7. August 2026: "das plus
+// ergibt zudem ueberhaupt keinen sinn fuer mich. ich verstehe nicht was es
+// symbolisieren soll und was der nutzen ist."
+//
+// Er hat recht: ein Plus verspricht "hier kommt etwas dazu", sagt aber nicht was, und
+// es schwebte auch dann, wenn niemand etwas einfuegen wollte. Fuer die haeufigen Faelle
+// gibt es ohnehin den kuerzeren Weg — Tiptaps StarterKit macht aus "## " eine
+// Ueberschrift und aus "> " ein Zitat, ohne dass man ein Menue oeffnet.
+//
+// Das Menue selbst (openInsertMenu/insertBlock) BLEIBT. Es bekommt seinen Platz dort,
+// wo Bausteine hingehoeren: in der Struktur-Ansicht, wo Jakob "auch neue Bausteine
+// hinzufuegen" koennen will. Nur der schwebende Knopf ist fort.
 
 function markTyping() {
   isTyping = true
   clearTimeout(typingTimer)
-  renderInsertTrigger()
   if (isComposing) return
   typingTimer = setTimeout(() => {
     isTyping = false
-    renderInsertTrigger()
   }, 520)
 }
 
@@ -2167,7 +2929,47 @@ function completeRealEditorUpdate() {
   return true
 }
 
+// Befehl+Z nimmt eine gerade uebernommene Anmerkung zurueck. Nur dann — steht das
+// eigene Schreiben zuletzt, gehoert die Taste dem Text und wir fassen sie nicht an.
+//
+// Der Griff muss vollstaendig sein: undoLast() setzt die Aenderung im Text SELBST
+// zurueck. Liesse man das Ereignis weiterlaufen, machte Tiptaps eigene Historie
+// denselben Schritt ein zweites Mal — ein Tastendruck, zwei Ruecknahmen.
+function handleAnmerkungRueckgaengig(event) {
+  if (!letzteAenderungWarAnmerkung) return false
+  if (event.isComposing || isComposing) return false
+  if (event.shiftKey || event.altKey) return false
+  if (!event.metaKey && !event.ctrlKey) return false
+  if (String(event.key).toLowerCase() !== 'z') return false
+
+  const workspace = activeWorkspace()
+  const verworfen = Boolean(workspace?.lastAnnotationRejection)
+  if (!verworfen && !workspace?.undoStack?.length) return false
+
+  event.preventDefault()
+  event.stopPropagation()
+  letzteAenderungWarAnmerkung = false
+
+  // Eine verworfene Anmerkung wurde zuletzt entschieden, eine uebernommene zuletzt
+  // eingebaut. undoLatestRejection() macht ihre eigene Meldung und ihren eigenen
+  // Neuaufbau — deshalb hier nur zurueck.
+  if (verworfen) {
+    undoLatestRejection()
+    return true
+  }
+
+  const result = annotationController?.undoLast()
+  announceAgentStatus(result?.ok
+    ? 'Die Anmerkung wurde zurückgenommen.'
+    : result?.reason === 'stale-target'
+      ? 'Seit der Änderung wurde weitergeschrieben. Zurücknehmen hat deshalb nichts verändert.'
+      : 'Es gibt nichts zurückzunehmen.')
+  refreshWorkspace()
+  return true
+}
+
 function handleEditorKeyDown(event) {
+  if (handleAnmerkungRueckgaengig(event)) return
   if (
     event.key !== 'Enter'
     || event.isComposing
@@ -2182,6 +2984,14 @@ function handleEditorKeyDown(event) {
 }
 
 function handleBeforeInput(event) {
+  // Wer wieder schreibt, meint mit Befehl+Z sein eigenes Schreiben. Ab hier gehoert die
+  // Taste wieder dem Text (siehe handleAnmerkungRueckgaengig).
+  //
+  // Bewusst GANZ oben und nicht in recordRealEditorInput(): das hat Schranken, hinter
+  // denen es aussteigt (kein Zustand, anderes Dokument). Hinter einer davon bliebe die
+  // Taste bei der Anmerkung haengen, obwohl laengst weitergeschrieben wurde.
+  letzteAenderungWarAnmerkung = false
+
   const docId = ctx?.activeDoc()?.id || null
   const paragraphBoundary = !isComposing && (
     event?.inputType === 'insertParagraph'
@@ -2260,10 +3070,6 @@ function planeMomentwechsel() {
     if (!aktuell || aktuell.generation !== generation) return
     if (!editorViewIsVisibleFor(docId)) return
     renderLocalFinding()
-    // Muss mit: sonst behauptet die Zeile weiter "1 Hinweis wartet", waehrend der
-    // Hinweis daneben schon sichtbar ist. Ausgerechnet der wahrscheinlichste Weg
-    // zum Aufschauen -- Nichtstun -- war der nicht abgedeckte.
-    renderZurueckgehalten()
     renderErweiterungen()
     planeErweiterungslauf()
     planeMomentwechsel()
@@ -2274,10 +3080,32 @@ function visiblePassageFindingRecords(doc, blocks) {
   ensureReasoningModel(doc)
   const moment = momentJetzt(doc?.id)
   const workspace = activeWorkspace()
+
+  // Der Stift ist abgelegt: nichts wird gezeigt — weder die Anmerkung noch der Punkt
+  // im Rand. Das ist die EINE Sache, die das eine verbliebene Bedienelement tut
+  // (docs/PHILOSOPHIE.md §1).
+  //
+  // Hier und nicht in der Steuerung, weil der Aufrufer sonst daran vorbeigreift:
+  // currentPassageFinding() faellt auf records[0] zurueck, wenn die Steuerung nichts
+  // liefert. "Ruhig" hat deshalb nie wirklich ausgeblendet, sondern nur die Steuerung
+  // stummgeschaltet, waehrend die Anmerkung weiter danebenstand.
+  //
+  // Ohne die frueh gesetzte Grenze wuerde ausserdem merkeGezeigt() unten mitlaufen und
+  // Anmerkungen als "schon gezeigt" vermerken, die niemand gesehen hat.
+  if (workspace?.quietAnnotations) return []
+
   const suppressionStore = suppressionStoreFor(doc, workspace)
   const records = []
   for (const finding of doc.findings.filter(candidate => candidate?.status === 'open')) {
-    if (!acceptsKindInMode(workspace?.annotationMode, finding.anmerkungsart)) continue
+    // Hier stand ein Filter nach Arbeitsmodus: im Modus "Text" blieben die fuenf
+    // Notiz-Arten unsichtbar (ausformulieren, buendeln, nachfrage, ordnen, aufgreifen)
+    // und umgekehrt. Umgeschaltet wurde in der Anmerkungsleiste — die es nicht mehr
+    // gibt (docs/PHILOSOPHIE.md §1). Der Filter musste mit: ohne Umschalter waere er
+    // eine Falltuer, die die Haelfte aller Arten fuer immer verschluckt.
+    //
+    // Es passt auch zum Grundsatz. Wer neben dir schreibt, fuehrt keine zwei getrennten
+    // Listen; ihm faellt auf, was ihm auffaellt. Ob es eine Rechtschreibung ist oder
+    // eine Nachfrage, entscheidet nicht, OB du es siehst.
     if (suppressionStore.suppresses(annotationSignature(finding), doc.id)) continue
     // Der Rhythmus folgt der Art, nicht dem Kanal (momente-model.mjs): eine
     // Formulierung darf sofort erscheinen, eine Strukturfrage erst beim Aufschauen.
@@ -2289,7 +3117,10 @@ function visiblePassageFindingRecords(doc, blocks) {
     const placement = resolveFindingPlacement(finding, blocks)
     if (placement.kind !== 'anchored' && placement.kind !== 'stale') continue
     const migrated = !hadBlockId && Boolean(finding.blockId)
-    merkeGezeigt(doc?.id, finding.id)
+    // Das Etikett {art, moment} stammt aus dem Lauf-Tor-Zweig (#12): das erste Erscheinen
+    // einer Karte wandert ins Journal, damit die Momente spaeter kalibriert werden koennen.
+    // HEADs Sammelform bleibt — main zeigt mehrere Anmerkungen, nicht mehr genau eine.
+    merkeGezeigt(doc?.id, finding.id, { art: artVon(finding), moment })
     records.push({ finding, block: placement.block, placementKind: placement.kind, migrated })
   }
   return records
@@ -2387,12 +3218,12 @@ function renderLocalDialogue(finding) {
   send.type = 'submit'
   send.title = 'Senden'
   send.setAttribute('aria-label', 'Nachricht senden')
-  send.disabled = Boolean(laufenderChatLauf)
+  send.disabled = kanalGesperrt('chat') // Sperre wohnt im Tor (Task 6), nicht mehr in einem lokalen Feld
   form.append(input, send)
   form.addEventListener('submit', event => {
     event.preventDefault()
     const text = input.value.trim()
-    if (!text || laufenderChatLauf) return
+    if (!text || kanalGesperrt('chat')) return
     // Echter, gestreamter Chat mit Finding-Kontext (Bereich C, Task C-3) — die Kulisse ist weg.
     input.value = ''
     appendThreadMessage(finding.thread, 'user', text, Date.now())
@@ -2625,6 +3456,10 @@ function commitAnnotationRejection(finding, scope) {
     decisionId: decision?.id || null,
     scope,
   }
+  // Auch das Verwerfen ist eine Entscheidung ueber eine Anmerkung. Befehl+Z nimmt sie
+  // zurueck, solange nichts anderes dazwischenkam — frueher lag dafuer ein Link
+  // "Entscheidung zuruecknehmen" in der Anmerkungsleiste.
+  letzteAenderungWarAnmerkung = true
   refreshWorkspace()
   announceAgentStatus(scope === 'once'
     ? 'Diese Anmerkung wurde verworfen. Ähnliche Hinweise dürfen später wieder erscheinen.'
@@ -3000,18 +3835,21 @@ function acceptSemanticFinding(finding) {
     return operation
   }
   annotationController?.pushUndo(operation)
+  letzteAenderungWarAnmerkung = true
   refreshWorkspace()
+  // Zurueck an den Text. Frueher lag hier der Rueckgaengig-Knopf der Anmerkungsleiste
+  // dazwischen; die Leiste ist fort (docs/PHILOSOPHIE.md §1), und der Text ist ohnehin
+  // der bessere Ort — von dort aus nimmt Befehl+Z die Aenderung zurueck.
   requestAnimationFrame(() => (
     elements().localLayer?.querySelector('.onda-annotation button, .onda-annotation input')
-      || document.getElementById('annotationUndo')
       || ctx.editor.view.dom
   ).focus({ preventScroll: true }))
-  announceAgentStatus('Änderung übernommen. Rückgängig bleibt möglich.')
+  announceAgentStatus('Änderung übernommen. Befehl+Z nimmt sie zurück.')
   return operation
 }
 
 function replyToAnnotation(finding, text) {
-  if (!text || laufenderChatLauf) return
+  if (!text || kanalGesperrt('chat')) return
   ensureLocalThread(finding)
   appendThreadMessage(finding.thread, 'user', text, Date.now())
   ctx.persist()
@@ -3019,103 +3857,40 @@ function replyToAnnotation(finding, text) {
   sendeLocalChat(finding, text)
 }
 
-// Ein Umschalter zum Vergleichen, KEIN Bedienelement des Produkts. Er erscheint nur,
-// wenn jemand ihn ausdruecklich einschaltet (localStorage 'ondaVarianten' = '1'), und
-// fliegt wieder raus, sobald die Fassung entschieden ist. So laesst sich am eigenen
-// Text vergleichen statt an einer Beschreibung — jede Gestaltungsentscheidung dieses
-// Projekts, die aus blossem Ueberlegen kam, musste spaeter zurueckgenommen werden.
-function renderBilanzUmschalter(bar) {
-  if (!bar) return
-  const an = (() => { try { return localStorage.getItem('ondaVarianten') === '1' } catch { return false } })()
-  const vorhanden = bar.querySelector('.onda-varianten')
-  if (!an) { vorhanden?.remove(); return }
-  if (vorhanden) return
-
-  const leiste = createNode('div', 'onda-varianten')
-  leiste.setAttribute('aria-label', 'Fassungen der Anmerkungszeile vergleichen')
-  const aktuell = normalisiereVariante(document.documentElement.dataset.bilanzVariante)
-  VARIANTEN.forEach(variante => {
-    const knopf = createNode('button', 'onda-varianten-knopf', VARIANTEN_LABEL[variante])
-    knopf.type = 'button'
-    knopf.title = VARIANTEN_ERKLAERUNG[variante]
-    knopf.setAttribute('aria-pressed', String(variante === aktuell))
-    knopf.addEventListener('click', () => {
-      document.documentElement.dataset.bilanzVariante = variante
-      try { localStorage.setItem('ondaBilanzVariante', variante) } catch { /* egal */ }
-      leiste.remove()
-      refreshWorkspace()
-    })
-    leiste.append(knopf)
-  })
-  bar.prepend(leiste)
-}
-
-function renderAnnotationReviewBar() {
+// Der andere Stift (docs/PHILOSOPHIE.md §1). Das EINZIGE Bedienelement fuer
+// Anmerkungen, das uebrig ist. Es kann genau zwei Dinge: sagen, dass Anmerkungen da
+// sind, und sie aus- und einblenden.
+//
+// Was es ausdruecklich NICHT tut: zaehlen. "0 Fehler · 1 Empfehlung · 0 Geschmack" war
+// eine Punktetafel, und eine Punktetafel hat ein Ziel — sie auf null bringen. Wer neben
+// dir schreibt, sagt nicht, wie viele Anmerkungen er noch hat.
+//
+// Fuer die Augen also nur ein Stift. Fuer Vorlesegeraete der volle Wortlaut: wer nicht
+// sieht, dass jemand mitschreibt, muss es gesagt bekommen. Die Zurueckhaltung ist eine
+// Frage der Augen, nicht der Zugaenglichkeit.
+function renderAnnotationPresence() {
   const doc = ctx?.activeDoc()
   const workspace = activeWorkspace()
-  const bar = document.getElementById('annotationReviewBar')
-  if (!bar || !doc || !workspace) return
-  const modeFindings = (Array.isArray(doc.findings) ? doc.findings : []).filter(finding => (
-    acceptsKindInMode(workspace.annotationMode, finding.anmerkungsart)
-  ))
-  const summary = annotationSummary(modeFindings)
-  bar.hidden = summary.total === 0 && workspace.undoStack.length === 0 && !workspace.lastAnnotationRejection
-  const label = document.getElementById('annotationReviewSummary')
-  if (label) {
-    // Vier Fassungen zur Wahl (bilanz-varianten.mjs). Welche gilt, steht am
-    // Wurzelelement; unbekannt oder nicht gesetzt heisst: der heutige Stand.
-    const variante = normalisiereVariante(document.documentElement.dataset.bilanzVariante)
-    const text = bilanzText(variante, summary)
-    const punkte = punkteFuer(variante, summary)
+  const zeichen = document.getElementById('annotationPresence')
+  if (!zeichen || !doc || !workspace) return
 
-    label.replaceChildren()
-    label.classList.toggle('is-punkte', punkte.length > 0)
-    if (text) label.append(document.createTextNode(text))
-    punkte.forEach(art => {
-      const punkt = createNode('span', `onda-bilanz-punkt is-${art}`)
-      punkt.setAttribute('aria-hidden', 'true')
-      label.append(punkt)
-    })
-    // Vorlesegeraete bekommen IMMER den vollen Wortlaut — auch in der stillen
-    // Fassung. Die Zurueckhaltung ist eine Frage der Augen, nicht der Zugaenglichkeit.
-    label.setAttribute('aria-label', bilanzVorlesetext(summary))
-    label.hidden = !text && !punkte.length
-  }
-  renderBilanzUmschalter(bar)
-  const bulk = document.getElementById('annotationBulkAccept')
-  const safeCount = modeFindings.filter(finding => (
-    finding.status === 'open'
-    && ['rechtschreibung', 'grammatik', 'zeichensetzung'].includes(finding.anmerkungsart)
-    && finding.action
-  )).length
-  if (bulk) {
-    bulk.hidden = safeCount === 0
-    bulk.textContent = safeCount === 1 ? 'Sichere Korrektur übernehmen' : `${safeCount} sichere Korrekturen übernehmen`
-  }
-  const quiet = document.getElementById('annotationQuietToggle')
-  if (quiet) {
-    quiet.setAttribute('aria-pressed', String(workspace.quietAnnotations))
-    quiet.textContent = workspace.quietAnnotations ? 'Anmerkungen zeigen' : 'Ruhig'
-  }
-  const previous = document.getElementById('annotationPrevious')
-  const next = document.getElementById('annotationNext')
-  if (previous) previous.disabled = summary.total < 2 || workspace.quietAnnotations
-  if (next) next.disabled = summary.total < 2 || workspace.quietAnnotations
-  const undo = document.getElementById('annotationUndo')
-  if (undo) undo.disabled = workspace.undoStack.length === 0
-  document.querySelectorAll('[data-annotation-mode]').forEach(button => {
-    button.setAttribute('aria-pressed', String(button.dataset.annotationMode === workspace.annotationMode))
-  })
-  const rejectionNotice = document.getElementById('annotationRejectionNotice')
-  const rejectionText = document.getElementById('annotationRejectionText')
-  if (rejectionNotice) rejectionNotice.hidden = !workspace.lastAnnotationRejection
-  if (rejectionText && workspace.lastAnnotationRejection) {
-    rejectionText.textContent = workspace.lastAnnotationRejection.scope === 'once'
-      ? 'Ein Hinweis wurde verworfen.'
-      : workspace.lastAnnotationRejection.scope === 'document'
-        ? 'Eine Regel gilt jetzt für diesen Text.'
-        : 'Eine persönliche Präferenz ist aktiv.'
-  }
+  const offen = (Array.isArray(doc.findings) ? doc.findings : []).filter(finding => finding?.status === 'open')
+  const summary = annotationSummary(offen)
+
+  // Kein Anlass, kein Zeichen. Ein Stift, der nichts anzustreichen hat, liegt nicht
+  // sichtbar herum.
+  zeichen.hidden = summary.total === 0
+  if (zeichen.hidden) return
+
+  if (!zeichen.firstChild) zeichen.append(ondaIcon('edit', { size: 18 }))
+
+  const sichtbar = !workspace.quietAnnotations
+  zeichen.setAttribute('aria-pressed', String(sichtbar))
+  const wortlaut = bilanzVorlesetext(summary)
+  zeichen.setAttribute('aria-label', sichtbar
+    ? `${wortlaut}. Anmerkungen ausblenden.`
+    : `${wortlaut}. Anmerkungen einblenden.`)
+  zeichen.title = sichtbar ? 'Anmerkungen ausblenden' : 'Anmerkungen einblenden'
 }
 
 function scheduleLocalPosition(blockId) {
@@ -3175,7 +3950,10 @@ function positionLocalSurface(blockId) {
   const localRect = local.getBoundingClientRect()
   const feedbackBottom = below ? localRect.bottom : blockRect.bottom
 
-  const touchTriggerClearance = Math.max(46, (insertTrigger?.getBoundingClientRect().height || 26) + 8)
+  // Luft unter der Anmerkung, damit sie den naechsten Absatz nicht beruehrt. Frueher
+  // war das die Hoehe des Plus-Knopfes plus Abstand; ohne ihn ein fester Wert in
+  // derselben Groessenordnung (44px Trefferflaeche + 2px).
+  const touchTriggerClearance = 46
   const spacing = feedbackBottom > blockRect.bottom
     ? feedbackBottom - blockRect.bottom + (below ? touchTriggerClearance : 14)
     : 0
@@ -3203,6 +3981,9 @@ function renderLocalFinding() {
   }
 
   if (localFeedbackError && localFeedbackError.findingId !== finding?.id) localFeedbackError = null
+
+  // Vor jeder Entscheidung ueber die Verzierung: gilt die Anmerkung dem ganzen Absatz?
+  aktuelleAnmerkungIstAbsatzweit = istAbsatzweit(finding)
 
   if (
     localDecoratedDocId !== doc.id
@@ -3379,13 +4160,21 @@ function chatNachrichtenTextKnoten(messageId) {
 // modulintern fuer Task C-3 (Randkarten-Gespräch, keine Verdichtung dort).
 //
 // Fix-Runde 1, Finding 1 (Critical): erzeugt KEIN eigenes Sperr-Objekt mehr, sondern
-// uebernimmt ein von sendeAgentenChat bereits gesetztes (laufenderChatLauf ist zu diesem
+// uebernimmt ein von sendeAgentenChat bereits gesetztes (chatStream ist zu diesem
 // Zeitpunkt schon non-null, siehe dort) — bei einem direkten Aufruf (C-3) erzeugt es weiterhin
 // selbst eins. Zwei verschiedene Sperr-Objekte fuer denselben Lauf waren die Ueberschreib-
 // Luecke, durch die ein dritter Submit moeglich wurde.
-async function fuehreChatLauf(thread, kontext) {
-  const lauf = laufenderChatLauf || { agentMessage: null, puffer: '', flushTimer: null }
-  laufenderChatLauf = lauf
+//
+// Tor-Anschluss (Task 6): runTask kommt jetzt als DRITTER Parameter vom Lauf-Tor
+// (fuehreLaufAus' laufFn, siehe sendeAgentenChat/sendeLocalChat) statt aus dem modulweiten
+// Import — die Sperre selbst wohnt im Tor (kanalGesperrt('chat')), hier bleibt chatStream nur
+// noch fuer den Streaming-Zustand. Der Rueckgabewert ({erfolg:true} bzw. {erfolg:false,
+// fehler}) reicht bis zu fuehreChatVorgangAus (chat-kontext.mjs) und von dort als
+// laufFn-Ergebnis ins Tor, das daraus den Journal-Eintrag 'geliefert'/'fehler' bildet
+// (bewerteLaufErgebnis, lauf-tor.mjs).
+async function fuehreChatLauf(thread, kontext, runTask) {
+  const lauf = chatStream || { agentMessage: null, puffer: '', flushTimer: null }
+  chatStream = lauf
   const flush = () => {
     lauf.flushTimer = null
     if (!lauf.agentMessage) return
@@ -3438,31 +4227,37 @@ async function fuehreChatLauf(thread, kontext) {
     setzeAgentStatus({ zustand: 'bereit' })
     if (lauf.flushTimer) clearTimeout(lauf.flushTimer)
     const antwort = typeof daten === 'string' && daten.trim() ? daten : lauf.puffer
-    if (!antwort.trim()) return
+    if (!antwort.trim()) return { erfolg: true }
     if (lauf.agentMessage) lauf.agentMessage.text = antwort
     else appendThreadMessage(thread, 'agent', antwort)
     announceAgentStatus(antwort)
+    return { erfolg: true }
   } catch (fehler) {
     if (lauf.flushTimer) clearTimeout(lauf.flushTimer)
     setzeAgentStatus({ zustand: 'fehler', fehlerTyp: fehler?.typ })
-    if (fehler?.typ === 'abgebrochen') return
+    if (fehler?.typ === 'abgebrochen') return { erfolg: false, fehler: 'abgebrochen' }
     const meldung = chatFehlerText(fehler)
     if (lauf.agentMessage) lauf.agentMessage.text = meldung
     else appendThreadMessage(thread, 'agent', meldung)
     announceAgentStatus(meldung)
+    return { erfolg: false, fehler: fehler?.typ }
   } finally {
-    laufenderChatLauf = null
+    chatStream = null
     ctx?.persist()
     refreshWorkspace()
   }
 }
 
 // Baut den Chat-Kontext aus dem Live-Zustand und startet fuehreChatLauf — orchestriert ueber
-// fuehreChatVorgangAus (chat-kontext.mjs, Fix-Runde 1), das die Sperre SYNCHRON vor jedem
-// await setzt (Finding 1) und den ganzen Vorgang inklusive Verdichtung als 'laeuft' meldet
-// (Finding 2). doc/project werden VOR der Sperre gelesen (reiner, synchroner Zugriff ohne
-// Risiko) und in den Callbacks weiterverwendet, damit chatte() IMMER fuehreChatLauf erreicht
-// — kein frueher Return mehr, der die Sperre/den Status haengen lassen koennte.
+// fuehreChatVorgangAus (chat-kontext.mjs, Fix-Runde 1) UND, aussenherum, ueber das Lauf-Tor
+// (lauf-tor.mjs, Task 6): fuehreLaufAus prueft/setzt kanalGesperrt('chat') SYNCHRON vor jedem
+// await und reicht dem laufFn das einzig legale runTask — fuehreChatVorgangAus'
+// laeuftBereits gibt darum nur noch konstant false zurueck (das Tor hat den Kanal bereits
+// geprueft und gesperrt), sperreSetzen pflegt nur noch chatStream (Streaming-Zustand) +
+// refreshWorkspace. doc/project werden VOR dem Tor-Aufruf gelesen (reiner, synchroner Zugriff
+// ohne Risiko) und in den Callbacks weiterverwendet, damit chatte() IMMER fuehreChatLauf
+// erreicht — kein frueher Return mehr, der die Sperre/den Status haengen lassen koennte.
+// Kein einmalJeSignatur: jede Chat-Frage ist gewollt, auch eine wortgleiche Wiederholung.
 //
 // Der Chat selbst ist ueberall echt, auch im Beispielprojekt (Spec) — istBeispielProjekt
 // sperrt hier NUR den automatischen Hinweislauf, den eine Chat-Bitte sonst ausloesen wuerde
@@ -3474,84 +4269,107 @@ async function sendeAgentenChat(message, anfrage) {
   const project = dokumentProjekt(doc)
   if (!doc || !project) return
 
-  await fuehreChatVorgangAus({
-    laeuftBereits: () => Boolean(laufenderChatLauf),
-    sperreSetzen: wert => {
-      laufenderChatLauf = wert ? (laufenderChatLauf || { agentMessage: null, puffer: '', flushTimer: null }) : null
-      refreshWorkspace() // Senden-Knopf sofort sichtbar deaktivieren (schliesst die Luecke aus Finding 1)
-    },
-    setzeStatus: setzeAgentStatus,
-    verdichte: async () => {
-      const plan = planVerlaufVerdichtung(message.thread, message.verlaufsNotiz || null)
-      if (!plan) return
-      try {
-        const { daten } = await runTask('zusammenfassung', { anfrage: plan.verdichtungsEingabe })
-        if (typeof daten === 'string' && daten.trim()) {
-          message.verlaufsNotiz = { text: daten.trim(), bisMessageId: plan.bisMessageId, erstelltAt: Date.now() }
-          ctx?.persist()
+  await fuehreLaufAus(
+    { kanal: 'chat', ausloeser: 'gespraech', signatur: fnvSignatur(anfrage) },
+    ({ runTask }) => fuehreChatVorgangAus({
+      laeuftBereits: () => false, // die Kanal-Sperre prueft und haelt das Tor (fuehreLaufAus)
+      sperreSetzen: wert => {
+        chatStream = wert ? (chatStream || { agentMessage: null, puffer: '', flushTimer: null }) : null
+        refreshWorkspace() // Senden-Knopf sofort sichtbar deaktivieren (schliesst die Luecke aus Finding 1)
+      },
+      setzeStatus: setzeAgentStatus,
+      verdichte: async () => {
+        const plan = planVerlaufVerdichtung(message.thread, message.verlaufsNotiz || null)
+        if (!plan) return
+        try {
+          const { daten } = await runTask('zusammenfassung', { anfrage: plan.verdichtungsEingabe })
+          if (typeof daten === 'string' && daten.trim()) {
+            message.verlaufsNotiz = { text: daten.trim(), bisMessageId: plan.bisMessageId, erstelltAt: Date.now() }
+            ctx?.persist()
+          }
+        } catch {
+          // Die Verdichtung ist Komfort: scheitert sie, läuft der Chat mit vollem Verlauf weiter.
         }
-      } catch {
-        // Die Verdichtung ist Komfort: scheitert sie, läuft der Chat mit vollem Verlauf weiter.
-      }
-    },
-    chatte: async () => {
-      const hinweisBitte = !istBeispielProjekt(project) && erkenneHinweisBitte(anfrage)
-      if (hinweisBitte) starteHinweislauf({ grund: 'chat' })
+      },
+      chatte: async () => {
+        const hinweisBitte = !istBeispielProjekt(project) && erkenneHinweisBitte(anfrage)
+        if (hinweisBitte) starteHinweislauf({ grund: 'chat' })
 
-      const kontext = baueChatKontext({
-        verstaendnis: ensureProjectUnderstanding(project),
-        docText: dokumentText(),
-        findings: doc.findings,
-        doc,
-        thread: message.thread.slice(0, -1), // der aktuelle Nutzer-Turn geht separat als `anfrage` mit
-        verlaufsNotiz: message.verlaufsNotiz || null,
-        anfrage,
-        zusatzAnweisung: hinweisBitte
-          ? 'Der Nutzer hat um eine Durchsicht gebeten. Ein Hinweislauf über den Text wurde soeben gestartet — erwähne kurz, dass du den Text jetzt durchgehst und dass Hinweise am Rand erscheinen, sobald etwas Belastbares dabei ist.'
-          : null,
-        onda: ondaQuellen(doc, project),
-      })
-      await fuehreChatLauf(message.thread, kontext)
-    },
-  })
+        const kontext = baueChatKontext({
+          verstaendnis: ensureProjectUnderstanding(project),
+          docText: dokumentText(),
+          findings: doc.findings,
+          doc,
+          thread: message.thread.slice(0, -1), // der aktuelle Nutzer-Turn geht separat als `anfrage` mit
+          verlaufsNotiz: message.verlaufsNotiz || null,
+          anfrage,
+          zusatzAnweisung: hinweisBitte
+            ? 'Der Nutzer hat um eine Durchsicht gebeten. Ein Hinweislauf über den Text wurde soeben gestartet — erwähne kurz, dass du den Text jetzt durchgehst und dass Hinweise am Rand erscheinen, sobald etwas Belastbares dabei ist.'
+            : null,
+          // Aus main: das Projektwissen (Textsorte, Aussagen-Speicher, Nachbartexte,
+          // Gedaechtnis). Der Zweig kannte es noch nicht — es darf beim Tor-Anschluss
+          // nicht verlorengehen, sonst waere der Chat wieder ein blinder Kanal.
+          onda: ondaQuellen(doc, project),
+        })
+        return await fuehreChatLauf(message.thread, kontext, runTask)
+      },
+    }),
+  )
+  // Das Tor loest kanalGesperrt('chat') in SEINEM EIGENEN finally (lauf-tor.mjs) — das laeuft
+  // NACH sperreSetzen(false) oben, das noch waehrend der Sperre rendert. Ohne diesen
+  // Nachrender bliebe der Senden-Knopf (send.disabled = kanalGesperrt('chat')) optisch UND
+  // funktional deaktiviert: ein Formular mit nur einem deaktivierten Submit-Button feuert kein
+  // implizites Submit mehr auf Enter — die Eingabe wirkt eingefroren, bis irgendein anderes
+  // Ereignis zufaellig neu rendert.
+  if (ctx) refreshWorkspace()
 }
 
 // Startet den echten Chat-Lauf FÜR EIN FINDING an der Randkarte (Task C-3) — dieselbe
-// Sperr-/Status-Disziplin wie sendeAgentenChat: fuehreChatVorgangAus setzt die Sperre SYNCHRON
-// vor jedem await (kein zweiter, ungesicherter Pfad, kein doppelter bezahlter Lauf — siehe
-// Fix-Runde 1 zu C-2, chat-kontext.mjs). laufenderChatLauf ist app-weit EIN Feld (siehe
-// Deklaration oben) — ein laufendes Panel-Gespräch blockiert ein Randkarten-Gespräch und
-// umgekehrt. Anders als sendeAgentenChat: keine Verlaufs-Verdichtung (Randkarten-Gespräche
-// bleiben kurz, Findings kennen kein verlaufsNotiz-Feld) und keine Hinweisbitte-Erkennung —
-// das Gespräch soll bei GENAU dieser Stelle bleiben (baueFindingZusatzAnweisung weist das
-// Modell entsprechend an).
+// Sperr-/Status-Disziplin wie sendeAgentenChat: das Lauf-Tor (Task 6) prueft/setzt
+// kanalGesperrt('chat') SYNCHRON vor jedem await (kein zweiter, ungesicherter Pfad, kein
+// doppelter bezahlter Lauf — siehe Fix-Runde 1 zu C-2, chat-kontext.mjs). chatStream ist
+// app-weit EIN Feld (siehe Deklaration oben) — ein laufendes Panel-Gespräch blockiert ein
+// Randkarten-Gespräch und umgekehrt (derselbe Kanal 'chat' im Tor). Anders als
+// sendeAgentenChat: keine Verlaufs-Verdichtung (Randkarten-Gespräche bleiben kurz, Findings
+// kennen kein verlaufsNotiz-Feld) und keine Hinweisbitte-Erkennung — das Gespräch soll bei
+// GENAU dieser Stelle bleiben (baueFindingZusatzAnweisung weist das Modell entsprechend an).
 async function sendeLocalChat(finding, anfrage) {
   const doc = ctx.activeDoc()
   const project = dokumentProjekt(doc)
   if (!doc || !project) return
 
-  await fuehreChatVorgangAus({
-    laeuftBereits: () => Boolean(laufenderChatLauf),
-    sperreSetzen: wert => {
-      laufenderChatLauf = wert ? (laufenderChatLauf || { agentMessage: null, puffer: '', flushTimer: null }) : null
-      refreshWorkspace() // Senden-Knopf an der Randkarte sofort sichtbar deaktivieren
-    },
-    setzeStatus: setzeAgentStatus,
-    verdichte: async () => {},
-    chatte: async () => {
-      const kontext = baueChatKontext({
-        verstaendnis: ensureProjectUnderstanding(project),
-        docText: dokumentText(),
-        findings: doc.findings,
-        doc,
-        thread: finding.thread.slice(0, -1), // der aktuelle Nutzer-Turn geht separat als `anfrage` mit
-        anfrage,
-        zusatzAnweisung: baueFindingZusatzAnweisung(finding),
-        onda: ondaQuellen(doc, project),
-      })
-      await fuehreChatLauf(finding.thread, kontext)
-    },
-  })
+  await fuehreLaufAus(
+    { kanal: 'chat', ausloeser: 'randkarte', signatur: fnvSignatur(anfrage) },
+    ({ runTask }) => fuehreChatVorgangAus({
+      laeuftBereits: () => false, // die Kanal-Sperre prueft und haelt das Tor (fuehreLaufAus)
+      sperreSetzen: wert => {
+        chatStream = wert ? (chatStream || { agentMessage: null, puffer: '', flushTimer: null }) : null
+        refreshWorkspace() // Senden-Knopf an der Randkarte sofort sichtbar deaktivieren
+      },
+      setzeStatus: setzeAgentStatus,
+      verdichte: async () => {},
+      chatte: async () => {
+        const kontext = baueChatKontext({
+          verstaendnis: ensureProjectUnderstanding(project),
+          docText: dokumentText(),
+          findings: doc.findings,
+          doc,
+          thread: finding.thread.slice(0, -1), // der aktuelle Nutzer-Turn geht separat als `anfrage` mit
+          anfrage,
+          zusatzAnweisung: baueFindingZusatzAnweisung(finding),
+          // Aus main, siehe sendeAgentenChat: ohne das Projektwissen waere auch das
+          // Randkarten-Gespraech ein blinder Kanal.
+          onda: ondaQuellen(doc, project),
+        })
+        return await fuehreChatLauf(finding.thread, kontext, runTask)
+      },
+    }),
+  )
+  // Siehe sendeAgentenChat: das Tor loest kanalGesperrt('chat') NACH dem letzten Rendern
+  // innerhalb von fuehreChatVorgangAus/fuehreChatLauf — ohne diesen Nachrender bliebe der
+  // Senden-Knopf an der Randkarte deaktiviert stehen und Enter faende kein aktives Submit
+  // mehr (implizite Formularabsendung verlangt einen aktivierten Submit-Button).
+  if (ctx) refreshWorkspace()
 }
 
 // Echte Initiative-Quelle, additiv zum bestehenden Aura-/Pausen-Mechanismus: eine Nachricht
@@ -3633,25 +4451,74 @@ function renderEntscheidungsverlauf(workspace) {
   return section
 }
 
-// renderAgentWidget raeumt bei jedem Lauf ALLE Kinder ab — auch die Kontur.
-// Sie wird deshalb jedes Mal neu angehaengt, und der alte Groessenbeobachter
-// vorher abgemeldet. Ihn stehenzulassen hiesse, bei jedem Tastendruck im
-// Gespraech einen weiteren zu sammeln.
-let blaseAbraeumen = null
+// Zwei Gesten, mehr nicht: merken und weglegen. Sie hingen bis zum 7. August 2026 an
+// der Karte in der Seitenleiste; mit der Karte waeren sie verschwunden, und mit ihnen
+// der einzige Weg, auf dem ein Muster in den Personenspeicher gelangt. Sie haengen
+// jetzt an der Nachricht im Gespraech, an der sie ohnehin hingehoeren.
+//
+// Keine Leiter aus „nur diesmal / nicht mehr hier / nie": das gibt es beim Verwerfen
+// eines Hinweises, weil ein Hinweis eine Forderung war, die man abwehren koennen muss.
+// Ein Angebot muss man nicht abwehren.
+function erweiterungsGesten(message) {
+  const kennung = String(message?.id || '')
+  if (!kennung.startsWith('erweiterung-')) return null
+  const doc = ctx?.activeDoc()
+  if (!doc) return null
+  const id = kennung.slice('erweiterung-'.length)
+  const eintrag = (doc.erweiterungen || []).find(kandidat => kandidat?.id === id)
+  if (!eintrag) return null
 
-function haltBlaseAmOrb() {
-  const ui = elements()
-  if (!ui.agentWidget || ui.agentWidget.hidden) return
-  blaseAmOrbAusrichten(ui.agentWidget, ui.agentPresence)
+  const flaeche = createNode('div', 'onda-rueckkopplung-gesten')
+  // Die Stelle, um die es geht. Eine Erweiterung ohne Weg dorthin waere eine
+  // Behauptung ueber einen Text, den man erst suchen muss.
+  ;(eintrag.stellen || []).forEach(stelle => {
+    if (!stelle?.blockId && !stelle?.docId) return
+    const sprung = createNode('button', 'onda-erk-geste is-still', stelle.docId ? `Zur Stelle in „${stelle.docTitel || 'einem anderen Text'}“` : 'Zur Stelle')
+    sprung.type = 'button'
+    sprung.addEventListener('click', () => {
+      if (stelle.blockId) { focusBlock(stelle.blockId); return }
+      if (typeof ctx?.ops?.openDoc !== 'function') return
+      ctx.ops.openDoc(stelle.docId)
+      requestAnimationFrame(() => {
+        const treffer = getEditorBlocks(ctx.editor)
+          .filter(block => String(block.text || '').includes(String(stelle.text || '')))
+        if (treffer.length === 1 && treffer[0].id) focusBlock(treffer[0].id)
+      })
+    })
+    flaeche.append(sprung)
+  })
+  const merken = createNode('button', 'onda-erk-geste', eintrag.status === 'gemerkt' ? 'Gemerkt' : 'Merken')
+  merken.type = 'button'
+  merken.disabled = eintrag.status === 'gemerkt'
+  merken.addEventListener('click', () => {
+    merkeErweiterung(doc, id)
+    // Das Muster ist der eigentliche Ertrag: der Einzelfall hilft einmal, das Prinzip
+    // beim naechsten Text von allein. Es gehoert der Person, nicht dem Dokument.
+    merkeErkanntes(eintrag.muster, 'erweiterung', eintrag.stellen?.[0]?.text || '', 'idee')
+    ctx?.scheduleSave()
+    refreshWorkspace()
+  })
+  const weglegen = createNode('button', 'onda-erk-geste is-still', 'Weglegen')
+  weglegen.type = 'button'
+  weglegen.addEventListener('click', () => {
+    legeErweiterungWeg(doc, id)
+    const workspace = activeWorkspace()
+    if (workspace) dismissAgentMessage(workspace, message.id)
+    ctx?.scheduleSave()
+    refreshWorkspace()
+  })
+  flaeche.append(merken, weglegen)
+  return flaeche
 }
 
 function renderAgentWidget() {
   const ui = elements()
   const workspace = activeWorkspace()
   if (!ui.agentWidget || !workspace) return
+  // Waehrend Fassung B des Abgangs bleibt der Inhalt stehen und verblasst mit der
+  // Flaeche. Abgeraeumt wird erst, wenn die Faltung durch ist.
+  if (blaseFaeltZurueck && !workspace.agent.open) return
   const inputState = captureInputState(ui.agentWidget, '.agent-chat-input')
-  blaseAbraeumen?.()
-  blaseAbraeumen = null
   ui.agentWidget.replaceChildren()
   if (!workspace.agent.open) {
     if (agentPresenceFocusRequest) {
@@ -3660,9 +4527,6 @@ function renderAgentWidget() {
     }
     return
   }
-  blaseAbraeumen = blaseAnhaengen(ui.agentWidget)
-  haltBlaseAmOrb()
-
   const message = activeAgentMessage(workspace)
   const header = createNode('header', 'agent-widget-header')
   header.append(
@@ -3701,6 +4565,8 @@ function renderAgentWidget() {
   }
   const messages = createNode('div', 'agent-widget-messages')
   message.thread.forEach(entry => appendThreadMessageNode(messages, entry))
+  const gesten = erweiterungsGesten(message)
+  if (gesten) messages.append(gesten)
 
   // Composer nach dem Design System: EIN Rahmen um Feld und Knopf, nicht zwei
   // Formen nebeneinander (components/conversation/Composer.jsx).
@@ -3714,16 +4580,15 @@ function renderAgentWidget() {
   send.append(ondaIcon('arrow-right', { size: 15 }))
   send.type = 'submit'
   send.title = 'Senden'
-  send.setAttribute('aria-label', 'Senden')
-  send.disabled = Boolean(laufenderChatLauf)
-  composer.append(input, send)
-  form.append(composer)
+  send.setAttribute('aria-label', 'Nachricht senden')
+  send.disabled = kanalGesperrt('chat') // Sperre wohnt im Tor (Task 6), nicht mehr in einem lokalen Feld
+  form.append(input, send)
   form.addEventListener('submit', event => {
     event.preventDefault()
     const text = input.value.trim()
-    if (!text || laufenderChatLauf) return
+    if (!text || kanalGesperrt('chat')) return
     if (istInterviewAktiv()) {
-      if (interviewLaufAktiv) return // ein Lauf zur Zeit; die Eingabe bleibt stehen
+      if (kanalGesperrt('interview')) return // ein Lauf zur Zeit; die Eingabe bleibt stehen
       input.value = ''
       sendeInterviewAntwort(message, text)
       return
@@ -4063,49 +4928,63 @@ async function fuehreHinweislaufAus({ grund = 'pause' } = {}) {
   // deshalb hier und nicht in versucheHinweislauf, das nur das aktuelle Dokument sieht.
   const rueckkopplung = synchronisiereRueckkopplungsvorschlag()
 
-  const ergebnis = await versucheHinweislauf({
-    hatDokument: Boolean(doc && workspace),
-    istBeispielprojekt: istBeispielDokument(doc),
-    verstaendnisOffen: verstaendnis ? istInterviewOffen(verstaendnis) : false,
-    laeuftBereits: hinweislaufAktiv,
-    docText,
-    signatur,
-    letzteSignatur: protokoll?.signatur ?? null,
-    sperreSetzen: wert => { hinweislaufAktiv = wert },
-    hatSchluessel,
-    istNochDasselbeDokument: () => ctx.activeDoc()?.id === docId,
-    // Fix-Runde 2, Finding 2b (Important): der Chat-Auslöser umging bisher die Monatsbremse
-    // komplett (beansprucheKostenfreigabe:null -> versucheHinweislauf nimmt dann {erlaubt:true}
-    // an, siehe hinweislauf-model.mjs). Die Oberfläche behauptet aber "Automatische Läufe sind
-    // pausiert" OHNE Ausnahme für den Chat-Hinweislauf -- das war schlicht nicht wahr. Der
-    // reine Chat (die Antwort des Agenten, sendeAgentenChat/fuehreChatLauf) ist davon NICHT
-    // betroffen: das hier ist ausschliesslich der zusätzliche Hintergrund-Hinweislauf, den eine
-    // Chat-Bitte ("schau mal drüber") zusätzlich anstößt (siehe starteHinweislauf-Aufruf in
-    // sendeAgentenChat) -- genau der soll wie jeder andere automatische Lauf der Bremse
-    // unterliegen; die Chat-Antwort selbst läuft unabhängig davon immer weiter.
-    beansprucheKostenfreigabe: () => beansprucheAutomatikKosten('hinweis', { docId, grund }),
-    verstaendnis,
-    blocks,
-    findings: doc?.findings,
-    decisions: doc?.decisions,
-    annotationMode: workspace?.annotationMode || 'text',
-    // Die Textart entscheidet, welche Hinweisarten Integritaetsfragen sind
-    // (textart-regeln.mjs). Bei einem Plakattext ist eine fehlende Quellenangabe keine
-    // Frage der Wahrhaftigkeit, und ihr Verwerfen kein "bewusst angenommenes Risiko".
-    // Fehlt das Profil, bleibt es beim vorsichtigen Fall: alle vier binden.
-    textart: project?.languageProfile?.genre || '',
-    rueckkopplung,
-    // Textsorte, Aussagen-Speicher und Gedaechtnis (onda-kontext.mjs) kommen hier eine Ebene
-    // spaeter dazu als bei Interview und Chat: den Kontext dieses Kanals baut
-    // versucheHinweislauf selbst (hinweislauf-model.mjs), und diese Datei kann ihm nichts
-    // durchreichen. ergaenzeOndaKontext haengt die Bloecke HINTEN an kontext.volatiles — also
-    // hinter Anweisung und Entscheidungsliste und weit hinter den gecachten Praefix, dessen
-    // Stabilitaet damit unberuehrt bleibt. versucheHinweislauf ruft runTask genau einmal, mit
-    // genau diesem Kontext; sobald hinweislauf-model.mjs einen onda-Parameter durchreicht,
-    // faellt diese Klammer ersatzlos weg (baueHinweisKontext kennt ihn bereits).
-    runTask: (task, kontext, optionen) => runTask(task, ergaenzeOndaKontext(kontext, ondaWissen), optionen),
-    setzeAgentStatus,
-  })
+  // Kanal-Sperre und Signatur wandern ins Lauf-Tor (lauf-tor.mjs, Task 7): laeuftBereits/
+  // sperreSetzen an versucheHinweislauf werden darum reine No-ops -- die Kanal-Sperre prueft
+  // und haelt das Tor (fuehreLaufAus); das Modell behaelt seine Parameter fuer die Modell-Tests
+  // (hinweislauf-model.test.mjs). Das Signatur-Doppel bleibt ABSICHTLICH zweistufig: die
+  // Tor-Signatur unten ist docId-praefixiert und vergleicht gegen den letzten BEZAHLTEN Lauf
+  // dieses Kanals im Journal (struktureller Backstop, kanalweit, einmalJeSignatur); die
+  // unpraefixierte `signatur`/`letzteSignatur` unten bleibt versucheHinweislaufs eigene,
+  // unveraenderte Pruefung gegen protokoll.signatur (je Workspace, wie vor Task 7).
+  //
+  // Aus main mitgenommen und NICHT verloren: annotationMode, textart, rueckkopplung und das
+  // Projektwissen. Der Zweig kannte diese vier noch nicht — sie sind nach seiner Abzweigung
+  // dazugekommen.
+  const ergebnis = await fuehreLaufAus(
+    { kanal: 'hinweis', ausloeser: grund, signatur: `${docId}:${signatur}`, einmalJeSignatur: true },
+    ({ runTask: torRunTask }) => versucheHinweislauf({
+      hatDokument: Boolean(doc && workspace),
+      istBeispielprojekt: istBeispielDokument(doc),
+      verstaendnisOffen: verstaendnis ? istInterviewOffen(verstaendnis) : false,
+      laeuftBereits: false, // die Kanal-Sperre prueft und haelt das Tor (fuehreLaufAus)
+      sperreSetzen: () => {}, // das Modell behaelt seine Parameter fuer die Modell-Tests
+      docText,
+      signatur,
+      letzteSignatur: protokoll?.signatur ?? null,
+      hatSchluessel,
+      istNochDasselbeDokument: () => ctx.activeDoc()?.id === docId,
+      // Fix-Runde 2, Finding 2b (Important): der Chat-Auslöser umging bisher die Monatsbremse
+      // komplett (beansprucheKostenfreigabe:null -> versucheHinweislauf nimmt dann {erlaubt:true}
+      // an, siehe hinweislauf-model.mjs). Die Oberfläche behauptet aber "Automatische Läufe sind
+      // pausiert" OHNE Ausnahme für den Chat-Hinweislauf -- das war schlicht nicht wahr. Der
+      // reine Chat (die Antwort des Agenten, sendeAgentenChat/fuehreChatLauf) ist davon NICHT
+      // betroffen: das hier ist ausschliesslich der zusätzliche Hintergrund-Hinweislauf, den eine
+      // Chat-Bitte ("schau mal drüber") zusätzlich anstößt (siehe starteHinweislauf-Aufruf in
+      // sendeAgentenChat) -- genau der soll wie jeder andere automatische Lauf der Bremse
+      // unterliegen; die Chat-Antwort selbst läuft unabhängig davon immer weiter.
+      beansprucheKostenfreigabe: () => beansprucheAutomatikKosten('hinweis', { docId, grund }),
+      verstaendnis,
+      blocks,
+      findings: doc?.findings,
+      decisions: doc?.decisions,
+      annotationMode: workspace?.annotationMode || 'text',
+      // Die Textart entscheidet, welche Hinweisarten Integritaetsfragen sind
+      // (textart-regeln.mjs). Bei einem Plakattext ist eine fehlende Quellenangabe keine
+      // Frage der Wahrhaftigkeit, und ihr Verwerfen kein "bewusst angenommenes Risiko".
+      // Fehlt das Profil, bleibt es beim vorsichtigen Fall: alle vier binden.
+      textart: project?.languageProfile?.genre || '',
+      rueckkopplung,
+      // Textsorte, Aussagen-Speicher und Gedaechtnis (onda-kontext.mjs) kommen hier eine Ebene
+      // spaeter dazu als bei Interview und Chat: den Kontext dieses Kanals baut
+      // versucheHinweislauf selbst (hinweislauf-model.mjs), und diese Datei kann ihm nichts
+      // durchreichen. ergaenzeOndaKontext haengt die Bloecke HINTEN an kontext.volatiles — also
+      // hinter Anweisung und Entscheidungsliste und weit hinter den gecachten Praefix, dessen
+      // Stabilitaet damit unberuehrt bleibt. Die Klammer sitzt jetzt um das RunTask DES TORS,
+      // damit Buchung und Journal denselben Weg nehmen wie bei jedem anderen Kanal.
+      runTask: (task, kontext, optionen) => torRunTask(task, ergaenzeOndaKontext(kontext, ondaWissen), optionen),
+      setzeAgentStatus,
+    }),
+  )
 
   if (!ergebnis.gestartet) {
     if (ergebnis.grund === 'monatsbudget-erreicht') {
@@ -4169,35 +5048,55 @@ async function fuehreErweiterungslaufAus({ vonHand = false } = {}) {
   const verstaendnis = project ? ensureProjectUnderstanding(project) : null
   const ondaWissen = ondaQuellen(doc, project)
 
-  const ergebnis = await versucheErweiterungslauf({
-    hatDokument: Boolean(doc && workspace),
-    istBeispielprojekt: istBeispielDokument(doc),
-    verstaendnisOffen: verstaendnis ? istInterviewOffen(verstaendnis) : false,
-    laeuftBereits: erweiterungslaufAktiv,
-    docText,
-    vonHand,
-    sperreSetzen: wert => { erweiterungslaufAktiv = wert },
-    hatSchluessel,
-    istNochDasselbeDokument: () => ctx.activeDoc()?.id === docId,
-    beansprucheKostenfreigabe: () => beansprucheAutomatikKosten('erweiterung', { docId, grund: vonHand ? 'hand' : 'aufschauen' }),
-    verstaendnis,
-    blocks,
-    doc,
-    // Dasselbe Buendel zweimal, mit Absicht und in beide Richtungen:
-    //   - hier als onda, damit versucheErweiterungslauf daraus die Geschwistertexte ableitet
-    //     und einen Anker, der in einem von ihnen steht, wiederfindet statt ihn zu verwerfen,
-    //   - unten im runTask-Umschlag, damit dieselben Texte auch im Prompt stehen.
-    // Beides muss aus DERSELBEN Quelle kommen: sonst zeigte der Prompt andere Texte, als die
-    // Pruefung durchsucht, und jede Querverbindung fiele stillschweigend heraus.
-    onda: ondaWissen,
-    // Dieselbe Klammer wie im Hinweislauf: den Kontext baut versucheErweiterungslauf selbst
-    // (erweiterungslauf-model.mjs), die Wissensbloecke kommen an der Uebergabestelle zum
-    // Gateway hinten an die volatiles. Fuer diesen Kanal ist vor allem der Aussagen-Speicher
-    // wichtig — eine Weiterfuehrung, die in einem anderen Text des Projekts schon steht, ist
-    // keine Erweiterung, sondern eine Doppelung.
-    runTask: (task, kontext, optionen) => runTask(task, ergaenzeOndaKontext(kontext, ondaWissen), optionen),
-    setzeAgentStatus,
-  })
+  // Kanal-Sperre und Signatur wandern ins Lauf-Tor (lauf-tor.mjs, Task 8): laeuftBereits/
+  // sperreSetzen an versucheErweiterungslauf werden darum reine No-ops -- die Kanal-Sperre
+  // prueft und haelt das Tor (fuehreLaufAus); das Modell behaelt seine Parameter fuer die
+  // Modell-Tests (erweiterungslauf-model.test.mjs). BEWUSSTE VERHALTENSSCHAERFUNG (der Kern
+  // von Issue #12, KEIN Momente-Verhalten): bisher lebte die Merkliste "wofuer wurde schon
+  // bezahlt" nur in der Modul-Variable letzteErweiterungsSignatur und vergass sie beim
+  // Neustart -- die App bezahlte denselben Text danach ein zweites Mal. Jetzt liegt die
+  // Merkliste im Journal (data.json) und ueberlebt den Neustart -- genau die Fehlerklasse
+  // aus fuenf Fixes in neun Tagen.
+  //
+  // Aus main mitgenommen: das onda-Buendel. Es steht zweimal da, mit Absicht und in beide
+  // Richtungen — einmal als Parameter, damit versucheErweiterungslauf die Geschwistertexte
+  // ableitet und einen Anker darin wiederfindet statt ihn zu verwerfen, und einmal im
+  // runTask-Umschlag, damit dieselben Texte auch im Prompt stehen. Beides MUSS aus derselben
+  // Quelle kommen: sonst zeigte der Prompt andere Texte, als die Pruefung durchsucht, und jede
+  // Querverbindung fiele stillschweigend heraus.
+  const ergebnis = await fuehreLaufAus(
+    {
+      kanal: 'erweiterung',
+      ausloeser: vonHand ? 'hand' : 'aufschauen',
+      signatur: erweiterungsSignatur(docId, docText),
+      einmalJeSignatur: !vonHand,
+    },
+    ({ runTask: torRunTask }) => versucheErweiterungslauf({
+      hatDokument: Boolean(doc && workspace),
+      istBeispielprojekt: istBeispielDokument(doc),
+      verstaendnisOffen: verstaendnis ? istInterviewOffen(verstaendnis) : false,
+      laeuftBereits: false, // die Kanal-Sperre prueft und haelt das Tor (fuehreLaufAus)
+      docText,
+      vonHand,
+      sperreSetzen: () => {}, // das Modell behaelt seine Parameter fuer die Modell-Tests
+      hatSchluessel,
+      istNochDasselbeDokument: () => ctx.activeDoc()?.id === docId,
+      beansprucheKostenfreigabe: () => beansprucheAutomatikKosten('erweiterung', { docId, grund: vonHand ? 'hand' : 'aufschauen' }),
+      verstaendnis,
+      blocks,
+      doc,
+      onda: ondaWissen,
+      runTask: (task, kontext, optionen) => torRunTask(task, ergaenzeOndaKontext(kontext, ondaWissen), optionen),
+      setzeAgentStatus,
+    }),
+  )
+
+  // Das Tor loest kanalGesperrt('erweiterung') in SEINEM EIGENEN finally (lauf-tor.mjs) --
+  // das laeuft NACH dem letzten Rendern innerhalb dieser Funktion. Ohne diesen Nachrender
+  // bliebe ein Bedienelement, das an kanalGesperrt('erweiterung') haengt, optisch UND
+  // funktional deaktiviert, auf allen Pfaden -- gestartet:false, Fehler UND Erfolg
+  // (siehe sendeAgentenChat fuer dasselbe Muster).
+  if (ctx) refreshWorkspace()
 
   if (!ergebnis.gestartet) {
     if (ergebnis.grund === 'monatsbudget-erreicht') {
@@ -4209,12 +5108,10 @@ async function fuehreErweiterungslaufAus({ vonHand = false } = {}) {
   }
   if (!ergebnis.erfolg) return ergebnis
 
-  // Nach JEDEM erfolgreichen Lauf, gleich welcher Ausloeser ihn startete -- genau wie
-  // beim Hinweislauf, wo protokoll.signatur in fuehreHinweislaufAus selbst gesetzt wird.
-  // Vorher stand die Fortschreibung nur im automatischen Zweig, und ein Lauf von Hand
-  // setzte sie sogar auf null zurueck: dann sah der Zeitgeber 24 ms spaeter einen
-  // unveraenderten Text mit unbekannter Signatur und bezahlte ihn ein zweites Mal.
-  letzteErweiterungsSignatur = erweiterungsSignatur(docId, docText)
+  // Die Fortschreibung der alten Modul-Variable entfaellt: der Journal-Eintrag IST die
+  // Merkliste jetzt (das Tor schreibt ihn in schliesseLauf, BEVOR fuehreLaufAus zurueckkehrt --
+  // siehe planeErweiterungslauf, dessen darfAutomatischLaufen-Check direkt danach bereits den
+  // frischen Eintrag sieht, keine Luecke).
   ergebnis.uebernommen.forEach(erweiterung => doc.erweiterungen.push(erweiterung))
   // Bewusst KEIN ergaenzeEchteInitiative und keine Zahl irgendwo: eine Erweiterung
   // klopft nicht an. Sie liegt in der Seitenspalte, bis jemand hinschaut.
@@ -4230,9 +5127,10 @@ function clearErweiterungslaufTimer() {
 // Der Erweiterungslauf gehoert zum Moment des Aufschauens (momente-model.mjs).
 // Er wird deshalb genau dann geplant, wenn die lange Ruhe erreicht ist -- nicht bei
 // jeder Schreibpause. Ein Lauf je Textstand: die Signatur merkt sich, wozu schon
-// gefragt wurde, damit dieselbe Ruhe nicht zweimal bezahlt wird.
-let letzteErweiterungsSignatur = null
-
+// gefragt wurde, damit dieselbe Ruhe nicht zweimal bezahlt wird. Die Merkliste selbst
+// (frueher hier als letzteErweiterungsSignatur) lebt jetzt im Journal (lauf-tor.mjs/
+// lauf-journal.mjs, Task 8) und ueberlebt damit den Neustart -- siehe die
+// Verhaltensschaerfung oben in fuehreErweiterungslaufAus.
 function erweiterungsSignatur(docId, docText) {
   return `${docId}:${seedBodySignature(docText)}`
 }
@@ -4242,7 +5140,7 @@ function planeErweiterungslauf() {
   const docId = ctx?.activeDoc()?.id || null
   const inputState = initiativeInputState(docId)
   if (!docId || !inputState || !Number.isFinite(inputState.lastInputAt)) return
-  if (erweiterungslaufAktiv || isComposing || !editorViewIsVisibleFor(docId)) return
+  if (kanalGesperrt('erweiterung') || isComposing || !editorViewIsVisibleFor(docId)) return
 
   const restzeit = AUFSCHAUEN_MS - (Date.now() - inputState.lastInputAt)
   const generation = inputState.generation
@@ -4252,19 +5150,126 @@ function planeErweiterungslauf() {
     if (!aktuell || aktuell.generation !== generation) return
     if (!editorViewIsVisibleFor(docId) || isComposing) return
     const signatur = erweiterungsSignatur(docId, baueDocText(getEditorBlocks(ctx.editor)))
-    if (!darfAutomatischLaufen(signatur, letzteErweiterungsSignatur)) return
+    // Gegen letzteBezahlteSignatur aus dem JOURNAL, nicht mehr gegen eine fluechtige
+    // Modul-Variable: das Tor schreibt den Journal-Eintrag in schliesseLauf VOR dem
+    // Rueckkehren aus fuehreLaufAus (lauf-tor.mjs), darum sieht dieser Check nach einem
+    // Lauf immer schon den frischen Stand -- keine Luecke zwischen Bezahlen und Merken.
+    if (!darfAutomatischLaufen(signatur, letzteBezahlteSignatur(torJournal(), 'erweiterung'))) return
     fuehreErweiterungslaufAus({ vonHand: false })
   }, Math.max(24, restzeit))
 }
 
-// Von Hand: „Was faellt dir noch ein?" Jeder Moment muss auch gezogen werden koennen —
-// proaktiv darf nicht heissen, warten zu muessen.
-export function starteErweiterungslauf() {
-  // Kein Zuruecksetzen der Signatur: der Weg von Hand fragt sie ohnehin nie ab
-  // (nur der Zeitgeber tut das). Sie auf null zu setzen hiess, dem Zeitgeber
-  // direkt danach denselben Text als unbekannt zu praesentieren.
-  return fuehreErweiterungslaufAus({ vonHand: true })
+// --- Dritter Lauf: die Quellen nach Thema ordnen -----------------------------
+// „Quellen nach Thema, von der KI gebildet und benannt; der Mensch kann umbenennen,
+// verschieben, Gruppen anlegen — wie bei der Struktur." (Jakob, 7. August 2026)
+//
+// Dieselbe duenne ctx/DOM-Klammer wie fuehreErweiterungslaufAus: alle Werte SYNCHRON
+// vor dem Aufruf einsammeln, die Ablauflogik steckt in versucheQuellenlauf
+// (quellenlauf-model.mjs, node-getestet).
+//
+// Der Lauf haengt am PROJEKT, nicht am Dokument. Deshalb prueft er auch nicht auf ein
+// offenes Dokument: die Quellen liegen im Projekt, und ihre Ordnung ist dieselbe,
+// gleich welchen Text man gerade vor sich hat.
+async function fuehreQuellenlaufAus({ vonHand = false } = {}) {
+  const doc = ctx?.activeDoc()
+  const project = dokumentProjekt(doc)
+  const projectId = project?.id ?? null
+  const quellen = Array.isArray(project?.sources) ? [...project.sources] : []
+  const verstaendnis = project ? ensureProjectUnderstanding(project) : null
+  const bestehendeThemen = project ? ensureQuellenThemen(project).map(thema => ({ ...thema })) : []
+  const signatur = quellenSignatur(projectId, quellen)
+  // Das Projektwissen gehoert auch in diesen Kanal. Er ging ohne es an den Start und war
+  // damit blind; gemeldet hat es die Eigenschafts-Pruefung ueber alle Kanaele
+  // (evals/pruefungen/kontext-alle-kanaele.mjs). Fuer die Themenbildung zaehlt vor allem
+  // die Textsorte — dieselben zwanzig Quellen ordnen sich fuer eine Seminararbeit anders
+  // als fuer einen Werbetext.
+  //
+  // Direkt durchgereicht statt durch die ergaenzeOndaKontext-Klammer wie bei Hinweis- und
+  // Erweiterungslauf: baueQuellenKontext kennt den onda-Parameter, also braucht es die
+  // Klammer hier gar nicht erst.
+  const ondaWissen = ondaQuellen(doc, project)
+
+  // DER FUENFTE KANAL LAEUFT DURCHS TOR. Genau darum ging es bei Issue #12: die
+  // Kopiervorlage "eigene Sperr-Variable + eigene Signatur-Merkliste" war zum fuenften Mal
+  // abgeschrieben worden, und system/LEITSTAND.md hat es benannt — dieser Kanal entstand am
+  // 8.8., drei Tage NACHDEM der Zweig fertig war, der die vier anderen ablöste.
+  //
+  // Wie bei den anderen: laeuftBereits/sperreSetzen werden No-ops, die Kanal-Sperre prueft
+  // und haelt das Tor. einmalJeSignatur nur bei automatischen Laeufen — von Hand darf man
+  // dieselben Quellen erneut ordnen lassen, etwa nachdem man Gruppennamen geaendert hat.
+  const ergebnis = await fuehreLaufAus(
+    {
+      kanal: 'quellen',
+      ausloeser: vonHand ? 'hand' : 'oeffnen',
+      signatur: `${projectId}:${signatur}`,
+      einmalJeSignatur: !vonHand,
+    },
+    ({ runTask: torRunTask }) => versucheQuellenlauf({
+      hatProjekt: Boolean(project),
+      istBeispielprojekt: istBeispielDokument(doc) || (project ? istBeispielProjekt(project) : false),
+      laeuftBereits: false, // die Kanal-Sperre prueft und haelt das Tor (fuehreLaufAus)
+      quellen,
+      bestehendeThemen,
+      verstaendnis,
+      onda: ondaWissen,
+      vonHand,
+      sperreSetzen: () => {}, // das Modell behaelt seine Parameter fuer die Modell-Tests
+      hatSchluessel,
+      istNochDasselbeProjekt: () => dokumentProjekt()?.id === projectId,
+      beansprucheKostenfreigabe: () => beansprucheAutomatikKosten('quellenthemen', { projectId, grund: vonHand ? 'hand' : 'oeffnen' }),
+      runTask: torRunTask,
+      setzeAgentStatus,
+    }),
+  )
+
+  // Wie bei Chat und Erweiterung: das Tor loest kanalGesperrt('quellen') in seinem eigenen
+  // finally, also NACH dem letzten Rendern hier. Ohne diesen Nachrender bliebe der
+  // Ordnen-Knopf deaktiviert stehen.
+  if (ctx) refreshWorkspace()
+
+  if (!ergebnis.gestartet) {
+    if (ergebnis.grund === 'monatsbudget-erreicht') {
+      zeigeBudgetPause(activeWorkspace())
+      persistWorkspace()
+      refreshWorkspace()
+    }
+    return ergebnis
+  }
+  if (!ergebnis.erfolg) return ergebnis
+
+  // Nach JEDEM erfolgreichen Lauf fortschreiben, gleich welcher Ausloeser ihn startete
+  // — sonst sieht das Oeffnen des Fensters gleich darauf dieselbe Quellenmenge als
+  // unbekannt an und bezahlt sie ein zweites Mal (Lehre aus dem Erweiterungslauf).
+  letzteQuellenSignatur = signatur
+  // Das Projekt frisch holen: waehrend des Laufs kann jemand eine Quelle aufgenommen
+  // haben. uebernimmThemenvorschlag verwirft Kennungen, die es nicht gibt, von selbst.
+  const aktuelles = dokumentProjekt()
+  if (aktuelles?.id === projectId) {
+    uebernimmThemenvorschlag(aktuelles, ergebnis.gruppen)
+    ctx?.persist()
+    renderMaterialTree()
+  }
+  return ergebnis
 }
+
+// Der stille Weg: beim Oeffnen des Quellen-Fensters, aber nur, wenn sich die
+// Quellenmenge seit dem letzten Lauf ueberhaupt geaendert hat. Ohne diese Sperre
+// zahlte jedes Nachschauen einen vollen Durchgang fuer dasselbe Ergebnis.
+function ordneQuellenBeiBedarf() {
+  const project = dokumentProjekt()
+  const signatur = quellenSignatur(project?.id ?? null, project?.sources || [])
+  if (!darfAutomatischOrdnen(signatur, letzteQuellenSignatur)) {
+    return Promise.resolve({ gestartet: false, grund: 'schon-geordnet' })
+  }
+  return fuehreQuellenlaufAus({ vonHand: false })
+}
+
+// Hier stand `starteErweiterungslauf()` — „Was faellt dir noch ein?", der Weg von Hand.
+// Der Knopf dazu sass in der Erweiterungs-Karte der Seitenleiste; die Karte ist am
+// 7.8.2026 mit der Flaeche gefallen (Jakob: Erweiterungen kommen ueber Chat oder
+// Anmerkung, nicht als Inventar). Der Export blieb stehen und rief niemand mehr auf,
+// waehrend der Kommentar darueber weiter einen Griff versprach, den es nicht gab.
+// Erweiterungen kommen jetzt ausschliesslich von selbst, beim Aufschauen.
 
 function nextAgentInitiative(workspace) {
   return workspace.agent.messages.find(message => (
@@ -4329,7 +5334,7 @@ function planeHinweislauf() {
   const entscheidung = pruefePausenAusloeser({
     hatDokument: Boolean(doc && workspace),
     istBeispielprojekt: istBeispielDokument(doc),
-    laeuftBereits: hinweislaufAktiv,
+    laeuftBereits: kanalGesperrt('hinweis'), // Sperre wohnt im Tor (Task 7), nicht mehr in einem lokalen Feld
     hatEingabeStatus: Boolean(inputState),
     lastInputAt: inputState?.lastInputAt,
     editorSichtbar: editorViewIsVisibleFor(docId),
@@ -4434,8 +5439,17 @@ export function refreshWorkspace({ reconcileEditing = false } = {}) {
 
   ui.view?.classList.toggle('is-agent-open', workspace.agent.open)
   ui.view?.classList.toggle('is-evidence-open', Boolean(workspace.evidenceFindingId))
+  // Die ruhige Lage: der Stift ist abgelegt, es kommt keine Anmerkung mehr. Dann traegt
+  // der Rand rechts nichts und schiebt den Text bloss aus der Mitte — er faellt weg,
+  // der Text bleibt gleich breit und rueckt in die Mitte. Es haengt bewusst allein am
+  // Stift und nicht daran, ob GERADE eine Anmerkung ansteht: sonst wanderte der Text
+  // bei jeder kommenden und gehenden Anmerkung hin und her.
+  ui.view?.classList.toggle('is-still', Boolean(workspace.quietAnnotations))
 
   setLayerVisibility(ui.agentWidget, workspace.agent.open)
+  // Direkt danach, im selben Bild: die Kontur misst das eben sichtbar gewordene
+  // Fenster. Vorher waere es noch versteckt und nicht messbar.
+  blaseFolgt(workspace.agent.open)
   ui.agentPresence?.setAttribute('aria-expanded', String(workspace.agent.open))
   applyAuraState()
   setLayerVisibility(ui.evidenceWindow, Boolean(workspace.evidenceFindingId))
@@ -4452,19 +5466,18 @@ export function refreshWorkspace({ reconcileEditing = false } = {}) {
 
   pruefeVerstaendnisInterview()
   renderStructureNav()
-  renderZurueckgehalten()
   renderErweiterungen()
   renderErkanntes()
   planeMomentwechsel()
   planeErweiterungslauf()
   renderProjectUnderstandingCard()
   renderMaterialEntry()
+  renderMaterialTree()
   syncThemeToggle()
-  renderAnnotationReviewBar()
+  renderAnnotationPresence()
   renderLocalFinding()
   renderAgentWidget()
   renderEvidenceWindow()
-  scheduleTriggerRender()
   scheduleAgentInitiative()
 }
 
@@ -4572,11 +5585,21 @@ export function initWorkspace(context) {
     persistWorkspace()
   }
 
+  // EIN Knopf fuer beide Richtungen, fest am Fenster. Zwei Knoepfe konnten nie an
+  // derselben Stelle stehen: sie hingen in zwei verschiedenen Kaesten, auf zwei
+  // verschiedenen Hoehenbaendern, und der eine Kasten wandert beim Einklappen um die
+  // volle Breite der Leiste.
   const applySidebarCollapsed = collapsed => {
     ui.view?.classList.toggle('is-sidebar-collapsed', collapsed)
-    ui.collapse?.setAttribute('aria-expanded', String(!collapsed))
-    ui.reopen?.setAttribute('aria-expanded', String(!collapsed))
-    if (ui.reopen) ui.reopen.hidden = !collapsed
+    const wort = collapsed ? 'Seitenleiste einblenden' : 'Seitenleiste einklappen'
+    ui.toggle?.setAttribute('aria-expanded', String(!collapsed))
+    ui.toggle?.setAttribute('aria-label', wort)
+    if (ui.toggle) ui.toggle.title = wort
+    ui.toggle?.replaceChildren(ondaIcon(collapsed ? 'chevron-right' : 'chevron-left', { size: 18 }))
+    // Eingeklappt heisst auch: nicht mehr ertastbar. Ohne das wanderte der Fokus durch
+    // die unsichtbaren Bedienelemente der weggeschobenen Leiste, und wer mit der
+    // Tastatur arbeitet, verlore ihn scheinbar ins Nichts.
+    if (ui.sidebar) ui.sidebar.inert = collapsed
   }
   const setSidebarCollapsed = collapsed => {
     if (Boolean(ctx.state.settings.sidebarCollapsed) !== collapsed) {
@@ -4585,72 +5608,37 @@ export function initWorkspace(context) {
     }
     applySidebarCollapsed(collapsed)
   }
-  const onSidebarCollapse = () => setSidebarCollapsed(true)
-  const onSidebarReopen = () => setSidebarCollapsed(false)
+  // Die Richtung kommt aus dem, was zu SEHEN ist, nicht aus der Einstellung. Auf
+  // schmalen Ansichten klappt die Shell die Leiste selbst ein (onda-shell.mjs), ohne
+  // die Einstellung anzufassen — beides lief auseinander, und ein Druck auf die Klinke
+  // tat dann scheinbar nichts.
+  const onSidebarToggle = () => setSidebarCollapsed(!ui.view?.classList.contains('is-sidebar-collapsed'))
   applySidebarCollapsed(Boolean(ctx.state.settings.sidebarCollapsed))
+  setzeSeitenBaum('struktur', seitenBaeume.struktur)
+  setzeSeitenBaum('quellen', seitenBaeume.quellen)
 
-  const previousAnnotation = () => {
-    momentVonHand = true
-    annotationController?.previous('aufschauen')
-    persistWorkspace()
-    refreshWorkspace()
-  }
-  const nextAnnotation = () => {
-    momentVonHand = true
-    annotationController?.next('aufschauen')
-    persistWorkspace()
-    refreshWorkspace()
-  }
+  // Das eine, was vom Bedienteil blieb: aus- und einblenden. Es haengt am Stift-Zeichen
+  // in der Topbar (docs/PHILOSOPHIE.md §1).
+  //
+  // Mit der Leiste gingen vier Handlungen: vor und zurueck zwischen Anmerkungen, die
+  // Sammeluebernahme sicherer Korrekturen und der Wechsel des Arbeitsmodus. Sie
+  // wandern NICHT woandershin — sie sind fort. Wer neben dir schreibt, gibt dir keine
+  // Vor-Zurueck-Tasten fuer seine Anmerkungen.
+  //
+  // Rueckgaengig ist die Ausnahme: es blieb, aber als Taste statt als Knopf, siehe
+  // handleAnmerkungRueckgaengig().
   const toggleQuietAnnotations = () => {
     const workspace = activeWorkspace()
     annotationController?.setQuiet(!workspace?.quietAnnotations)
     refreshWorkspace()
   }
-  const switchAnnotationMode = event => {
-    annotationController?.setMode(event.currentTarget.dataset.annotationMode)
-    momentVonHand = true
-    refreshWorkspace()
-  }
-  const acceptSafeAnnotations = () => {
-    const result = annotationController?.acceptAllSafeCorrections()
-    if (result?.ok) announceAgentStatus(`${result.count} sichere Korrekturen übernommen. Rückgängig bleibt einzeln möglich.`)
-    refreshWorkspace()
-  }
-  const undoAnnotation = () => {
-    const result = annotationController?.undoLast()
-    if (!result?.ok) {
-      announceAgentStatus(result?.reason === 'stale-target'
-        ? 'Seit der Änderung wurde weitergeschrieben. Rückgängig hat deshalb nichts verändert.'
-        : 'Es gibt nichts rückgängig zu machen.')
-    } else {
-      announceAgentStatus('Die letzte Anmerkungsänderung wurde rückgängig gemacht.')
-    }
-    refreshWorkspace()
-  }
-  document.getElementById('sidebarCollapse')?.replaceChildren(ondaIcon('chevron-left', { size: 18 }))
-  document.getElementById('sidebarReopen')?.replaceChildren(ondaIcon('chevron-right', { size: 18 }))
   document.querySelector('.onda-side-back-chevron')?.replaceChildren(ondaIcon('arrow-left', { size: 16 }))
   document.getElementById('kiSettings')?.replaceChildren(ondaIcon('settings', { size: 18 }))
-  document.getElementById('annotationPrevious')?.replaceChildren(ondaIcon('chevron-left', { size: 18 }))
-  document.getElementById('annotationNext')?.replaceChildren(ondaIcon('chevron-right', { size: 18 }))
 
-  const onPointerOver = event => {
-    const block = event.target.closest('[data-block-id]')
-    const activeBlockId = activeWorkspace()?.activeBlockId
-    if (!block || block.dataset.blockId !== activeBlockId) return
-    clearTimeout(hoverTimer)
-    hoveredBlockId = activeBlockId
-    renderInsertTrigger()
-  }
-  const onPointerOut = event => {
-    const block = event.target.closest('[data-block-id]')
-    if (!block || block.dataset.blockId !== hoveredBlockId) return
-    if (block.contains(event.relatedTarget) || insertTrigger?.contains(event.relatedTarget)) return
-    scheduleHoverClear()
-  }
+  // Die beiden Zeigerhorcher am Absatz gab es nur, damit das Plus beim Ueberfahren
+  // auftauchte. Ohne Plus horcht hier niemand mehr mit.
   const onEditorScroll = () => {
     closeInsertMenu({ restoreFocus: false })
-    scheduleTriggerRender()
     if (localDecoratedBlockId) scheduleLocalPosition(localDecoratedBlockId)
   }
   const onShelfScroll = () => {
@@ -4658,11 +5646,7 @@ export function initWorkspace(context) {
   }
   const onResize = () => {
     closeInsertMenu({ restoreFocus: false })
-    scheduleTriggerRender()
     if (localDecoratedBlockId) scheduleLocalPosition(localDecoratedBlockId)
-    // Der Orb wandert mit der Fensterbreite; sein Sitz muss mitwandern,
-    // sonst haengt die Blase neben ihm statt an ihm.
-    haltBlaseAmOrb()
   }
   const onViewChange = event => {
     if (event.detail?.view !== 'editor') {
@@ -4689,7 +5673,6 @@ export function initWorkspace(context) {
       return
     }
     workspace.activeBlockId = activeBlockId
-    hoveredBlockId = null
     refreshWorkspace()
     persistWorkspace()
   }
@@ -4700,11 +5683,16 @@ export function initWorkspace(context) {
   }
 
   listen(ui.back, 'click', onBack)
+  // Zwei Wege zur Übersicht, weil beide erwartbar sind: der Pfeil unten links und der
+  // Name oben links. Derselbe Weg, nicht zwei verschiedene.
+  listen(document.getElementById('ondaHome'), 'click', onBack)
   listen(ui.agentPresence, 'click', onAgentPresence)
-  listen(ui.collapse, 'click', onSidebarCollapse)
-  listen(ui.reopen, 'click', onSidebarReopen)
-  listen(ctx.editor.view.dom, 'pointerover', onPointerOver)
-  listen(ctx.editor.view.dom, 'pointerout', onPointerOut)
+  listen(ui.toggle, 'click', onSidebarToggle)
+  // Zwei Gesten, klar getrennt: der Name oeffnet das Fenster, der Pfeil klappt den
+  // Baum. Ein Knopf, der beides taete, koennte keins von beidem ankuendigen.
+  listen(ui.structureTree, 'click', () => setzeSeitenBaum('struktur', !seitenBaeume.struktur))
+  listen(ui.materialTreeToggle, 'click', () => setzeSeitenBaum('quellen', !seitenBaeume.quellen))
+  listen(document.getElementById('structureOpen'), 'click', event => openStrukturModal(event.currentTarget))
   listen(ctx.editor.view.dom, 'keydown', handleEditorKeyDown, true)
   listen(ctx.editor.view.dom, 'beforeinput', handleBeforeInput)
   listen(ctx.editor.view.dom, 'compositionstart', startComposition)
@@ -4719,17 +5707,15 @@ export function initWorkspace(context) {
   listen(document.getElementById('materialSources'), 'click', event => openProjectSourcesModal(event.currentTarget))
   listen(document.getElementById('themeToggle'), 'click', toggleTheme)
   listen(document.getElementById('kiSettings'), 'click', event => openKiSettingsDialog(event.currentTarget))
-  listen(document.getElementById('annotationPrevious'), 'click', previousAnnotation)
-  listen(document.getElementById('annotationNext'), 'click', nextAnnotation)
-  listen(document.getElementById('annotationQuietToggle'), 'click', toggleQuietAnnotations)
-  listen(document.getElementById('annotationBulkAccept'), 'click', acceptSafeAnnotations)
-  listen(document.getElementById('annotationUndo'), 'click', undoAnnotation)
-  listen(document.getElementById('annotationRejectionUndo'), 'click', undoLatestRejection)
-  document.querySelectorAll('[data-annotation-mode]').forEach(button => (
-    listen(button, 'click', switchAnnotationMode)
-  ))
+  // Ein einziger Zuhoerer fuer Anmerkungen. Frueher waren es acht — vor, zurueck,
+  // ruhig, Sammeluebernahme, rueckgaengig, Entscheidung zuruecknehmen und zwei fuer
+  // den Arbeitsmodus. Sie hingen alle an der Leiste ueber dem Text, und die Leiste ist
+  // fort (docs/PHILOSOPHIE.md §1 "Der andere Stift").
+  listen(document.getElementById('annotationPresence'), 'click', toggleQuietAnnotations)
   listenEditor('selectionUpdate', onSelectionUpdate)
   listenEditor('update', onEditorUpdate)
+
+  cleanups.push(blaseBeobachten())
 
   // Status-Abo: Statuszeile und Aura folgen dem echten Agenten-Zustand.
   cleanups.push(beiAgentStatus(() => {
@@ -4749,20 +5735,25 @@ export function initWorkspace(context) {
     closeOndaDialog({ restoreFocus: false })
     cleanups.splice(0).reverse().forEach(cleanup => cleanup())
 
-    clearTimeout(hoverTimer)
     clearTimeout(typingTimer)
-    if (laufenderChatLauf?.flushTimer) clearTimeout(laufenderChatLauf.flushTimer)
-    laufenderChatLauf = null
-    if (triggerFrame) cancelAnimationFrame(triggerFrame)
+    if (chatStream?.flushTimer) clearTimeout(chatStream.flushTimer)
+    chatStream = null
     if (localPositionFrame) cancelAnimationFrame(localPositionFrame)
     if (agentLiveFrame) cancelAnimationFrame(agentLiveFrame)
 
     context.editor.unregisterPlugin(activeBlockKey)
     context.editor.unregisterPlugin(localFindingKey)
-    insertTrigger?.remove()
     elements().localLayer?.replaceChildren()
     elements().agentWidget?.replaceChildren()
+    elements().agentWidget?.classList.remove('hat-kontur', 'waechst', 'faellt-zurueck')
     elements().evidenceWindow?.replaceChildren()
+    blaseAntriebAbbrechen()
+    blaseBeobachter?.disconnect()
+    blaseBeobachter = null
+    blaseKontur = null
+    blaseSteht = null
+    blaseFaeltZurueck = false
+    blaseZeigen(elements().blase, false)
 
     if (window.__workspaceCloseTopLayer === closeTopLayer) delete window.__workspaceCloseTopLayer
     if (controller === instance) controller = null
@@ -4772,11 +5763,7 @@ export function initWorkspace(context) {
     renderedDocId = null
     decoratedDocId = null
     decoratedBlockId = null
-    insertTrigger = null
-    hoveredBlockId = null
-    hoverTimer = null
     typingTimer = null
-    triggerFrame = null
     isTyping = false
     isComposing = false
     structureNavState = null
@@ -4784,7 +5771,7 @@ export function initWorkspace(context) {
     localDecoratedFindingId = null
     localDecoratedBlockId = null
     localDecoratedSpacing = 0
-    localDecoratedFinding = null
+    localDecoratedAbsatzweit = false
     localFeedbackError = null
     localPositionFrame = null
     localSummaryFocusRequest = null
@@ -4795,7 +5782,9 @@ export function initWorkspace(context) {
     agentLiveFrame = null
     agentPresenceFocusRequest = false
     interviewPruefKey = null
-    interviewLaufAktiv = false
+    // Keine interviewLaufAktiv-Rueckstellung mehr: die Sperre lebt im Lauf-Tor
+    // (lauf-tor.mjs), dessen eigenes finally sie freigibt, sobald der laufende
+    // Aufruf zurueckkehrt — auch wenn dieser Workspace vorher zerstoert wurde.
     interviewStatus = null
     pausierterAutomatiklauf = null
   }
@@ -4838,5 +5827,24 @@ export const __workspaceTestBridge = {
       boundaryAt: Number.NaN,
       boundaryGeneration: null,
     }
+  },
+  // Wem gehoert Befehl+Z gerade? Sonst nicht von aussen zu sehen, und genau daran haengt,
+  // ob eine Ruecknahme die Anmerkung trifft oder das eigene Schreiben.
+  gehoertRueckgaengigDerAnmerkung() {
+    return letzteAenderungWarAnmerkung
+  },
+  // Das Einfuege-Menue hat seit dem 7. August 2026 keinen sichtbaren Oeffner mehr — das
+  // Plus am Absatz ist fort (docs/PHILOSOPHIE.md §1, und Jakob verstand es schlicht
+  // nicht). Sein Platz wird die Struktur-Ansicht sein, in der Bausteine hinzukommen
+  // duerfen.
+  //
+  // Bis dahin haenge das Menue nicht ungetestet in der Luft: sein Verhalten —
+  // Tastaturweg, Fokusrueckgabe, Einfuegen an der richtigen Stelle — ist lebender Code
+  // und wird weiter geprueft. Dieser Zugang ist die Klinke dafuer, sonst nichts.
+  oeffneEinfuegeMenue(afterBlockId, opener = null) {
+    const blockId = afterBlockId || activeWorkspace()?.activeBlockId
+    if (!blockId) return null
+    openInsertMenu(blockId, opener || document.activeElement || ctx?.editor?.view?.dom || null)
+    return document.querySelector('.semantic-insert-menu')
   },
 }

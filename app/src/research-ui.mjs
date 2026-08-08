@@ -59,7 +59,7 @@ export function createResearchUi({
   }
 
   function actionButton(label, className = '') {
-    const button = createNode('button', `research-action ${className}`.trim(), label)
+    const button = createNode('button', `onda-blaetter__eintrag research-action ${className}`.trim(), label)
     button.type = 'button'
     return button
   }
@@ -95,7 +95,7 @@ export function createResearchUi({
     const status = createNode('p', 'research-status-line', '')
     status.id = 'researchPlanStatus'
     status.setAttribute('role', 'status')
-    const submit = createNode('button', 'research-primary', 'Plan speichern')
+    const submit = createNode('button', 'onda-blaetter__eintrag research-primary', 'Plan speichern')
     submit.id = 'researchPlanSubmit'
     submit.type = 'submit'
 
@@ -114,7 +114,7 @@ export function createResearchUi({
     form.append(
       back,
       createNode('span', 'source-reader-kicker', 'Begrenzter Recherchelauf'),
-      createNode('h3', 'source-reader-title', 'Recherche planen'),
+      createNode('h3', 'onda-blaetter__tiefe-titel source-reader-title', 'Recherche planen'),
       createNode('p', 'research-intro', 'Der Plan wird lokal gespeichert, bevor ein Werkzeug aufgerufen wird. Ergebnisse gelten erst nach Prüfung am Original als belegt.'),
       field('Prüfbare Frage', question),
       field('Zu prüfende Aussage', claim),
@@ -197,7 +197,7 @@ export function createResearchUi({
     })
     const section = createNode('section', 'research-review')
     section.id = 'researchReview'
-    section.append(createNode('h3', 'source-section-title', 'Geprüfte Recherchelage'))
+    section.append(createNode('h3', 'onda-blaetter__tiefe-titel source-section-title', 'Geprüfte Recherchelage'))
     renderCandidateGroup(section, 'Widersprechende Befunde', review.counterEvidence, (
       review.notes.find(note => /Gegenbeleg/.test(note)) || 'Gegenbelegsuche noch nicht abgeschlossen.'
     ))
@@ -404,7 +404,8 @@ export function createResearchUi({
     const header = createNode('div', 'research-overview-header')
     const title = createNode('div')
     title.append(
-      createNode('h3', 'source-section-title', `Rechercheläufe · ${project.researchRuns.length}`),
+      // Kein Zaehler in der Ueberschrift: die Liste darunter sagt selbst, wie viele es sind.
+      createNode('h3', 'onda-blaetter__tiefe-titel source-section-title', 'Rechercheläufe'),
       createNode('p', 'research-overview-copy', 'Begrenzte Suchwege mit Gegenbelegen, Grenzen und vollständigem Werkzeugprotokoll.'),
     )
     const create = actionButton('Recherche planen', 'research-primary')

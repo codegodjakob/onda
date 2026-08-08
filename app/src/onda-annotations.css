@@ -59,30 +59,10 @@
 }
 .aura-mark--active .aura-mark__n { background: var(--accent); color: var(--on-accent); }
 
-.onda-review-bar {
-  flex: none; display: flex; align-items: center; justify-content: space-between; gap: var(--space-4);
-  margin: 0 var(--space-4) var(--space-2); padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius-panel); background: var(--bg-sunken); color: var(--text-secondary);
-}
-.onda-review-bar[hidden] { display: none; }
-.onda-review-bar__summary { display: flex; align-items: baseline; gap: var(--space-2); min-width: 0; font: var(--type-body); }
-.onda-review-bar__eyebrow { color: var(--text-primary); font-weight: var(--fw-medium); }
-.onda-review-bar__notice { display: inline-flex; align-items: center; gap: var(--space-2); color: var(--text-tertiary); font: var(--type-caption); }
-.onda-review-bar__notice[hidden] { display: none; }
-.onda-review-bar__notice button { padding: 0; border: 0; background: transparent; color: var(--text-link); font: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
-.onda-review-bar__actions { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-2); }
-.onda-review-nav { display: inline-flex; align-items: center; }
-.onda-mode-switch { display: inline-flex; padding: var(--space-1); border-radius: var(--radius-pill); background: var(--bg-surface); }
-.onda-mode-switch button { min-height: 44px; padding: 0 var(--space-3); border: 0; border-radius: var(--radius-pill); background: transparent; color: var(--text-secondary); font: var(--type-label); cursor: pointer; }
-.onda-mode-switch button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); }
-.onda-review-control, .onda-review-icon {
-  min-height: 44px; padding: 0 var(--space-3); border: 0; border-radius: var(--radius-control);
-  background: transparent; color: var(--text-secondary); font: var(--type-label); cursor: pointer;
-  transition: var(--transition-colors);
-}
-.onda-review-icon { width: 44px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
-.onda-review-control:hover, .onda-review-icon:hover, .onda-review-control[aria-pressed="true"] { background: var(--bg-hover); color: var(--text-primary); }
-.onda-review-control:disabled, .onda-review-icon:disabled { opacity: .42; cursor: default; }
+/* Hier stand bis zum 7. August 2026 die Anmerkungsleiste: eine Zeile ueber dem Text mit
+   Bilanz, Modus, Ruhig, vor/zurueck, Rueckgaengig und Sammeluebernahme. Sie ist ersatzlos
+   entfallen — siehe docs/PHILOSOPHIE.md §1 "Der andere Stift". Was von ihr blieb, ist ein
+   Stift-Zeichen in der Topbar (.onda-presence in style.css). */
 
 #localAgentLayer > .onda-annotation { position: absolute; z-index: 2; width: 340px; pointer-events: auto; }
 #localAgentLayer > .onda-annotation.is-below { width: auto; }
@@ -97,7 +77,10 @@
   border: 1px solid var(--border-subtle); border-radius: var(--radius-overlay);
   background: var(--bg-surface); box-shadow: var(--shadow-md); color: var(--text-primary);
   font-family: var(--font-sans); text-align: left;
-  animation: onda-annotation-in var(--dur-normal) var(--ease-out);
+  /* Der Auftritt (docs/PHILOSOPHIE.md §1). Der Versatz ist die eigentliche Aussage:
+     erst zeichnet der Stift im Text, dann tritt die Anmerkung daneben. Wer mit einem
+     anderen Stift mitschreibt, streicht zuerst an und schreibt dann an den Rand. */
+  animation: onda-annotation-in var(--dur-ankunft) var(--ease-out) var(--versatz-ankunft) both;
 }
 .onda-annotation[data-state="loading"] { opacity: .68; }
 .onda-annotation[data-state="applied"] { background: var(--bg-sunken); }
@@ -245,23 +228,13 @@
 .aura-rejection__choice strong { font: var(--type-label); }
 .aura-rejection__choice span { color: var(--text-secondary); font: var(--type-caption); }
 
-@keyframes onda-annotation-in { from { opacity: 0; transform: translateY(6px); } }
+/* Vier Pixel, nicht sechs, und ueber die doppelte Zeit: der Weg soll zu langsam sein,
+   um als Sprung gelesen zu werden. */
+@keyframes onda-annotation-in { from { opacity: 0; transform: translateY(4px); } }
 @media (max-width: 1040px) {
   .onda-annotation { max-width: var(--container-reading); }
-  .onda-review-bar { align-items: flex-start; }
-  .onda-review-bar__actions { flex-wrap: wrap; }
 }
 @media (max-width: 480px) {
-  .onda-review-bar { flex-direction: column; align-items: stretch; margin-inline: var(--space-2); }
-  .onda-review-bar__summary { flex-wrap: wrap; }
-  .onda-review-bar__actions {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    justify-content: stretch;
-  }
-  #annotationBulkAccept { grid-column: 1 / -1; }
-  #annotationQuietToggle, #annotationUndo { justify-self: start; }
-  .onda-review-nav { grid-column: 1; }
   .onda-annotation { padding: var(--space-4); }
   .aura-note__head { flex-wrap: wrap; }
   .aura-note__scope { width: 100%; margin-left: 24px; }

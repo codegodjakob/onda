@@ -1,3 +1,4 @@
+import { ERKANNTES_TYP } from './erkanntes-model.mjs'
 import { correctDossierItem, synchronizeProjectMemory } from './memory-dossier.mjs'
 import { createMemoryEntry } from './memory-model.mjs'
 import { deleteMemoryScope, exportMemory } from './memory-portability.mjs'
@@ -226,11 +227,19 @@ export function createMemoryUi({ context, createNode, openDialog }) {
   }
 
   function renderSharedMemory(parent, project) {
-    const records = retrieveMemoryContext({
+    const available = retrieveMemoryContext({
       store: context.state.memoryStore,
       projectId: project.id,
       textId: context.activeDoc()?.id || null,
-    }).records.filter(record => ['topic', 'personal'].includes(record.entry.level))
+    }).records
+    // Die Ebene allein reicht als Filter nicht: ein erkanntes Prinzip liegt ebenfalls auf
+    // 'personal'. Hier wäre es dreifach falsch — als "Persönliche Präferenz" beschriftet,
+    // mit einer Projektfreigabe begründet, die niemand erteilt hat (ein Prinzip gilt
+    // projektübergreifend), und einmal je Begegnung untereinander. Sein Ort ist der eigene
+    // Abschnitt, den renderErkanntes in workspace.js über erkanntesListe gruppiert zeigt.
+    const records = available.filter(record => (
+      ['topic', 'personal'].includes(record.entry.level) && record.entry.type !== ERKANNTES_TYP
+    ))
     if (!records.length) return
     const section = createNode('section', 'memory-section memory-shared-section')
     section.append(createNode('h3', 'memory-section-title', 'Freigegebene Erinnerungen'))

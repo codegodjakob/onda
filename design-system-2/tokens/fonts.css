@@ -1,0 +1,17 @@
+/* Onda · ABC Diatype (Dinamo, Edu) — lokal gebündelt in assets/fonts/. Eine Familie, große Gewichtsspanne (100–950) für klaren Hierarchie-Kontrast. Keine Mono-Schrift. */
+@font-face{font-family:"ABC Diatype";src:url("../assets/fonts/ABCDiatypeEdu-Thin.woff2") format("woff2");font-weight:100;font-style:normal;font-display:swap}
+@font-face{font-family:"ABC Diatype";src:url("../assets/fonts/ABCDiatypeEdu-ThinItalic.woff2") format("woff2");font-weight:100;font-style:italic;font-display:swap}
+@font-face{font-family:"ABC Diatype";src:url("../assets/fonts/ABCDiatypeEdu-Light.woff2") format("woff2");font-weight:300;font-style:normal;font-display:swap}
+@font-face{font-family:"ABC Diatype";src:url("../assets/fonts/ABCDiatypeEdu-LightItalic.woff2") format("woff2");font-weight:300;font-style:italic;font-display:swap}
+@font-face{font-family:"ABC Diatype";src:url("../assets/fonts/ABCDiatypeEdu-Regular.woff2") format("woff2");font-weight:400;font-style:normal;font-display:swap}
+@font-face{font-family:"ABC Diatype";src:url("../assets/fonts/ABCDiatypeEdu-RegularItalic.woff2") format("woff2");font-weight:400;font-style:italic;font-display:swap}
+@font-face{font-family:"ABC Diatype";src:url("../assets/fonts/ABCDiatypeEdu-Medium.woff2") format("woff2");font-weight:500;font-style:normal;font-display:swap}
+@font-face{font-family:"ABC Diatype";src:url("../assets/fonts/ABCDiatypeEdu-MediumItalic.woff2") format("woff2");font-weight:500;font-style:italic;font-display:swap}
+@font-face{font-family:"ABC Diatype";src:url("../assets/fonts/ABCDiatypeEdu-Bold.woff2") format("woff2");font-weight:700;font-style:normal;font-display:swap}
+@font-face{font-family:"ABC Diatype";src:url("../assets/fonts/ABCDiatypeEdu-BoldItalic.woff2") format("woff2");font-weight:700;font-style:italic;font-display:swap}
+@font-face{font-family:"ABC Diatype";src:url("../assets/fonts/ABCDiatypeEdu-Heavy.woff2") format("woff2");font-weight:800;font-style:normal;font-display:swap}
+@font-face{font-family:"ABC Diatype";src:url("../assets/fonts/ABCDiatypeEdu-HeavyItalic.woff2") format("woff2");font-weight:800;font-style:italic;font-display:swap}
+@font-face{font-family:"ABC Diatype";src:url("../assets/fonts/ABCDiatypeEdu-Black.woff2") format("woff2");font-weight:900;font-style:normal;font-display:swap}
+@font-face{font-family:"ABC Diatype";src:url("../assets/fonts/ABCDiatypeEdu-BlackItalic.woff2") format("woff2");font-weight:900;font-style:italic;font-display:swap}
+@font-face{font-family:"ABC Diatype";src:url("../assets/fonts/ABCDiatypeEdu-Ultra.woff2") format("woff2");font-weight:950;font-style:normal;font-display:swap}
+@font-face{font-family:"ABC Diatype";src:url("../assets/fonts/ABCDiatypeEdu-UltraItalic.woff2") format("woff2");font-weight:950;font-style:italic;font-display:swap}
