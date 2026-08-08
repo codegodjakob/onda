@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
 import { openMaterialLibrary } from './helpers/onda-navigation.mjs'
+import { starteAppServer } from './helpers/onda-server.mjs'
 
-const baseUrl = process.env.AIWT_URL || 'http://127.0.0.1:4173/'
+const { baseUrl } = await starteAppServer()
 
 async function waitForLibraryReady(page) {
   await page.locator('#materialModal').waitFor({ state: 'visible' })

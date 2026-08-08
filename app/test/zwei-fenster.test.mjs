@@ -25,43 +25,11 @@
 
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
-import { createServer } from 'node:http'
-import { readFile } from 'node:fs/promises'
-import { extname, resolve, sep } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { ZWEITER_SEED_ABSAETZE } from '../evals/fixtures/zweiter-seed.mjs'
+import { starteAppServer } from './helpers/onda-server.mjs'
 
-const appRoot = resolve(fileURLToPath(new URL('..', import.meta.url)))
-const mimeByExtension = {
-  '.css': 'text/css',
-  '.html': 'text/html',
-  '.js': 'text/javascript',
-  '.json': 'application/json',
-  '.mjs': 'text/javascript',
-  '.woff2': 'font/woff2',
-}
 
-let staticServer = null
-let baseUrl = process.env.AIWT_URL
-if (!baseUrl) {
-  staticServer = createServer(async (request, response) => {
-    try {
-      const pathname = decodeURIComponent(new URL(request.url, 'http://127.0.0.1').pathname)
-      const target = resolve(appRoot, pathname === '/' ? 'index.html' : pathname.slice(1))
-      if (target !== appRoot && !target.startsWith(`${appRoot}${sep}`)) {
-        response.writeHead(403).end()
-        return
-      }
-      const content = await readFile(target)
-      response.writeHead(200, { 'content-type': mimeByExtension[extname(target)] || 'application/octet-stream' })
-      response.end(content)
-    } catch {
-      response.writeHead(404).end()
-    }
-  })
-  await new Promise(resolveListening => staticServer.listen(0, '127.0.0.1', resolveListening))
-  baseUrl = `http://127.0.0.1:${staticServer.address().port}/`
-}
+const { baseUrl, stop: serverStoppen } = await starteAppServer()
 
 // Der Ausgangstext kommt aus dem zweiten Seed (anderes Genre) — damit auch diese
 // Prüfung nicht am einen Beispieltext „Calm Technology" hängt.
@@ -148,5 +116,5 @@ try {
   console.log('Zwei-Fenster-Prüfung: Verhalten dokumentiert — letzter Schreiber gewinnt, sogar beim bloßen Verlassen der Seite; der Verlust bleibt lautlos.')
 } finally {
   await browser.close()
-  if (staticServer) await new Promise(resolveClose => staticServer.close(resolveClose))
+  await serverStoppen()
 }

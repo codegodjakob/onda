@@ -7,37 +7,14 @@
 // schon zweimal zerdrückt worden.
 
 import assert from 'node:assert/strict'
-import { createServer } from 'node:http'
-import { readFile } from 'node:fs/promises'
-import { extname, resolve, sep } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
 import AxeBuilder from '@axe-core/playwright'
+import { starteAppServer } from './helpers/onda-server.mjs'
 
-const appRoot = resolve(fileURLToPath(new URL('..', import.meta.url)))
-const mimeByExtension = {
-  '.css': 'text/css', '.html': 'text/html', '.js': 'text/javascript',
-  '.mjs': 'text/javascript', '.woff2': 'font/woff2',
-}
 
 // Eigener Server auf eigenem Port. Ein fester Port kann einer fremden Sitzung
 // gehören — dann misst man deren Code und hält das Ergebnis für seines.
-let staticServer = null
-let baseUrl = process.env.AIWT_URL
-if (!baseUrl) {
-  staticServer = createServer(async (request, response) => {
-    try {
-      const pathname = decodeURIComponent(new URL(request.url, 'http://127.0.0.1').pathname)
-      const target = resolve(appRoot, pathname === '/' ? 'index.html' : pathname.slice(1))
-      if (target !== appRoot && !target.startsWith(`${appRoot}${sep}`)) { response.writeHead(403).end(); return }
-      const content = await readFile(target)
-      response.writeHead(200, { 'content-type': mimeByExtension[extname(target)] || 'application/octet-stream' })
-      response.end(content)
-    } catch { response.writeHead(404).end() }
-  })
-  await new Promise(listening => staticServer.listen(0, '127.0.0.1', listening))
-  baseUrl = `http://127.0.0.1:${staticServer.address().port}/`
-}
+const { baseUrl, stop: serverStoppen } = await starteAppServer()
 
 async function sichtbareVersalien(page) {
   return page.evaluate(() => [...document.querySelectorAll('*')]
@@ -384,5 +361,5 @@ try {
   console.log('Typografie smoke: PASS')
 } finally {
   await browser.close()
-  if (staticServer) await new Promise(closed => staticServer.close(closed))
+  await serverStoppen()
 }

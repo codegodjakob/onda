@@ -2,8 +2,9 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { chromium, firefox, webkit } from 'playwright'
 import { ensureProjectSidebarOpen } from './helpers/onda-navigation.mjs'
+import { starteAppServer } from './helpers/onda-server.mjs'
 
-const baseUrl = process.env.AIWT_URL || 'http://127.0.0.1:4173/'
+const { baseUrl } = await starteAppServer()
 const CENTRAL = 'Das Angebot garantiert jeder Gemeinde warscheinlich sinkende Kosten.'
 const SECOND_CANARY = 'CANARY-D1-ZWEITTEXT bleibt ausschließlich im zweiten Text.'
 const BETA_CANARY = 'CANARY-D1-BETA bleibt ausschließlich im zweiten Projekt.'

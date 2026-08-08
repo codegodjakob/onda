@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict'
 import { chromium, firefox, webkit } from 'playwright'
 import { ensureProjectSidebarOpen, openMaterialLibrary } from './helpers/onda-navigation.mjs'
+import { starteAppServer } from './helpers/onda-server.mjs'
 
-const baseUrl = process.env.AIWT_URL || 'http://127.0.0.1:4173/'
+const { baseUrl } = await starteAppServer()
 const CENTRAL = 'Die Intervention senkt die Fehlerrate allgemein.'
 const SUPPORT = 'In der Hauptstudie sank die Fehlerrate nach einer Sitzung.'
 const COUNTER = 'Die unabhängige Replikation zeigt für denselben Endpunkt keinen belastbaren Unterschied.'

@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict'
-import { createServer } from 'node:http'
-import { readFile, mkdir } from 'node:fs/promises'
-import { extname, resolve, sep } from 'node:path'
+import { mkdir } from 'node:fs/promises'
+import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
 import AxeBuilder from '@axe-core/playwright'
@@ -9,38 +8,15 @@ import AxeBuilder from '@axe-core/playwright'
 import { ALL_ANNOTATION_KINDS } from '../src/annotation-contract.mjs'
 import { MINDEST_BREITE, MINDEST_HOEHE } from '../src/onda-blase.mjs'
 import { ensureProjectSidebarOpen } from './helpers/onda-navigation.mjs'
+import { starteAppServer } from './helpers/onda-server.mjs'
 
 const appRoot = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const requestedSection = process.argv.includes('--section')
   ? process.argv[process.argv.indexOf('--section') + 1]
   : 'all'
 const screenshots = process.argv.includes('--screenshots')
-const mimeByExtension = {
-  '.css': 'text/css', '.html': 'text/html', '.js': 'text/javascript',
-  '.mjs': 'text/javascript', '.woff2': 'font/woff2',
-}
 
-let staticServer = null
-let baseUrl = process.env.AIWT_URL
-if (!baseUrl) {
-  staticServer = createServer(async (request, response) => {
-    try {
-      const pathname = decodeURIComponent(new URL(request.url, 'http://127.0.0.1').pathname)
-      const target = resolve(appRoot, pathname === '/' ? 'index.html' : pathname.slice(1))
-      if (target !== appRoot && !target.startsWith(`${appRoot}${sep}`)) {
-        response.writeHead(403).end()
-        return
-      }
-      const content = await readFile(target)
-      response.writeHead(200, { 'content-type': mimeByExtension[extname(target)] || 'application/octet-stream' })
-      response.end(content)
-    } catch {
-      response.writeHead(404).end()
-    }
-  })
-  await new Promise(resolveListening => staticServer.listen(0, '127.0.0.1', resolveListening))
-  baseUrl = `http://127.0.0.1:${staticServer.address().port}/`
-}
+const { baseUrl, stop: serverStoppen } = await starteAppServer()
 
 async function runComponents(browser) {
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 } })
@@ -1202,5 +1178,5 @@ try {
   console.log(`ONDA UI ${requestedSection}: PASS`)
 } finally {
   await browser.close()
-  if (staticServer) await new Promise(resolveClose => staticServer.close(resolveClose))
+  await serverStoppen()
 }
