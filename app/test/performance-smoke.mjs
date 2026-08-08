@@ -11,6 +11,10 @@ try {
   await page.reload({ waitUntil: 'networkidle' })
   await page.locator('#doclist .doc').filter({ hasText: 'Beispiel: Calm Technology' }).click()
   await page.locator('#doclist .doc').first().click()
+  // openDoc fokussiert den Editor ueber Tiptaps focus() — und das laeuft intern in einem
+  // requestAnimationFrame. Erst wenn dieser Fokus angekommen ist, kann der spaet feuernde
+  // rAF nicht mehr das fill() ins Chat-Eingabefeld bestehlen.
+  await page.waitForFunction(() => window.AIWT.state.editor.view.hasFocus())
 
   await page.evaluate(() => {
     window.__performanceEval = { aktiv: false, samples: [], longTasks: [] }
@@ -68,6 +72,9 @@ try {
   await page.evaluate(() => {
     window.AIWT.state.editor.commands.focus('end')
   })
+  // Erst tippen, wenn der Editor den Fokus nachweislich haelt — sonst landen die
+  // Tastenanschlaege unter Last womoeglich im Chat-Eingabefeld des Agent-Widgets.
+  await page.waitForFunction(() => window.AIWT.state.editor.view.dom.contains(document.activeElement))
   await page.keyboard.type(' Reaktionsprobe', { delay: 20 })
   await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
 

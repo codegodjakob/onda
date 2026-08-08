@@ -165,8 +165,6 @@ let renderedDocId = null
 let decoratedDocId = null
 let decoratedBlockId = null
 let insertMenu = null
-let typingTimer = null
-let isTyping = false
 let isComposing = false
 let structureNavState = null
 let localDecoratedDocId = null
@@ -2850,15 +2848,11 @@ async function sendeInterviewAntwort(message, text) {
 // Das Menue selbst (openInsertMenu/insertBlock) BLEIBT. Es bekommt seinen Platz dort,
 // wo Bausteine hingehoeren: in der Struktur-Ansicht, wo Jakob "auch neue Bausteine
 // hinzufuegen" koennen will. Nur der schwebende Knopf ist fort.
-
-function markTyping() {
-  isTyping = true
-  clearTimeout(typingTimer)
-  if (isComposing) return
-  typingTimer = setTimeout(() => {
-    isTyping = false
-  }, 520)
-}
+//
+// Mit dem Knopf faellt auch der Tipp-Zustand fort (markTyping, isTyping, typingTimer).
+// Er hatte genau eine Aufgabe: dem Plus beim Tippen die Klasse is-typing zu geben, mit
+// der es verblasste. Wann zuletzt getippt wurde, fuehrt ohnehin initiativeInputState —
+// eine Wahrheit darueber genuegt.
 
 function initiativeInputState(docId = ctx?.activeDoc()?.id) {
   if (!controller || !docId) return null
@@ -3017,21 +3011,18 @@ function handleBeforeInput(event) {
     && istSatzende(event.data)
   pendingParagraphBoundaryDocId = null
   recordRealEditorInput({ paragraphBoundary, satzende })
-  markTyping()
 }
 
 function startComposition() {
   isComposing = true
   pendingParagraphBoundaryDocId = null
   recordRealEditorInput()
-  markTyping()
 }
 
 function endComposition() {
   isComposing = false
   recordRealEditorInput()
   completeRealEditorUpdate()
-  markTyping()
 }
 
 // Welcher Moment ist gerade erreicht (momente-model.mjs)? Liest nur die ohnehin
@@ -5758,7 +5749,6 @@ export function initWorkspace(context) {
     closeOndaDialog({ restoreFocus: false })
     cleanups.splice(0).reverse().forEach(cleanup => cleanup())
 
-    clearTimeout(typingTimer)
     if (chatStream?.flushTimer) clearTimeout(chatStream.flushTimer)
     chatStream = null
     if (localPositionFrame) cancelAnimationFrame(localPositionFrame)
@@ -5786,8 +5776,6 @@ export function initWorkspace(context) {
     renderedDocId = null
     decoratedDocId = null
     decoratedBlockId = null
-    typingTimer = null
-    isTyping = false
     isComposing = false
     structureNavState = null
     localDecoratedDocId = null

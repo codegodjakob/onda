@@ -1,7 +1,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { SYSTEM_COACH, INTERVIEW_REGELN, HINWEIS_ANWEISUNG, ERWEITERUNG_ANWEISUNG } from '../src/agent-prompts.mjs'
+import { SYSTEM_COACH, INTERVIEW_REGELN, HINWEIS_ANWEISUNG, ERWEITERUNG_ANWEISUNG, BAUSTEINARTEN_ANWEISUNG } from '../src/agent-prompts.mjs'
 import { HINWEISE_SCHEMA } from '../src/agent-tasks.mjs'
+import { FUNKTIONEN } from '../src/bausteinarten-vertrag.mjs'
 import {
   FEHLERBILDER,
   MECHANISMEN,
@@ -113,4 +114,47 @@ test('HINWEIS_ANWEISUNG verlangt Mechanismus und Prueffrage statt des blossen Et
   assert.ok(HINWEIS_ANWEISUNG.includes('Prüffrage'))
   assert.ok(HINWEIS_ANWEISUNG.includes('aufgesetzt'))
   assert.ok(HINWEIS_ANWEISUNG.includes('Etikett'))
+})
+
+// ---------- Bausteinarten ------------------------------------------------------------------
+// Der dritte Kanal. Seine Staerke liegt darin, die Textsorte zuerst zu finden, dann daraus
+// die Arten abzuleiten -- nicht umgekehrt in eine allgemeine Schubladenliste zu sortieren.
+
+test('BAUSTEINARTEN_ANWEISUNG hat vier Schritte in der richtigen Reihenfolge', () => {
+  const schritt1 = BAUSTEINARTEN_ANWEISUNG.indexOf('Schritt 1')
+  const schritt2 = BAUSTEINARTEN_ANWEISUNG.indexOf('Schritt 2')
+  const schritt3 = BAUSTEINARTEN_ANWEISUNG.indexOf('Schritt 3')
+  const schritt4 = BAUSTEINARTEN_ANWEISUNG.indexOf('Schritt 4')
+  assert.ok(schritt1 >= 0 && schritt2 > schritt1 && schritt3 > schritt2 && schritt4 > schritt3,
+    'Die vier Schritte muessen vorhanden und in Reihenfolge sein')
+})
+
+test('BAUSTEINARTEN_ANWEISUNG ordnet Textsorte zuerst, dann Arten aus dieser ab', () => {
+  const textsorte = BAUSTEINARTEN_ANWEISUNG.indexOf('Textsorte')
+  const arten = BAUSTEINARTEN_ANWEISUNG.indexOf('Arten')
+  const reihenfolgeSatz = 'Textsorte zuerst'
+  assert.ok(BAUSTEINARTEN_ANWEISUNG.includes('Textsorte: Bestimme zuerst'), 'Textsorte wird nicht eindeutig zuerst genannt')
+  assert.ok(BAUSTEINARTEN_ANWEISUNG.includes('Leite daraus die Bausteinarten ab'), 'die Ableitung aus der Textsorte ist nicht genannt')
+  assert.ok(textsorte < arten, 'Textsorte muss in der Anweisung vor Arten erscheinen')
+})
+
+test('BAUSTEINARTEN_ANWEISUNG nennt die Obergrenze: Hoechstens acht Arten', () => {
+  assert.ok(BAUSTEINARTEN_ANWEISUNG.includes('Höchstens acht Arten'), 'die Obergrenze fehlt')
+  assert.ok(BAUSTEINARTEN_ANWEISUNG.includes('mehr heißt, dass zu fein unterschieden wurde'), 'die Begruendung fehlt')
+})
+
+test('BAUSTEINARTEN_ANWEISUNG nennt alle Funktionen aus der Rechenlogik', () => {
+  for (const funktion of FUNKTIONEN) {
+    assert.ok(BAUSTEINARTEN_ANWEISUNG.includes(funktion), `Funktion ${funktion} fehlt`)
+  }
+})
+
+test('BAUSTEINARTEN_ANWEISUNG lehrt die zwei Waechter: null ist richtig, hoechstens ONE claim', () => {
+  assert.ok(BAUSTEINARTEN_ANWEISUNG.includes('null ist die richtige'), 'die Lehre, dass null richtig ist, fehlt')
+  assert.ok(BAUSTEINARTEN_ANWEISUNG.includes('Höchstens EINE Art trägt claim'), 'die Eins-Claim-Regel fehlt')
+})
+
+test('BAUSTEINARTEN_ANWEISUNG schliesst Ueberschriften aus und loest Unsicherheit durch Weglassen', () => {
+  assert.ok(BAUSTEINARTEN_ANWEISUNG.includes('Überschriften bekommen\nkeine Art'), 'Ueberschriften-Ausschluss fehlt')
+  assert.ok(BAUSTEINARTEN_ANWEISUNG.includes('Bist du dir bei einem Absatz nicht sicher, lass ihn weg'), 'die Loesung via Weglassen fehlt')
 })

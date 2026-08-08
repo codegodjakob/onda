@@ -7,6 +7,7 @@
 import { SYSTEM_COACH } from './agent-prompts.mjs'
 import { STILMITTEL } from './stilmittel.mjs'
 import { NOTE_ANNOTATION_KINDS, TEXT_ANNOTATION_KINDS } from './annotation-contract.mjs'
+import { FUNKTIONEN } from './bausteinarten-vertrag.mjs'
 
 export const API_URL = 'https://api.anthropic.com/v1/messages'
 export const API_VERSION = '2023-06-01'
@@ -206,6 +207,56 @@ export const VERSTAENDNIS_SCHEMA = Object.freeze({
   additionalProperties: false,
 })
 
+// Der dritte Kanal (Bausteinarten). Die Zuordnung nennt die Art bei ihrem NAMEN, nicht
+// bei einer Kennung: Das Modell soll keine IDs erfinden, die dann irgendwo aufgelöst
+// werden müssten. Die IDs vergibt bausteinlauf-model.mjs beim Verarbeiten.
+export const BAUSTEINARTEN_SCHEMA = Object.freeze({
+  type: 'object',
+  properties: {
+    textsorte: {
+      type: 'string',
+      description: 'Knapp, was für ein Text das ist. Bestimmt, welche Arten überhaupt in Frage kommen.',
+    },
+    arten: {
+      type: 'array',
+      maxItems: 8,
+      items: {
+        type: 'object',
+        properties: {
+          name: {
+            type: 'string',
+            description: 'Ein bis zwei Wörter im Deutschen, so wie eine Lektorin die Art im Gespräch nennt.',
+          },
+          beschreibung: { type: 'string', description: 'Ein Satz, wozu diese Art in diesem Text dient.' },
+          funktion: {
+            anyOf: [
+              { type: 'string', enum: [...FUNKTIONEN] },
+              { type: 'null' },
+            ],
+            description: 'Die Rolle im Argument, oder null. null ist richtig, wenn keine passt — nicht raten.',
+          },
+        },
+        required: ['name', 'beschreibung', 'funktion'],
+        additionalProperties: false,
+      },
+    },
+    zuordnung: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          blockId: { type: 'string', description: 'Die Kennung des Absatzes aus dem gelieferten Absatzverzeichnis.' },
+          art: { type: 'string', description: 'Der Name einer Art aus arten, zeichengenau.' },
+        },
+        required: ['blockId', 'art'],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ['textsorte', 'arten', 'zuordnung'],
+  additionalProperties: false,
+})
+
 // Fix-Runde 2, Finding 5 (Important): auf claude-opus-5 ist adaptives Denken standardmaessig AN,
 // und max_tokens deckelt DENKEN + ANTWORT zusammen (kein separates Denk-Budget wie bei
 // extended thinking mit explizitem budget_tokens). Bei 16000 lief das regelmaessig auf
@@ -229,6 +280,12 @@ export const TASK_TABLE = Object.freeze({
   // Die Ausgabe ist klein (Namen, ein Satz, Kennungen), 8000 reichen weit; nur
   // gedacht wird viel, und das teilt sich das Budget (siehe oben).
   quellenthemen: Object.freeze({ modell: 'stark', maxTokens: 8000, stream: false, schema: QUELLENTHEMEN_SCHEMA }),
+  // Bausteinarten laufen auf dem starken Modell: Die Aufgabe ist nicht, Absätze in
+  // bekannte Schubladen zu sortieren, sondern für DIESEN Text erst die passenden
+  // Schubladen zu finden. Genau das kann ein Routine-Modell nicht -- es liefert
+  // zuverlässig die allgemeine Liste, also die, die wir gerade abgeschafft haben.
+  // 8000 Tokens reichen: acht Arten plus eine Zuordnungszeile je Absatz.
+  bausteinarten: Object.freeze({ modell: 'stark', maxTokens: 8000, stream: false, schema: BAUSTEINARTEN_SCHEMA }),
   chat: Object.freeze({ modell: 'stark', maxTokens: 64000, stream: true }),
   titel: Object.freeze({ modell: 'routine', maxTokens: 256, stream: false }),
   zusammenfassung: Object.freeze({ modell: 'routine', maxTokens: 2000, stream: false }),
