@@ -174,6 +174,20 @@ test('Nirgends hört Text auf und drei Punkte kommen hinterher', async () => {
       if (/(?:slice|substring)\(0,[^)\n]*\)[^\n`]*\}…/.test(inhalt)) {
         funde.push(`${datei}: Schnitt nach Zeichenzahl mit …`)
       }
+
+      // Menüpunkte tragen keine drei Punkte („die menüpunkte auch ohne punkte", Jakob,
+      // 8.8.2026). In macOS-Menüs heißen sie „das öffnet noch ein Fenster" — aber das
+      // muss man wissen; wer es nicht weiß, sieht abgeschnittenen Text.
+      //
+      // Nur Beschriftungen, nicht jedes Auslassungszeichen: Platzhalter („Antworten …")
+      // und Verlaufsmeldungen („Agent denkt nach …") bleiben. Dort hört kein Text auf —
+      // dort läuft etwas.
+      for (const [muster, was] of [
+        [/menuItem\([^,\n]+,\s*(['"`])[^'"`\n]*…/, 'Menüpunkt mit …'],
+        [/\blabel:\s*(['"`])[^'"`\n]*…/, 'Beschriftung mit …'],
+      ]) {
+        if (muster.test(inhalt)) funde.push(`${datei}: ${was}`)
+      }
     }
   }
 

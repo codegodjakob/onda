@@ -1,6 +1,7 @@
 import { isIntegrityCategory } from './reasoning-model.mjs'
 import { istFremdeInterviewNachricht } from './verstaendnis-interview.mjs'
 import { normalizeAnnotationWorkspace } from './annotation-controller.mjs'
+import { normalisiereBausteinarten } from './bausteinlauf-model.mjs'
 
 const WORKSPACE_VERSION = 3
 const IDLE_BEFORE_INITIATIVE_MS = 3000
@@ -136,6 +137,11 @@ export function ensureWorkspaceState(doc) {
       finding.thread = normalizeThreadInPlace(finding.thread)
     })
   }
+
+  // Die erkannten Bausteinarten liegen NEBEN dem Text (Spec: "Wo es liegt"). Was hier
+  // ankommt, kann aus einer aelteren Fassung stammen -- entweder es ist vollstaendig
+  // gueltig, oder es ist null. Eine halbe Ablage waere schlimmer als keine.
+  current.bausteinarten = normalisiereBausteinarten(current.bausteinarten)
 
   doc.workspace = current
   return current

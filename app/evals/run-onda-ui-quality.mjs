@@ -229,6 +229,24 @@ const safeReport = redactSecrets(JSON.stringify(report, null, 2))
 if (containsSecretMarker(safeReport)) throw new Error('Der Onda-UI-Bericht enthält ein Geheimnismuster.')
 await mkdir(dirname(resultPath), { recursive: true })
 await writeFile(resultPath, `${safeReport}\n`, 'utf8')
+// An dieser einen Datei hängen 21 Eval-Kennungen — mehr als an jeder anderen. Ohne
+// eigene Ergebniszeilen fielen alle 21 gemeinsam, sobald irgendeine Teilprüfung rot
+// wurde, und am Ergebnisstand wäre nicht zu sehen, welche Zusage wirklich gebrochen
+// ist. Das Urteil je Kriterium steht oben längst; hier wird es nur gesagt.
+//
+// Die Rubrik bleibt davon unberührt: Reisst sie, endet dieser Lauf mit Fehler, obwohl
+// jede Kennung grün meldet — und der Läufer lässt dann bewusst KEINE davon durchgehen
+// (siehe src/bindungs-urteil.mjs, Regel 3). Ein Gesamtgate lässt sich so nicht durch
+// Einzelurteile aushebeln.
+const einzeln = criteria.filter(item => item.status !== 'not-run')
+process.stdout.write(`# je-eval: ${einzeln.map(item => item.criterion).join(' ')}\n`)
+for (const item of einzeln) {
+  process.stdout.write(`${item.status === 'passed' ? 'ok' : 'not ok'} ${item.criterion} — ${item.title}\n`)
+  if (item.status !== 'passed') {
+    const rot = (criterionChecks[item.criterion] || []).filter(id => !byCheck.get(id)?.passed)
+    process.stdout.write(`  # Rote Teilprüfungen: ${rot.join(', ') || 'es ist gar keine Teilprüfung gebunden'}\n`)
+  }
+}
 process.stdout.write(`Onda UI: ${report.summary.passed}/${criteria.length} bestanden, ${report.summary.notRun} bewusst ausgelassen, Score ${average}/5\n`)
 process.stdout.write(`Ergebnis: evals/results/${resultName}\n`)
 if (!hardGatesPass || !report.rubric.passed || (liveNative && report.summary.failed)) process.exitCode = 1

@@ -713,3 +713,36 @@ test('Quellen, Belege, Relationen und Sprachbericht erreichen gemeinsam alle Age
     }
   }
 })
+
+// Ein Prinzip liegt auf der persoenlichen Ebene mit allProjects — retrieveMemoryContext
+// liefert es deshalb auch dem Gedaechtnisblock mit. Ungefiltert stuende derselbe Satz
+// ZWEIMAL im Prompt, und beide Male wird er bei JEDEM Lauf bezahlt (Regel 1 im Modulkopf;
+// dieselbe Klasse Fehler wurde schon einmal behoben, Commit a46c939). Schlimmer als die
+// Kosten ist die Beschriftung: "ausdruecklich fuer dieses Projekt freigegeben" behauptet
+// eine Entscheidung, die bei einem projektuebergreifenden Prinzip niemand getroffen hat.
+// Der Test setzt bewusst ein Projekt und ein Dokument, denn ohne beide steigt
+// gedaechtnisBlock frueh aus — genau daran ist die Doppelung bisher vorbeigelaufen.
+test('Erkanntes steht NUR in seinem eigenen Block, nie zusaetzlich im Gedaechtnis', () => {
+  let store = ensureMemoryStore(null)
+  store = schreibeErkanntes(store, { satz: 'MARKANTES-PRINZIP-1f7e braucht seine Herkunft.', at: 1 }).store
+  const bloecke = baueOndaBloecke({ project: { id: PROJEKT_ID }, doc: OFFENER_TEXT, memoryStore: store })
+
+  assert.equal(bloecke.length, 1, 'ein Speicher mit nur Erkanntem ergibt GENAU EINEN Block')
+  assert.match(bloecke[0], /schon erkannt/)
+  assert.doesNotMatch(bloecke[0], /freigegebenes Wissen/)
+})
+
+// Gegenprobe zum Test darueber: der Filter darf NUR Prinzipien nehmen. Ein Filter, der
+// das Wissen ganz leert, bestuende die "genau ein Block"-Pruefung ebenfalls — und haette
+// echtes, ausdruecklich freigegebenes Wissen stillschweigend aus dem Prompt geworfen.
+test('echtes freigegebenes Wissen bleibt neben einem Prinzip erhalten', () => {
+  let store = gedaechtnis([{ level: 'topic', type: 'knowledge', content: 'MARKANTES-THEMENWISSEN-6b9f' }])
+  store = schreibeErkanntes(store, { satz: 'MARKANTES-PRINZIP-1f7e braucht seine Herkunft.', at: 1 }).store
+  const bloecke = baueOndaBloecke({ project: { id: PROJEKT_ID }, doc: OFFENER_TEXT, memoryStore: store })
+
+  assert.equal(bloecke.length, 2, 'Gedaechtnis und Erkanntes — je ein Block')
+  const gedaechtnisBlock = bloecke.find(b => /Gedächtnis/.test(b))
+  assert.match(gedaechtnisBlock, /freigegebenes Wissen: »MARKANTES-THEMENWISSEN-6b9f«/)
+  assert.doesNotMatch(gedaechtnisBlock, /MARKANTES-PRINZIP-1f7e/)
+  assert.match(bloecke.find(b => /schon erkannt/.test(b)), /MARKANTES-PRINZIP-1f7e/)
+})
