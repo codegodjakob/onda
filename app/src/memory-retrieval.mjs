@@ -1,3 +1,11 @@
+// Was aus dem Gedächtnis überhaupt bis zum Modell vordringt — PUR, node-testbar, kein DOM.
+//
+// Wählt aus dem Speicher die Einträge, die für genau dieses Projekt und diesen Text
+// gelten. Etwas von einem Projekt in ein anderes zu tragen geschieht nicht von selbst:
+// dafür gibt es eine Anfrage, der zugestimmt oder die abgelehnt wird.
+//
+// Gehört zur Browser-App (Einstiegspunkt src/editor.js); der Text daraus fließt über
+// onda-kontext.mjs in die Anfrage ans Modell.
 import { createMemoryEntry, ensureMemoryStore } from './memory-model.mjs'
 
 function clone(value) {

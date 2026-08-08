@@ -1,3 +1,10 @@
+// Das Gedächtnis der Sprachprüfung im Projekt — PUR, node-testbar, kein DOM.
+//
+// Legt je Text den letzten Sprachbericht ab, führt die Liste der Entscheidungen dazu
+// (übernommen, verworfen) und gibt auf Wunsch ein Dossier heraus. Ohne diesen Speicher
+// wäre jede Prüfung die erste: dieselben Befunde kämen nach jedem Neustart wieder.
+//
+// Gehört zur Browser-App (Einstiegspunkt src/editor.js).
 function isObject(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }

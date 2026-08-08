@@ -1,3 +1,13 @@
+// Das Verständnis des Projekts und die Warteschlange der Befunde — PUR, node-testbar,
+// kein DOM.
+//
+// Zwei Dinge, die zusammengehören: (a) was Onda über Auftrag, Publikum, gewünschte
+// Wirkung und Belegmaßstab weiß, einschließlich der Felder, die der Autor gegen
+// Überschreiben geschützt hat, und (b) die Befunde am Text mit ihrer Entscheidung
+// (übernommen, verworfen). Enthält außerdem die Kostenbremse "Entwurf schon versucht":
+// einmal gesetzt, startet kein zweiter bezahlter Entwurfslauf fürs selbe Projekt.
+//
+// Gehört zur Browser-App (Einstiegspunkt src/editor.js).
 import { istIntegritaetsfrageFuerCategory } from './textart-regeln.mjs'
 import { normalizeAnnotationFinding } from './annotation-contract.mjs'
 

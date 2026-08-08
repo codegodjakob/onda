@@ -1,3 +1,11 @@
+// Die Rechtschreibregeln selbst — PUR, node-testbar, kein DOM.
+//
+// Eine kurze, ausdrücklich aufgezählte Liste: jede Regel hat eine Kennung, ein Suchmuster
+// und einen Ersatz, der die Groß- und Kleinschreibung der Fundstelle übernimmt. Dazu die
+// Gegenprobe, die vor dem Anwenden prüft, dass eine Korrektur wirklich zu ihrer Regel
+// gehört — sonst könnte eine Ersetzung mehr ändern als angekündigt.
+//
+// Gehört zur Browser-App (Einstiegspunkt src/editor.js).
 function withSourceCase(source, replacement) {
   if (source === source.toLocaleUpperCase('de-DE')) return replacement.toLocaleUpperCase('de-DE')
   if (/^\p{Lu}/u.test(source)) {

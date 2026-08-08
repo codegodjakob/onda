@@ -1,3 +1,11 @@
+// Rechtschreibkorrekturen planen und anwenden — PUR, node-testbar, kein DOM.
+//
+// Erst wird geplant (welche Regel greift wo, und darf sie hier überhaupt von selbst
+// greifen — das sagt das Sprachprofil), dann angewendet. Jede einzelne Ersetzung muss zwei
+// Gegenproben bestehen: sie gehört zu ihrer Regel (orthography-rules.mjs), und sie
+// verändert die Aussage nicht (language-variant.mjs).
+//
+// Gehört zur Browser-App (Einstiegspunkt src/editor.js), aufgerufen aus language-ui.mjs.
 import { ensureLanguageProfile } from './language-profile.mjs'
 import { validateOrthographyRuleApplication } from './orthography-rules.mjs'
 import { evaluateLanguageVariant } from './language-variant.mjs'

@@ -1,3 +1,11 @@
+// Der Wächter über jede Umformulierung — PUR, node-testbar, kein DOM.
+//
+// Die Frage: Sagt der neue Satz noch dasselbe wie der alte? Verglichen werden Verneinung,
+// Einschränkungswörter, Zahlen, Belege, Zitate, Verweise, geschützte Begriffe und die
+// Stimme. Weicht auch nur eines ab, gilt der Vorschlag als abgelehnt, und der Grund wird
+// beim Namen genannt.
+//
+// Gehört zur Browser-App (Einstiegspunkt src/editor.js), aufgerufen aus orthography.mjs.
 function isObject(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }

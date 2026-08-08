@@ -1,3 +1,11 @@
+// Die Form des Gedächtnisses — PUR, node-testbar, kein DOM.
+//
+// Legt fest, was ein Gedächtniseintrag ist: auf welcher Ebene er gilt (Text, Projekt,
+// Thema, Person), wie heikel er ist und wann er zu löschen ist (mit dem Text, mit dem
+// Projekt, von Hand oder nie automatisch). Dazu das Ereignisprotokoll, das jede Änderung
+// festhält, statt sie stillschweigend zu überschreiben.
+//
+// Gehört zur Browser-App (Einstiegspunkt src/editor.js).
 export const MEMORY_LEVELS = Object.freeze(['text', 'project', 'topic', 'personal'])
 export const MEMORY_SENSITIVITIES = Object.freeze(['standard', 'sensitive', 'personal'])
 export const MEMORY_DELETION_RULES = Object.freeze(['with-text', 'with-project', 'manual', 'all'])

@@ -1,3 +1,10 @@
+// Die Bedienoberfläche der Recherche — DOM, deshalb nicht node-testbar.
+//
+// Zeigt den Stand eines Recherchelaufs in deutschen Worten ("Geprüft, bereit zur
+// Sichtung"), startet und pausiert ihn und führt durch die Sichtung der Funde.
+//
+// Gehört zur Browser-App (Einstiegspunkt src/editor.js), eingebettet in
+// source-library-ui.mjs.
 import { createResearchAdapter } from './research-adapter.mjs'
 import { executeResearchPaths } from './research-orchestrator.mjs'
 import { createResearchPlan, researchPathFingerprint, transitionResearchRun } from './research-run.mjs'

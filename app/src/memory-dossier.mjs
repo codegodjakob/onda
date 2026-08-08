@@ -1,3 +1,11 @@
+// Das Projekt-Dossier: was Onda über ein Projekt weiß, in lesbarer Ordnung — PUR,
+// node-testbar, kein DOM.
+//
+// Sammelt die Gedächtnis-Ereignisse (memory-model.mjs) zu Abschnitten wie Zielen,
+// bestätigten Begriffen, Quellen und Autorentscheidungen. Jede Zeile bleibt korrigierbar,
+// und eine Korrektur überschreibt nichts: sie wird als weiteres Ereignis angehängt.
+//
+// Gehört zur Browser-App (Einstiegspunkt src/editor.js), angezeigt über memory-ui.mjs.
 import {
   appendMemoryEvent,
   createMemoryEvent,

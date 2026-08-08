@@ -1,3 +1,10 @@
+// Wer hat was geschrieben — PUR, node-testbar, kein DOM.
+//
+// Baut die Übersicht über ein Projekt, in der bei jedem Stück steht, woher es kommt:
+// eigener Text, Einschätzung des Agenten, übernommenes Wissen. Wo die Herkunft fehlt,
+// steht ausdrücklich "unknown" statt einer stillen Annahme.
+//
+// Gehört zur Browser-App (Einstiegspunkt src/editor.js), verwendet von authorship-proof.mjs.
 const KNOWLEDGE_STATUSES = new Set(['supported', 'mixed'])
 
 function provenanceOf(candidate, fallbackAction) {

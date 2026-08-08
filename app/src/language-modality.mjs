@@ -1,3 +1,11 @@
+// Behauptungsstärke gegen Belegelage — PUR, node-testbar, kein DOM.
+//
+// Prüft, ob ein Satz mehr behauptet, als er belegt: "beweist", "zweifellos", "ausnahmslos"
+// bei dünner oder strittiger Quellenlage — und umgekehrt eine Aussage, die sich mit
+// "vielleicht" kleiner macht, als sie ist. Die Befunde entstehen über die Fabrik aus
+// language-diagnostics.mjs und sehen deshalb aus wie alle anderen Sprachbefunde.
+//
+// Gehört zur Browser-App (Einstiegspunkt src/editor.js), eingebunden über language-ui.mjs.
 import { createLanguageDiagnostic } from './language-diagnostics.mjs'
 
 const TOO_STRONG = /\b(?:beweist|bewiesen|zweifellos|ausnahmslos|garantiert|immer|unbestreitbar)\b/iu

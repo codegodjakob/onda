@@ -1,3 +1,11 @@
+// Vom Fund zur belegten Quelle — kein DOM; die Prüfsummen-Funktion kommt herein.
+//
+// Prüft jeden Kandidaten aus dem Lauf (research-run.mjs) darauf, was ihm fehlt, stellt
+// daraus die Sichtungsliste zusammen und übernimmt nach der Entscheidung des Autors:
+// Quelle aufnehmen (source-model.mjs), Fundstelle festhalten (locator-model.mjs),
+// Belegbündel bauen (evidence-bundle.mjs).
+//
+// Gehört zur Browser-App (Einstiegspunkt src/editor.js).
 import { importSource } from './source-model.mjs'
 import { createLocator, resolveLocator } from './locator-model.mjs'
 import { buildEvidenceBundle } from './evidence-bundle.mjs'

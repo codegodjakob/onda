@@ -1,3 +1,10 @@
+// Der Weg aus Onda heraus — PUR, node-testbar, kein DOM.
+//
+// Macht aus einem Dokument eine Veröffentlichungsfassung in Markdown, HTML oder JATS.
+// Nur eine ausdrücklich genannte Liste von Block- und Auszeichnungsarten kommt durch;
+// alles andere fällt weg, statt ungeprüft in die Ausgabe zu geraten.
+//
+// Gehört zur Browser-App (Einstiegspunkt src/editor.js), aufgerufen aus audit-ui.mjs.
 const FORMAT_EXTENSIONS = Object.freeze({
   markdown: 'md',
   html: 'html',

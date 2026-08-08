@@ -1,3 +1,10 @@
+// Die Bedienoberfläche des Gedächtnisses — DOM, deshalb nicht node-testbar.
+//
+// Zeigt das Projekt-Dossier (memory-dossier.mjs), lässt einzelne Zeilen richtigstellen,
+// Einträge von Hand anlegen, Übertragungen zwischen Projekten entscheiden und den ganzen
+// Speicher ausgeben oder löschen (memory-portability.mjs).
+//
+// Gehört zur Browser-App (Einstiegspunkt src/editor.js), aufgebaut von src/workspace.js.
 import { ERKANNTES_TYP } from './erkanntes-model.mjs'
 import { correctDossierItem, synchronizeProjectMemory } from './memory-dossier.mjs'
 import { createMemoryEntry } from './memory-model.mjs'

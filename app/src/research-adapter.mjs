@@ -1,3 +1,12 @@
+// Der Anschluss an ein einzelnes Recherchewerkzeug — kein DOM; das Werkzeug selbst wird
+// hereingereicht.
+//
+// Ein Adapter sagt, welche Werkzeuge er kann (Suche, Metadaten, Leser, Übernahme) und wie
+// man ihn aufruft. Jeder Aufruf wird im Lauf protokolliert, Schlüssel und Passwörter
+// werden vorher geschwärzt. Ist eine Quelle nicht erreichbar, nennt dieses Modul die
+// legalen Umwege, statt eine Sperre zu umgehen.
+//
+// Gehört zur Browser-App (Einstiegspunkt src/editor.js).
 import {
   appendToolEvent,
   canAttemptResearchPath,

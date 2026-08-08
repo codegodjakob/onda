@@ -1,3 +1,10 @@
+// Der Recherchelauf als Zustand — PUR, node-testbar, kein DOM.
+//
+// Was ein Lauf ist: ein Plan aus Wegen, ein Zustand (geplant, läuft, pausiert, zur Sichtung
+// bereit, übernommen, abgebrochen, unterbrochen) mit ausdrücklich erlaubten Übergängen,
+// ein Ereignisprotokoll und die Liste der Fundkandidaten.
+//
+// Gehört zur Browser-App (Einstiegspunkt src/editor.js).
 export const RESEARCH_TOOLS = Object.freeze(['search', 'metadata', 'reader', 'import'])
 export const RESEARCH_STATUSES = Object.freeze([
   'planned',

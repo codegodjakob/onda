@@ -1,3 +1,10 @@
+// Die Bedienoberfläche für Sprache und Rechtschreibung — DOM, deshalb nicht node-testbar.
+//
+// Hier laufen die reinen Sprachmodule zusammen: Profil einstellen (language-profile.mjs),
+// prüfen (language-diagnostics.mjs, language-modality.mjs, language-patterns.mjs),
+// korrigieren (orthography.mjs) und das Ergebnis merken (language-report.mjs).
+//
+// Gehört zur Browser-App (Einstiegspunkt src/editor.js), aufgebaut von src/workspace.js.
 import { analyzeCommunicationEffect, analyzeRhetoricalDevices } from './effect-analysis.mjs'
 import { analyzeEffectFairness } from './effect-fairness.mjs'
 import {

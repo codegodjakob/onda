@@ -1,3 +1,12 @@
+// Der gemeinsame Vertrag für Sprachbefunde — PUR, node-testbar, kein DOM.
+//
+// Hier steht, welche fünf Arten von Sprachbefund es überhaupt gibt (vom harten Normfehler
+// bis zur Integritätswarnung) und welche Felder jeder einzelne tragen muss. Dazu die
+// Grunduntersuchung eines Textes auf Rechtschreibung, Grammatik und Register. Die
+// Nachbarmodule language-modality.mjs und language-patterns.mjs bauen ihre Befunde über
+// dieselbe Fabrik, damit die Oberfläche nur eine Form kennen muss.
+//
+// Gehört zur Browser-App (Einstiegspunkt src/editor.js), eingebunden über language-ui.mjs.
 import { ORTHOGRAPHY_RULES } from './orthography-rules.mjs'
 
 export const LANGUAGE_DIAGNOSTIC_CLASSES = Object.freeze([

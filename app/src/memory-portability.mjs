@@ -1,3 +1,11 @@
+// Gedächtnis mitnehmen und löschen — PUR, node-testbar, kein DOM.
+//
+// Zwei Rechte in einem Modul: alles herausgeben (Export, nachprüfbar) und alles wieder
+// loswerden (Löschen nach Ebene). Beim Export werden Schlüssel, Passwörter und
+// Sitzungsmarken geschwärzt — ein mitgenommenes Gedächtnis darf kein Zugangsdatum
+// enthalten.
+//
+// Gehört zur Browser-App (Einstiegspunkt src/editor.js), bedient über memory-ui.mjs.
 import { ensureMemoryStore } from './memory-model.mjs'
 
 const SECRET_KEY = /(api[-_]?key|password|passwd|secret|token|cookie|authorization|credential|session)/i

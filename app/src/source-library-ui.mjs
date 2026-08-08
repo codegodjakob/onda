@@ -1,3 +1,10 @@
+// Die Quellenbibliothek als Oberfläche — DOM, deshalb nicht node-testbar.
+//
+// Quellen aufnehmen, Fundstellen setzen, Belege einsehen und sehen, was ein Rückzug oder
+// eine Korrektur an einer Quelle für die eigenen Aussagen bedeutet (argument-graph.mjs).
+// Die Recherche (research-ui.mjs) sitzt darin.
+//
+// Gehört zur Browser-App (Einstiegspunkt src/editor.js), aufgebaut von src/workspace.js.
 import { importSource, recordSourceEvent } from './source-model.mjs'
 import { createLocator, resolveLocator } from './locator-model.mjs'
 import { buildEvidenceBundle, propagateSourceEvent } from './evidence-bundle.mjs'

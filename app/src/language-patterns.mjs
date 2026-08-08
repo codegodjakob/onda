@@ -1,3 +1,10 @@
+// Wiederkehrende Sprachmuster über mehrere Absätze — PUR, node-testbar, kein DOM.
+//
+// Sucht, was erst im Zusammenhang auffällt: dieselbe Übergangsformel ("Darüber hinaus",
+// "Des Weiteren") mehrfach hintereinander. Ein einzelner Absatz ist dafür blind, deshalb
+// bekommt dieses Modul die Blöcke am Stück. Befundform aus language-diagnostics.mjs.
+//
+// Gehört zur Browser-App (Einstiegspunkt src/editor.js), eingebunden über language-ui.mjs.
 import { createLanguageDiagnostic } from './language-diagnostics.mjs'
 
 const CONNECTOR = /^\s*(Darüber hinaus|Des Weiteren|Zusätzlich|Abschließend)\b/iu

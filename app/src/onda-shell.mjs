@@ -1,3 +1,9 @@
+// Die Hülle um alles: der Wechsel zwischen Bibliothek und Schreibraum — DOM.
+//
+// Sie schaltet die Ansicht um, setzt die Beschriftung für Vorlesegeräte und hält die
+// Seitenleiste auf schmalen Bildschirmen in Ordnung. Kein Inhalt, nur der Rahmen.
+//
+// Gehört zur Browser-App (Einstiegspunkt src/editor.js).
 let shellContext = null
 
 function visibleDocuments(context) {

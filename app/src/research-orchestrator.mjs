@@ -1,3 +1,10 @@
+// Die Abarbeitung der geplanten Recherchewege — kein DOM; die Adapter kommen herein.
+//
+// Geht die Wege eines Recherchelaufs der Reihe nach durch, überspringt, was schon erledigt
+// ist (research-run.mjs kennt den Fingerabdruck jedes Wegs), und schreibt jeden Fund in den
+// Lauf zurück. Kein Weg wird zweimal bezahlt.
+//
+// Gehört zur Browser-App (Einstiegspunkt src/editor.js).
 import { executeResearchTool, legalAlternativePaths } from './research-adapter.mjs'
 import {
   appendResearchCandidate,

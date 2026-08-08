@@ -1,3 +1,11 @@
+// Die Symbole der Oberfläche, als Zeichenpfade im Programm statt als Bilddateien.
+//
+// Ein Satz Pfade und eine Funktion, die daraus ein Symbol baut. Dass sie hier stehen und
+// nicht daneben liegen, hält sie ohne Netzzugriff verfügbar und lässt sie die
+// Schriftfarbe der Umgebung erben.
+//
+// Gehört zu BEIDEN Einstiegspunkten: der Browser-App (src/editor.js) und dem
+// Anmerkungslabor (annotation-lab.html).
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg'
 
 const ICONS = Object.freeze({

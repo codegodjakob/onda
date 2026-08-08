@@ -1,3 +1,11 @@
+// Die reine Hälfte der Brücken-Prüfung — kein DOM, kein Netz, node-testbar.
+//
+// Prüft mit Zeitlimit, ob die zwei Brücken zur Mac-Hülle antworten: Bild speichern und
+// Zustand speichern. Was die Brücken tun, wird hereingereicht; dieses Modul kennt nur die
+// Frage "antwortet es rechtzeitig?" und die Antwort ja oder nein.
+//
+// Gehört zur Browser-App (Einstiegspunkt src/editor.js); die Verdrahtung dazu steht in
+// live-native-probe.mjs.
 function mitZeitlimit(arbeit, timeoutMs) {
   return new Promise(resolve => {
     let erledigt = false

@@ -1,3 +1,11 @@
+// Die Fundstelle in einer Quelle — kein DOM; die Prüfsummen-Funktion kommt herein.
+//
+// Ein Locator sagt, WO in einer Quelle etwas steht: Seite, Abschnitt, Textstelle oder
+// Zeitmarke. Beim Auflösen wird zuerst geprüft, ob die Quelle noch unverändert ist
+// (source-model.mjs) und ob die zitierte Stelle dort wörtlich vorkommt — eine Fundstelle
+// in einer stillschweigend ausgetauschten Datei wäre ein falscher Beleg.
+//
+// Gehört zur Browser-App (Einstiegspunkt src/editor.js).
 import { verifySourceIntegrity } from './source-model.mjs'
 
 export const LOCATOR_KINDS = Object.freeze(['page', 'section', 'text', 'time'])

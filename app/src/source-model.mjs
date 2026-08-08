@@ -1,3 +1,11 @@
+// Was eine Quelle ist — kein DOM; die Prüfsummen-Funktion kommt herein.
+//
+// Aufnahme einer Quelle (PDF, Web, DOI, Text, Ton, Video), ihr Prüfsummen-Abdruck und ihr
+// Stand: gültig, korrigiert, zurückgezogen, ersetzt. Der Abdruck ist der Grund, warum
+// eine Fundstelle später noch etwas wert ist — an ihm zeigt sich, ob die Quelle sich hinter
+// dem Rücken des Autors verändert hat.
+//
+// Gehört zur Browser-App (Einstiegspunkt src/editor.js).
 export const SOURCE_TYPES = Object.freeze(['pdf', 'web', 'doi', 'text', 'audio', 'video'])
 export const SOURCE_STATUSES = Object.freeze(['active', 'corrected', 'retracted', 'superseded'])
 export const METADATA_STATUSES = Object.freeze(['confirmed', 'user-provided', 'conflict', 'unknown'])

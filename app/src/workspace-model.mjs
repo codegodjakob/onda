@@ -1,3 +1,11 @@
+// Der Arbeitsraum eines Dokuments als reines Modell — node-testbar, kein DOM.
+//
+// Die rechnende Hälfte von src/workspace.js: den Zustand eines Dokuments normalisieren,
+// Befunde ihren Textblöcken zuordnen, eine laufende Bearbeitung mitführen, während der
+// Text darunter weitergeschrieben wird, und entscheiden, wann der Agent sich von selbst
+// melden darf.
+//
+// Gehört zur Browser-App (Einstiegspunkt src/editor.js).
 import { isIntegrityCategory } from './reasoning-model.mjs'
 import { istFremdeInterviewNachricht } from './verstaendnis-interview.mjs'
 import { normalizeAnnotationWorkspace } from './annotation-controller.mjs'
