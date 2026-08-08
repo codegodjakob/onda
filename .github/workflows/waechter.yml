@@ -1,0 +1,96 @@
+# Die Waechter-Pruefung — der schnelle Lauf.
+#
+# WARUM es sie gibt: Unter app/evals/pruefungen/ liegen neun Pruefungen, die
+# festhalten, was das Programm koennen MUSS (welche Rueckmeldungsart auf welchem
+# Moment steht, dass kein Schluessel in eine Sicherung rutscht, und so fort).
+# Dazu kommen die Waechter unter betrieb/waechter/, die den Pruefstand selbst
+# bewachen. Bis heute hat all das bei keinem Pull Request mitgelaufen: die andere
+# Pruefung (pruefung.yml) arbeitet ausschliesslich im Ordner app/ und kommt an
+# betrieb/ gar nicht heran. Neun Pruefungen, die niemand startet, sind neun
+# Pruefungen, die es nicht gibt.
+#
+# WARUM ein EIGENER Auftrag und nicht ein Schritt in pruefung.yml: Der dortige
+# Lauf installiert drei Browser und baut das Bundle; das dauert viele Minuten.
+# Alles hier braucht nichts davon und ist in Sekunden fertig. Ein eigener Auftrag
+# faellt darum sofort auf, statt hinten an einer langen Schlange zu warten.
+#
+# Was hier ausdruecklich NICHT passiert:
+#   - Kein Schluessel wird gesetzt. Keine dieser Pruefungen spricht mit dem Netz.
+#   - Kein Lauf, der Geld kostet. Die teuren Qualitaetslaeufe bleiben, wo sie
+#     sind: von Hand gestartet.
+#   - Keine Browser werden geholt. Die Pruefungen, die hier laufen, lesen nur
+#     Dateien, sie klicken nichts. Zwei der neun brauchen doch einen Browser;
+#     die bleiben hier aussen vor, die Begruendung steht weiter unten beim
+#     Schritt „Pruefungen".
+
+name: Wächter
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# Wer zweimal hintereinander pusht, braucht den ersten Lauf nicht mehr.
+concurrency:
+  group: waechter-${{ github.ref }}
+  cancel-in-progress: true
+
+# Der Lauf liest nur.
+permissions:
+  contents: read
+
+jobs:
+  waechter:
+    name: Wächter und Prüfungen
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      # Gebraucht wird das nur fuer einen einzigen Grund: Der Prueffang-Waechter
+      # startet `npm run test:unit`, und ein paar Testdateien holen sich beim
+      # Laden ein Paket aus node_modules. Ohne diesen Schritt stuerben sie schon
+      # an der ersten Zeile. Browser kommen dabei keine mit — die werden erst
+      # nachtraeglich geholt, und genau das lassen wir hier bleiben.
+      - name: Pakete installieren
+        run: npm ci
+        working-directory: app
+
+      # Der Sammler findet jeden Waechter im Ordner selbst. Kommt einer dazu,
+      # muss hier nichts nachgetragen werden.
+      - name: Wächter
+        run: node betrieb/waechter/alle.mjs
+
+      # Jede Datei im Ordner wird gestartet — bis auf zwei. Sonst keine Liste,
+      # die man zu pflegen vergessen kann. Faellt eine durch, endet der Schritt
+      # rot und nennt die Datei.
+      #
+      # WARUM zwei fehlen: Sieben der neun Pruefungen lesen nur Dateien und sind
+      # in Sekundenbruchteilen fertig. Zwei sind das nicht. gestalt.mjs oeffnet
+      # einen echten Browser und ruft die laufende Anwendung unter
+      # 127.0.0.1:4173 auf; umgestaltung-entschieden.mjs ruft gestalt.mjs
+      # seinerseits auf. Die beiden brauchen also Browser, gebautes Bundle und
+      # einen laufenden Server — genau das, was dieser schnelle Auftrag bewusst
+      # NICHT tut. Sie gehoeren in den grossen Lauf (pruefung.yml). Wuerde man
+      # sie hier mitlaufen lassen, waere dieser Auftrag bei JEDEM Pull Request
+      # rot.
+      - name: Prüfungen
+        run: |
+          for f in evals/pruefungen/*.mjs; do
+            case "$(basename "$f")" in
+              gestalt.mjs|umgestaltung-entschieden.mjs)
+                echo "--- $f  (uebersprungen: braucht Browser und laufenden Server)"
+                continue ;;
+            esac
+            echo "--- $f"
+            node "$f" || { echo "ROT: $f"; exit 1; }
+          done
+        working-directory: app
