@@ -94,6 +94,16 @@ async function runEditor(browser) {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } })
   await openExample(page)
   const seeded = await page.evaluate(() => {
+    // Der Beispieltext bringt seit dem 07.08.2026 alle 29 Anmerkungsarten mit,
+    // damit Jakob jeden Anwendungsfall durchklicken kann. Einige davon zaehlen
+    // zur Integritaet und stehen deshalb VOR jeder eingesetzten Anmerkung —
+    // createdAt: -1 genuegt dann nicht mehr, um vorne zu stehen.
+    // Diese Pruefung gilt der Umschreibungs-Form, nicht der Reihenfolge der
+    // Warteschlange: sie raeumt die mitgelieferten Anmerkungen deshalb weg und
+    // arbeitet mit genau einer eigenen.
+    const doc = window.AIWT.state.docs.find(candidate => candidate.id === window.AIWT.state.active)
+    doc.findings = []
+    doc.lane = []
     const block = window.AIWT.__blockIdentityTestBridge.getBlocks().find(candidate => candidate.text.length > 24)
     if (!block) return null
     const target = block.text.slice(0, Math.min(32, block.text.length))
@@ -118,7 +128,13 @@ async function runEditor(browser) {
   assert.equal((await zeichen.textContent()).trim(), '', 'Das Zeichen zeigt eine Zahl — es soll nur ein Stift sein')
   assert.match(await zeichen.getAttribute('aria-label'), /Empfehlung/)
 
-  await page.getByRole('button', { name: /Fassung übernehmen/ }).click()
+  // Der Knopf hiess "Fassung übernehmen" und heisst seit dem 07.08.2026
+  // "Übernehmen" — so steht er im Design System (components/annotation/
+  // Rewrite.jsx: acceptLabel='Übernehmen'). Der Knopf wird ueber die Form
+  // gesucht, nicht ueber den ganzen Bildschirm: eine Beschriftung, die
+  // anderswo nochmal vorkommt, wuerde sonst den falschen treffen.
+  await page.locator('[data-annotation-form="rewrite"]')
+    .getByRole('button', { name: 'Übernehmen' }).click()
   assert.equal(await page.locator('#editor .ProseMirror').textContent().then(text => text.includes(seeded.action)), true)
   assert.equal(await page.evaluate(() => window.AIWT.state.docs.find(doc => doc.id === window.AIWT.state.active).findings.find(item => item.id === 'onda-editor-smoke').status), 'resolved')
 

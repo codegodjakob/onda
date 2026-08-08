@@ -53,6 +53,9 @@ export const ANNOTATION_DEFINITIONS = Object.freeze({
   satzstil: definition('satzstil', 'Satzstil', 'stil', 'empfehlung', 'rewrite', 'Satz', 'replace-range'),
   absatzstil: definition('absatzstil', 'Absatzstil', 'stil', 'geschmack', 'rewrite', 'Absatz', 'replace-range'),
   straffen: definition('straffen', 'Straffen', 'stil', 'empfehlung', 'rewrite', 'Satz', 'replace-range'),
+  // Wiederholung ist eine Sammelkarte: jedes Vorkommen wird im Text markiert und
+  // durchnummeriert, die Karte fasst zusammen und ersetzt auf einmal. So steht es
+  // in annotation.card.html, Beispiel "Wiederholung".
   wiederholung: definition('wiederholung', 'Wiederholung', 'stil', 'geschmack', 'region', 'Absatz', 'replace-many'),
   ton: definition('ton', 'Ton & Register', 'stil', 'geschmack', 'region', 'Abschnitt', 'replace-many'),
   stilmittel: definition('stilmittel', 'Stilmittel', 'stil', 'geschmack', 'insertion', 'Satz', 'insert-at'),
@@ -62,7 +65,12 @@ export const ANNOTATION_DEFINITIONS = Object.freeze({
   uebergang: definition('uebergang', 'Übergang', 'struktur', 'empfehlung', 'insertion', 'Satz', 'insert-at'),
   gliederung: definition('gliederung', 'Gliederung', 'struktur', 'empfehlung', 'slot', 'Abschnitt', 'insert-heading'),
   fluss: definition('fluss', 'Textfluss', 'struktur', 'empfehlung', 'rewrite', 'Satz', 'replace-range'),
-  faden: definition('faden', 'Roter Faden', 'struktur', 'empfehlung', 'rewrite', 'Text'),
+  // Roter Faden hat KEINE Textoperation (letztes Feld leer) — es gibt nichts zu
+  // ersetzen, nur etwas zu bedenken. Die Form war bis hierher 'rewrite', also
+  // eine Karte, die einen Ersatztext verspricht und keinen liefert. Die Vorlage
+  // zeigt hier <Annotation> (annotation.card.html, Beispiel "Roter Faden"):
+  // eine gewoehnliche Karte mit einem Satz und einem Knopf "Verstanden".
+  faden: definition('faden', 'Roter Faden', 'struktur', 'empfehlung', 'card', 'Text'),
   ueberschrift: definition('ueberschrift', 'Überschrift', 'struktur', 'geschmack', 'title', 'Titel', 'replace-title'),
   anmerkung: definition('anmerkung', 'Anmerkung', 'inhalt', 'geschmack', 'dialogue', 'Satz'),
   beleg: definition('beleg', 'Beleg fehlt', 'inhalt', 'fehler', 'source', 'Satz', 'attach-source'),

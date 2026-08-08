@@ -9,6 +9,7 @@
     "maximumIterationsPerStage": 5,
     "stopAfterConsecutiveNonImprovingIterations": 2
   },
+  "_rubrikBestaetigt": "Die Rubrikgewichte sind bestätigt von Jakob am 2026-08-05 (Issue #16). Damit sind sie seine Setzungen; jede Änderung an ihnen läuft über den Maßstabs-Wächter (Issue #15).",
   "rubric": [
     {
       "id": "truth",

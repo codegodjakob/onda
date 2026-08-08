@@ -165,8 +165,6 @@ let renderedDocId = null
 let decoratedDocId = null
 let decoratedBlockId = null
 let insertMenu = null
-let typingTimer = null
-let isTyping = false
 let isComposing = false
 let structureNavState = null
 let localDecoratedDocId = null
@@ -2850,15 +2848,11 @@ async function sendeInterviewAntwort(message, text) {
 // Das Menue selbst (openInsertMenu/insertBlock) BLEIBT. Es bekommt seinen Platz dort,
 // wo Bausteine hingehoeren: in der Struktur-Ansicht, wo Jakob "auch neue Bausteine
 // hinzufuegen" koennen will. Nur der schwebende Knopf ist fort.
-
-function markTyping() {
-  isTyping = true
-  clearTimeout(typingTimer)
-  if (isComposing) return
-  typingTimer = setTimeout(() => {
-    isTyping = false
-  }, 520)
-}
+//
+// Mit dem Knopf faellt auch der Tipp-Zustand fort (markTyping, isTyping, typingTimer).
+// Er hatte genau eine Aufgabe: dem Plus beim Tippen die Klasse is-typing zu geben, mit
+// der es verblasste. Wann zuletzt getippt wurde, fuehrt ohnehin initiativeInputState —
+// eine Wahrheit darueber genuegt.
 
 function initiativeInputState(docId = ctx?.activeDoc()?.id) {
   if (!controller || !docId) return null
@@ -3017,21 +3011,18 @@ function handleBeforeInput(event) {
     && istSatzende(event.data)
   pendingParagraphBoundaryDocId = null
   recordRealEditorInput({ paragraphBoundary, satzende })
-  markTyping()
 }
 
 function startComposition() {
   isComposing = true
   pendingParagraphBoundaryDocId = null
   recordRealEditorInput()
-  markTyping()
 }
 
 function endComposition() {
   isComposing = false
   recordRealEditorInput()
   completeRealEditorUpdate()
-  markTyping()
 }
 
 // Welcher Moment ist gerade erreicht (momente-model.mjs)? Liest nur die ohnehin
@@ -3954,7 +3945,18 @@ function positionLocalSurface(blockId) {
     : Math.min(sideWidth, availableRight - 42)
 
   local.classList.toggle('is-below', below)
-  local.style.width = `${localWidth}px`
+  // Korrektur und Einfuegung sind in der Vorlage KEINE Karten: die eine ist eine
+  // Zeile, die andere waechst mit ihrem Vorschlag. Presst man sie auf
+  // Kartenbreite, bricht "alt → neu" auf drei Zeilen um und sieht wieder aus wie
+  // das, was sie nicht sein soll. Sie bekommen deshalb nur eine Obergrenze.
+  const kompakt = local.classList.contains('aura-corr__pop') || local.classList.contains('aura-ins__pop')
+  if (kompakt) {
+    local.style.width = ''
+    local.style.maxWidth = `${Math.max(localWidth, below ? localWidth : sideWidth + 120)}px`
+  } else {
+    local.style.maxWidth = ''
+    local.style.width = `${localWidth}px`
+  }
   local.style.left = `${below ? Math.max(gutter, blockRect.left - layerRect.left) : blockRect.right - layerRect.left + 34}px`
   local.style.top = `${below ? blockRect.bottom - layerRect.top + 14 : blockRect.top - layerRect.top}px`
   local.hidden = Boolean(scrollRect && (blockRect.bottom < scrollRect.top || blockRect.top > scrollRect.bottom))
@@ -4004,7 +4006,7 @@ function renderLocalFinding() {
   ) {
     localDecoratedDocId = doc.id
     localDecoratedFindingId = finding?.id || null
-    setLocalFindingDecoration(blockId, 0, true)
+    setLocalFindingDecoration(blockId, 0, true, finding || null)
   }
 
   ui.localLayer.replaceChildren()
@@ -4539,7 +4541,6 @@ function renderAgentWidget() {
     }
     return
   }
-
   const message = activeAgentMessage(workspace)
   const header = createNode('header', 'agent-widget-header')
   header.append(
@@ -4581,13 +4582,16 @@ function renderAgentWidget() {
   const gesten = erweiterungsGesten(message)
   if (gesten) messages.append(gesten)
 
+  // Composer nach dem Design System: EIN Rahmen um Feld und Knopf, nicht zwei
+  // Formen nebeneinander (components/conversation/Composer.jsx).
   const form = createNode('form', 'agent-chat-form agent-widget-form')
+  const composer = createNode('div', 'onda-composer')
   const input = createNode('input', 'agent-chat-input')
   input.type = 'text'
-  input.placeholder = 'Antworten …'
+  input.placeholder = 'Schreib eine Anweisung …'
   input.setAttribute('aria-label', 'Dem Agenten antworten')
   const send = createNode('button', 'agent-chat-send')
-  send.append(ondaIcon('arrow-right', { size: 18 }))
+  send.append(ondaIcon('arrow-right', { size: 15 }))
   send.type = 'submit'
   send.title = 'Senden'
   send.setAttribute('aria-label', 'Nachricht senden')
@@ -5745,7 +5749,6 @@ export function initWorkspace(context) {
     closeOndaDialog({ restoreFocus: false })
     cleanups.splice(0).reverse().forEach(cleanup => cleanup())
 
-    clearTimeout(typingTimer)
     if (chatStream?.flushTimer) clearTimeout(chatStream.flushTimer)
     chatStream = null
     if (localPositionFrame) cancelAnimationFrame(localPositionFrame)
@@ -5773,8 +5776,6 @@ export function initWorkspace(context) {
     renderedDocId = null
     decoratedDocId = null
     decoratedBlockId = null
-    typingTimer = null
-    isTyping = false
     isComposing = false
     structureNavState = null
     localDecoratedDocId = null

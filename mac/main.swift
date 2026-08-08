@@ -25,7 +25,7 @@ enum Store {
     static var dataURL: URL { dir.appendingPathComponent("data.json") }
     static var backupURL: URL { dir.appendingPathComponent("data.backup.json") }
 
-    /// Datierte Backup-Generationen: data.backup-JJJJMMTT-HHMMSS-mmm-lfd.json.
+    /// Datierte Backup-Generationen: data.backup-JJJJMMTT-HHMMSS-mmm.json.
     /// Neben der unmittelbaren Vorstufe (data.backup.json) bleiben bis zu 5
     /// Generationen mit mindestens 60 s Abstand erhalten — ein Fehler, der in
     /// schneller Folge speichert, kann so nicht alle Rettungsanker vernichten.
@@ -57,13 +57,40 @@ enum Store {
         return f.string(from: datum)
     }
 
-    /// Alle datierten Generationen, neueste zuerst (das Namensformat sortiert chronologisch).
+    /// Zeitstempel und Zähler aus einem Generationsnamen. Der Zähler fehlt beim
+    /// ersten Eintrag einer Millisekunde und zählt dann als 1.
+    private static func generationsSchluessel(_ name: String) -> (String, Int) {
+        let kern = String(name.dropFirst(backupPrefix.count).dropLast(".json".count))
+        let teile = kern.split(separator: "-")
+        guard teile.count >= 4, let zaehler = Int(teile[3]) else { return (kern, 1) }
+        return (teile[0..<3].joined(separator: "-"), zaehler)
+    }
+
+    /// Die Gegenrichtung zu `generationsSchluessel`: aus Zeitstempel und Zähler wird
+    /// wieder ein Name. Zähler 1 heißt kein Zusatz — so hießen die Generationen von
+    /// Anfang an, und genau so liest der Schlüssel sie zurück. Beide Hälften der
+    /// Regel stehen deshalb nebeneinander; wandert eine, fällt die andere auf.
+    private static func generationsURL(zeit: String, lauf: Int) -> URL {
+        lauf <= 1
+            ? dir.appendingPathComponent("\(backupPrefix)\(zeit).json")
+            : dir.appendingPathComponent("\(backupPrefix)\(zeit)-\(lauf).json")
+    }
+
+    /// Alle datierten Generationen, neueste zuerst.
+    ///
+    /// Sortiert wird nach Bedeutung — Zeitstempel, dann Zähler —, nicht nach rohem
+    /// Dateinamen. Der rohe Textvergleich stellte "…-500-2.json" HINTER
+    /// "…-500.json", weil "-" (0x2D) vor "." (0x2E) kommt: bei zwei Sicherungen in
+    /// derselben Millisekunde galt die jüngere als die ältere. Das traf zwei
+    /// Stellen, die beide echte Texte kosten können — `load()` fiel auf den
+    /// ÄLTEREN Stand zurück, und die Rotation unten löschte am falschen Ende, also
+    /// die jüngste Generation statt der ältesten.
     static func backupGenerationen() -> [URL] {
         let fm = FileManager.default
         let namen = (try? fm.contentsOfDirectory(atPath: dir.path)) ?? []
         return namen
             .filter { $0.hasPrefix(backupPrefix) && $0.hasSuffix(".json") }
-            .sorted(by: >)
+            .sorted { generationsSchluessel($0) > generationsSchluessel($1) }
             .map { dir.appendingPathComponent($0) }
     }
 
@@ -108,8 +135,8 @@ enum Store {
     ///
     /// Hier genügt der einfache Zusatzname bei gleicher Millisekunde: diese Dateien
     /// werden nie sortiert, sondern nur gezählt und nach ihrem Änderungsdatum
-    /// abgeräumt. Bei den Generationen ist das anders — dort IST der Name die
-    /// Reihenfolge, deshalb hat `naechsterGenerationsName` eine eigene Regel.
+    /// abgeräumt. Bei den Generationen ist das anders — dort trägt der Name die
+    /// Reihenfolge, deshalb liest `generationsSchluessel` sie eigens aus.
     private static func legeBeiseite(_ s: String) {
         let fm = FileManager.default
         var ziel = dir.appendingPathComponent("data.abgelehnt-\(stamp()).json")
@@ -119,44 +146,6 @@ enum Store {
             lauf += 1
         }
         try? s.data(using: .utf8)?.write(to: ziel, options: .atomic)
-    }
-
-    /// Der Name einer Generation ist zugleich ihr Rang: `backupGenerationen()` sortiert
-    /// die Namen absteigend und nennt das Ergebnis „neueste zuerst". Zwei Sicherungen in
-    /// derselben Millisekunde brauchen deshalb nicht bloß verschiedene Namen, sondern
-    /// Namen in der richtigen Reihenfolge.
-    ///
-    /// Ein angehängtes „-2" leistet das nicht. Der Bindestrich steht im Zeichensatz VOR
-    /// dem Punkt, also sortiert `…-123-2.json` hinter `…-123.json`: die jüngere Stufe
-    /// rutscht ans Ende der Liste. Danach fällt das Laden auf einen älteren Stand zurück,
-    /// und die Rotation räumt die jüngsten Generationen weg statt der ältesten — die
-    /// Anzahl der Dateien stimmt weiterhin, ihr Inhalt ist der falsche.
-    ///
-    /// Die laufende Nummer gehört deshalb IMMER zum Namen und hat feste Breite
-    /// (…-123-000, …-123-001), damit sie mitsortiert. Der Zeitstempel wird einmal
-    /// genommen und nicht je Versuch neu — sonst wandert die Nummer an eine andere Zeit.
-    ///
-    /// Die Nummer zählt weiter, statt bei 000 neu anzufangen: die Rotation räumt die
-    /// kleinsten Nummern zuerst weg, und ein wiederverwendeter Name sortierte die
-    /// jüngste Sicherung erneut ans Ende — derselbe Fehler durch die Hintertür.
-    private static func naechsterGenerationsName() -> URL {
-        let fm = FileManager.default
-        let rumpf = "\(backupPrefix)\(stamp())-"
-        let hoechsteVergebene = backupGenerationen()
-            .map { $0.lastPathComponent }
-            .filter { $0.hasPrefix(rumpf) && $0.hasSuffix(".json") }
-            .compactMap { Int($0.dropFirst(rumpf.count).dropLast(".json".count)) }
-            .max()
-        var lauf = hoechsteVergebene.map { $0 + 1 } ?? 0
-        // Nach dem Weiterzählen ist der Name frei. Der Blick auf die Platte kostet
-        // nichts und schließt aus, dass eine Sicherung still verlorengeht, weil ein
-        // unerwarteter Name (etwa aus einer früheren Fassung) doch schon dort liegt.
-        var ziel = dir.appendingPathComponent("\(rumpf)\(String(format: "%03d", lauf)).json")
-        while fm.fileExists(atPath: ziel.path) {
-            lauf += 1
-            ziel = dir.appendingPathComponent("\(rumpf)\(String(format: "%03d", lauf)).json")
-        }
-        return ziel
     }
 
     /// Hebt den aktuellen Datenbestand als Backup auf: immer als unmittelbare
@@ -175,7 +164,32 @@ enum Store {
         let faellig = juengste.map { Date().timeIntervalSince($0) >= backupAbstandSekunden } ?? true
         guard erzwungen || faellig else { return }
 
-        try? fm.copyItem(at: dataURL, to: naechsterGenerationsName())
+        // Der Zeitstempel wird EINMAL genommen und für den Zähler wiederverwendet.
+        // Rief die Schleife stamp() erneut auf, konnte die zweite Stufe unter einer
+        // späteren Millisekunde mit Zähler 2 landen — dann log der Schlüssel
+        // (Zeitstempel, Zähler) über die Reihenfolge, und eine später geschriebene
+        // Generation ohne Zähler galt als älter.
+        //
+        // Der Zähler zählt außerdem HINTER dem höchsten weiter, der zu dieser
+        // Millisekunde schon vergeben ist. Finge er wieder bei 1 an, wäre der
+        // Schlüssel erneut gelogen: die Rotation räumt die kleinsten Zähler zuerst
+        // weg, und die frei gewordene Nummer machte aus der jüngsten Sicherung die
+        // vermeintlich älteste — derselbe Fehler durch die Hintertür. Sichtbar wird
+        // das erst, wenn eine ganze Rotationsrunde in eine Millisekunde fällt;
+        // `rotation-generationen-neueste-zuerst` prüft genau diesen Ausgang.
+        let zeit = stamp()
+        let hoechsterZaehler = backupGenerationen()
+            .map { generationsSchluessel($0.lastPathComponent) }
+            .filter { $0.0 == zeit }
+            .map { $0.1 }
+            .max() ?? 0
+        var lauf = hoechsterZaehler + 1
+        var ziel = generationsURL(zeit: zeit, lauf: lauf)
+        while fm.fileExists(atPath: ziel.path) { // gleiche Millisekunde — Namen nie überschreiben
+            lauf += 1
+            ziel = generationsURL(zeit: zeit, lauf: lauf)
+        }
+        try? fm.copyItem(at: dataURL, to: ziel)
 
         for alt in backupGenerationen().dropFirst(maxBackupGenerationen) {
             try? fm.removeItem(at: alt)
@@ -419,8 +433,8 @@ func runSelfTest() -> Never {
     // FALSCHEN fünf behält. Neun Speichervorgänge müssen neun unterscheidbare
     // Generationen ergeben haben, von denen die fünf jüngsten übrig sind — in der
     // Reihenfolge, die `backupGenerationen()` verspricht: neueste zuerst. Genau das
-    // bricht, wenn zwei Sicherungen sich einen Zeitstempel teilen und der Zusatzname
-    // die Sortierung verdreht (siehe `naechsterGenerationsName`).
+    // bricht, wenn zwei Sicherungen sich einen Zeitstempel teilen und die Sortierung
+    // sie verdreht (siehe `generationsSchluessel`).
     let erwarteteGenerationen = [7, 6, 5, 4, 3].map { rotStaende[$0] }
     let gefundeneGenerationen = Store.backupGenerationen()
         .compactMap { try? String(contentsOf: $0, encoding: .utf8) }
@@ -429,6 +443,33 @@ func runSelfTest() -> Never {
     try? "{kaputt!!".data(using: .utf8)!.write(to: Store.backupURL)
     check("rueckfall-auf-generation", Store.load() == rotStaende[7])
     Store.backupAbstandSekunden = 60
+
+    // 10b) Zwei Sicherungen in DERSELBEN Millisekunde. sichereVorstufe haengt dann
+    //      ein "-2" an, damit keine Stufe ueberschrieben wird. Die Reihenfolge muss
+    //      trotzdem stimmen: die zweite ist die juengere und gehoert nach vorn.
+    //      Roh als Text sortiert dreht sich das um, weil "-" (0x2D) vor "." (0x2E)
+    //      kommt — "…-500.json" gilt dann als juenger als "…-500-2.json". Zwei
+    //      Folgen, beide treffen echte Texte: der Rueckfall liefert den AELTEREN
+    //      Stand, und die Rotation loescht am falschen Ende, also die juengste
+    //      Generation statt der aeltesten. Genau das hat am 8. August einen Bau an
+    //      Pflicht-Tor 2 abgebrochen — sichtbar nur, wenn zwei Speichervorgaenge
+    //      wirklich in dieselbe Millisekunde fielen, also je nach Last mal so, mal so.
+    let msFM = FileManager.default
+    for datei in (try? msFM.contentsOfDirectory(atPath: Store.dir.path)) ?? []
+    where datei.hasPrefix(Store.backupPrefix) {
+        try? msFM.removeItem(at: Store.dir.appendingPathComponent(datei))
+    }
+    let msAlt = "{\"docs\":[{\"id\":\"k\",\"title\":\"kollision-alt\",\"body\":\"<p>alt</p>\",\"updated\":1}],\"active\":\"k\"}"
+    let msNeu = "{\"docs\":[{\"id\":\"k\",\"title\":\"kollision-neu\",\"body\":\"<p>neu</p>\",\"updated\":2}],\"active\":\"k\"}"
+    let msErste = "\(Store.backupPrefix)20260808-120000-500.json"
+    let msZweite = "\(Store.backupPrefix)20260808-120000-500-2.json"
+    try? msAlt.data(using: .utf8)!.write(to: Store.dir.appendingPathComponent(msErste))
+    try? msNeu.data(using: .utf8)!.write(to: Store.dir.appendingPathComponent(msZweite))
+    check("gleiche-millisekunde-juengste-zuerst",
+          Store.backupGenerationen().first?.lastPathComponent == msZweite)
+    try? "{kaputt!!".data(using: .utf8)!.write(to: Store.dataURL)
+    try? "{kaputt!!".data(using: .utf8)!.write(to: Store.backupURL)
+    check("gleiche-millisekunde-rueckfall-nimmt-juengste", Store.load() == msNeu)
 
     // 11) Wartung: Beiseitegelegtes älter als 30 Tage wird abgeräumt, Junges bleibt.
     let fm = FileManager.default
