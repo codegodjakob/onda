@@ -367,11 +367,42 @@ const gebrocheneWoerter = page => page.evaluate(() => {
   return { funde, raus, karteBreite: Math.round(kr.width) }
 })
 
+// Die zweite Hälfte der Regel, und sie braucht eine eigene Messung. Ob ein Umbruch
+// mitten im Wort einen Trennstrich gesetzt hat, lässt sich am gezeichneten Text NICHT
+// ablesen: der Strich ist kein Zeichen im Dokument, und die Rechtecke eines Bereichs
+// zählen ihn nicht mit (nachgemessen 8.8.2026 — Unterschied exakt 0). Gefragt wird
+// deshalb die Regel selbst, und zwar die WIRKSAME am laufenden Programm, nicht ihr
+// Wortlaut in der Datei: `overflow-wrap: anywhere` ist die Erlaubnis, an jeder
+// beliebigen Stelle zu schneiden, `hyphens: auto` die Anweisung, nach Silben zu trennen.
+//
+// Ausgenommen ist die Web-Adresse einer Quelle. Fehlt einer Quelle der Titel, steht ihre
+// nackte Adresse in der Zeile; die hat weder Leerzeichen noch Silben und liefe sonst
+// quer aus der Anmerkung. Dort ist „irgendwo brechen" richtig.
+const umbruchRegeln = page => page.evaluate(() => {
+  const karte = [...document.querySelectorAll('.onda-annotation')].find(k => k.offsetParent)
+  if (!karte) return { fehler: 'keine sichtbare Anmerkung — hier ist nichts zu messen' }
+  const erlaubt = knoten => knoten.closest('.aura-note__srclink')
+  const freibriefe = [karte, ...karte.querySelectorAll('*')]
+    .filter(knoten => knoten.offsetParent && !erlaubt(knoten))
+    .filter(knoten => getComputedStyle(knoten).overflowWrap === 'anywhere')
+    .map(knoten => knoten.className || knoten.tagName)
+  return { freibriefe, trennung: getComputedStyle(karte).hyphens }
+})
+
 async function pruefeGanzeWoerter(browser) {
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, reducedMotion: 'reduce' })
   const page = await context.newPage()
   await oeffneBeispiel(page)
   await page.locator('.onda-annotation').first().waitFor({ state: 'visible' })
+
+  const regeln = await umbruchRegeln(page)
+  assert.ok(!regeln.fehler, regeln.fehler)
+  assert.deepEqual(regeln.freibriefe, [],
+    'Diese Teile der Anmerkung dürfen Wörter an jeder beliebigen Stelle zerschneiden '
+    + `(overflow-wrap: anywhere): ${regeln.freibriefe.join(', ')}`)
+  assert.equal(regeln.trennung, 'auto',
+    `Die Anmerkung trennt nicht nach Silben (hyphens: ${regeln.trennung}) — ein zu langes `
+    + 'Wort bricht dann ohne Trennstrich um oder läuft seitlich heraus')
 
   // Der gemeldete Fall: bei 1280px ist die Karte am schmalsten, weil rechts vom Absatz
   // nur der Rest des Randes bleibt. Dort stand „Konzentati / on".

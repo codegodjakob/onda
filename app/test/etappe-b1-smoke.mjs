@@ -9,6 +9,10 @@ async function waitForLibraryReady(page) {
   await page.locator('#materialModal').evaluate(async node => {
     await Promise.all(node.getAnimations({ subtree: true }).map(animation => animation.finished.catch(() => {})))
   })
+  // Ohne Animationen resolved das sofort, waehrend der rAF-Fokus aus openOndaDialog noch
+  // aussteht — der koennte sonst ein fill() oder einen gesetzten Fokus mitten im Ablauf
+  // bestehlen. Erst warten, bis der Dialog-Fokus wirklich angekommen ist.
+  await page.waitForFunction(() => document.activeElement?.closest('#materialModal'))
 }
 
 async function freshProject(page) {
