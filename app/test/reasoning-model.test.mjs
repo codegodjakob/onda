@@ -7,6 +7,7 @@ import {
   ensureReasoningModel,
   getFindingQueue,
   isIntegrityCategory,
+  istRisikoAnnahme,
 } from '../src/reasoning-model.mjs'
 
 test('normalizes project understanding without discarding existing fields', () => {
@@ -133,12 +134,60 @@ test('exakte Beleg-, Fakten- und Widerspruchsarten bleiben Integritätsentscheid
   }
 })
 
-test('zeichnet den gewählten Verwerfungsumfang nachvollziehbar auf', () => {
-  const doc = { findings: [{ id: 'style', status: 'open', category: 'wording' }] }
+// Hier stand „zeichnet den gewählten Verwerfungsumfang nachvollziehbar auf". Der
+// Umfang ist fort (Issue #38) — eine Anmerkung gilt einmal. Geblieben ist die Frage,
+// die wirklich unterscheidet: Ist das Verwerfen dieser Anmerkung eine Risikoannahme?
+// Sie lag bisher stumm INNEN in decideFinding; seit die Risiko-Tafel dieselbe Frage
+// stellen muss, hat sie einen Namen — und deshalb hier eine eigene Prüfung.
+test('istRisikoAnnahme trennt die Integritätsfragen von allem anderen', () => {
+  // Die vier strengen Arten, wenn keine Textart feststeht (fail-closed).
+  assert.equal(istRisikoAnnahme({ category: 'source' }), true)
+  assert.equal(istRisikoAnnahme({ category: 'fact' }), true)
+  assert.equal(istRisikoAnnahme({ category: 'method' }), true)
+  assert.equal(istRisikoAnnahme({ category: 'logic' }), true)
+  // Formulierung und Aufbau sind keine.
+  assert.equal(istRisikoAnnahme({ category: 'wording' }), false)
+  assert.equal(istRisikoAnnahme({ category: 'structure' }), false)
+  // Auch ohne category trägt die Anmerkungsart die Frage.
+  assert.equal(istRisikoAnnahme({ anmerkungsart: 'beleg' }), true)
+  assert.equal(istRisikoAnnahme({ anmerkungsart: 'satzstil' }), false)
+  // Nichts drin, nichts dran.
+  assert.equal(istRisikoAnnahme(null), false)
+  assert.equal(istRisikoAnnahme({}), false)
+  // Geerbte Eigenschaften sind keine Anmerkungsarten — sonst würde ein Finding mit
+  // anmerkungsart 'constructor' die Nachschlagetabelle austricksen.
+  assert.equal(istRisikoAnnahme({ anmerkungsart: 'constructor' }), false)
+  assert.equal(istRisikoAnnahme({ anmerkungsart: 'toString' }), false)
+})
 
-  decideFinding(doc, 'style', { kind: 'reject', rejectionScope: 'art-im-dokument' }, 42)
+test('istRisikoAnnahme folgt der Textart — die Tafel erscheint nur, wo sie trägt', () => {
+  // Im Gedicht kennt Onda gar keine Integritätsfrage. Dort ist Verwerfen nie eine
+  // Risikoannahme, also erscheint die Tafel dort nie.
+  assert.equal(istRisikoAnnahme({ category: 'source', textart: 'lyrik' }), false)
+  assert.equal(istRisikoAnnahme({ anmerkungsart: 'beleg', textart: 'lyrik' }), false)
+  // Ein Marketingtext darf zuspitzen und weglassen — aber eine falsche
+  // Tatsachenbehauptung bleibt falsch. Der fehlende Beleg ist dort keine Frage mehr.
+  assert.equal(istRisikoAnnahme({ category: 'fact', textart: 'marketing' }), true)
+  assert.equal(istRisikoAnnahme({ category: 'source', textart: 'marketing' }), false)
+})
 
-  assert.equal(doc.decisions[0].rejectionScope, 'art-im-dokument')
+test('die Buchführung benutzt dieselbe Regel wie die Tafel', () => {
+  // Wenn diese beiden auseinanderliefen, erschiene die Tafel in Fällen, die als
+  // 'dismissed' verbucht werden — oder eine Risikoannahme geschähe wortlos.
+  for (const finding of [
+    { id: 'a', status: 'open', category: 'source' },
+    { id: 'b', status: 'open', category: 'wording' },
+    { id: 'c', status: 'open', category: 'source', textart: 'lyrik' },
+    { id: 'd', status: 'open', anmerkungsart: 'beleg' },
+  ]) {
+    const doc = { findings: [{ ...finding }] }
+    const entschieden = decideFinding(doc, finding.id, { kind: 'reject' }, 42)
+    assert.equal(
+      entschieden.status === 'risk-accepted',
+      istRisikoAnnahme(finding),
+      `${finding.id}: Tafel und Buchführung sind sich uneinig`,
+    )
+  }
 })
 
 test('dismisses a wording proposal without creating an integrity risk', () => {

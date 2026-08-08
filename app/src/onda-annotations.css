@@ -73,7 +73,18 @@
 
 .onda-annotation {
   display: flex; flex-direction: column; gap: var(--space-3); width: 100%;
-  padding: var(--space-4) var(--space-5); overflow-wrap: anywhere;
+  padding: var(--space-4) var(--space-5);
+  /* Wie ein zu langes Wort umbricht. Bis zum 8.8.2026 stand hier `overflow-wrap: anywhere`
+     — eine Erlaubnis, JEDES Wort an JEDER Stelle zu zerschneiden. Solange die Anmerkung
+     breit genug war, hat sie niemand eingelöst; sobald es eng wurde, stand in der
+     Korrektur „Konzentati / on".
+     Deutsch trennt nach Silben und setzt einen Strich: aus „Benachrichtigungsunterbrechungen"
+     wird „Benachrichtigungsunterbre-chungen", nicht „…unterbrec / hungen". Das Wort bleibt
+     lesbar, weil der Strich ansagt, dass es weitergeht. Möglich ist das nur, weil
+     index.html `lang="de"` trägt — ohne Sprache kennt der Browser keine Silben.
+     break-word bleibt als Notbremse darunter: greift erst, wenn es keine Trennstelle gibt,
+     und verhindert dann, dass Text seitlich aus der Karte läuft. */
+  hyphens: auto; -webkit-hyphens: auto; overflow-wrap: break-word;
   border: 1px solid var(--border-subtle); border-radius: var(--radius-overlay);
   background: var(--bg-surface); box-shadow: var(--shadow-md); color: var(--text-primary);
   font-family: var(--font-sans); text-align: left;
@@ -130,6 +141,16 @@
   flex-direction: row; align-items: center; gap: var(--space-3); width: auto; max-width: 100%;
   padding: 9px 10px 9px 16px; border: 0; border-radius: var(--radius-panel);
   box-shadow: var(--shadow-md); font: var(--type-body); letter-spacing: var(--tracking-normal);
+  /* Eine Zeile, solange sie eine sein kann. Die sechs Stücke — alt, Pfeil, neu, Hinweis,
+     Übernehmen, Verwerfen — brauchen nebeneinander 527px; am rechten Rand stehen bei
+     1280px Fensterbreite 277px zur Verfügung. Ohne Umbruch teilen Flex-Elemente den
+     Mangel unter sich auf: „Konzentation" wurde von 87px auf 32px gestaucht und stand
+     auf VIER Zeilen, drei Stücke ragten aus der Form heraus (gemessen 8.8.2026).
+     Mit Umbruch wandert stattdessen ganz, was nicht mehr hinpasst: „alt → neu" bleibt
+     zusammen auf der ersten Zeile — darum geht es in dieser Form —, der Hinweis geht auf
+     die zweite, die Knöpfe auf die dritte. Die Form wird dabei nicht größer, sondern
+     kleiner: 221px hoch vorher, 119px nachher. */
+  flex-wrap: wrap;
 }
 .aura-corr__from { color: var(--text-tertiary); text-decoration: line-through; text-decoration-thickness: 1px; }
 .aura-corr__sep { display: inline-flex; flex: none; color: var(--text-tertiary); }
@@ -204,7 +225,11 @@
 .onda-annotation[data-state="active"] .aura-note__n { background: var(--accent); color: var(--on-accent); }
 .aura-note__count { font: var(--type-caption); color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
 .aura-note__source, .aura-note__compare { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-4); border-radius: var(--radius-panel); background: var(--bg-sunken); }
-.aura-note__srclink { display: inline-flex; align-items: center; gap: var(--space-2); color: var(--text-link); font: var(--type-label); text-decoration: none; }
+/* Hier — und nur hier — ist „an jeder Stelle brechen" richtig. Fehlt einer Quelle der
+   Titel, steht ihre nackte Web-Adresse in der Zeile (annotation-components.mjs), und die
+   hat weder Leerzeichen noch Silben: sie liefe sonst quer aus der Karte. Ein Trennstrich
+   wäre dort sogar schädlich, weil er wie ein Teil der Adresse aussähe. */
+.aura-note__srclink { display: inline-flex; align-items: center; gap: var(--space-2); color: var(--text-link); font: var(--type-label); text-decoration: none; overflow-wrap: anywhere; hyphens: none; -webkit-hyphens: none; }
 .aura-note__srclink:hover { text-decoration: underline; text-underline-offset: 2px; }
 .aura-note__excerpt { margin: 0; padding-left: var(--space-3); border-left: 2px solid var(--border-default); color: var(--text-secondary); font: var(--type-body); line-height: var(--leading-relaxed); }
 .aura-note__srcmeta, .aura-note__cmpref { color: var(--text-tertiary); font: var(--type-caption); }
@@ -219,14 +244,10 @@
 .aura-title-correction__field { display: flex; flex-direction: column; gap: var(--space-2); }
 .aura-title-correction__label { color: var(--text-tertiary); font: var(--type-caption); }
 .aura-title-correction__input { width: 100%; min-height: 48px; padding: 0 var(--space-4); border: 1px solid var(--border-default); border-radius: var(--radius-control); background: var(--bg-sunken); color: var(--text-primary); font: var(--type-title); }
-.aura-rejection { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-4); border-radius: var(--radius-panel); background: var(--bg-sunken); }
-.aura-rejection__title { margin: 0; font: var(--type-label); color: var(--text-primary); }
-.aura-rejection__intro { margin: 0; font: var(--type-body); color: var(--text-secondary); }
-.aura-rejection__choices { display: grid; gap: var(--space-2); }
-.aura-rejection__choice { display: grid; gap: var(--space-1); min-height: 60px; padding: var(--space-3) var(--space-4); border: 1px solid var(--border-default); border-radius: var(--radius-panel); background: var(--bg-surface); color: var(--text-primary); text-align: left; cursor: pointer; }
-.aura-rejection__choice:hover { border-color: var(--accent); }
-.aura-rejection__choice strong { font: var(--type-label); }
-.aura-rejection__choice span { color: var(--text-secondary); font: var(--type-caption); }
+/* Hier lagen die Regeln fuer .aura-rejection — das Fenster "Was soll Onda daraus
+   lernen?". Es ist fort (Issue #38): eine Anmerkung gilt einmal und wird nie zur
+   Regel. Was beim Verwerfen einer Integritaetsfrage erscheint, ist die Risiko-Tafel;
+   ihre Regeln stehen in style.css bei .integrity-risk-*. */
 
 /* Vier Pixel, nicht sechs, und ueber die doppelte Zeit: der Weg soll zu langsam sein,
    um als Sprung gelesen zu werden. */
@@ -238,8 +259,11 @@
   .onda-annotation { padding: var(--space-4); }
   .aura-note__head { flex-wrap: wrap; }
   .aura-note__scope { width: 100%; margin-left: 24px; }
-  .aura-correction__comparison { grid-template-columns: 1fr; }
-  .aura-correction__comparison > svg { transform: rotate(90deg); }
+  /* Die Korrektur stand hier bis zum 8.8.2026 noch einmal eigens auf eine Spalte
+     umgestellt. Das ist entfallen: Sie bricht jetzt von allein um, wenn ihre Stücke nicht
+     nebeneinander passen — und zwar bei JEDER Breite, nicht erst unter 480px. Genau da
+     lag der Fehler: die Anmerkung war bei 1280px Fensterbreite schon zu schmal, das
+     Fenster aber weit über der Schwelle, also griff die Regel nie. */
   .aura-action { flex: 1 1 auto; }
 }
 @media (prefers-reduced-motion: reduce) {

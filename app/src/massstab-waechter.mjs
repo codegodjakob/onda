@@ -19,7 +19,14 @@ const EVAL_FELDER = ['title', 'gate', 'automation', 'given', 'when', 'then', 'ev
 
 // Hält fest, womit dieser Lauf gemessen hat. Nur Inhalt, der das Urteil
 // beeinflusst — keine Pfade, keine Reihenfolge-Zufälle.
-export function massstabSchnappschuss(katalog, bindungen) {
+//
+// `urteilsweise` ist die dritte Zutat und die jüngste: je Prüfdatei „je-eval",
+// wenn sie ihre Kennungen einzeln verantwortet (siehe src/bindungs-urteil.mjs),
+// sonst „datei". Sie gehört zum Maßstab, weil sie ändert, WIE gemessen wird,
+// ohne dass Katalog oder Bindung sich anfassen lassen: Entfernt jemand die
+// Ankündigung aus einer Prüfung, fällt sie auf ein einziges Sammelurteil
+// zurück — genau die stumme Verschiebung, gegen die es den Wächter gibt.
+export function massstabSchnappschuss(katalog, bindungen, urteilsweise) {
   const evals = {}
   for (const suite of katalog?.suites || []) {
     for (const eintrag of suite?.evals || []) {
@@ -34,6 +41,13 @@ export function massstabSchnappschuss(katalog, bindungen) {
     externalLiveGateIds: [...(katalog?.externalLiveGateIds || [])].sort(),
     evals,
     bindungen: Object.fromEntries(Object.entries(bindungen || {}).map(([id, dateien]) => [id, [...dateien]])),
+    // Nur die Ausnahme wird festgehalten. Das Sammelurteil ist der Normalfall; stünde
+    // jede Prüfung mit „datei" darin, meldete der erste Lauf nach der Umstellung acht
+    // Dutzend Änderungen, von denen keine etwas besagt — und der Abschnitt, der laut
+    // sein soll, wenn wirklich etwas kippt, wäre entwertet.
+    urteilsweise: Object.fromEntries(
+      Object.entries(urteilsweise || {}).filter(([, modus]) => modus === 'je-eval'),
+    ),
   }
 }
 
@@ -82,12 +96,26 @@ export function vergleicheMassstab(vorher, jetzt) {
     else if (!gleich(a, b)) melde({ bereich: 'bindung', art: 'geaendert', id, vorher: a, jetzt: b })
   }
 
+  for (const id of vereinteSchluessel(vorher.urteilsweise, jetzt.urteilsweise)) {
+    const [a, b] = [vorher.urteilsweise?.[id], jetzt.urteilsweise?.[id]]
+    if (a && !b) melde({ bereich: 'urteilsweise', art: 'entfernt', id, vorher: a })
+    else if (!a && b) melde({ bereich: 'urteilsweise', art: 'hinzugefuegt', id, jetzt: b })
+    else if (a !== b) melde({ bereich: 'urteilsweise', art: 'geaendert', id, vorher: a, jetzt: b })
+  }
+
   return aenderungen
 }
 
 // Macht aus dem strukturierten Vergleich lesbare Zeilen für Konsole und Bericht.
 export function formatiereMassstabAenderungen(aenderungen) {
   return (aenderungen || []).map(a => {
+    // Die Urteilsweise bekommt ganze Sätze statt „entfernt (war: je-eval)". Wer das
+    // liest, soll ohne Vorwissen erkennen, was sich an der Messung geändert hat.
+    if (a.bereich === 'urteilsweise') {
+      return a.art === 'entfernt'
+        ? `${a.id} urteilt nicht mehr je Eval — alle gebundenen Evals hängen wieder an einem Sammelurteil`
+        : `${a.id} urteilt jetzt je Eval statt mit einem Sammelurteil für alle`
+    }
     const wo = a.id ? `${name(a.bereich)} ${a.id}` : name(a.bereich)
     if (a.art === 'entfernt') return `${wo} entfernt${wert(' (war: ', a.vorher)}`
     if (a.art === 'hinzugefuegt') return `${wo} hinzugekommen${wert(' (', a.jetzt)}`
