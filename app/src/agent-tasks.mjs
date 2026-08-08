@@ -84,8 +84,24 @@ export const HINWEISE_SCHEMA = Object.freeze({
           },
           istGrundursache: { type: 'boolean' },
           integritaet: { type: 'boolean' },
+          // Was der Text GEWINNT, wenn dieser Hinweis umgesetzt wird — als Stufe, nicht
+          // als Satz. Die Prosa dazu steht schon in folge („was passiert, wenn es
+          // bleibt"); ein zweiter Satz waere bei jedem Hinweis erneut zu bezahlen und
+          // sagte dasselbe in die andere Richtung.
+          //
+          // Diese Stufe entscheidet die Reihenfolge VOR der Tragweite (reasoning-model,
+          // vergleicheHinweise). Das ist ihr ganzer Zweck: die Tragweite ordnet ARTEN
+          // („eine Gliederungsfrage reicht weiter als eine Wortwahl"), die Stufe ordnet
+          // FAELLE — sie ist der Ort, an dem das Modell sagen darf, dass ausgerechnet
+          // dieses eine Wort den Text traegt.
+          gewinn: {
+            type: 'string',
+            enum: ['traegt', 'schaerft', 'glaettet'],
+            description: 'traegt = der Text sagt danach, was er vorher nur behauptet; hoechstens EIN Hinweis je Durchgang darf das beanspruchen. '
+              + 'schaerft = die Aussage wird genauer. glaettet = es liest sich besser. Im Zweifel schaerft.',
+          },
         },
-        required: ['kategorie', 'anmerkungsart', 'anker', 'beobachtung', 'relevanz', 'folge', 'muster', 'vorschlagsart', 'stilmittelId', 'vorschlag', 'istGrundursache', 'integritaet'],
+        required: ['kategorie', 'anmerkungsart', 'anker', 'beobachtung', 'relevanz', 'folge', 'muster', 'vorschlagsart', 'stilmittelId', 'vorschlag', 'istGrundursache', 'integritaet', 'gewinn'],
         additionalProperties: false,
       },
     },

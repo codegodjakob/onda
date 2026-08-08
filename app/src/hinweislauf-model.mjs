@@ -73,6 +73,7 @@ export function verarbeiteHinweisantwort({
   const frisch = dedupeHinweise(geliefertListe, findings, decisions)
   let verworfen = geliefertListe.length - frisch.length
   const uebernommen = []
+  let traegtVergeben = false
 
   frisch.forEach(hinweis => {
     if (!pruefeAnmerkungsart(hinweis, annotationMode)) { verworfen += 1; return }
@@ -86,6 +87,17 @@ export function verarbeiteHinweisantwort({
     // Integritaetsfrage, sein Verwerfen aber trotzdem ein angenommenes Risiko.
     const finding = hinweisZuFinding(hinweis, ankerErgebnis, blockId, docText, jetzt, textart)
     if (!finding) { verworfen += 1; return }
+    // Hoechstens EIN „traegt" je Durchgang. Die Stufe entscheidet, was zuerst auf den
+    // Schirm kommt (reasoning-model.mjs, vergleicheHinweise) — und eine Stufe, die
+    // jeder beanspruchen darf, ordnet nichts mehr. Der Prompt bittet darum; ein Prompt
+    // ist eine Bitte, kein Riegel. Der Riegel steht hier.
+    //
+    // Zurueckgestuft wird, nicht verworfen: der Hinweis selbst kann gut sein, nur seine
+    // Selbsteinschaetzung war zu gross.
+    if (finding.gewinn === 'traegt') {
+      if (traegtVergeben) finding.gewinn = 'schaerft'
+      else traegtVergeben = true
+    }
     uebernommen.push(finding)
   })
 
