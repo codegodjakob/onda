@@ -57,10 +57,10 @@ Die fünf Gesten unterscheiden sich allein durch ihre Form. Das ist kein Verzich
 eine Probe: Trägt die Form von sich aus, braucht es Farbe nie — und Farbe bleibt für
 später frei, für etwas, das sie wirklich braucht.
 
-(Eine Ausnahme ist im Programm geblieben: die vier Marken-Arten in
-`app/src/onda-annotations.css` unterscheiden sich weiterhin auch am Farbton, weil `inhalt`
-und `stil` sonst gleich aussähen. Das ist ein älteres System, das neben diesem hier
-existiert; zusammengeführt sind die beiden noch nicht.)
+Diese Regel gilt seit dem 8.8.2026 für die **ganze App**, nicht nur für die Anmerkungen —
+siehe `docs/DIE-AESTHETIK.md`. Die letzte Ausnahme im Anmerkungssystem (die vierte
+Marken-Art unterschied sich am Farbton statt an der Auszeichnungsart) ist damit auch
+gefallen: sie trägt jetzt eine gepunktete Linie.
 
 ## Fail-closed: lieber keine Markierung als eine falsche
 
@@ -128,13 +128,14 @@ vielleicht gar nichts. Genau so kam heraus, dass eine Bedingung im Programm dopp
 die eine Hälfte konnte kaputtgehen, ohne dass es auffiel.
 
 Der ganze Bestand: `cd app && npm test` (die Zahl zeigt der Lauf selbst; am 8.8.2026 waren
-es 1130 Prüfungen, alle grün).
+es 1134 Prüfungen, alle grün).
 
 ## Was noch offen ist
 
 - **Zwei Markierungssysteme nebeneinander.** Die vier `aura-mark`-Arten aus einem früheren
-  Stand und die fünf Gesten aus diesem. Solange beide da sind, bleibt die eine Farbe im
-  Programm.
+  Stand und die fünf Gesten aus diesem. Beide sind seit dem 8.8.2026 farblos und durch die
+  Form getrennt — aber es sind immer noch zwei. Sie zusammenzuführen ist ein eigener
+  Schritt.
 - **`buendeln` und `ordnen`** scheitern beim Ausführen aus demselben Grund, aus dem der
   Ortswechsel es lange tat: kein Ziel. Sie gehören dem Notizen-Kanal, der hier nicht
   angefasst wurde.

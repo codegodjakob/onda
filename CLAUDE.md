@@ -32,6 +32,7 @@ Einzelner Kontext — `CONTEXT.md` und `docs/adr/` im Projektwurzelverzeichnis. 
 | Datei | Inhalt |
 |---|---|
 | `docs/PHILOSOPHIE.md` | Die Gestaltungsgrundsätze. Entschieden, nicht gesammelt — eine Oberfläche, die einem widerspricht, ist falsch |
+| `docs/DIE-AESTHETIK.md` | **Verbindlich seit 8.8.2026.** Tinte auf Papier, Unterschiede durch Form statt Farbe, die einzige Farbe ist die Aura. Gilt für die ganze App |
 | `docs/ONDA-SYSTEM.md` | Das ganze System in 16 Kapiteln |
 | `docs/DIE-GESTE-IM-TEXT.md` | Wie die KI im Text zeigt, welche Stelle sie meint — fünf Gesten, keine Farbe |
 | `docs/VISION-GEGEN-GEBAUTES.md` | Der Abstract gegen den Code geprüft |

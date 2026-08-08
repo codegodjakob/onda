@@ -42,7 +42,12 @@ test('Sky, editoriale Grundflaechen, warme Overlays und Aura sind kanonisch defi
   assert.match(css, /--radius-panel:\s*10px/)
   assert.match(css, /--radius-overlay:\s*16px/)
   assert.match(css, /--gradient-aura:\s*linear-gradient/)
-  assert.match(css, /--danger:\s*var\(--red-500\)/)
+  // --danger zeigte bis zum 8.8.2026 auf var(--red-500) — die letzte Statusfarbe.
+  // Sie ist Tinte geworden (docs/DIE-AESTHETIK.md): der loeschende Knopf unterscheidet
+  // sich seither in der FORM vom bestaetigenden (Umriss gegen Flaeche), nicht im
+  // Farbton. Sky bleibt als Farbe definiert, weil die Aura sie braucht — nur zeigt
+  // ausser ihr nichts mehr darauf.
+  assert.match(css, /--danger:\s*var\(--text-primary\)/)
 })
 
 test('Tokenquelle wird vor Kompatibilitäts- und Komponenten-CSS geladen', async () => {

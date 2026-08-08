@@ -41,14 +41,19 @@ test('die vier Kategorien unterscheiden sich in der ART der Auszeichnung', () =>
   assert.equal(wert('.aura-mark--korrektur', 'border'), '1px solid var(--border-strong)')
   assert.equal(wert('.aura-mark--stil', 'background'), 'var(--bg-sunken)')
   assert.equal(wert('.aura-mark--struktur', 'box-shadow'), 'var(--shadow-md)')
-  assert.match(regelFuer('.aura-mark--inhalt, .aura-mark--notiz') || '', /background:\s*var\(--accent-tint\)/)
+  // Die vierte Art unterschied sich bis zum 8.8.2026 im FARBTON (--accent-tint) statt
+  // in der Art der Auszeichnung — der einzige Farbfleck, der das Entfaerben der
+  // Anmerkungen ueberlebt hatte. Jetzt eine gepunktete Linie darunter: dieselbe
+  // Familie wie der Strich unter dem Satz, und von den drei anderen auf einen Blick
+  // zu unterscheiden.
+  assert.match(regelFuer('.aura-mark--inhalt, .aura-mark--notiz') || '', /repeating-linear-gradient/)
 })
 
 test('keine Kategorie wird ueber eine eigene Farbe unterschieden', () => {
   // Taucht hier je ein Farbwert oder eine zweite Akzentfamilie auf, ist das
   // Prinzip gebrochen — dann liest man die Kategorie an der Farbe ab, und der
   // Text bekommt vier Sorten Buntheit.
-  const kategorien = ['korrektur', 'stil', 'struktur']
+  const kategorien = ['korrektur', 'stil', 'struktur', 'inhalt, .aura-mark--notiz']
   kategorien.forEach(name => {
     const regel = regelFuer(`.aura-mark--${name}`) || ''
     assert.doesNotMatch(regel, /#[0-9a-f]{3,8}\b|rgb|hsl/i,

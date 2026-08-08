@@ -499,6 +499,7 @@ async function runShell(browser) {
   await assertOrtswechselZeigtSeinZiel(page)
   await assertAnmerkungOhnePlatte(page)
   await assertAlternativeStehtImSatz(page)
+  await assertKeineFarbeAusserDerAura(page)
   await assertEntscheidungOeffnetKeineKette(page)
   await assertWichtigstesZuerst(page)
   await assertRuhigeLage(page)
@@ -1178,6 +1179,87 @@ async function assertAlternativeStehtImSatz(page) {
     doc.findings = []
     window.AIWT.__workspaceTestBridge.reinitialize()
   })
+}
+
+// EINE FARBE, UND DIE GEHÖRT DER KI (docs/DIE-AESTHETIK.md, 8.8.2026).
+//
+// aesthetik-tinte.test.mjs liest das CSS und ist der schnelle Wächter. Das hier ist
+// der Beweis: gemessen wird, was WIRKLICH auf dem Schirm steht — über die Fenster,
+// die man erreichen kann, und in beiden Erscheinungen. Beides wird gebraucht, denn
+// das CSS kann farblos aussehen und über eine Marke doch auf Farbe zeigen.
+//
+// ACHTUNG bei der Schwelle: Ondas Graus sind ABSICHTLICH warm. #736d64 hat 15 Abstand
+// zwischen dem stärksten und dem schwächsten Kanal, #b6afa4 hat 18. Eine Schwelle von
+// 12 meldete am 8.8.2026 das Papier selbst als Farbe — der Messfehler saß in der
+// Prüfung, nicht in der App. Echte Farbe liegt weit darüber: Sky #8db2c9 hat 60.
+async function assertKeineFarbeAusserDerAura(page) {
+  const WARMES_GRAU_GEHT_BIS = 30
+
+  const messe = () => page.evaluate(schwelle => {
+    const kanal = wert => (wert.match(/\d+(\.\d+)?/g) || []).slice(0, 3).map(Number)
+    const bunt = wert => {
+      if (!wert || wert === 'none' || wert.includes('gradient')) return false
+      const k = kanal(wert)
+      if (k.length < 3) return false
+      // Fast durchsichtige Werte zählen nicht — sie sind auf dem Schirm keine Farbe.
+      if (parseFloat((wert.match(/[\d.]+\)$/) || ['1'])[0]) < 0.05) return false
+      return Math.max(...k) - Math.min(...k) > schwelle
+    }
+    const treffer = []
+    for (const el of document.querySelectorAll('body *')) {
+      const kasten = el.getBoundingClientRect()
+      if (kasten.width < 1 || kasten.height < 1) continue
+      // Die Aura ist die eine erlaubte Ausnahme — und eine Aussage: das Farbige an
+      // der Oberfläche ist die KI selbst.
+      if (el.closest('.onda-aura, #ondaAura')) continue
+      const stil = getComputedStyle(el)
+      const kandidaten = [
+        ['Schrift', stil.color], ['Fläche', stil.backgroundColor],
+        ['Kante', stil.borderTopColor], ['Kante', stil.borderLeftColor],
+        ['Schreibmarke', stil.caretColor], ['Füllung', stil.fill], ['Strich', stil.stroke],
+      ]
+      for (const [was, wert] of kandidaten) {
+        if (!bunt(wert)) continue
+        // Eine Kantenfarbe ohne Kante ist keine Farbe auf dem Schirm.
+        if (was === 'Kante' && stil.borderTopWidth === '0px' && stil.borderLeftWidth === '0px') continue
+        const name = `${el.tagName.toLowerCase()}.${(el.className || '').toString().split(' ').filter(Boolean).slice(0, 2).join('.')}`
+        treffer.push(`${was} ${wert} an ${name}`)
+        break
+      }
+    }
+    return [...new Set(treffer)]
+  }, WARMES_GRAU_GEHT_BIS)
+
+  const pruefe = async ort => {
+    const treffer = await messe()
+    assert.deepEqual(treffer, [], `Farbe außerhalb der Aura — ${ort}:\n  ${treffer.join('\n  ')}`)
+  }
+
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await page.waitForTimeout(150)
+  await pruefe('Schreibansicht')
+
+  // Die Fenster einzeln, weil in jedem andere Regeln greifen. Ein Fenster, das sich
+  // nicht öffnen lässt, ist ein Fehler in dieser Prüfung und wird gemeldet — still
+  // übersprungen hieße: ungeprüft und trotzdem grün.
+  for (const [name, oeffner, warte] of [
+    ['Struktur-Fenster', '#structureOpen', '#strukturModal'],
+    ['Quellen-Fenster', '#materialSources', '#materialModal'],
+    ['KI-Anschluss', '#kiSettings', '#kiModal'],
+  ]) {
+    assert.equal(await page.locator(oeffner).count(), 1, `${name}: ${oeffner} nicht gefunden`)
+    await page.locator(oeffner).click()
+    await page.locator(warte).waitFor({ state: 'visible' })
+    await pruefe(name)
+    await page.keyboard.press('Escape')
+    await page.waitForTimeout(200)
+  }
+
+  await page.evaluate(() => { document.documentElement.dataset.theme = 'dark' })
+  await page.waitForTimeout(250)
+  await pruefe('Dunkelmodus')
+  await page.evaluate(() => { document.documentElement.dataset.theme = 'light' })
+  await page.waitForTimeout(200)
 }
 
 // Der Tastweg folgt dem Blick: was oben steht, kommt zuerst. Und wer ein Fenster mit

@@ -27,16 +27,23 @@
 .aura-mark--korrektur { border: 1px solid var(--border-strong); padding: 0 4px; }
 .aura-mark--stil { background: var(--bg-sunken); padding: 1px 4px; }
 .aura-mark--struktur { background: var(--bg-surface); box-shadow: var(--shadow-md); padding: 1px 5px; }
-/* HIER BLEIBT DIE FARBE, und das ist kein Versehen. Die vier Markenarten oben
-   unterscheiden sich in der ART der Auszeichnung; „inhalt" ist die staerkste und
-   braucht dafuer eine Flaeche, die sich von „stil" (bg-sunken) abhebt. Nimmt man ihr
-   den Akzent, sind beide dieselbe graue Flaeche und die Unterscheidung faellt weg —
-   test/annotation-vorlage.test.mjs haelt genau das fest.
-   Beim Entfaerben am 8.8.2026 wurde diese Zeile zunaechst mitgenommen und dann
-   zurueckgestellt. Die zwei Markensysteme — diese vier Arten und die drei Gesten nach
-   Reichweite (style.css, .onda-stelle) — gehoeren zusammengefuehrt; das ist ein
-   eigener Schritt und keine Nebenwirkung einer Zusammenfuehrung. */
-.aura-mark--inhalt, .aura-mark--notiz { background: var(--accent-tint); padding: 1px 4px; }
+/* Die vierte Art bekommt eine FORM, keine Farbe.
+   Bis zum 8.8.2026 stand hier --accent-tint, die einzige Farbe, die das Entfaerben der
+   Anmerkungen ueberlebt hatte: „inhalt" braucht eine Auszeichnung, die sich von „stil"
+   (bg-sunken) unterscheidet, und der Akzent war der bequeme Weg dahin. Bequem, aber
+   inkonsequent — drei Arten unterschieden sich in der Art der Auszeichnung, die vierte
+   im Farbton.
+   Jetzt eine gepunktete Linie darunter. Sie gehoert in dieselbe Familie wie der Strich
+   unter dem Satz und die gestrichelte Linie an der Zielmarke, und sie ist von den drei
+   anderen auf einen Blick zu unterscheiden: Kontur, versenkte Flaeche, angehobene
+   Flaeche, gepunktete Linie. */
+.aura-mark--inhalt, .aura-mark--notiz {
+  padding: 1px 4px 2px;
+  background-image: repeating-linear-gradient(to right, currentColor 0 2px, transparent 2px 5px);
+  background-repeat: no-repeat;
+  background-position: 0 100%;
+  background-size: 100% 2px;
+}
 [data-theme="dark"] .aura-mark--korrektur { border-color: var(--ink-500); }
 .aura-mark:hover { background: var(--bg-sunken); }
 .aura-mark--active { background: var(--bg-sunken); border-color: var(--text-primary); }

@@ -19,19 +19,27 @@
   --gradient-aura:linear-gradient(115deg,var(--aura-1) 0%,var(--aura-2) 34%,var(--aura-3) 62%,var(--aura-4) 100%);
   --gradient-aura-soft:linear-gradient(115deg,#f5f9fb 0%,#e4eef4 40%,#dde8ef 68%,#e1ebe8 100%);
   --gradient-surface:linear-gradient(180deg,#fbfaf8 0%,#f4f2ec 100%);
-  --red-500:#b04a3f; --red-100:#f0dcd8;
+  /* Hier stand --red-500/--red-100, die Grundlage von --danger. Beide sind fort:
+     nichts zeigt mehr darauf (docs/DIE-AESTHETIK.md). Eine Farbmarke, die niemand
+     benutzt, ist eine Einladung, sie wieder zu benutzen. */
 
   --bg-app:var(--paper); --bg-surface:var(--surface); --bg-raised:var(--surface); --bg-sunken:var(--surface-2);
   --bg-inset:var(--surface-inset); --bg-hover:rgba(28,26,23,0.04); --bg-active:rgba(28,26,23,0.07);
   --text-primary:var(--ink-900); --text-secondary:var(--ink-600); --text-tertiary:var(--ink-500);
-  --text-disabled:var(--ink-300); --text-on-accent:#16232c; --text-link:#41718c;
+  --text-disabled:var(--ink-300); --text-on-accent:var(--bg-app); --text-link:var(--text-primary);
   --border-subtle:var(--line-soft); --border-default:var(--line); --border-strong:var(--line-strong);
-  --accent:var(--sky-500); --accent-hover:var(--sky-600); --accent-active:var(--sky-700);
-  --accent-tint:var(--sky-100); --accent-tint-hover:var(--sky-200); --on-accent:#16232c;
-  --focus-ring:rgba(141,178,201,0.42);
+  /* TINTE STATT AKZENT (8.8.2026, docs/DIE-AESTHETIK.md).
+     --accent war Sky #8db2c9 und faerbte rund siebzig Stellen: Knoepfe, Fokusrahmen,
+     Schreibmarke, Etiketten, Verweise. Die Marken heissen weiter accent, damit nicht
+     siebzig Regeln umgeschrieben werden muessen — sie zeigen nur nicht mehr auf eine
+     Farbe. Wer die Farbe zurueckholen will, aendert diese vier Zeilen und sonst nichts.
+     --success/--warning/--info waren schon vorher Tinte; --danger folgt jetzt. */
+  --accent:var(--text-primary); --accent-hover:var(--ink-700); --accent-active:var(--ink-800);
+  --accent-tint:var(--bg-sunken); --accent-tint-hover:var(--bg-active); --on-accent:var(--bg-app);
+  --focus-ring:rgba(28,26,23,0.38);
   --success:var(--text-secondary); --success-tint:var(--bg-sunken);
   --warning:var(--text-secondary); --warning-tint:var(--bg-sunken);
-  --danger:var(--red-500); --danger-tint:var(--red-100);
+  --danger:var(--text-primary); --danger-tint:var(--bg-sunken);
   --info:var(--text-secondary); --info-tint:var(--bg-sunken);
 
   --font-sans:"ABC Diatype",system-ui,-apple-system,"Segoe UI",sans-serif;
@@ -88,6 +96,10 @@
   --shadow-inset:inset 0 1px 2px rgba(28,26,23,0.07);
   --shadow-focus:0 0 0 4px var(--focus-ring);
   --shadow-glow:0 0 0 1px rgba(166,195,214,0.34),0 4px 22px rgba(141,178,201,0.3);
+  /* Der Hoehepunkt des Atmens. Stand als fester Wert mitten im @keyframes in
+     style.css — dem einzigen Ort, an dem Aura-Farbe ausserhalb einer Aura-Regel lag.
+     Als Marke steht sie jetzt bei den anderen Aura-Marken (docs/DIE-AESTHETIK.md). */
+  --shadow-glow-hoch:0 0 0 1px rgba(142,195,230,0.45),0 6px 30px rgba(127,184,222,0.45);
 
   /* MATERIAL statt Anstrich (Apple Tahoe). Ein Bedienelement ist eine durchscheinende
      Scheibe: sie nimmt die Farbe von dem an, was hinter ihr liegt, und traegt eine
@@ -120,12 +132,16 @@
   --bg-app:var(--paper); --bg-surface:var(--surface); --bg-raised:var(--surface-2); --bg-sunken:var(--surface-inset);
   --bg-inset:var(--surface-inset); --bg-hover:rgba(245,241,234,0.05); --bg-active:rgba(245,241,234,0.09);
   --text-primary:#f4f1ea; --text-secondary:#c4bdb1; --text-tertiary:#8f887c;
-  --text-disabled:#5c574e; --text-on-accent:#111c24; --text-link:#b5cfe0;
-  --accent:var(--sky-400); --accent-hover:var(--sky-300); --accent-active:var(--sky-500);
-  --accent-tint:rgba(166,195,214,0.16); --accent-tint-hover:rgba(166,195,214,0.24); --on-accent:#111c24;
-  --focus-ring:rgba(166,195,214,0.45);
-  --success:var(--text-secondary); --info:var(--text-secondary); --warning:var(--text-secondary); --danger:#d98177;
-  --success-tint:var(--bg-sunken); --warning-tint:var(--bg-sunken); --danger-tint:rgba(217,129,119,0.18); --info-tint:var(--bg-sunken);
+  --text-disabled:#5c574e; --text-on-accent:var(--bg-app); --text-link:var(--text-primary);
+  /* Dieselbe Regel wie im Hellmodus (docs/DIE-AESTHETIK.md): Tinte statt Akzent.
+     Im Dunkeln ist die Tinte hell und der Grund dunkel — die Marken kippen von
+     selbst mit, weil sie auf --text-primary und --bg-app zeigen und nicht auf
+     feste Werte. */
+  --accent:var(--text-primary); --accent-hover:var(--text-secondary); --accent-active:var(--text-tertiary);
+  --accent-tint:var(--bg-active); --accent-tint-hover:var(--bg-hover); --on-accent:var(--bg-app);
+  --focus-ring:rgba(245,241,234,0.42);
+  --success:var(--text-secondary); --info:var(--text-secondary); --warning:var(--text-secondary); --danger:var(--text-primary);
+  --success-tint:var(--bg-sunken); --warning-tint:var(--bg-sunken); --danger-tint:var(--bg-sunken); --info-tint:var(--bg-sunken);
   --shadow-xs:0 1px 2px rgba(0,0,0,0.3);
   --shadow-sm:0 1px 2px rgba(0,0,0,0.35),0 1px 1px rgba(0,0,0,0.25);
   --shadow-md:0 2px 4px rgba(0,0,0,0.3),0 6px 16px rgba(0,0,0,0.35);
@@ -133,6 +149,7 @@
   --shadow-xl:0 8px 16px rgba(0,0,0,0.4),0 28px 56px rgba(0,0,0,0.55);
   --shadow-inset:inset 0 1px 2px rgba(0,0,0,0.4);
   --shadow-glow:0 0 0 1px rgba(166,195,214,0.26),0 4px 26px rgba(166,195,214,0.36);
+  --shadow-glow-hoch:0 0 0 1px rgba(166,195,214,0.4),0 6px 34px rgba(166,195,214,0.5);
 
   /* Im Dunkeln ist Glas heller als sein Grund, nicht dunkler — sonst verschwindet es.
      Der Innenrand oben bleibt, er ist das, was die Scheibe als Scheibe lesbar macht. */
