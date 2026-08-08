@@ -33,6 +33,14 @@ enum Store {
     static let maxBackupGenerationen = 5
     static var backupAbstandSekunden: TimeInterval = 60 // var: der Selbsttest setzt ihn auf 0
 
+    /// Die Uhr, aus der die NAMEN der Sicherungen ihren Zeitstempel ziehen. Eine
+    /// `var`, damit der Selbsttest sie anhalten kann: dann fallen mehrere Stufen in
+    /// dieselbe Millisekunde, und zwar bei jedem Lauf statt nach Tagesform des
+    /// Rechners. Eine Prüfung, die nur manchmal prüft, prüft nicht.
+    /// Das Fälligkeitsfenster in `sichereVorstufe` liest bewusst weiter die echte
+    /// Uhr: es beantwortet „ist genug Zeit vergangen?", nicht „wie heißt die Datei?".
+    static var stempelUhr: () -> Date = { Date() }
+
     enum SaveErgebnis: Equatable {
         case ok
         case ungueltig            // kein gültiges JSON — wird nie geschrieben
@@ -49,7 +57,8 @@ enum Store {
         return (try? JSONSerialization.jsonObject(with: d)) != nil
     }
 
-    private static func stamp(_ datum: Date = Date()) -> String {
+    private static func stamp(_ datum: Date? = nil) -> String {
+        let datum = datum ?? stempelUhr()
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_US_POSIX")
         f.timeZone = TimeZone.current
@@ -420,13 +429,25 @@ func runSelfTest() -> Never {
 
     // 10) Rotation: höchstens 5 datierte Generationen, und der Rückfall
     //     erreicht sie, wenn Datei UND unmittelbare Vorstufe kaputt sind.
+    //
+    //     Die neun Sicherungen laufen unter einer ANGEHALTENEN Uhr und fallen damit
+    //     alle in dieselbe Millisekunde — der härteste Fall, und zwar in JEDEM Lauf.
+    //     Vorher entschied die Geschwindigkeit des Rechners darüber, ob überhaupt
+    //     zwei Stufen zusammenfielen: auf einem flotten Rechner lagen die neun
+    //     Speichervorgänge je eine Millisekunde auseinander, und dieser Abschnitt
+    //     prüfte die Kollision gar nicht. Genau daran hing das Wackeln vom
+    //     8. August — mal rot, mal grün, und `mac/build.sh` brach zufällig ab.
+    //     Angehalten prüft der Abschnitt dieselbe Aussage, nur nicht mehr auf gut Glück.
     Store.backupAbstandSekunden = 0
+    let festeZeit = Date()
+    Store.stempelUhr = { festeZeit }
     var rotStaende: [String] = []
     for i in 0..<9 {
         let s = "{\"docs\":[{\"id\":\"g\",\"title\":\"rot\(i)\",\"body\":\"<p>Generation \(i)</p>\",\"updated\":\(i)}],\"active\":\"g\"}"
         rotStaende.append(s)
         if Store.save(s) != .ok { ok = false }
     }
+    Store.stempelUhr = { Date() }
     check("rotation-speichert", ok)
     check("rotation-max-generationen", Store.backupGenerationen().count == Store.maxBackupGenerationen)
     // Die Anzahl allein sagt nichts: sie bleibt auch dann fünf, wenn die Rotation die
