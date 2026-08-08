@@ -24,6 +24,7 @@ import {
   shouldOpenAgentWidget,
   structureHintMap,
 } from './workspace-model.mjs'
+import { bausteinNamen, bausteinRollen } from './bausteinlauf-model.mjs'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import { applySettings } from './ui.js'
@@ -150,8 +151,15 @@ const BLOCK_TYPES = [
   ['question', 'Offene Frage'],
 ]
 
+// Die Beschriftung einer Karte — bewusst OHNE den gewoehnlichen Absatz. "Freier Absatz" war
+// ein Etikett ohne Aussage: Es sah aus wie eine Angabe und war keine. Wer nichts weiss, sagt
+// hier nichts.
+//
+// Im MENUE behaelt das Wort seinen Sinn (BLOCK_TYPES, unveraendert): Dort heisst es "lege
+// einen gewoehnlichen Absatz an" -- das ist eine Aussage. Beschriften und Auswaehlen sind
+// zwei verschiedene Zwecke, darum ab hier zwei verschiedene Tabellen.
 const ROLE_LABELS = new Map([
-  ...BLOCK_TYPES,
+  ...BLOCK_TYPES.filter(([rolle]) => rolle !== 'paragraph'),
   ['heading', 'Überschrift'],
 ])
 
@@ -439,6 +447,30 @@ function activeWorkspace() {
   return doc ? ensureWorkspaceState(doc) : null
 }
 
+// EINE Stelle, an der Bloecke entstehen. Vorher holte dieses Modul die Bloecke an gut zwanzig
+// Stellen einzeln aus dem Editor -- eine davon zu vergessen hiesse, dort still ohne Rollen zu
+// arbeiten, ohne dass ein Test anschlaegt. Genau so ist die Luecke entstanden, die dieser
+// Umbau schliesst. Ein Waechter in schreibansicht-ruhe.test.mjs haelt sie zu.
+function bausteinBestand(workspace = activeWorkspace()) {
+  return workspace?.bausteinarten || null
+}
+
+function aktuelleBloecke(editor = ctx?.editor) {
+  return getEditorBlocks(editor, bausteinRollen(bausteinBestand()))
+}
+
+// Wie ein Baustein beschriftet wird — an EINER Stelle, weil es drei Anzeigen gibt
+// (Struktur-Spalte, Blaetter-Liste, Blaetter-Tiefe) und drei Fassungen derselben Regel
+// unweigerlich auseinanderlaufen.
+//
+// Rangfolge, und sie ist die Entscheidung (Issue #36):
+//   1. Der erkannte Name — was dieser Absatz in DIESEM Text tut ("Befund", "Einwand").
+//   2. Das beim Erzeugen von Hand gewaehlte Wort ("Kernbehauptung", "Beleg").
+//   3. Nichts. Ein Etikett, das nichts aussagt, ist schlechter als keines.
+function bausteinName(block, namen) {
+  return namen?.get(block.id) || ROLE_LABELS.get(block.role) || ''
+}
+
 // Das offene Dokument bestimmt sein Projekt — nicht ctx.activeProjectObj().
 //
 // ctx.activeProjectObj() folgt state.activeProject, und das ist der BROWSE-Zeiger der
@@ -676,7 +708,7 @@ function enforceExclusiveLayers(workspace) {
 }
 
 function syncActiveBlock(workspace) {
-  const blocks = getEditorBlocks(ctx.editor)
+  const blocks = aktuelleBloecke()
   const currentId = getActiveBlockId(ctx.editor)
 
   if (renderedDocId !== ctx.activeDoc()?.id) {
@@ -720,7 +752,7 @@ function selectBlock(block) {
 }
 
 function focusBlock(blockId) {
-  const block = getEditorBlocks(ctx.editor).find(candidate => candidate.id === blockId)
+  const block = aktuelleBloecke().find(candidate => candidate.id === blockId)
   if (!block) return
   selectBlock(block)
   const workspace = activeWorkspace()
@@ -768,7 +800,7 @@ function insertBlock(afterBlockId, role) {
   const workspace = activeWorkspace()
   if (workspace) workspace.activeBlockId = insertedId
   closeInsertMenu({ restoreFocus: false })
-  const block = getEditorBlocks(ctx.editor).find(candidate => candidate.id === insertedId)
+  const block = aktuelleBloecke().find(candidate => candidate.id === insertedId)
   if (block) ctx.editor.commands.setTextSelection(block.pos + 1)
   refreshWorkspace()
   // Der Oeffner des Menues steht in der Struktur-Ansicht. Ohne diese Zeile bliebe das
@@ -924,8 +956,11 @@ function createNavBlockNode(block) {
 // die Funktion eines Absatzes — ihr Text wiederholt nur den Fliesstext.
 const NAV_ROLLEN_MIT_EIGENEM_TEXT = new Set(['heading'])
 
-function updateNavBlockNode(nodes, block, activeBlockId, hintKind) {
-  const roleLabel = ROLE_LABELS.get(block.role) || 'Freier Absatz'
+// bausteinName ist der von der KI fuer DIESEN Text erkannte Name ("Befund", "Einwand").
+// Er gewinnt ueber die allgemeine Beschriftung: Er sagt, was der Absatz HIER tut, nicht,
+// welcher Schublade er allgemein angehoert. Fehlt beides, bleibt die Karte still.
+function updateNavBlockNode(nodes, block, activeBlockId, hintKind, namen = null) {
+  const roleLabel = bausteinName(block, namen)
   const excerpt = block.excerpt || 'Noch leer'
   const hintLabel = hintKind === 'evidence'
     ? ' — Beleg offen'
@@ -938,8 +973,9 @@ function updateNavBlockNode(nodes, block, activeBlockId, hintKind) {
   const zeigeAuszug = istKarteOffen(block)
 
   // Vorlesegeraete bekommen weiterhin den vollen Wortlaut — die Kuerzung ist
-  // eine Frage der Augen, nicht der Zugaenglichkeit.
-  nodes.preview.setAttribute('aria-label', `${roleLabel}: ${excerpt}${hintLabel}`)
+  // eine Frage der Augen, nicht der Zugaenglichkeit. Ohne Namen entsteht auch kein
+  // leerer Doppelpunkt davor.
+  nodes.preview.setAttribute('aria-label', roleLabel ? `${roleLabel}: ${excerpt}${hintLabel}` : `${excerpt}${hintLabel}`)
   nodes.preview.setAttribute('aria-expanded', zeigeAuszug ? 'true' : 'false')
   if (istAktiv) nodes.preview.setAttribute('aria-current', 'true')
   else nodes.preview.removeAttribute('aria-current')
@@ -950,6 +986,7 @@ function updateNavBlockNode(nodes, block, activeBlockId, hintKind) {
   nodes.preview.classList.toggle('is-offen', zeigeAuszug)
 
   nodes.role.textContent = roleLabel
+  nodes.role.hidden = !roleLabel
   nodes.preview.classList.toggle('has-hint', Boolean(hintKind))
   nodes.hint.dataset.hint = hintKind || ''
 }
@@ -977,7 +1014,7 @@ function renderStructureNav() {
   let list = nav.querySelector('.structure-nav-list')
   if (!list) { list = createNode('div', 'structure-nav-list'); list.id = 'structureNavList'; nav.append(list) }
 
-  const blocks = getEditorBlocks(ctx.editor).filter(block => block.id)
+  const blocks = aktuelleBloecke().filter(block => block.id)
   const ids = blocks.map(block => block.id)
   const orderChanged = structureNavState?.docId !== doc.id
     || structureNavState.ids.length !== ids.length
@@ -985,9 +1022,16 @@ function renderStructureNav() {
   if (orderChanged) rebuildStructureNav(list, doc, blocks)
 
   const hints = structureHintMap(doc, blocks)
+  // Der Anzeigename geht bewusst NICHT ueber block.role: Dort steht die Funktion im Argument
+  // (claim, evidence, ...), hier der Name, den die KI fuer diesen Text gefunden hat. Zwei
+  // Zwecke, zwei Wege — so bleibt block.role genau das, was es ist, und die Anzeige haengt
+  // nicht an der Rechenlogik.
+  const namen = bausteinNamen(bausteinBestand(workspace))
   blocks.forEach(block => {
     const nodes = structureNavState.blockNodes.get(block.id)
-    if (nodes) updateNavBlockNode(nodes, block, workspace.activeBlockId, hints.get(block.id) || null)
+    if (nodes) {
+      updateNavBlockNode(nodes, block, workspace.activeBlockId, hints.get(block.id) || null, namen)
+    }
   })
 }
 
@@ -1019,7 +1063,7 @@ function blockAnriss(text) {
 // bei einem Zitat oder einer Liste steckt der Text eine Ebene tiefer, und ihn dort
 // flach zu ueberschreiben, machte aus dem Zitat einen Absatz.
 function schreibeBlockText(blockId, text) {
-  const block = getEditorBlocks(ctx?.editor).find(kandidat => kandidat.id === blockId)
+  const block = aktuelleBloecke().find(kandidat => kandidat.id === blockId)
   if (!block || !block.isTextblock) return false
   const node = ctx.editor.state.doc.nodeAt(block.pos)
   if (!node) return false
@@ -1041,14 +1085,15 @@ function openStrukturModal(opener) {
     title: 'Struktur',
     opener,
     eintraege: (liste, { gewaehlt, waehle, eintrag }) => {
-      const blocks = getEditorBlocks(ctx.editor).filter(block => block.id)
+      const blocks = aktuelleBloecke().filter(block => block.id)
       if (!blocks.length) {
         liste.append(createNode('p', 'onda-blaetter__tiefe-hinweis', 'Noch keine Textabschnitte.'))
         return
       }
       const offen = blocks.some(block => block.id === gewaehlt) ? gewaehlt : blocks[0].id
+      const namen = bausteinNamen(bausteinBestand())
       blocks.forEach(block => {
-        liste.append(eintrag(block.id, ROLE_LABELS.get(block.role) || 'Freier Absatz', {
+        liste.append(eintrag(block.id, bausteinName(block, namen), {
           anriss: blockAnriss(block.excerpt || block.text),
           gewaehlt: offen === block.id,
           onWaehle: () => waehle(block.id),
@@ -1056,7 +1101,7 @@ function openStrukturModal(opener) {
       })
     },
     fuss: (flaeche, { gewaehlt }) => {
-      const blocks = getEditorBlocks(ctx.editor).filter(block => block.id)
+      const blocks = aktuelleBloecke().filter(block => block.id)
       const nach = blocks.some(block => block.id === gewaehlt) ? gewaehlt : blocks[blocks.length - 1]?.id
       const knopf = createNode('button', 'onda-blaetter__eintrag', 'Baustein hinzufügen')
       knopf.id = 'strukturBausteinNeu'
@@ -1067,13 +1112,14 @@ function openStrukturModal(opener) {
       flaeche.append(knopf)
     },
     tiefe: (tief, gewaehlt) => {
-      const blocks = getEditorBlocks(ctx.editor).filter(block => block.id)
+      const blocks = aktuelleBloecke().filter(block => block.id)
       const block = blocks.find(kandidat => kandidat.id === gewaehlt) || blocks[0]
       if (!block) {
         tief.append(createNode('p', 'onda-blaetter__tiefe-hinweis', 'Noch keine Textabschnitte.'))
         return
       }
-      tief.append(createNode('h3', 'onda-blaetter__tiefe-titel', ROLE_LABELS.get(block.role) || 'Freier Absatz'))
+      const tiefeName = bausteinName(block, bausteinNamen(bausteinBestand()))
+      if (tiefeName) tief.append(createNode('h3', 'onda-blaetter__tiefe-titel', tiefeName))
       if (block.isTextblock) {
         bearbeitbaresFeld(tief, 'Text dieses Bausteins', block.text || '', wert => {
           schreibeBlockText(block.id, wert)
@@ -1551,7 +1597,9 @@ function blattEintrag(schluessel, name, { anriss = '', gewaehlt = false, onWaehl
   knopf.type = 'button'
   knopf.dataset.blattId = schluessel
   if (gewaehlt) knopf.setAttribute('aria-current', 'true')
-  knopf.append(createNode('span', 'onda-blaetter__eintrag-name', name))
+  // Auch der Name ist bedingt, nicht nur der Anriss: Ein Baustein ohne erkannten und ohne
+  // von Hand gewaehlten Namen traegt keinen — dann soll dort auch keine leere Zeile stehen.
+  if (name) knopf.append(createNode('span', 'onda-blaetter__eintrag-name', name))
   if (anriss) knopf.append(createNode('span', 'onda-blaetter__eintrag-anriss', anriss))
   if (onWaehle) knopf.addEventListener('click', onWaehle)
   return knopf
@@ -2378,8 +2426,9 @@ let pvBlaetter = null
 // feld  = was in das Textfeld darunter gehoert.
 // Beides muss verschieden sein: bis zum 7.8.2026 stand hier zweimal derselbe Wortlaut
 // untereinander — Ueberschrift "Aufgabe", sechs Pixel darunter noch einmal "Aufgabe".
-// Die Struktur-Ansicht macht es seit jeher richtig vor ("Freier Absatz" / "Text dieses
-// Bausteins"): die Ueberschrift sagt, WO man ist, der Feldname sagt, WAS man schreibt.
+// Die Struktur-Ansicht macht es vor ("Einwand" / "Text dieses Bausteins"): die Ueberschrift
+// sagt, WO man ist, der Feldname sagt, WAS man schreibt. Dort steht seit dem 8.8.2026 der
+// erkannte Name — und wo keiner erkannt ist, gar nichts.
 const PV_FELDER = [
   { schluessel: 'task', label: 'Aufgabe', feld: 'Was dieser Text leisten soll', lese: u => u.task, schreibe: (u, wert) => { u.task = wert } },
   { schluessel: 'audience', label: 'Zielgruppe', feld: 'Für wen er geschrieben ist', lese: u => u.audience.join(', '), schreibe: (u, wert) => { u.audience = splitList(wert, false) } },
@@ -2414,13 +2463,13 @@ function openProjectUnderstandingModal(opener) {
     context: ctx,
     createNode,
     openDialog: openOndaDialog,
-    getBlocks: () => getEditorBlocks(ctx.editor),
+    getBlocks: () => aktuelleBloecke(),
   })
   const languageUi = createLanguageUi({
     context: ctx,
     createNode,
     openDialog: openOndaDialog,
-    getBlocks: () => getEditorBlocks(ctx.editor),
+    getBlocks: () => aktuelleBloecke(),
     applyCorrections: corrections => replaceAnchoredTexts(ctx.editor, corrections),
   })
 
@@ -2535,7 +2584,7 @@ function zeigeBudgetPause(workspace) {
 }
 
 function docPlainText() {
-  return getEditorBlocks(ctx.editor)
+  return aktuelleBloecke()
     .map(block => String(block.text || '').trim())
     .filter(Boolean)
     .join('\n\n')
@@ -3303,7 +3352,7 @@ function reconcilePersistedEditingFinding() {
     return { kind: 'stale', editingFinding: stale }
   }
 
-  const result = reconcileEditingFinding(editing, getEditorBlocks(ctx.editor))
+  const result = reconcileEditingFinding(editing, aktuelleBloecke())
   const nextEditing = result.editingFinding
   const changed = editing.status !== nextEditing.status || editing.staleReason !== nextEditing.staleReason
   workspace.editingFinding = nextEditing
@@ -3496,7 +3545,7 @@ function undoLatestRejection() {
 
 function authorizedFindingBlock(finding) {
   if (!finding?.blockId) return null
-  return resolveFindingBlock(finding, getEditorBlocks(ctx.editor))
+  return resolveFindingBlock(finding, aktuelleBloecke())
 }
 
 function handleSuggestionOwnVersion(finding) {
@@ -3540,7 +3589,7 @@ function completeOwnVersion(expectedFindingId) {
 
   const finding = doc.findings.find(candidate => candidate.id === editing.findingId)
   if (!finding || finding.status !== 'open') return
-  const completion = completeEditingFinding(editing, getEditorBlocks(ctx.editor))
+  const completion = completeEditingFinding(editing, aktuelleBloecke())
   if (completion.kind !== 'accept') return
 
   workspace.editingFinding = null
@@ -3705,7 +3754,7 @@ function renderSuggestion(finding, blockId) {
 
 function annotationDocumentSnapshot(doc = ctx?.activeDoc()) {
   const title = document.getElementById('title')?.value ?? doc?.title ?? ''
-  const blocks = getEditorBlocks(ctx?.editor).map(block => ({
+  const blocks = aktuelleBloecke().map(block => ({
     id: block.id,
     type: block.type,
     role: block.role,
@@ -4017,7 +4066,7 @@ function renderLocalFinding() {
   const previousFindingId = previous?.dataset.findingId || previous?.dataset.annotationKind || null
   const inputState = captureInputState(ui.localLayer, '.aura-dialogue__input')
 
-  const blocks = getEditorBlocks(ctx.editor)
+  const blocks = aktuelleBloecke()
   const resolution = currentPassageFinding(doc, blocks)
   const finding = resolution.finding
   const blockId = resolution.block?.id || null
@@ -4159,7 +4208,7 @@ function closeAgentWidget({ dismiss = true, restoreFocus = true } = {}) {
 function renderUnplacedFindingList() {
   const doc = ctx?.activeDoc()
   if (!doc) return null
-  const items = unplacedPassageFindings(doc, getEditorBlocks(ctx.editor))
+  const items = unplacedPassageFindings(doc, aktuelleBloecke())
   if (!items.length) return null
 
   const section = createNode('section', 'unplaced-findings')
@@ -4522,7 +4571,7 @@ function erweiterungsGesten(message) {
       if (typeof ctx?.ops?.openDoc !== 'function') return
       ctx.ops.openDoc(stelle.docId)
       requestAnimationFrame(() => {
-        const treffer = getEditorBlocks(ctx.editor)
+        const treffer = aktuelleBloecke()
           .filter(block => String(block.text || '').includes(String(stelle.text || '')))
         if (treffer.length === 1 && treffer[0].id) focusBlock(treffer[0].id)
       })
@@ -4954,7 +5003,7 @@ function ergaenzeEchteInitiative(workspace, finding, jetzt) {
 async function fuehreHinweislaufAus({ grund = 'pause' } = {}) {
   const doc = ctx?.activeDoc()
   const workspace = activeWorkspace()
-  const blocks = doc ? getEditorBlocks(ctx.editor) : []
+  const blocks = doc ? aktuelleBloecke() : []
   const docText = doc ? baueDocText(blocks) : ''
   const protokoll = workspace ? hinweislaufProtokoll(workspace) : null
   const signatur = seedBodySignature(docText)
@@ -5083,7 +5132,7 @@ async function fuehreErweiterungslaufAus({ vonHand = false } = {}) {
   const doc = ctx?.activeDoc()
   const workspace = activeWorkspace()
   if (doc) ensureErweiterungen(doc)
-  const blocks = doc ? getEditorBlocks(ctx.editor) : []
+  const blocks = doc ? aktuelleBloecke() : []
   const docText = doc ? baueDocText(blocks) : ''
   const docId = doc?.id ?? null
   const project = dokumentProjekt(doc)
@@ -5191,7 +5240,7 @@ function planeErweiterungslauf() {
     const aktuell = initiativeInputState(docId)
     if (!aktuell || aktuell.generation !== generation) return
     if (!editorViewIsVisibleFor(docId) || isComposing) return
-    const signatur = erweiterungsSignatur(docId, baueDocText(getEditorBlocks(ctx.editor)))
+    const signatur = erweiterungsSignatur(docId, baueDocText(aktuelleBloecke()))
     // Gegen letzteBezahlteSignatur aus dem JOURNAL, nicht mehr gegen eine fluechtige
     // Modul-Variable: das Tor schreibt den Journal-Eintrag in schliesseLauf VOR dem
     // Rueckkehren aus fuehreLaufAus (lauf-tor.mjs), darum sieht dieser Check nach einem
@@ -5381,7 +5430,7 @@ function planeHinweislauf() {
     lastInputAt: inputState?.lastInputAt,
     editorSichtbar: editorViewIsVisibleFor(docId),
     isComposing,
-    leseSignatur: () => seedBodySignature(baueDocText(getEditorBlocks(ctx.editor))),
+    leseSignatur: () => seedBodySignature(baueDocText(aktuelleBloecke())),
     letzteSignatur: workspace ? hinweislaufProtokoll(workspace).signatur : null,
     idleMs: AGENT_IDLE_MS,
   })
@@ -5530,7 +5579,7 @@ export function initWorkspace(context) {
   annotationController = createAnnotationController({
     getFindings: () => {
       const doc = ctx?.activeDoc()
-      return doc ? visiblePassageFindingRecords(doc, getEditorBlocks(ctx.editor)).map(record => record.finding) : []
+      return doc ? visiblePassageFindingRecords(doc, aktuelleBloecke()).map(record => record.finding) : []
     },
     getWorkspace: () => activeWorkspace(),
     persist: () => persistWorkspace(),

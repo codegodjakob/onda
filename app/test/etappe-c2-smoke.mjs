@@ -112,17 +112,17 @@ async function seedArgumentProjects(page, name = 'C2 Alpha') {
     window.AIWT.__blockIdentityTestBridge.setContent([
       {
         type: 'paragraph',
-        attrs: { blockId: 'b-central', semanticRole: 'claim' },
+        attrs: { blockId: 'b-central' },
         content: [{ type: 'text', text: central }],
       },
       {
         type: 'paragraph',
-        attrs: { blockId: 'b-support', semanticRole: 'evidence' },
+        attrs: { blockId: 'b-support' },
         content: [{ type: 'text', text: support }],
       },
       {
         type: 'paragraph',
-        attrs: { blockId: 'b-counter', semanticRole: 'counterpoint' },
+        attrs: { blockId: 'b-counter' },
         content: [{ type: 'text', text: counter }],
       },
       {
@@ -131,6 +131,24 @@ async function seedArgumentProjects(page, name = 'C2 Alpha') {
         content: [{ type: 'text', text: definition }],
       },
     ])
+    // Seit Task 7 kommt die Bausteinart aus der Ablage (doc.workspace.bausteinarten),
+    // nicht mehr aus dem Tiptap-Merkmal semanticRole -- sonst bliebe die Argumentations-
+    // projektion (claim-ledger.mjs, argument-projection.mjs) ohne zentrale Aussage.
+    alphaDoc.workspace.bausteinarten = {
+      textsorte: null,
+      arten: [
+        { id: 'art-central', name: 'Kernbehauptung', beschreibung: '', funktion: 'claim' },
+        { id: 'art-support', name: 'Beleg', beschreibung: '', funktion: 'evidence' },
+        { id: 'art-counter', name: 'Gegenposition', beschreibung: '', funktion: 'counterpoint' },
+      ],
+      zuordnung: {
+        'b-central': { artId: 'art-central', zeichen: central.length },
+        'b-support': { artId: 'art-support', zeichen: support.length },
+        'b-counter': { artId: 'art-counter', zeichen: counter.length },
+      },
+      laufSignatur: '',
+      standAt: 0,
+    }
     window.AIWT.flushSave()
 
     window.AIWT.newDoc()
