@@ -3954,7 +3954,18 @@ function positionLocalSurface(blockId) {
     : Math.min(sideWidth, availableRight - 42)
 
   local.classList.toggle('is-below', below)
-  local.style.width = `${localWidth}px`
+  // Korrektur und Einfuegung sind in der Vorlage KEINE Karten: die eine ist eine
+  // Zeile, die andere waechst mit ihrem Vorschlag. Presst man sie auf
+  // Kartenbreite, bricht "alt → neu" auf drei Zeilen um und sieht wieder aus wie
+  // das, was sie nicht sein soll. Sie bekommen deshalb nur eine Obergrenze.
+  const kompakt = local.classList.contains('aura-corr__pop') || local.classList.contains('aura-ins__pop')
+  if (kompakt) {
+    local.style.width = ''
+    local.style.maxWidth = `${Math.max(localWidth, below ? localWidth : sideWidth + 120)}px`
+  } else {
+    local.style.maxWidth = ''
+    local.style.width = `${localWidth}px`
+  }
   local.style.left = `${below ? Math.max(gutter, blockRect.left - layerRect.left) : blockRect.right - layerRect.left + 34}px`
   local.style.top = `${below ? blockRect.bottom - layerRect.top + 14 : blockRect.top - layerRect.top}px`
   local.hidden = Boolean(scrollRect && (blockRect.bottom < scrollRect.top || blockRect.top > scrollRect.bottom))
@@ -4004,7 +4015,7 @@ function renderLocalFinding() {
   ) {
     localDecoratedDocId = doc.id
     localDecoratedFindingId = finding?.id || null
-    setLocalFindingDecoration(blockId, 0, true)
+    setLocalFindingDecoration(blockId, 0, true, finding || null)
   }
 
   ui.localLayer.replaceChildren()
@@ -4539,7 +4550,6 @@ function renderAgentWidget() {
     }
     return
   }
-
   const message = activeAgentMessage(workspace)
   const header = createNode('header', 'agent-widget-header')
   header.append(
@@ -4581,13 +4591,16 @@ function renderAgentWidget() {
   const gesten = erweiterungsGesten(message)
   if (gesten) messages.append(gesten)
 
+  // Composer nach dem Design System: EIN Rahmen um Feld und Knopf, nicht zwei
+  // Formen nebeneinander (components/conversation/Composer.jsx).
   const form = createNode('form', 'agent-chat-form agent-widget-form')
+  const composer = createNode('div', 'onda-composer')
   const input = createNode('input', 'agent-chat-input')
   input.type = 'text'
-  input.placeholder = 'Antworten …'
+  input.placeholder = 'Schreib eine Anweisung …'
   input.setAttribute('aria-label', 'Dem Agenten antworten')
   const send = createNode('button', 'agent-chat-send')
-  send.append(ondaIcon('arrow-right', { size: 18 }))
+  send.append(ondaIcon('arrow-right', { size: 15 }))
   send.type = 'submit'
   send.title = 'Senden'
   send.setAttribute('aria-label', 'Nachricht senden')
