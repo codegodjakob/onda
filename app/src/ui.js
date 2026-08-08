@@ -50,6 +50,10 @@ function closeAllPanels() {
   panels.forEach(p => p.classList.remove('open'))
   openPanel = null
   if (slashActive) closeSlash()
+  // Das Format-Untermenue haengt an einem Knopf der Auswahl-Leiste. Wird es von
+  // aussen geschlossen (Klick daneben, Escape), muss dessen aria-expanded mitgehen —
+  // sonst meldet das Vorlesegeraet ein Menue, das gar nicht mehr offen ist.
+  meldeFormatmenue()
 }
 function positionPanel(panel, anchorRect, alignRight) {
   panel.style.visibility = 'hidden'
@@ -190,16 +194,12 @@ function requestPrint() {
     window.print()
   }
 }
+// Hier stand bis zum 7.8.2026 noch der Rest der alten Werkzeugleiste: ein Zugriff auf
+// #blockLabel, das es im DOM seit Commit c0a8f21 nicht mehr gibt, und darin Aufrufe von
+// currentBlock() und blockBtn — beide waren nirgends deklariert. Ein ReferenceError
+// wartete hinter einem `if`, das nur deshalb nie wahr wurde, weil das Element fehlte.
+// Was der Name heute noch tut, ist der Wortzaehler.
 function updateToolbarState() {
-  const lab = document.getElementById('blockLabel')
-  if (lab) {
-    const b = currentBlock()
-    if (lab.dataset.ic !== b.name) {
-      lab.dataset.ic = b.name
-      lab.replaceChildren(ondaIcon('text', { size: 16 }))
-    }
-    if (blockBtn) blockBtn.title = 'Absatzformat: ' + b.name
-  }
   if (counterEl && ctx.editor.storage.characterCount) {
     const w = ctx.editor.storage.characterCount.words()
     counterEl.textContent = w + (w === 1 ? ' Wort' : ' Wörter')
@@ -211,6 +211,9 @@ function updateToolbarState() {
 let linkEl = null
 function openLinkDialog() {
   closeAllPanels()
+  // Der Link-Kasten steht an derselben Stelle wie die Auswahl-Leiste. Zwei schwebende
+  // Flaechen uebereinander waeren Unruhe, also weicht die Leiste.
+  verbergeAuswahlLeiste()
   if (!linkEl) {
     linkEl = el('div', 'menu linkbox')
     document.body.appendChild(linkEl)
@@ -263,13 +266,25 @@ function openLinkDialog() {
 
 // ---------- Slash-Menü ----------
 let slashEl = null, slashActive = false, slashFrom = 0
+
+// Die vier Absatzformate an EINER Stelle: das Slash-Menue und der Format-Knopf der
+// Auswahl-Leiste zeigen dieselben vier Eintraege, nicht zwei Listen, die auseinander
+// laufen. Benannt wie Jakob sie nennt — „drei Überschriftgrößen (groß/mittel/klein)
+// und EINE Textgröße" —, nicht durchnummeriert: „Überschrift 2" sagt niemandem etwas,
+// der nicht weiss, dass HTML sechs Ebenen kennt.
+function blockFormate() {
+  const e = ctx.editor
+  return [
+    { label: 'Text', aktiv: () => e.isActive('paragraph'), run: () => e.chain().focus().setParagraph().run() },
+    { label: 'Überschrift groß', aktiv: () => e.isActive('heading', { level: 1 }), run: () => e.chain().focus().setHeading({ level: 1 }).run() },
+    { label: 'Überschrift mittel', aktiv: () => e.isActive('heading', { level: 2 }), run: () => e.chain().focus().setHeading({ level: 2 }).run() },
+    { label: 'Überschrift klein', aktiv: () => e.isActive('heading', { level: 3 }), run: () => e.chain().focus().setHeading({ level: 3 }).run() },
+  ]
+}
 function slashItems() {
   const e = ctx.editor
   return [
-    { label: 'Text', run: () => e.chain().focus().setParagraph().run() },
-    { label: 'Überschrift 1', run: () => e.chain().focus().setHeading({ level: 1 }).run() },
-    { label: 'Überschrift 2', run: () => e.chain().focus().setHeading({ level: 2 }).run() },
-    { label: 'Überschrift 3', run: () => e.chain().focus().setHeading({ level: 3 }).run() },
+    ...blockFormate().map(({ label, run }) => ({ label, run })),
     { label: 'Aufzählung', run: () => e.chain().focus().toggleBulletList().run() },
     { label: 'Nummerierte Liste', run: () => e.chain().focus().toggleOrderedList().run() },
     { label: 'Checkliste', run: () => e.chain().focus().toggleTaskList().run() },
@@ -358,6 +373,192 @@ function bindSlash() {
       return false
     },
   })
+}
+
+// ---------- Auswahl-Leiste ----------
+// „beim markieren erscheinen wenige werkzeuge — kursiv, zitat und was schon da ist"
+// (Jakob, 7.8.2026). Sie widerspricht docs/PHILOSOPHIE.md §1 nicht: verboten ist die
+// Schaltzentrale, also alles, was DAUERHAFT ueber dem Text Platz beansprucht. Diese
+// Leiste steht nur, solange etwas markiert ist, und geht mit der Markierung wieder.
+// position: fixed heisst ausserdem: sie kann die Schreibspalte gar nicht schmaler
+// machen — die harte Regel „der Text schrumpft nie" ist von ihr nicht zu erreichen.
+//
+// Alle vier Befehle sind auch ohne sie mit der Tastatur zu haben (⌘I, ⌘⇧B, ⌘K,
+// ⌘⌥1/2/3 und das Slash-Menue). Die Leiste ist der Weg fuer die Maus; fuer Tastatur
+// und Vorlesegeraet ist sie eine ordentliche Werkzeugleiste mit Pfeiltasten-Wanderung,
+// aber kein einziger Befehl haengt allein an ihr.
+let selBar = null, selFormatLabel = null, selFormatBtn = null, selFormatMenu = null
+let auswahlRahmen = 0, zeigtAuswahl = false, ziehtAuswahl = false, verworfeneAuswahl = null
+
+function meldeFormatmenue() {
+  if (!selFormatBtn || !selFormatMenu) return
+  selFormatBtn.setAttribute('aria-expanded', String(selFormatMenu.classList.contains('open')))
+}
+
+function auswahlKnopf(text, beschriftung) {
+  const b = el('button', 'auswahl-knopf')
+  b.type = 'button'
+  b.tabIndex = -1
+  b.appendChild(el('span', 'auswahl-knopf-text', text))
+  if (beschriftung) b.setAttribute('aria-label', beschriftung)
+  // Ohne das verliert der Text beim Klick die Markierung, und der Befehl trifft nichts.
+  b.addEventListener('mousedown', e => e.preventDefault())
+  return b
+}
+
+function baueAuswahlLeiste() {
+  const bar = el('div', 'auswahl-leiste')
+  bar.setAttribute('role', 'toolbar')
+  bar.setAttribute('aria-label', 'Werkzeuge für die Auswahl')
+  bar.setAttribute('aria-orientation', 'horizontal')
+  bar.inert = true
+
+  selFormatBtn = auswahlKnopf('Text', 'Absatzformat wählen')
+  selFormatBtn.classList.add('auswahl-knopf-format')
+  selFormatBtn.tabIndex = 0
+  selFormatLabel = selFormatBtn.querySelector('.auswahl-knopf-text')
+  selFormatBtn.appendChild(ondaIcon('chevron-down', { size: 14 }))
+  selFormatBtn.setAttribute('aria-haspopup', 'true')
+  selFormatBtn.setAttribute('aria-expanded', 'false')
+  selFormatMenu = makeDropdown(selFormatBtn, panel => {
+    blockFormate().forEach(f => menuItem(panel, f.label, f.run, { active: f.aktiv() }))
+  })
+  selFormatBtn.addEventListener('click', () => meldeFormatmenue())
+
+  const kursiv = auswahlKnopf('Kursiv')
+  kursiv.dataset.cmd = 'italic'
+  kursiv.addEventListener('click', () => ctx.editor.chain().focus().toggleItalic().run())
+
+  const zitat = auswahlKnopf('Zitat')
+  zitat.dataset.cmd = 'quote'
+  zitat.addEventListener('click', () => ctx.editor.chain().focus().toggleBlockquote().run())
+
+  const link = auswahlKnopf('Link')
+  link.dataset.cmd = 'link'
+  link.addEventListener('click', () => openLinkDialog())
+
+  bar.append(selFormatBtn, kursiv, zitat, link)
+  document.body.appendChild(bar)
+  bar.addEventListener('keydown', onAuswahlTaste)
+  return bar
+}
+
+// Werkzeugleiste nach ARIA: EIN Knopf liegt im Tab-Weg, die Pfeiltasten wandern
+// zwischen allen. Escape schliesst und gibt den Text zurueck — ohne diesen Riegel
+// wuerde das globale Escape aus bindKeys die ganze Schreibansicht verlassen.
+function onAuswahlTaste(e) {
+  const knoepfe = [...selBar.querySelectorAll('.auswahl-knopf')]
+  const hier = knoepfe.indexOf(document.activeElement)
+  const springe = ziel => {
+    knoepfe.forEach((k, i) => { k.tabIndex = i === ziel ? 0 : -1 })
+    knoepfe[ziel].focus()
+  }
+  if (e.key === 'ArrowRight' && hier >= 0) { e.preventDefault(); springe((hier + 1) % knoepfe.length) }
+  else if (e.key === 'ArrowLeft' && hier >= 0) { e.preventDefault(); springe((hier - 1 + knoepfe.length) % knoepfe.length) }
+  else if (e.key === 'Home') { e.preventDefault(); springe(0) }
+  else if (e.key === 'End') { e.preventDefault(); springe(knoepfe.length - 1) }
+  else if (e.key === 'Escape') { e.stopPropagation(); verbergeAuswahlLeiste({ verworfen: true }) }
+}
+
+function auswahlSchluessel() {
+  const { from, to } = ctx.editor.state.selection
+  return `${from}:${to}`
+}
+
+function verbergeAuswahlLeiste({ verworfen = false } = {}) {
+  // Wer Escape drueckt, will sie WEG — nicht einen Wimpernschlag spaeter wieder da.
+  // Der Fokus, der gleich in den Text zurueckgeht, loest selbst eine Auswahlmeldung
+  // aus; ohne diesen Vermerk kaeme die Leiste dadurch sofort zurueck. Sie bleibt
+  // fort, bis die Markierung eine andere ist.
+  if (verworfen && ctx?.editor) verworfeneAuswahl = auswahlSchluessel()
+  if (!selBar || !zeigtAuswahl) return
+  zeigtAuswahl = false
+  const hatteFokus = selBar.contains(document.activeElement)
+  selBar.classList.remove('open')
+  // inert statt aria-hidden: es nimmt die Leiste zugleich aus dem Tab-Weg UND aus dem
+  // Baum fuer Vorlesegeraete. aria-hidden allein wuerde fokussierbare Knoepfe
+  // verstecken, die man trotzdem antabben kann — genau das ruegt die axe-Pruefung.
+  selBar.inert = true
+  if (selFormatMenu?.classList.contains('open')) closeAllPanels()
+  if (hatteFokus || verworfen) ctx.editor.commands.focus()
+}
+
+function setzeAuswahlLeiste() {
+  const view = ctx.editor.view
+  const { from, to } = ctx.editor.state.selection
+  let a, b
+  try { a = view.coordsAtPos(from); b = view.coordsAtPos(to) } catch { return false }
+  const flaeche = document.getElementById('scroll')?.getBoundingClientRect()
+  const obenAn = Math.min(a.top, b.top)
+  const untenAn = Math.max(a.bottom, b.bottom)
+  // Ist die Markierung aus der Schreibflaeche gescrollt, hat die Leiste nichts zu
+  // zeigen — sonst klebte sie am Rand ueber fremdem Inhalt.
+  if (flaeche && (untenAn < flaeche.top || obenAn > flaeche.bottom)) return false
+
+  selBar.style.visibility = 'hidden'
+  selBar.classList.add('open')
+  const breite = selBar.offsetWidth, hoehe = selBar.offsetHeight
+  const mitte = (Math.min(a.left, b.left) + Math.max(a.right, b.right)) / 2
+  // Sie bleibt ueber der Schreibflaeche, nicht bloss im Fenster: eine Markierung am
+  // linken Spaltenrand haette die Leiste sonst halb ueber die Seitenleiste geschoben.
+  // Passt sie nicht hinein, gewinnt der linke Rand.
+  const randLinks = (flaeche ? flaeche.left : 0) + 8
+  const randRechts = (flaeche ? flaeche.right : window.innerWidth) - 8
+  const links = Math.max(randLinks, Math.min(Math.round(mitte - breite / 2), randRechts - breite))
+  const grenze = flaeche ? flaeche.top + 8 : 8
+  let oben = obenAn - hoehe - 8
+  if (oben < grenze) oben = untenAn + 8   // kein Platz darueber, dann darunter
+  selBar.style.left = links + 'px'
+  selBar.style.top = Math.round(oben) + 'px'
+  selBar.style.visibility = ''
+  return true
+}
+
+function aktualisiereAuswahlLeiste() {
+  if (!ctx?.editor) return
+  const { empty } = ctx.editor.state.selection
+  const imText = document.body.classList.contains('view-editor')
+  const beiUns = selBar?.contains(document.activeElement)
+  if (verworfeneAuswahl && verworfeneAuswahl !== auswahlSchluessel()) verworfeneAuswahl = null
+  if (empty || ziehtAuswahl || !imText || verworfeneAuswahl || (!ctx.editor.isFocused && !beiUns)) {
+    verbergeAuswahlLeiste()
+    return
+  }
+  if (!selBar) selBar = baueAuswahlLeiste()
+  // Der Format-Knopf sagt, was der Absatz gerade IST. Damit ersetzt er die Anzeige,
+  // fuer die die alte Werkzeugleiste ein eigenes Feld brauchte.
+  const formate = blockFormate()
+  selFormatLabel.textContent = (formate.find(f => f.aktiv()) || formate[0]).label
+  selBar.querySelector('[data-cmd="italic"]').setAttribute('aria-pressed', String(ctx.editor.isActive('italic')))
+  selBar.querySelector('[data-cmd="quote"]').setAttribute('aria-pressed', String(ctx.editor.isActive('blockquote')))
+  meldeFormatmenue()
+  selBar.inert = false
+  if (!setzeAuswahlLeiste()) { selBar.classList.remove('open'); selBar.inert = true; zeigtAuswahl = false; return }
+  zeigtAuswahl = true
+}
+
+// coordsAtPos liefert vor dem naechsten Layout falsche Werte — dieselbe Ursache wie
+// der rAF-Riegel in den Browser-Pruefungen. Deshalb wird erst im naechsten Bild
+// gemessen, und mehrere Anlaesse im selben Bild fallen zu einem zusammen.
+function planeAuswahlLeiste() {
+  if (auswahlRahmen) return
+  auswahlRahmen = requestAnimationFrame(() => { auswahlRahmen = 0; aktualisiereAuswahlLeiste() })
+}
+
+function bindAuswahlLeiste() {
+  const pm = ctx.editor.view.dom
+  // Waehrend gezogen wird, bleibt sie fort: eine Leiste, die dem Mauszeiger
+  // hinterherzuckt, ist Unruhe. Sie kommt, wenn die Markierung steht.
+  pm.addEventListener('pointerdown', () => { ziehtAuswahl = true; verbergeAuswahlLeiste() })
+  document.addEventListener('pointerup', () => {
+    if (!ziehtAuswahl) return
+    ziehtAuswahl = false
+    planeAuswahlLeiste()
+  })
+  document.getElementById('scroll').addEventListener('scroll', planeAuswahlLeiste)
+  window.addEventListener('resize', planeAuswahlLeiste)
+  ctx.editor.on('blur', () => planeAuswahlLeiste())
+  document.addEventListener('aiwt:viewchange', () => verbergeAuswahlLeiste())
 }
 
 // ---------- Bild-Resize ----------
@@ -708,9 +909,10 @@ export function initUI(context) {
   bindSidebar()
   bindTitle()
   bindKeys()
+  bindAuswahlLeiste()
   updateToolbarState()
-  ctx.editor.on('selectionUpdate', () => { updateToolbarState(); markZenBlock() })
-  ctx.editor.on('update', () => { updateToolbarState(); markZenBlock() })
+  ctx.editor.on('selectionUpdate', () => { updateToolbarState(); markZenBlock(); planeAuswahlLeiste() })
+  ctx.editor.on('update', () => { updateToolbarState(); markZenBlock(); planeAuswahlLeiste() })
   document.getElementById('scroll').addEventListener('scroll', () => {
     if (openPanel) closeAllPanels()
   })

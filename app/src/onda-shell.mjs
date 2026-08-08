@@ -16,15 +16,18 @@ function syncView(view) {
   syncMobileSidebar(view)
 }
 
+// Auf schmalen Ansichten faehrt die Leiste als Auszug ueber den Text — sie startet
+// dort eingeklappt. Die Klinke ist seit dem 7. August 2026 EIN Knopf (#sidebarToggle),
+// der immer an derselben Stelle am Fenster haengt; das Symbol setzt workspace.js.
 function syncMobileSidebar(view = document.body.classList.contains('view-editor') ? 'editor' : 'home') {
   if (view !== 'editor' || !window.matchMedia('(max-width: 800px)').matches) return
   const editorView = document.getElementById('editorView')
-  const collapse = document.getElementById('sidebarCollapse')
-  const reopen = document.getElementById('sidebarReopen')
+  const sidebar = document.getElementById('ondaSidebar')
+  const toggle = document.getElementById('sidebarToggle')
   editorView?.classList.add('is-sidebar-collapsed')
-  collapse?.setAttribute('aria-expanded', 'false')
-  reopen?.setAttribute('aria-expanded', 'false')
-  if (reopen) reopen.hidden = false
+  toggle?.setAttribute('aria-expanded', 'false')
+  toggle?.setAttribute('aria-label', 'Seitenleiste einblenden')
+  if (sidebar) sidebar.inert = true
 }
 
 function renderRecent(context) {

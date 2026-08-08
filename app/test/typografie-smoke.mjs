@@ -1,0 +1,388 @@
+// Typografie am laufenden Programm: keine Versalien auf dem Schirm, drei
+// unterscheidbare Überschriftstufen, eine Textgröße — und die Auswahl-Leiste, die
+// beim Markieren kommt und mit der Markierung wieder geht.
+//
+// Gemessen wird im Browser, nicht in der Quelle: was im Blatt steht, ist erst dann
+// wahr, wenn keine spätere Regel es überschreibt. Genau daran ist die Schreibspalte
+// schon zweimal zerdrückt worden.
+
+import assert from 'node:assert/strict'
+import { createServer } from 'node:http'
+import { readFile } from 'node:fs/promises'
+import { extname, resolve, sep } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { chromium } from 'playwright'
+import AxeBuilder from '@axe-core/playwright'
+
+const appRoot = resolve(fileURLToPath(new URL('..', import.meta.url)))
+const mimeByExtension = {
+  '.css': 'text/css', '.html': 'text/html', '.js': 'text/javascript',
+  '.mjs': 'text/javascript', '.woff2': 'font/woff2',
+}
+
+// Eigener Server auf eigenem Port. Ein fester Port kann einer fremden Sitzung
+// gehören — dann misst man deren Code und hält das Ergebnis für seines.
+let staticServer = null
+let baseUrl = process.env.AIWT_URL
+if (!baseUrl) {
+  staticServer = createServer(async (request, response) => {
+    try {
+      const pathname = decodeURIComponent(new URL(request.url, 'http://127.0.0.1').pathname)
+      const target = resolve(appRoot, pathname === '/' ? 'index.html' : pathname.slice(1))
+      if (target !== appRoot && !target.startsWith(`${appRoot}${sep}`)) { response.writeHead(403).end(); return }
+      const content = await readFile(target)
+      response.writeHead(200, { 'content-type': mimeByExtension[extname(target)] || 'application/octet-stream' })
+      response.end(content)
+    } catch { response.writeHead(404).end() }
+  })
+  await new Promise(listening => staticServer.listen(0, '127.0.0.1', listening))
+  baseUrl = `http://127.0.0.1:${staticServer.address().port}/`
+}
+
+async function sichtbareVersalien(page) {
+  return page.evaluate(() => [...document.querySelectorAll('*')]
+    .filter(node => !node.children.length && node.offsetParent)
+    .filter(node => getComputedStyle(node).textTransform === 'uppercase')
+    .filter(node => node.getBoundingClientRect().width > 0)
+    .map(node => `${node.className || node.tagName}: ${node.textContent.trim().slice(0, 24)}`))
+}
+
+async function oeffneBeispiel(page) {
+  await page.goto(baseUrl, { waitUntil: 'networkidle' })
+  await page.evaluate(() => localStorage.clear())
+  await page.reload({ waitUntil: 'networkidle' })
+  await page.locator('#doclist .doc').filter({ hasText: 'Beispiel: Calm Technology' }).click()
+  await page.locator('#doclist .doc').first().click()
+  await page.locator('#editor .ProseMirror').waitFor({ state: 'visible' })
+}
+
+// Der rAF-Riegel: die Leiste misst ihre Lage erst im nächsten Bild, also muss die
+// Prüfung mindestens ein Bild abwarten, bevor sie urteilt.
+const bildwechsel = page => page.evaluate(() => new Promise(fertig => (
+  requestAnimationFrame(() => requestAnimationFrame(fertig))
+)))
+const leisteOffen = page => page.evaluate(() => (
+  document.querySelector('.auswahl-leiste')?.classList.contains('open') === true
+))
+// Mitten im Einblenden steht die Leiste noch verkleinert da; getBoundingClientRect
+// gibt die verwandelte Größe zurück. Wer da schon misst, misst die Bewegung.
+const ruhe = locator => locator.evaluate(async node => {
+  await Promise.all(node.getAnimations({ subtree: true }).map(bewegung => bewegung.finished.catch(() => {})))
+})
+
+async function pruefeVersalien(browser) {
+  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } })
+  await page.goto(baseUrl, { waitUntil: 'networkidle' })
+  await page.evaluate(() => localStorage.clear())
+  await page.reload({ waitUntil: 'networkidle' })
+
+  // „KEINE VERSALIEN IM GANZEN PROGRAMM." Bibliothek zuerst.
+  assert.deepEqual(await sichtbareVersalien(page), [], 'Versalien in der Bibliothek')
+  await page.locator('#doclist .doc').filter({ hasText: 'Beispiel: Calm Technology' }).click()
+  await page.locator('#doclist .doc').first().click()
+  await page.locator('#editor .ProseMirror').waitFor({ state: 'visible' })
+  assert.deepEqual(await sichtbareVersalien(page), [], 'Versalien in der Schreibansicht')
+
+  // Und die Rubrik ist trotzdem als Rubrik zu erkennen: kleinster Grad, mittleres
+  // Gewicht gegen 400 im Fließtext, zurückgenommene Farbe.
+  const rubrik = await page.locator('.onda-eyebrow').first().evaluate(node => {
+    const stil = getComputedStyle(node)
+    return {
+      groesse: stil.fontSize, gewicht: stil.fontWeight, laufweite: stil.letterSpacing,
+      farbe: stil.color, fliesstextFarbe: getComputedStyle(document.querySelector('#editor .ProseMirror')).color,
+    }
+  })
+  assert.equal(rubrik.groesse, '12px', `Die Rubrik misst ${rubrik.groesse}`)
+  assert.equal(rubrik.gewicht, '500', `Die Rubrik wiegt ${rubrik.gewicht} statt 500`)
+  assert.ok(parseFloat(rubrik.laufweite) < 0.5, `Die Rubrik läuft ${rubrik.laufweite} weit — das war die Versalien-Laufweite`)
+  assert.notEqual(rubrik.farbe, rubrik.fliesstextFarbe, 'Die Rubrik trägt dieselbe Farbe wie der Fließtext')
+  await page.close()
+}
+
+async function pruefeStufen(browser) {
+  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } })
+  await oeffneBeispiel(page)
+  await page.evaluate(() => window.AIWT.state.editor.commands.setContent(
+    '<h1>Groß</h1><p>Fließtext eins</p><h2>Mittel</h2><p>Fließtext zwei</p>'
+    + '<h3>Klein</h3><p>Fließtext drei</p><blockquote><p>Ein Zitat</p></blockquote>'
+    + '<ul><li><p>Ein Punkt</p></li></ul>',
+  ))
+  await bildwechsel(page)
+
+  const grade = await page.evaluate(() => {
+    const lies = wahl => [...document.querySelectorAll(`#editor .ProseMirror ${wahl}`)]
+      .map(node => parseFloat(getComputedStyle(node).fontSize))
+    return {
+      h1: lies('h1')[0], h2: lies('h2')[0], h3: lies('h3')[0],
+      koerper: [...lies('p'), ...lies('li')],
+      titel: parseFloat(getComputedStyle(document.getElementById('title')).fontSize),
+      spalte: document.querySelector('#editor .ProseMirror').getBoundingClientRect().width,
+    }
+  })
+
+  // „EINE Textgröße" — Absatz, Zitat und Listeneintrag messen dasselbe.
+  assert.deepEqual([...new Set(grade.koerper)], [15], `Der Fließtext hat ${new Set(grade.koerper).size} Größen: ${[...new Set(grade.koerper)]}`)
+  assert.equal(grade.titel, 40, `Der Titel misst ${grade.titel}px`)
+  assert.ok(grade.spalte >= 640 && grade.spalte <= 680, `Die Schreibspalte ist ${grade.spalte}px breit`)
+
+  // „Drei Überschriftgrößen (groß/mittel/klein)" — und drei, die man auch sieht.
+  // Vor dem 7.8.2026 lagen h2 und h3 drei Pixel auseinander, das las niemand als
+  // eigene Ebene. Zwischen zwei Überschriften muss ein Fünftel und dreieinhalb Pixel
+  // liegen; vom Titel zur größten Überschrift ohnehin mehr.
+  assert.ok(grade.titel > grade.h1, `Der Titel (${grade.titel}px) überragt die große Überschrift nicht`)
+  for (const [oben, unten] of [[grade.h1, grade.h2], [grade.h2, grade.h3]]) {
+    assert.ok(oben / unten >= 1.2, `Stufe ${oben}px über ${unten}px ist nur Faktor ${(oben / unten).toFixed(3)}`)
+    assert.ok(oben - unten >= 3.5, `Stufe ${oben}px über ${unten}px sind nur ${(oben - unten).toFixed(1)}px`)
+  }
+  // Die kleinste Überschrift steht dem Fließtext nah; dort trägt das Gewicht die
+  // Unterscheidung. Größer muss sie trotzdem sein, sonst sind es nur zwei Stufen.
+  assert.ok(grade.h3 > 15, `Die kleine Überschrift misst ${grade.h3}px wie der Fließtext`)
+  const gewichte = await page.evaluate(() => ['h1', 'h2', 'h3', 'p']
+    .map(t => getComputedStyle(document.querySelector(`#editor .ProseMirror ${t}`)).fontWeight))
+  assert.deepEqual(gewichte, ['700', '700', '700', '400'])
+  await page.close()
+}
+
+async function pruefeAuswahlLeiste(browser) {
+  // Eigener Kontext, weil die axe-Prüfung weiter unten einen braucht — und mit
+  // reduzierter Bewegung, weil axe sonst die Anmerkung MITTEN in ihrer Ankunft misst
+  // (--dur-ankunft, 720ms) und die halbdurchsichtige Zwischenstufe als Kontrastfehler
+  // meldet. Derselbe Grund, aus dem der bestehende Barrierefrei-Lauf es genauso macht.
+  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce' })
+  const page = await context.newPage()
+  await oeffneBeispiel(page)
+
+  // Vor dem Markieren steht über dem Text nichts (docs/PHILOSOPHIE.md §1).
+  await bildwechsel(page)
+  assert.equal(await leisteOffen(page), false, 'Die Auswahl-Leiste steht, ohne dass etwas markiert ist')
+
+  const vorher = await page.locator('#editor .ProseMirror').evaluate(n => n.getBoundingClientRect().width)
+
+  await page.locator('#editor .ProseMirror p').first().click({ clickCount: 3 })
+  await bildwechsel(page)
+  await page.waitForFunction(() => document.querySelector('.auswahl-leiste')?.classList.contains('open'))
+
+  // Harte Regel 1: die Schreibspalte gibt kein Pixel ab, auch nicht an die Leiste.
+  const nachher = await page.locator('#editor .ProseMirror').evaluate(n => n.getBoundingClientRect().width)
+  assert.equal(nachher, vorher, `Die Schreibspalte schrumpfte von ${vorher} auf ${nachher}px`)
+
+  const leiste = page.locator('.auswahl-leiste')
+  await ruhe(leiste)
+  assert.equal(await leiste.getAttribute('role'), 'toolbar')
+  assert.ok((await leiste.getAttribute('aria-label'))?.length > 0, 'Die Leiste hat keinen Namen für Vorlesegeräte')
+  assert.equal(await leiste.evaluate(n => getComputedStyle(n).position), 'fixed')
+
+  const knoepfe = await leiste.locator('.auswahl-knopf').evaluateAll(nodes => nodes.map(node => ({
+    text: node.textContent.trim(),
+    name: node.getAttribute('aria-label') || node.textContent.trim(),
+    hoehe: node.getBoundingClientRect().height,
+  })))
+  assert.equal(knoepfe.length, 4, `Die Leiste hat ${knoepfe.length} Werkzeuge statt vier`)
+  knoepfe.forEach(k => {
+    assert.ok(k.name.length > 0, 'Ein Werkzeug hat keinen Namen')
+    assert.ok(k.hoehe >= 44, `„${k.text}" ist nur ${k.hoehe}px hoch`)
+  })
+  // Der Format-Knopf sagt, was der Absatz gerade IST — er ersetzt damit die Anzeige,
+  // die die alte Werkzeugleiste dafür brauchte.
+  assert.match(knoepfe[0].text, /Text|Überschrift/)
+
+  // Die Zurückhaltung gilt den Augen, nicht der Zugänglichkeit: die OFFENE Leiste muss
+  // die axe-Prüfung genauso bestehen wie der Rest. Der bestehende Barrierefrei-Lauf
+  // markiert nirgends Text und bekommt sie deshalb nie zu sehen. Sie wird hier
+  // geprüft, solange sie noch steht — später im Lauf ist sie wieder fort.
+  assert.equal(await leisteOffen(page), true, 'Die Leiste war schon zu — die axe-Prüfung sähe sie gar nicht')
+  const axe = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze()
+  const schwer = axe.violations.filter(fund => ['critical', 'serious'].includes(fund.impact))
+  assert.deepEqual(schwer.map(fund => ({ id: fund.id, ziele: fund.nodes.map(n => n.target) })), [])
+
+  // Dieselbe Leiste im dunklen Kleid. Ein neuer Bedienbereich muss in beiden Fassungen
+  // lesbar sein, nicht nur in der, in der zufällig geprüft wird.
+  await page.evaluate(() => { document.documentElement.dataset.theme = 'dark' })
+  const axeDunkel = await new AxeBuilder({ page }).include('.auswahl-leiste')
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze()
+  assert.deepEqual(axeDunkel.violations.map(fund => fund.id), [])
+  await page.evaluate(() => { document.documentElement.dataset.theme = 'light' })
+
+  // Pfeiltasten wandern zwischen den Werkzeugen, Escape gibt den Text zurück.
+  await leiste.locator('.auswahl-knopf').first().focus()
+  await page.keyboard.press('ArrowRight')
+  assert.equal(await page.evaluate(() => document.activeElement?.textContent.trim()), 'Kursiv')
+  await page.keyboard.press('Escape')
+  await bildwechsel(page)
+  assert.equal(await page.evaluate(() => document.activeElement?.classList.contains('ProseMirror')), true,
+    'Escape gibt den Fokus nicht an den Text zurück')
+  assert.equal(await leisteOffen(page), false, 'Escape schließt die Leiste nicht')
+
+  // Kursiv ist die einzige Auszeichnung, die zurückkam.
+  await page.locator('#editor .ProseMirror p').first().click({ clickCount: 3 })
+  await page.waitForFunction(() => document.querySelector('.auswahl-leiste')?.classList.contains('open'))
+  const kursiv = leiste.locator('[data-cmd="italic"]')
+  assert.equal(await kursiv.getAttribute('aria-pressed'), 'false')
+  await kursiv.click()
+  await bildwechsel(page)
+  assert.match(await page.evaluate(() => window.AIWT.state.editor.getHTML()), /<em>/)
+  assert.equal(await kursiv.getAttribute('aria-pressed'), 'true')
+
+  // Mit der Markierung geht sie wieder. Ein Klick ohne Ziehen setzt nur den Cursor.
+  await page.locator('#editor .ProseMirror p').first().click()
+  await bildwechsel(page)
+  await page.waitForFunction(() => document.querySelector('.auswahl-leiste')?.classList.contains('open') === false)
+  // Und sie liegt dann auch nicht mehr im Tastaturweg.
+  assert.equal(await leiste.evaluate(n => n.inert), true, 'Die geschlossene Leiste ist noch antabbar')
+
+  // Auf dem schmalsten Fenster darf sie nicht seitlich hinausragen: eine feste Fläche,
+  // die über den Rand steht, schiebt das ganze Dokument. Der Format-Knopf trägt dort
+  // das längste Wort des Programms ("Überschrift mittel").
+  await page.setViewportSize({ width: 320, height: 760 })
+  await bildwechsel(page)
+  // Ausdrücklich eine Überschrift: nur dort trägt der Format-Knopf das lange Wort,
+  // und nur dann wird es überhaupt eng. Auf einem Absatz stünde bloß „Text".
+  await page.locator('#editor .ProseMirror h2').first().click({ clickCount: 3 })
+  await page.waitForFunction(() => document.querySelector('.auswahl-leiste')?.classList.contains('open'))
+  assert.match(await page.locator('.auswahl-knopf-text').first().textContent(), /Überschrift/)
+  await ruhe(leiste)
+  await bildwechsel(page)
+  const ueberlauf = await page.evaluate(() => {
+    const l = document.querySelector('.auswahl-leiste').getBoundingClientRect()
+    return {
+      dokument: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      links: Math.round(l.left), rechts: Math.round(l.right), fenster: window.innerWidth,
+    }
+  })
+  assert.ok(ueberlauf.dokument <= 1, `320px: ${ueberlauf.dokument}px horizontaler Überlauf`)
+  assert.ok(ueberlauf.links >= 0 && ueberlauf.rechts <= ueberlauf.fenster,
+    `Die Leiste steht bei ${ueberlauf.fenster}px von ${ueberlauf.links} bis ${ueberlauf.rechts}`)
+  await page.setViewportSize({ width: 1440, height: 1000 })
+
+  // Und alles andere bleibt aus — auch beim Einfügen von Fremdtext.
+  const fremd = await page.evaluate(() => {
+    const e = window.AIWT.state.editor
+    e.commands.setContent('<p><strong>Fett</strong> <em>Kursiv</em> <s>Weg</s> <code>Code</code></p>')
+    return e.getHTML()
+  })
+  assert.match(fremd, /<em>Kursiv<\/em>/)
+  assert.doesNotMatch(fremd, /<(?:strong|s|code)\b/)
+  await context.close()
+}
+
+// ---------- Beschriftung gegen Eintrag ----------
+// Ohne Versalien trägt allein die Mischung aus Grad, Gewicht und Farbe. Ein einziger
+// Gewichtsschritt reicht nicht: am 7.8.2026 waren „Struktur" und „Warum es wichtig ist"
+// darunter beide 15px und beide rgb(28,26,23) — im Bild las sich der Eintrag mindestens
+// so stark wie die Beschriftung. Gemessen wird am laufenden Programm, weil erst hier
+// feststeht, welche Regel gewinnt.
+const gemessen = (page, wahl) => page.evaluate(sel => {
+  const node = document.querySelector(sel)
+  if (!node) return null
+  const stil = getComputedStyle(node)
+  return {
+    grad: parseFloat(stil.fontSize), gewicht: Number(stil.fontWeight), farbe: stil.color,
+    text: node.textContent.trim().slice(0, 28),
+  }
+}, wahl)
+
+function pruefePaar(ort, beschriftung, eintrag) {
+  assert.ok(beschriftung && eintrag, `${ort}: eine der beiden Zeilen steht gar nicht auf dem Schirm`)
+  assert.equal(beschriftung.gewicht, 500, `${ort}: „${beschriftung.text}" wiegt ${beschriftung.gewicht} statt 500`)
+  assert.equal(eintrag.gewicht, 400, `${ort}: „${eintrag.text}" wiegt ${eintrag.gewicht} statt 400`)
+  assert.ok(beschriftung.grad !== eintrag.grad || beschriftung.farbe !== eintrag.farbe,
+    `${ort}: „${beschriftung.text}" und „${eintrag.text}" unterscheidet nur das Gewicht — `
+    + `beide ${beschriftung.grad}px, beide ${beschriftung.farbe}`)
+}
+
+async function pruefeBeschriftungen(browser) {
+  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce' })
+  const page = await context.newPage()
+  await page.goto(baseUrl, { waitUntil: 'networkidle' })
+  await page.evaluate(() => localStorage.clear())
+  await page.reload({ waitUntil: 'networkidle' })
+
+  // Bibliothek: „Zuletzt bearbeitet" über den Texten darunter.
+  pruefePaar('Bibliothek',
+    await gemessen(page, '#libraryRecentTitle'),
+    await gemessen(page, '.onda-library-recent__item'))
+
+  await oeffneBeispiel(page)
+
+  // Seitenleiste: der Abschnittsname über den Bausteinen.
+  pruefePaar('Seitenleiste',
+    await gemessen(page, '#ondaSidebar .onda-side-name'),
+    await gemessen(page, '#ondaSidebar .block-preview-excerpt'))
+
+  // Quellenbaum: dieselbe Frage eine Ebene tiefer. Der Beispieltext hat keine Quellen,
+  // also kommen sie so herein, wie sie im Betrieb aussehen (source-model.mjs macht aus
+  // metadata.title IMMER ein Objekt).
+  await page.evaluate(() => {
+    const state = window.AIWT.state
+    const projekt = state.projects.find(kandidat => kandidat.id === state.activeProject)
+    projekt.sources = [1, 2].map(nummer => ({
+      id: `q${nummer}`, projectId: projekt.id, type: 'web',
+      origin: { kind: 'url', immutableRef: `https://beispiel.de/q${nummer}`, originalUrl: `https://beispiel.de/q${nummer}` },
+      original: { mediaType: 'text/html', sections: [{ id: 'import', heading: 'Abschnitt', text: 'Text.' }] },
+      checksumSha256: 'a'.repeat(64), importedAt: Date.now(),
+      provenance: { actor: 'user', action: 'import' },
+      metadata: { title: { value: `Quelle ${nummer}`, status: 'user-provided' } },
+      derived: {}, status: 'active', locators: [], history: [],
+    }))
+    projekt.quellenThemen = [{
+      id: 'thema-1', name: 'Aufmerksamkeit', warum: 'Beide fragen, worauf Menschen achten.',
+      quellenIds: ['q1', 'q2'], vonKi: true, handverschoben: [],
+    }]
+    window.AIWT.openDoc(state.active)
+  })
+  await page.locator('#editor .ProseMirror').waitFor({ state: 'visible' })
+  await page.locator('#materialTreeToggle').click()
+  // Zwei Ebenen: erst der Baum, dann die Gruppe darin — die Quellen sitzen eingeklappt
+  // unter ihrem eigenen Pfeil.
+  await page.locator('#materialTree .onda-baum-pfeil').first().click()
+  await page.locator('#materialTree .onda-baum-quelle').first().waitFor({ state: 'visible' })
+  pruefePaar('Quellenbaum',
+    await gemessen(page, '#materialTree .onda-baum-name'),
+    await gemessen(page, '#materialTree .onda-baum-quelle'))
+
+  // Die zurückgenommene Farbe darf die Zeile nicht unlesbar machen — Zurückhaltung
+  // gilt den Augen, nicht der Zugänglichkeit.
+  const axeBaum = await new AxeBuilder({ page }).include('#ondaSidebar')
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze()
+  assert.deepEqual(axeBaum.violations.map(fund => fund.id), [])
+
+  // Fenster: die Gruppenbeschriftung über den Einträgen. Gemessen wird ein RUHENDER
+  // Eintrag — der gewählte trägt bewusst 500, sonst ginge er in der Liste unter.
+  await page.locator('#pvCard').click()
+  await page.locator('#pvModal').waitFor({ state: 'visible' })
+  pruefePaar('Fenster',
+    await gemessen(page, '#pvModal .onda-blaetter__gruppe'),
+    await gemessen(page, '#pvModal .onda-blaetter__eintrag:not([aria-current="true"])'))
+  const gewaehlt = await gemessen(page, '#pvModal .onda-blaetter__eintrag[aria-current="true"]')
+  assert.equal(gewaehlt.gewicht, 500, `Der gewählte Eintrag wiegt ${gewaehlt.gewicht} wie die ruhenden`)
+
+  // Und die Hierarchie im Fenster steht richtig herum: „Aufgabe" las sich bis zum
+  // 7.8.2026 größer als „Projektverständnis", weil der Fenstername auf 18px stand —
+  // einem Grad, den das Haus gar nicht kennt.
+  const fenstername = await gemessen(page, '#pvModal .onda-dialog-title')
+  const ueberschrift = await gemessen(page, '#pvModal .onda-blaetter__tiefe-titel')
+  assert.ok(fenstername.grad > ueberschrift.grad,
+    `„${fenstername.text}" (${fenstername.grad}px) überragt „${ueberschrift.text}" (${ueberschrift.grad}px) nicht`)
+  for (const zeile of [fenstername, ueberschrift]) {
+    assert.ok([12, 15, 21, 40].includes(zeile.grad), `„${zeile.text}" misst ${zeile.grad}px — kein Hausgrad`)
+  }
+
+  // Und der Wortlaut steht nicht zweimal untereinander: Überschrift „Aufgabe",
+  // Feldname „Was dieser Text leisten soll".
+  const feldname = await gemessen(page, '#pvModal .onda-pv-label')
+  assert.notEqual(feldname.text, ueberschrift.text,
+    `„${ueberschrift.text}" steht im Fenster zweimal untereinander`)
+  await context.close()
+}
+
+const browser = await chromium.launch({ headless: true })
+try {
+  await pruefeVersalien(browser)
+  await pruefeStufen(browser)
+  await pruefeAuswahlLeiste(browser)
+  await pruefeBeschriftungen(browser)
+  console.log('Typografie smoke: PASS')
+} finally {
+  await browser.close()
+  if (staticServer) await new Promise(closed => staticServer.close(closed))
+}

@@ -45,6 +45,25 @@
   --type-body:var(--fw-regular) var(--text-base)/var(--leading-normal) var(--font-sans);
   --type-label:var(--fw-medium) var(--text-base)/var(--leading-snug) var(--font-sans);
   --type-caption:var(--fw-regular) var(--text-xs)/var(--leading-snug) var(--font-sans);
+  /* Rubrik — die Beschriftung ueber einem Abschnitt ("Bibliothek", "Modelle").
+     Sie stand bis zum 7.8.2026 in Versalien; Jakob hat sie abgeschafft
+     ("ich find, es sieht sehr haesslich aus"). Versalien haben zwei Dinge auf
+     einmal gesagt: ich bin klein, und ich bin keine Fliesszeile. Faellt die
+     Grossschreibung, muessen Grad, Gewicht und Farbe das allein tragen —
+     kleinster Grad (12px) und mittleres Gewicht (500) gegen 400 im Fliesstext.
+     Kein neuer Grad, kein neues Gewicht, nur eine andere Mischung.
+
+     DIE REGEL DAHINTER, einmal geschrieben und ueberall dieselbe: eine Beschriftung
+     und der Eintrag unter ihr unterscheiden sich im GEWICHT (500 gegen 400) UND in
+     mindestens einem weiteren Merkmal — Grad oder Farbe. Zwei Merkmale, nie nur eines.
+     Ein einziger Gewichtsschritt bei gleicher Groesse und gleicher Farbe reicht nicht:
+     so stand die Seitenleiste am 7.8.2026 da, und "Warum es wichtig ist" las sich
+     genauso stark wie "Struktur" darueber. Welches das zweite Merkmal ist, haengt vom
+     Ort ab — im Baum ist der kleinste Grad schon erreicht, dort traegt die Farbe; in
+     der Bibliothek traegt der Grad. Mittleres Gewicht ist damit im ganzen Programm
+     fuer genau zweierlei reserviert: fuer eine Beschriftung, und fuer das, was gerade
+     GEWAEHLT ist. */
+  --type-rubrik:var(--fw-medium) var(--text-xs)/var(--leading-snug) var(--font-sans);
 
   --space-0:0; --space-px:1px; --space-05:2px; --space-1:4px; --space-2:8px; --space-3:12px;
   --space-4:16px; --space-5:20px; --space-6:24px; --space-7:32px; --space-8:40px; --space-9:48px;
@@ -69,6 +88,15 @@
   --shadow-inset:inset 0 1px 2px rgba(28,26,23,0.07);
   --shadow-focus:0 0 0 4px var(--focus-ring);
   --shadow-glow:0 0 0 1px rgba(166,195,214,0.34),0 4px 22px rgba(141,178,201,0.3);
+
+  /* MATERIAL statt Anstrich (Apple Tahoe). Ein Bedienelement ist eine durchscheinende
+     Scheibe: sie nimmt die Farbe von dem an, was hinter ihr liegt, und traegt eine
+     haarfeine Kante mit einem hellen Innenrand oben — so entsteht Tiefe ohne Schatten
+     und ohne Farbe. Fuer Flaechen, die frueher --accent trugen, ohne es zu meinen.
+     Die Aura bleibt die einzige Stelle im Haus, die faerben darf. */
+  --onda-material:rgba(20,19,16,0.06);
+  --onda-material-dicht:rgba(20,19,16,0.11);
+  --onda-material-kante:inset 0 0 0 1px rgba(20,19,16,0.08),inset 0 1px 0 rgba(255,255,255,0.55);
 
   --ease-out:cubic-bezier(0.16,1,0.3,1); --ease-standard:cubic-bezier(0.2,0,0,1);
   --ease-in-out:cubic-bezier(0.65,0,0.35,1); --ease-spring:cubic-bezier(0.34,1.4,0.64,1);
@@ -105,6 +133,12 @@
   --shadow-xl:0 8px 16px rgba(0,0,0,0.4),0 28px 56px rgba(0,0,0,0.55);
   --shadow-inset:inset 0 1px 2px rgba(0,0,0,0.4);
   --shadow-glow:0 0 0 1px rgba(166,195,214,0.26),0 4px 26px rgba(166,195,214,0.36);
+
+  /* Im Dunkeln ist Glas heller als sein Grund, nicht dunkler — sonst verschwindet es.
+     Der Innenrand oben bleibt, er ist das, was die Scheibe als Scheibe lesbar macht. */
+  --onda-material:rgba(245,241,234,0.07);
+  --onda-material-dicht:rgba(245,241,234,0.13);
+  --onda-material-kante:inset 0 0 0 1px rgba(245,241,234,0.10),inset 0 1px 0 rgba(245,241,234,0.13);
 }
 
 @media (prefers-reduced-motion:reduce) {

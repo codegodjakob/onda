@@ -2,12 +2,13 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   MODELLE, TASK_TABLE, PREISE, HINWEISE_SCHEMA, VERSTAENDNIS_SCHEMA, ERWEITERUNGEN_SCHEMA,
+  QUELLENTHEMEN_SCHEMA,
   API_URL, baueAnfrage, schaetzeKostenCents,
 } from '../src/agent-tasks.mjs'
 import { SYSTEM_COACH } from '../src/agent-prompts.mjs'
 
 test('TASK_TABLE ist vollstaendig und zeigt auf gueltige Modelle', () => {
-  const tasks = ['verstaendnis', 'hinweise', 'erweiterungen', 'chat', 'titel', 'zusammenfassung']
+  const tasks = ['verstaendnis', 'hinweise', 'erweiterungen', 'quellenthemen', 'chat', 'titel', 'zusammenfassung']
   assert.deepEqual(Object.keys(TASK_TABLE).sort(), tasks.slice().sort())
   for (const name of tasks) {
     const eintrag = TASK_TABLE[name]
@@ -19,6 +20,7 @@ test('TASK_TABLE ist vollstaendig und zeigt auf gueltige Modelle', () => {
   assert.equal(TASK_TABLE.verstaendnis.schema, VERSTAENDNIS_SCHEMA)
   assert.equal(TASK_TABLE.hinweise.schema, HINWEISE_SCHEMA)
   assert.equal(TASK_TABLE.erweiterungen.schema, ERWEITERUNGEN_SCHEMA)
+  assert.equal(TASK_TABLE.quellenthemen.schema, QUELLENTHEMEN_SCHEMA)
   assert.equal(TASK_TABLE.titel.maxTokens, 256)
   assert.equal(TASK_TABLE.zusammenfassung.maxTokens, 2000)
   assert.equal(MODELLE.stark, 'claude-opus-5')
@@ -185,6 +187,29 @@ test('baueAnfrage wirft bei unbekanntem Task und leerem Kontext', () => {
 // Der Wert des Erweiterungs-Kanals haengt ganz daran, das Naheliegende zu erkennen und zu
 // verwerfen. Genau das kann ein Routine-Modell nicht -- es liefert zuverlaessig den
 // erwartbaren Gedanken, also den einen, den die Autorin oder der Autor schon hatte.
+// Ein Routine-Modell liefert bei einer Quellenliste zuverlaessig die Bibliotheksrubrik
+// („Web-Quellen", „Sonstiges") — genau die Ordnung, die jeder Mensch selbst hinbekommt
+// und die deshalb nichts wert ist. Das Budget darf klein sein: die Ausgabe sind Namen,
+// ein Satz und Kennungen, gedacht wird viel mehr als geschrieben.
+test('Quellenthemen laufen auf dem starken Modell, mit knapper Ausgabe', () => {
+  assert.equal(TASK_TABLE.quellenthemen.modell, 'stark')
+  assert.equal(TASK_TABLE.quellenthemen.stream, false)
+  assert.ok(TASK_TABLE.quellenthemen.maxTokens >= 4000, 'zu knapp fuer Denken plus Antwort')
+  assert.ok(TASK_TABLE.quellenthemen.maxTokens < TASK_TABLE.erweiterungen.maxTokens)
+})
+
+test('QUELLENTHEMEN_SCHEMA verlangt Name, Begruendung und Kennungen — und verbietet Zusatzfelder', () => {
+  const gruppe = QUELLENTHEMEN_SCHEMA.properties.gruppen.items
+  assert.deepEqual(gruppe.required.slice().sort(), ['name', 'quellenIds', 'warum'])
+  assert.equal(gruppe.additionalProperties, false)
+  assert.equal(QUELLENTHEMEN_SCHEMA.additionalProperties, false)
+  assert.deepEqual(QUELLENTHEMEN_SCHEMA.required, ['gruppen'])
+  // Die Beschreibungen tragen die eigentliche Weisung: keine Formatrubrik, keine
+  // erfundene Kennung. Ohne sie waere das Schema nur eine Form.
+  assert.match(gruppe.properties.name.description, /nie die Form|Restrubrik/)
+  assert.match(gruppe.properties.quellenIds.description, /erfinden/)
+})
+
 test('Erweiterungen laufen auf dem starken Modell', () => {
   assert.equal(TASK_TABLE.erweiterungen.modell, 'stark')
   assert.equal(TASK_TABLE.erweiterungen.stream, false)
