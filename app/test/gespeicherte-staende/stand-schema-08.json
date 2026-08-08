@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 8,
+  "docs": [
+    {
+      "id": "d-alt-hausarbeit",
+      "title": "Hausarbeit Rousseau",
+      "body": "<p>Rousseau denkt den Gesellschaftsvertrag nicht als Vertrag zwischen Herrschern und Beherrschten, sondern als Vertrag der Beherrschten untereinander.</p><p>Dieser Unterschied ist durchaus folgenreich, denn er verlegt die Quelle der Legitimitaet vom Amt in die Zustimmung.</p>",
+      "updated": 1735689600000,
+      "projectId": "p-uni",
+      "coach": [
+        { "id": "c-alt-1", "text": "Der zweite Absatz behauptet mehr, als er belegt." }
+      ],
+      "lane": [
+        { "id": "l-alt-1", "text": "„durchaus“ traegt hier nichts.", "from": 12, "to": 20 }
+      ],
+      "structure": [
+        { "id": "s-alt-1", "title": "Der Vertrag der Beherrschten", "note": "Kern des Abschnitts" }
+      ],
+      "narrative": []
+    },
+    {
+      "id": "d-alt-notizen",
+      "title": "",
+      "body": "<p>Notizen aus dem Seminar vom Dienstag. Noch ungeordnet.</p>",
+      "updated": 1735776000000
+    }
+  ],
+  "active": "d-alt-hausarbeit",
+  "projects": [
+    {
+      "id": "p-uni",
+      "name": "Uni",
+      "created": 1735603200000,
+      "material": [
+        { "id": "m-alt-1", "kind": "Zitat", "text": "„L'homme est ne libre, et partout il est dans les fers.“", "x": 24, "y": 40 }
+      ]
+    }
+  ],
+  "activeProject": "p-uni",
+  "settings": {
+    "theme": "dark",
+    "spellcheck": true,
+    "showWords": false,
+    "structWidth": 9999,
+    "accent": "neon"
+  }
+}

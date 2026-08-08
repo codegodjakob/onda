@@ -1,0 +1,151 @@
+{
+  "schemaVersion": 10,
+  "docs": [
+    {
+      "id": "d-zehn-essay",
+      "title": "Aufmerksamkeit als Bedingung",
+      "body": "<p>Wer ueber Aufmerksamkeit schreibt, schreibt ueber eine Bedingung, nicht ueber eine Eigenschaft.</p><p>Sie wird gestaltet, bevor sie geleistet wird.</p>",
+      "updated": 1743465600000,
+      "projectId": "p-essay",
+      "coach": [
+        {
+          "id": "c-zehn-1",
+          "text": "Der Schluss nimmt den Anfang nicht auf."
+        }
+      ],
+      "lane": [
+        {
+          "id": "l-zehn-1",
+          "kind": "form",
+          "text": "Zwei Hauptsaetze hintereinander wirken abgehackt.",
+          "from": 4,
+          "to": 33
+        },
+        {
+          "id": "l-zehn-2",
+          "text": "Ohne kind-Feld — Altbestand aus der Zeit vor den Anmerkungsarten.",
+          "from": 40,
+          "to": 60
+        }
+      ],
+      "structure": [
+        {
+          "id": "s-zehn-1",
+          "title": "Bedingung statt Eigenschaft",
+          "note": ""
+        }
+      ],
+      "narrative": [],
+      "provenance": {
+        "actor": "user",
+        "action": "document-create",
+        "createdAt": 1743465600000
+      }
+    },
+    {
+      "id": "d-zehn-beispiel",
+      "title": "Calm Technology",
+      "body": "<p>Calm Technology beschreibt Technik, die in der Peripherie bleibt und Aufmerksamkeit nur beansprucht, wenn sie wirklich gebraucht wird.</p><h2>Warum es wichtig ist</h2><p>Ständige Benachrichtigungen fragmentieren die Aufmerksamkeit und zerreißen den Denkfluss. Der eigentliche Schaden ist nicht die einzelne Meldung, sondern die Summe der kleinen Unterbrechungen über den Tag.</p><p>Weiser und Brown beschrieben schon 1996, wie Technik zwischen Zentrum und Peripherie der Aufmerksamkeit wechseln kann. Eine gute Statusanzeige informiert, ohne sich in den Vordergrund zu drängen.</p><h2>Was das fürs Schreiben heißt</h2><p>Für Schreibsoftware bedeutet das: Werkzeuge erscheinen im Kontext, Hinweise sammeln sich leise, nichts drängt sich in den Fluss.</p><p>Am Ende ist ruhige Technik keine Frage des Verzichts, sondern der Haltung: volle Kraft, leise Präsentation.</p>",
+      "updated": 1743379200000,
+      "projectId": "p-example",
+      "coach": [],
+      "lane": []
+    }
+  ],
+  "active": "d-zehn-essay",
+  "projects": [
+    {
+      "id": "p-essay",
+      "name": "Essay Aufmerksamkeit",
+      "created": 1743292800000,
+      "material": [
+        {
+          "id": "m-zehn-1",
+          "kind": "Notiz",
+          "text": "Weiser & Brown 1996 als Ausgangspunkt.",
+          "x": 30,
+          "y": 50
+        }
+      ],
+      "sources": [
+        {
+          "id": "q-zehn-1",
+          "type": "pdf",
+          "title": "Weiser & Brown (1996)",
+          "reference": "project://essay/weiser-brown.pdf",
+          "status": "active",
+          "locators": [
+            {
+              "id": "lok-zehn-1",
+              "kind": "page",
+              "value": "3"
+            }
+          ],
+          "claim": "Technik kann zwischen Zentrum und Peripherie der Aufmerksamkeit wechseln.",
+          "original": "Technology can move between the center and the periphery of attention."
+        }
+      ]
+    },
+    {
+      "id": "p-example",
+      "name": "Beispiel: Calm Technology",
+      "created": 1743292800000,
+      "example": true,
+      "material": []
+    }
+  ],
+  "activeProject": "p-essay",
+  "settings": {
+    "theme": "light",
+    "spellcheck": false,
+    "showWords": true,
+    "structWidth": 620,
+    "accent": "clay",
+    "sidebarCollapsed": true,
+    "exampleVersion": 9,
+    "exampleSeeded": true
+  },
+  "memoryStore": {
+    "schemaVersion": 1,
+    "events": [
+      {
+        "id": "ev-zehn-1",
+        "kind": "note",
+        "at": 1743465600000,
+        "sensitivity": "normal",
+        "text": "Jakob arbeitet lieber am Morgen.",
+        "provenance": {
+          "actor": "user"
+        }
+      }
+    ],
+    "entries": [
+      {
+        "id": "me-zehn-1",
+        "level": "project",
+        "type": "praeferenz",
+        "content": "Kurze Saetze bevorzugt.",
+        "createdAt": 1743465600000,
+        "status": "active",
+        "sensitivity": "normal",
+        "deletionRule": "on-request",
+        "scope": {
+          "projectId": "p-essay"
+        },
+        "provenance": {
+          "actor": "user",
+          "at": 1743465600000
+        }
+      }
+    ],
+    "consents": [
+      {
+        "id": "cons-zehn-1",
+        "scope": "project",
+        "projectId": "p-essay",
+        "granted": true,
+        "at": 1743465600000
+      }
+    ]
+  }
+}
