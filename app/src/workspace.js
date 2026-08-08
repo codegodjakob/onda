@@ -9,7 +9,7 @@ import {
   replaceAnchoredTexts,
   replaceFindingTarget,
 } from './block-identity.js'
-import { decideFinding, ensureProjectUnderstanding, ensureReasoningModel, getFindingQueue, isIntegrityCategory, istInterviewOffen, loeseSchutz, markiereEntwurfVersucht, markiereGeschuetzt, mergeVerstaendnis } from './reasoning-model.mjs'
+import { decideFinding, ensureProjectUnderstanding, ensureReasoningModel, getFindingQueue, isIntegrityCategory, istInterviewOffen, istRisikoAnnahme, loeseSchutz, markiereEntwurfVersucht, markiereGeschuetzt, mergeVerstaendnis } from './reasoning-model.mjs'
 import {
   appendThreadMessage,
   completeEditingFinding,
@@ -119,10 +119,8 @@ import { createLanguageUi } from './language-ui.mjs'
 import { analyzeArgumentImpact } from './argument-graph.mjs'
 import { createAuditUi } from './audit-ui.mjs'
 import {
-  annotationSignature,
   annotationSummary,
   createAnnotationController,
-  createSuppressionStore,
 } from './annotation-controller.mjs'
 import { renderAnnotation } from './annotation-components.mjs'
 import { ANNOTATION_DEFINITIONS, resolveAnnotationPresentation } from './annotation-contract.mjs'
@@ -439,18 +437,6 @@ function scrollThreadToLatest(messages) {
 function activeWorkspace() {
   const doc = ctx?.activeDoc()
   return doc ? ensureWorkspaceState(doc) : null
-}
-
-function suppressionStoreFor(doc = ctx?.activeDoc(), workspace = activeWorkspace()) {
-  if (!ctx?.state || !doc || !workspace) return createSuppressionStore()
-  if (!ctx.state.memoryStore || typeof ctx.state.memoryStore !== 'object') ctx.state.memoryStore = {}
-  if (!Array.isArray(ctx.state.memoryStore.annotationSuppressions)) {
-    ctx.state.memoryStore.annotationSuppressions = []
-  }
-  return createSuppressionStore({
-    documentRecords: workspace.annotationSuppressions,
-    personalRecords: ctx.state.memoryStore.annotationSuppressions,
-  })
 }
 
 // Das offene Dokument bestimmt sein Projekt — nicht ctx.activeProjectObj().
@@ -3097,7 +3083,6 @@ function visiblePassageFindingRecords(doc, blocks) {
   // Anmerkungen als "schon gezeigt" vermerken, die niemand gesehen hat.
   if (workspace?.quietAnnotations) return []
 
-  const suppressionStore = suppressionStoreFor(doc, workspace)
   const records = []
   for (const finding of doc.findings.filter(candidate => candidate?.status === 'open')) {
     // Hier stand ein Filter nach Arbeitsmodus: im Modus "Text" blieben die fuenf
@@ -3109,7 +3094,12 @@ function visiblePassageFindingRecords(doc, blocks) {
     // Es passt auch zum Grundsatz. Wer neben dir schreibt, fuehrt keine zwei getrennten
     // Listen; ihm faellt auf, was ihm auffaellt. Ob es eine Rechtschreibung ist oder
     // eine Nachfrage, entscheidet nicht, OB du es siehst.
-    if (suppressionStore.suppresses(annotationSignature(finding), doc.id)) continue
+    // Hier stand ein zweiter Filter: ein Unterdrueckungsspeicher hielt Hinweise
+    // zurueck, die man einmal "in diesem Text nicht mehr" oder "als persoenliche
+    // Praeferenz" verworfen hatte. Beides ist fort (Issue #38) — eine Anmerkung gilt
+    // einmal und wird nie zur Regel. Damit hatte der Speicher keinen Erzeuger mehr und
+    // filterte fuer immer gegen eine leere Liste.
+    //
     // Der Rhythmus folgt der Art, nicht dem Kanal (momente-model.mjs): eine
     // Formulierung darf sofort erscheinen, eine Strukturfrage erst beim Aufschauen.
     // Zurueckgehalten heisst nur zurueckgehalten -- der Hinweis bleibt bestehen und
@@ -3433,68 +3423,56 @@ function decideAndAdvance(finding, decision, { refresh = true, restoreFocus = tr
   return recorded
 }
 
+// Eine Anmerkung gilt fuer eine Stelle in einem Text, EINMAL (Jakob, 8.8.2026;
+// Issue #38). Hier stand bis dahin die Frage "Was soll Onda daraus lernen?" mit drei
+// Knoepfen, von denen zwei aus einer einzelnen Anmerkung eine Dauerregel machten
+// ("in diesem Text nicht mehr", "als persoenliche Praeferenz"). Das war ein
+// Kategorienfehler — und gefaehrlich obendrein: wer einmal stumm schaltete, bekam
+// spaeter einen echten Belegmangel nicht mehr zu sehen.
+//
+// Was sich je nach Anmerkung unterscheidet, ist nicht die REICHWEITE, sondern die
+// BEDEUTUNG des Verwerfens. Einen fehlenden Beleg zu verwerfen heisst, ein
+// wissenschaftliches Risiko anzunehmen — das wird benannt (Risiko-Tafel). Einen
+// Stilvorschlag zu verwerfen heisst: nein danke — das geschieht wortlos.
 function handleSuggestionReject(finding) {
   const workspace = activeWorkspace()
-  workspace.pendingRejectionFindingId = finding.id
-  ctx.scheduleSave()
-  refreshWorkspace()
+  if (!workspace) return
+  if (istRisikoAnnahme(finding)) {
+    workspace.riskConfirmationFindingId = finding.id
+    workspace.riskReason = ''
+    riskConfirmationFocusRequest = true
+    ctx.scheduleSave()
+    refreshWorkspace()
+    return
+  }
+  commitAnnotationRejection(finding)
 }
 
-function commitAnnotationRejection(finding, scope) {
+// Der eine Weg, auf dem eine Verwerfung festgeschrieben wird — aus der Anmerkung
+// heraus (wortlos) wie von der Risiko-Tafel (mit Begruendung).
+function commitAnnotationRejection(finding, reason = '') {
   const doc = ctx.activeDoc()
   const workspace = activeWorkspace()
   if (!doc || !workspace || finding.status !== 'open') return
-  const record = suppressionStoreFor(doc, workspace).reject({
-    findingId: finding.id,
-    signature: annotationSignature(finding),
-    documentId: doc.id,
-    scope,
-    at: Date.now(),
-  })
-  workspace.pendingRejectionFindingId = null
-  const decision = decideAndAdvance(finding, { kind: 'reject', rejectionScope: scope }, { refresh: false, restoreFocus: false })
+  const decision = decideAndAdvance(
+    finding,
+    { kind: 'reject', reason },
+    { refresh: false, restoreFocus: false },
+  )
   workspace.lastAnnotationRejection = {
-    recordId: record.id,
     findingId: finding.id,
     decisionId: decision?.id || null,
-    scope,
   }
   // Auch das Verwerfen ist eine Entscheidung ueber eine Anmerkung. Befehl+Z nimmt sie
   // zurueck, solange nichts anderes dazwischenkam — frueher lag dafuer ein Link
   // "Entscheidung zuruecknehmen" in der Anmerkungsleiste.
   letzteAenderungWarAnmerkung = true
   refreshWorkspace()
-  announceAgentStatus(scope === 'once'
-    ? 'Diese Anmerkung wurde verworfen. Ähnliche Hinweise dürfen später wieder erscheinen.'
-    : scope === 'document'
-      ? 'Diese Art Hinweis wird in diesem Text nicht erneut vorgeschlagen.'
-      : 'Diese Entscheidung gilt als persönliche Präferenz, bis du sie zurücknimmst.')
-}
-
-function renderRejectionScope(finding) {
-  const workspace = activeWorkspace()
-  if (workspace?.pendingRejectionFindingId !== finding.id) return null
-  const panel = createNode('section', 'aura-rejection')
-  panel.setAttribute('aria-label', 'Folge des Verwerfens wählen')
-  panel.append(
-    createNode('h3', 'aura-rejection__title', 'Was soll Onda daraus lernen?'),
-    createNode('p', 'aura-rejection__intro', 'Wähle, ob nur diese einzelne Anmerkung verschwindet oder ob Onda ähnliche Hinweise künftig zurückhalten soll.'),
-  )
-  const choices = createNode('div', 'aura-rejection__choices')
-  const options = [
-    ['once', 'Nur diese Anmerkung', 'Der aktuelle Hinweis verschwindet. Ein ähnlicher Hinweis darf später wieder erscheinen.'],
-    ['document', 'In diesem Text nicht mehr', 'Onda hält denselben Hinweis in diesem Dokument künftig zurück. Andere Texte bleiben unberührt.'],
-    ['personal', 'Als persönliche Präferenz merken', 'Onda hält denselben Hinweis auch in anderen Projekten zurück, bis du diese Entscheidung widerrufst.'],
-  ]
-  options.forEach(([scope, title, description]) => {
-    const button = createNode('button', 'aura-rejection__choice')
-    button.type = 'button'
-    button.append(createNode('strong', '', title), createNode('span', '', description))
-    button.addEventListener('click', () => commitAnnotationRejection(finding, scope))
-    choices.append(button)
-  })
-  panel.append(choices)
-  return panel
+  // Die Ansage folgt der Bedeutung, nicht der Reichweite: ein angenommenes Risiko
+  // wird als solches benannt, alles andere bleibt eine schlichte Ablage.
+  announceAgentStatus(decision?.outcome === 'risk-accepted'
+    ? 'Das wissenschaftliche Risiko ist bewusst angenommen und mit deiner Begründung vermerkt.'
+    : 'Diese Anmerkung wurde verworfen. Ein ähnlicher Hinweis darf später wieder erscheinen.')
 }
 
 function undoLatestRejection() {
@@ -3502,7 +3480,6 @@ function undoLatestRejection() {
   const workspace = activeWorkspace()
   const latest = workspace?.lastAnnotationRejection
   if (!doc || !workspace || !latest) return false
-  suppressionStoreFor(doc, workspace).revoke(latest.recordId)
   const finding = doc.findings.find(candidate => candidate.id === latest.findingId)
   if (finding) {
     finding.status = 'open'
@@ -3624,15 +3601,18 @@ function renderIntegrityRiskConfirmation(finding) {
     createNode('strong', 'integrity-risk-title', 'Wissenschaftliches Risiko bewusst annehmen'),
     createNode('p', 'integrity-risk-consequence', findingConsequence(finding)),
   )
-  const label = createNode('label', 'integrity-risk-reason-label', 'Begründung (optional)')
+  // Die Begruendung ist PFLICHT (Jakob, 8.8.2026; Issue #38). Ein Pflichtfeld ist sonst
+  // ein schlechtes Mittel — es erzeugt "xxx". Hier traegt es, weil es einen freien
+  // Ausweg gibt: Abbrechen bleibt immer bedienbar und kostet nichts. Die Wahl lautet
+  // damit nicht "tippe irgendwas oder komm nicht weiter", sondern "benenne den Grund —
+  // oder nimm das Risiko eben nicht an". Ein wissenschaftliches Risiko anzunehmen, ohne
+  // sagen zu koennen warum, SOLL unbequem sein.
+  const label = createNode('label', 'integrity-risk-reason-label', 'Begründung')
   const reason = createNode('textarea', 'integrity-risk-reason')
   reason.rows = 2
   reason.value = workspace.riskReason || ''
+  reason.required = true
   reason.setAttribute('aria-label', 'Begründung für die bewusste Risikoannahme')
-  reason.addEventListener('input', () => {
-    workspace.riskReason = reason.value
-    persistWorkspace()
-  })
   label.append(reason)
 
   const actions = createNode('div', 'integrity-risk-actions')
@@ -3648,10 +3628,41 @@ function renderIntegrityRiskConfirmation(finding) {
   const confirm = createNode('button', 'integrity-risk-confirm', 'Wissenschaftliches Risiko bewusst annehmen')
   confirm.type = 'button'
   confirm.addEventListener('click', () => {
-    decideAndAdvance(finding, { kind: 'reject', reason: workspace.riskReason.trim() })
+    // Doppelt gesichert: der Knopf ist ohnehin gesperrt, aber ein Klick per Tastatur
+    // oder aus einem Vorlesegeraet darf keine leere Begruendung durchlassen.
+    const begruendung = String(workspace.riskReason || '').trim()
+    if (!begruendung) return
+    workspace.riskConfirmationFindingId = null
+    workspace.riskReason = ''
+    commitAnnotationRejection(finding, begruendung)
   })
+
+  // Leerzeichen sind keine Begruendung — sonst waere die Pflicht mit der Leertaste
+  // umgangen. Der Zustand wird bei jedem Tastendruck neu gesetzt, ohne Neuzeichnen:
+  // ein Rerender waere hier ein Fokusraub mitten im Satz.
+  const pflegeSperre = () => {
+    confirm.disabled = !String(workspace.riskReason || '').trim()
+  }
+  reason.addEventListener('input', () => {
+    workspace.riskReason = reason.value
+    pflegeSperre()
+    persistWorkspace()
+  })
+  pflegeSperre()
+
   actions.append(cancel, confirm)
-  confirmation.append(label, actions)
+  // Der Ausweg muss zu SEHEN sein, nicht bloss vorhanden. Wer nicht begruenden kann,
+  // soll erkennen, dass Abbrechen der vorgesehene Weg ist — sonst fuehlt sich das
+  // Pflichtfeld wie eine Sackgasse an, und genau daraus entsteht das "xxx".
+  confirmation.append(
+    label,
+    createNode(
+      'p',
+      'integrity-risk-hint',
+      'Ohne Begründung lässt sich das Risiko nicht annehmen. Brich ab, dann bleibt die Anmerkung offen.',
+    ),
+    actions,
+  )
 
   if (riskConfirmationFocusRequest) {
     riskConfirmationFocusRequest = false
@@ -3990,10 +4001,6 @@ function renderLocalFinding() {
   const isStale = resolution.placementKind === 'stale'
   if (resolution.migrated) ctx.scheduleSave()
 
-  if (workspace.pendingRejectionFindingId && workspace.pendingRejectionFindingId !== finding?.id) {
-    workspace.pendingRejectionFindingId = null
-  }
-
   if (localFeedbackError && localFeedbackError.findingId !== finding?.id) localFeedbackError = null
 
   // Vor jeder Entscheidung ueber die Verzierung: gilt die Anmerkung dem ganzen Absatz?
@@ -4030,8 +4037,6 @@ function renderLocalFinding() {
   if (ownVersion) surface.append(ownVersion)
   const riskConfirmation = renderIntegrityRiskConfirmation(finding)
   if (riskConfirmation) surface.append(riskConfirmation)
-  const rejectionScope = renderRejectionScope(finding)
-  if (rejectionScope) surface.append(rejectionScope)
   if (localFeedbackError?.findingId === finding.id) {
     const error = createNode('p', 'local-finding-error', localFeedbackError.message)
     error.setAttribute('role', 'status')
