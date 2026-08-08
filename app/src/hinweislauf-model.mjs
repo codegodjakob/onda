@@ -2,7 +2,7 @@
 // PUR, node-testbar, kein DOM, kein ctx. workspace.js (fuehreHinweislaufAus) orchestriert nur
 // noch: Dokument/Editor lesen, diese Funktionen aufrufen, runTask + Persistenz auslösen.
 import { dedupeHinweise, findeAnker } from './anchor-verify.mjs'
-import { blockFuerAnkerIndex, fasseEntscheidungenZusammen, fasseOffeneHinweiseZusammen, hinweisZuFinding } from './agent-findings.mjs'
+import { blockFuerAnkerIndex, fasseEntscheidungenZusammen, fasseOffeneHinweiseZusammen, hinweisZuFinding, loeseVerschiebungAuf } from './agent-findings.mjs'
 import { baueHinweisKontext } from './hinweis-kontext.mjs'
 import { darfVorgeschlagenWerden, stilmittel } from './stilmittel.mjs'
 import { isAnnotationKindAllowed } from './annotation-contract.mjs'
@@ -87,6 +87,16 @@ export function verarbeiteHinweisantwort({
     // Integritaetsfrage, sein Verwerfen aber trotzdem ein angenommenes Risiko.
     const finding = hinweisZuFinding(hinweis, ankerErgebnis, blockId, docText, jetzt, textart)
     if (!finding) { verworfen += 1; return }
+    // Ein Ortswechsel hat zwei Enden. Das erste (woher) steht schon im blockId; das
+    // zweite (wohin) muss aus dem Zielzitat aufgeloest werden, sonst scheitert die
+    // Ausfuehrung spaeter mit 'missing-target-block' — und die Autorin saehe eine
+    // Anmerkung, deren Knopf nichts tut. Kein Ziel: verwerfen wie einen nicht
+    // auffindbaren Anker. Lieber ein Hinweis weniger als einer, der ins Leere zeigt.
+    if (finding.anmerkungsart === 'verschieben') {
+      const ziel = loeseVerschiebungAuf(hinweis?.verschiebung, docText, blocks, blockId)
+      if (!ziel) { verworfen += 1; return }
+      finding.move = ziel
+    }
     // Hoechstens EIN „traegt" je Durchgang. Die Stufe entscheidet, was zuerst auf den
     // Schirm kommt (reasoning-model.mjs, vergleicheHinweise) — und eine Stufe, die
     // jeder beanspruchen darf, ordnet nichts mehr. Der Prompt bittet darum; ein Prompt

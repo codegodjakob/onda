@@ -54,10 +54,16 @@ test('Schemata verbieten Zusatzfelder und verlangen Pflichtfelder', () => {
   assert.deepEqual(hinweis.properties.kategorie.enum,
     ['fakt', 'quelle', 'methode', 'logik', 'struktur', 'wirkung', 'erklaerung', 'sprache'])
   assert.deepEqual(hinweis.required,
-    ['kategorie', 'anmerkungsart', 'anker', 'beobachtung', 'relevanz', 'folge', 'muster', 'vorschlagsart', 'stilmittelId', 'vorschlag', 'istGrundursache', 'integritaet', 'gewinn'])
+    ['kategorie', 'anmerkungsart', 'anker', 'beobachtung', 'relevanz', 'folge', 'muster', 'vorschlagsart', 'stilmittelId', 'vorschlag', 'istGrundursache', 'integritaet', 'verschiebung', 'gewinn'])
   // gewinn ist seit dem 8.8.2026 Pflicht. Ohne Pflichtfeld KANN das Modell es nicht
   // einmal freiwillig nachreichen — die Feldliste ist geschlossen.
   assert.deepEqual(hinweis.properties.gewinn.enum, ['traegt', 'schaerft', 'glaettet'])
+  // verschiebung ebenso: das ZIEL eines Ortswechsels. Es ist Pflicht und darf null
+  // sein — Pflicht, weil ein optionales Feld in einer geschlossenen Liste nie kaeme;
+  // null, weil 28 der 29 Arten nichts verschieben.
+  assert.deepEqual(hinweis.properties.verschiebung.anyOf[0].required, ['zielAnker', 'lage'])
+  assert.deepEqual(hinweis.properties.verschiebung.anyOf[0].properties.lage.enum, ['davor', 'danach'])
+  assert.deepEqual(hinweis.properties.verschiebung.anyOf[1], { type: 'null' })
   assert.deepEqual(hinweis.properties.vorschlagsart.enum, ['keiner', 'formulierung', 'stilmittel'])
   assert.ok(hinweis.properties.stilmittelId.anyOf[0].enum.includes('alliteration'))
   assert.deepEqual(hinweis.properties.stilmittelId.anyOf[1], { type: 'null' })

@@ -19,7 +19,7 @@ import {
   markierungsGestalt,
 } from '../src/annotation-contract.mjs'
 
-const GESTEN = new Set(['wort', 'satz', 'absatz', 'keine'])
+const GESTEN = new Set(['wort', 'satz', 'absatz', 'block', 'keine'])
 
 test('Jede der 29 Arten bekommt genau eine gueltige Geste', () => {
   assert.equal(ALL_ANNOTATION_KINDS.length, 29, 'Die Zahl der Arten hat sich geaendert — dann auch diese Pruefung ansehen')
@@ -39,6 +39,29 @@ test('Die Geste folgt der Reichweite, nicht der Gestalt der Karte', () => {
   assert.equal(markierungsGestalt('satzstil'), 'satz')
   assert.equal(markierungsGestalt('absatzstil'), 'absatz')
   assert.equal(markierungsGestalt('ton'), 'absatz', 'Abschnitt gilt dem Absatz als Ganzem')
+})
+
+test('Der Ortswechsel bekommt eine eigene Geste — er ist der einzige mit zwei Enden', () => {
+  // „Der Ortswechsel hat ein sichtbares Wohin. Ein ‚das gehoert woanders hin' ohne Ziel
+  // ist eine halbe Aussage." (anmerkungs-varianten.html, 8.8.2026)
+  //
+  // 'verschieben' hat dieselbe Reichweite wie 'absatzstil' — Absatz. Trotzdem darf es
+  // nicht dieselbe Geste bekommen: die Klammer sagt „dieser Absatz ist gemeint" und
+  // kann kein Ziel zeigen. Genau daran ist zu erkennen, ob die Regel noch greift.
+  assert.equal(ANNOTATION_DEFINITIONS.verschieben.scope, ANNOTATION_DEFINITIONS.absatzstil.scope)
+  assert.equal(markierungsGestalt('verschieben'), 'block')
+  assert.notEqual(markierungsGestalt('verschieben'), markierungsGestalt('absatzstil'))
+
+  // Genau EINE Art traegt sie. Waeren es mehr, waere die Flaeche keine Aussage mehr.
+  const mitFlaeche = ALL_ANNOTATION_KINDS.filter(art => markierungsGestalt(art) === 'block')
+  assert.deepEqual(mitFlaeche, ['verschieben'])
+
+  // 'buendeln' und 'ordnen' verschieben ebenfalls (operation move-block), meinen aber
+  // Notizen. Die stehen nicht im Fliesstext — eine Flaeche um nichts waere eine
+  // Behauptung ueber den Text.
+  assert.equal(ANNOTATION_DEFINITIONS.buendeln.operation, ANNOTATION_DEFINITIONS.verschieben.operation)
+  assert.equal(markierungsGestalt('buendeln'), 'keine')
+  assert.equal(markierungsGestalt('ordnen'), 'keine')
 })
 
 test('Wo es keine einzelne Stelle gibt, entsteht auch keine Markierung', () => {

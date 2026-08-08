@@ -4,6 +4,7 @@
 
 import { istIntegritaetsfrage, istVonDerTextartAusgeschlossen } from './textart-regeln.mjs'
 import { normalizeAnnotationFinding } from './annotation-contract.mjs'
+import { findeAnker } from './anchor-verify.mjs'
 
 // Mapping abgeleitet aus dem bestehenden Code (reasoning-model.mjs):
 // INTEGRITY_CATEGORIES = fact/source/citation/method/logic; Passage-Findings mit
@@ -65,6 +66,49 @@ export function blockFuerAnkerIndex(blocks, index) {
     offset += text.length + TRENNER.length
   }
   return null
+}
+
+// Die ersten Worte eines Bausteins — als Aufschrift fuer den Zielplatz. Nicht der
+// ganze Absatz: die Marke soll den Ort NENNEN, nicht ihn noch einmal erzaehlen.
+function anfangsworte(text, anzahl = 7) {
+  const worte = String(text || '').trim().split(/\s+/).filter(Boolean)
+  if (!worte.length) return ''
+  const anfang = worte.slice(0, anzahl).join(' ')
+  return worte.length > anzahl ? `${anfang} …` : anfang
+}
+
+// Loest das ZIEL eines Ortswechsels auf: aus dem woertlichen Zitat des Modells wird
+// die Baustein-Kennung, die annotation-operations.mjs (planMoveBlock) tatsaechlich
+// braucht. Ohne sie scheitert jedes „Verschieben" mit 'missing-target-block' — die
+// Anmerkungsart war bis hierher also gar nicht ausfuehrbar, ausser in den Beispieldaten.
+//
+// Fail-closed wie bei findeAnker: kein auffindbares Ziel, ein Ziel im Quellbaustein
+// selbst oder eine unbekannte Lage geben null zurueck. Der Aufrufer verwirft den
+// Hinweis dann ganz. Eine Verschiebung ohne Ziel ist keine halbe Verschiebung,
+// sondern eine Aufforderung, die niemand befolgen kann.
+export function loeseVerschiebungAuf(verschiebung, docText, blocks, quellBlockId) {
+  const zielAnker = String(verschiebung?.zielAnker || '')
+  const lage = String(verschiebung?.lage || '')
+  if (lage !== 'davor' && lage !== 'danach') return null
+
+  const treffer = findeAnker(docText, zielAnker)
+  if (!treffer.gefunden) return null
+  const zielBlockId = blockFuerAnkerIndex(blocks, treffer.index)
+  if (!zielBlockId) return null
+  const quelle = String(quellBlockId || '')
+  if (!quelle || zielBlockId === quelle) return null
+
+  const zielBlock = (blocks || []).find(block => block?.id === zielBlockId)
+  const anfang = anfangsworte(zielBlock?.text)
+  return {
+    fromBlockId: quelle,
+    toBlockId: zielBlockId,
+    position: lage === 'davor' ? 'before' : 'after',
+    // Die Aufschrift entsteht HIER aus dem Dokument, nicht aus einem weiteren
+    // Modellfeld: der Ort steht schon im Text, ihn noch einmal schreiben zu lassen
+    // kostet Worte und kann abweichen.
+    to: anfang ? `${lage === 'davor' ? 'Vor' : 'Nach'}: ${anfang}` : '',
+  }
 }
 
 // Fix-Runde 2, Finding 3 (Important): target (und claim) sind jetzt der ECHTE Wortlaut aus dem

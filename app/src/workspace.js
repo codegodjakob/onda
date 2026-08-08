@@ -180,6 +180,7 @@ let localDecoratedSpacing = 0
 let localDecoratedAbsatzweit = false
 let localDecoratedGestalt = 'keine'
 let localDecoratedZiel = ''
+let localDecoratedOrtswechsel = ''
 let localFeedbackError = null
 let localPositionFrame = null
 let localSummaryFocusRequest = null
@@ -341,14 +342,43 @@ function localFindingPlugin() {
 
         const local = []
         transaction.doc.forEach((node, offset) => {
+          // Das ZWEITE Ende eines Ortswechsels. Ein „das gehoert woanders hin" ohne
+          // sichtbares Wohin ist eine halbe Aussage: man liest den Vorschlag und
+          // sucht dann selbst die Stelle. Die Marke oeffnet sich genau dort, wo der
+          // Absatz landen wuerde — davor oder danach, wie der Plan es vorsieht.
+          const ortswechsel = findingState.ortswechsel
+          if (ortswechsel && node.attrs.blockId === ortswechsel.blockId) {
+            const davor = ortswechsel.lage === 'before'
+            local.push(Decoration.widget(davor ? offset : offset + node.nodeSize, () => {
+              const marke = document.createElement('div')
+              marke.className = 'onda-zielmarke'
+              marke.contentEditable = 'false'
+              const wort = document.createElement('span')
+              wort.className = 'onda-zielmarke__wort'
+              wort.textContent = 'hierher'
+              const linie = document.createElement('span')
+              linie.className = 'onda-zielmarke__linie'
+              marke.append(wort, linie)
+              if (ortswechsel.aufschrift) marke.title = ortswechsel.aufschrift
+              return marke
+            }, {
+              key: `onda-zielmarke:${ortswechsel.blockId}:${ortswechsel.lage}`,
+              side: davor ? -1 : 1,
+              ignoreSelection: true,
+            }))
+          }
           if (node.attrs.blockId === findingState.blockId) {
             // Gilt die Anmerkung dem ganzen Absatz oder einer Stelle in ihm? Nur im
             // ersten Fall wird der Absatz selbst angedeutet — sonst zeigt der Punkt am
             // Rand auf ihn, obwohl nur ein Wort gemeint ist.
-            const klassen = findingState.absatzweit
-              ? 'has-local-finding hat-absatzweite-anmerkung'
-              : 'has-local-finding'
-            local.push(Decoration.node(offset, offset + node.nodeSize, { class: klassen }))
+            const klassen = ['has-local-finding']
+            if (findingState.absatzweit) klassen.push('hat-absatzweite-anmerkung')
+            // Der Ortswechsel bekommt eine ruhige Flaeche statt der Klammer: die
+            // Klammer sagt „dieser Absatz ist gemeint", die Flaeche sagt zusaetzlich
+            // „dieser Absatz ist beweglich" — und sie hat ein Gegenstueck an der
+            // Zielmarke. Zwei Enden, zweimal dieselbe Sprache.
+            if (findingState.gestalt === 'block') klassen.push('hat-ortswechsel')
+            local.push(Decoration.node(offset, offset + node.nodeSize, { class: klassen.join(' ') }))
 
             // Die Geste an den WOERTERN. Bis zum 8.8.2026 gab es sie nicht: der Absatz
             // trug einen Punkt im Rand, die Stelle selbst blieb unberuehrt — man musste
@@ -394,18 +424,35 @@ function localFindingPlugin() {
 // Welche Gestalt traegt die Markierung im Text? Die Antwort steht seit jeher im
 // Vertrag (annotation-contract.mjs, markierungsGestalt): jede Art hat einen scope,
 // und aus ihm folgt die Geste — Kontur ums Wort, Strich unter den Satz, Klammer am
-// Absatz. 'keine' heisst: es gibt keine einzelne Stelle (der ganze Text, der Titel,
-// eine Notiz), dann bleibt es beim Punkt im Rand.
-function istAbsatzweit(finding) {
-  return gestaltFuerFinding(finding) === 'absatz'
-}
-
+// Absatz, Flaeche mit Zielmarke beim Ortswechsel. 'keine' heisst: es gibt keine
+// einzelne Stelle (der ganze Text, der Titel, eine Notiz), dann bleibt es beim
+// Punkt im Rand.
+//
 // Die Gestalt und die Stelle gehoeren zur gerade gezeigten Anmerkung, nicht zum
 // Aufruf. Sie hier zu merken statt sie durch vier Aufrufstellen zu reichen, haelt die
 // Aufrufe schlank — und keine von ihnen kennt die Anmerkung ueberhaupt.
 let aktuelleAnmerkungIstAbsatzweit = false
 let aktuelleAnmerkungGestalt = 'keine'
 let aktuelleAnmerkungZiel = ''
+let aktuellesZiel = null
+
+// Das zweite Ende eines Ortswechsels, aufgeloest gegen die Bausteine, die JETZT im
+// Dokument stehen. move.toBlockId entstand beim Hinweislauf (agent-findings.mjs,
+// loeseVerschiebungAuf); seither kann der Absatz geloescht oder selbst verschoben
+// worden sein. Ein Ziel, das es nicht mehr gibt, ergibt keine Marke — und ein Ziel,
+// das der Quellbaustein selbst ist, auch nicht: die Marke saesse dann am eigenen
+// Absatz und behauptete eine Bewegung, die keine ist.
+function ortswechselZiel(finding, blocks, quellBlockId) {
+  const move = finding?.move
+  const zielId = String(move?.toBlockId || '')
+  if (!zielId || zielId === quellBlockId) return null
+  if (!(blocks || []).some(block => block?.id === zielId)) return null
+  return {
+    blockId: zielId,
+    lage: move?.position === 'before' ? 'before' : 'after',
+    aufschrift: String(move?.to || ''),
+  }
+}
 
 // Wo genau im Baustein steht die Stelle? Gesucht wird im ZUSAMMENGESETZTEN Text und
 // dann zurueckgerechnet — nicht mit textContent.indexOf auf dem Absatz.
@@ -449,24 +496,31 @@ function setLocalFindingDecoration(blockId, spacing = 0, force = false) {
   const absatzweit = Boolean(blockId) && aktuelleAnmerkungIstAbsatzweit
   const gestalt = blockId ? aktuelleAnmerkungGestalt : 'keine'
   const ziel = blockId ? aktuelleAnmerkungZiel : ''
+  const ortswechsel = blockId && gestalt === 'block' ? aktuellesZiel : null
+  const ortswechselSchluessel = ortswechsel
+    ? `${ortswechsel.blockId}|${ortswechsel.lage}|${ortswechsel.aufschrift}`
+    : ''
   const nextSpacing = blockId ? Math.max(0, Math.ceil(spacing)) : 0
   if (!force
     && localDecoratedBlockId === blockId
     && localDecoratedSpacing === nextSpacing
     && localDecoratedAbsatzweit === absatzweit
     && localDecoratedGestalt === gestalt
-    && localDecoratedZiel === ziel) return false
+    && localDecoratedZiel === ziel
+    && localDecoratedOrtswechsel === ortswechselSchluessel) return false
   localDecoratedBlockId = blockId
   localDecoratedSpacing = nextSpacing
   localDecoratedAbsatzweit = absatzweit
   localDecoratedGestalt = gestalt
   localDecoratedZiel = ziel
+  localDecoratedOrtswechsel = ortswechselSchluessel
   ctx.editor.view.dispatch(ctx.editor.state.tr.setMeta(localFindingKey, {
     blockId,
     spacing: nextSpacing,
     absatzweit,
     gestalt,
     ziel,
+    ortswechsel,
   }))
   return true
 }
@@ -4178,6 +4232,11 @@ function renderLocalFinding() {
   aktuelleAnmerkungGestalt = finding ? gestaltFuerFinding(finding) : 'keine'
   aktuelleAnmerkungIstAbsatzweit = aktuelleAnmerkungGestalt === 'absatz'
   aktuelleAnmerkungZiel = String(finding?.target || '')
+  // Fail-closed wie ueberall: nur ein Ziel, das WIRKLICH ein anderer Baustein im
+  // aktuellen Dokument ist, wird zur Marke. Fehlt es oder zeigt es auf einen
+  // Baustein, den es nicht mehr gibt, entsteht keine — die Anmerkung bleibt lesbar,
+  // sie behauptet nur kein Wohin, das der Text nicht hergibt.
+  aktuellesZiel = ortswechselZiel(finding, blocks, blockId)
 
   if (
     localDecoratedDocId !== doc.id
@@ -5961,6 +6020,9 @@ export function initWorkspace(context) {
     localDecoratedBlockId = null
     localDecoratedSpacing = 0
     localDecoratedAbsatzweit = false
+    localDecoratedGestalt = 'keine'
+    localDecoratedZiel = ''
+    localDecoratedOrtswechsel = ''
     localFeedbackError = null
     localPositionFrame = null
     localSummaryFocusRequest = null

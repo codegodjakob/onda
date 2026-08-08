@@ -30,6 +30,7 @@ export const ETAPPE_A_HINWEISE = Object.freeze({
       istGrundursache: true,
       integritaet: true,
       gewinn: 'traegt',
+      verschiebung: null,
     },
     {
       kategorie: 'quelle',
@@ -45,6 +46,7 @@ export const ETAPPE_A_HINWEISE = Object.freeze({
       istGrundursache: false,
       integritaet: true,
       gewinn: 'schaerft',
+      verschiebung: null,
     },
   ],
 })

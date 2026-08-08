@@ -94,6 +94,35 @@ export const HINWEISE_SCHEMA = Object.freeze({
           // („eine Gliederungsfrage reicht weiter als eine Wortwahl"), die Stufe ordnet
           // FAELLE — sie ist der Ort, an dem das Modell sagen darf, dass ausgerechnet
           // dieses eine Wort den Text traegt.
+          // WOHIN verschoben werden soll. Ohne diese Angabe ist „das gehoert woandershin"
+          // eine halbe Aussage — und mehr als das: die Operation move-block braucht eine
+          // Zielkennung und scheitert ohne sie mit 'missing-target-block'. Bis zum
+          // 8.8.2026 lieferte das Modell sie nicht; das Feld `move` wurde von renderSlot
+          // gelesen, aber nur von den BEISPIELDATEN gesetzt. Ein Verschieben-Hinweis aus
+          // einem echten Lauf war damit nicht ausfuehrbar.
+          //
+          // Das Modell kennt keine Bausteinkennungen, nur Text. Es nennt deshalb ein
+          // woertliches Zitat aus dem Ziel-Absatz — genauso wie beim anker —, und die
+          // Aufloesung zur Kennung geschieht im Programm (hinweislauf-model.mjs). Findet
+          // sich das Zitat nicht, wird der Hinweis verworfen statt geraten.
+          verschiebung: {
+            anyOf: [
+              {
+                type: 'object',
+                properties: {
+                  zielAnker: {
+                    type: 'string',
+                    description: 'Woertliches Minimal-Zitat aus dem Absatz, NEBEN den verschoben werden soll. Keine Paraphrase, und nicht aus dem Absatz, der verschoben wird.',
+                  },
+                  lage: { type: 'string', enum: ['davor', 'danach'] },
+                },
+                required: ['zielAnker', 'lage'],
+                additionalProperties: false,
+              },
+              { type: 'null' },
+            ],
+            description: 'Nur bei anmerkungsart "verschieben" gefuellt, sonst null.',
+          },
           gewinn: {
             type: 'string',
             enum: ['traegt', 'schaerft', 'glaettet'],
@@ -101,7 +130,7 @@ export const HINWEISE_SCHEMA = Object.freeze({
               + 'schaerft = die Aussage wird genauer. glaettet = es liest sich besser. Im Zweifel schaerft.',
           },
         },
-        required: ['kategorie', 'anmerkungsart', 'anker', 'beobachtung', 'relevanz', 'folge', 'muster', 'vorschlagsart', 'stilmittelId', 'vorschlag', 'istGrundursache', 'integritaet', 'gewinn'],
+        required: ['kategorie', 'anmerkungsart', 'anker', 'beobachtung', 'relevanz', 'folge', 'muster', 'vorschlagsart', 'stilmittelId', 'vorschlag', 'istGrundursache', 'integritaet', 'verschiebung', 'gewinn'],
         additionalProperties: false,
       },
     },

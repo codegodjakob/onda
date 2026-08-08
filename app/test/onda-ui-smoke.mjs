@@ -496,6 +496,7 @@ async function runShell(browser) {
   await assertBausteinHinzufuegen(page)
   await assertQuellenFensterEineHandschrift(page)
   await assertGesteZeigtAufDieStelle(page)
+  await assertOrtswechselZeigtSeinZiel(page)
   await assertEntscheidungOeffnetKeineKette(page)
   await assertWichtigstesZuerst(page)
   await assertRuhigeLage(page)
@@ -915,6 +916,124 @@ async function assertGesteZeigtAufDieStelle(page) {
     const doc = window.AIWT.state.docs.find(kandidat => kandidat.id === window.AIWT.state.active)
     doc.findings = []
     window.AIWT.__workspaceTestBridge.reinitialize()
+  })
+}
+
+// Der Ortswechsel ist die einzige Anmerkungsart mit ZWEI Enden: „das gehört woanders
+// hin" ist ohne ein sichtbares Wohin eine halbe Aussage. Bis zum 8.8.2026 zeigte der
+// Text nur das erste Ende — man las den Vorschlag und suchte die Zielstelle selbst.
+//
+// Geprüft wird beides und ihr Verhältnis: die Fläche am wandernden Absatz, die Marke
+// an der Zielstelle, und dass die Marke wirklich DORT sitzt und nicht am Absatz selbst.
+async function assertOrtswechselZeigtSeinZiel(page) {
+  await page.setViewportSize({ width: 1440, height: 900 })
+
+  const gesehen = await page.evaluate(async () => {
+    const doc = window.AIWT.state.docs.find(kandidat => kandidat.id === window.AIWT.state.active)
+    const vorrat = { findings: doc.findings, decisions: doc.decisions, coach: doc.coach, lane: doc.lane }
+    doc.findings = []
+    doc.decisions = []
+    doc.coach = []
+    doc.lane = []
+    const bausteine = window.AIWT.__blockIdentityTestBridge.getBlocks().filter(b => b.text.length > 40)
+    if (bausteine.length < 3) return { fehler: 'zu wenige Bausteine im Beispieltext' }
+    const quelle = bausteine[2]
+    const ziel = bausteine[0]
+
+    // Wo stehen die BUCHSTABEN vor der Markierung? Gemessen wird der Text, nicht der
+    // Kasten: die Fläche wächst absichtlich nach außen (negativer Außenabstand in der
+    // Größe ihrer Polsterung), der Kasten wird also breiter — der Satzspiegel aber
+    // darf sich um kein Pixel bewegen. „Dass da irgendwie dann nichts umspringt oder
+    // verdeckt ist" (Jakob, 8.8.2026). Ein Kastenmaß hätte hier falschen Alarm gegeben.
+    const messen = id => {
+      const knoten = document.querySelector(`#editor [data-block-id="${CSS.escape(id)}"]`)
+      const strecke = document.createRange()
+      strecke.selectNodeContents(knoten)
+      const kasten = strecke.getBoundingClientRect()
+      return { links: Math.round(kasten.left), breite: Math.round(kasten.width) }
+    }
+    const vorher = messen(quelle.id)
+
+    window.AIWT.__workspaceTestBridge.injectFinding({
+      id: 'ortswechsel-pruefung', status: 'open', placement: 'passage', blockId: quelle.id,
+      target: quelle.text.slice(0, 24), short: 'Beleg.', why: 'Beleg.', folge: 'Beleg.',
+      anmerkungsart: 'verschieben', kiKategorie: 'struktur', createdAt: -1,
+      move: { fromBlockId: quelle.id, toBlockId: ziel.id, position: 'before', to: 'Vor: Beleg' },
+    })
+    await new Promise(fertig => setTimeout(fertig, 900))
+
+    const quellKnoten = document.querySelector(`#editor [data-block-id="${CSS.escape(quelle.id)}"]`)
+    const zielKnoten = document.querySelector(`#editor [data-block-id="${CSS.escape(ziel.id)}"]`)
+    const marke = document.querySelector('#editor .onda-zielmarke')
+    const markeKasten = marke ? marke.getBoundingClientRect() : null
+
+    const ergebnis = {
+      flaeche: quellKnoten.classList.contains('hat-ortswechsel'),
+      klammer: quellKnoten.classList.contains('hat-absatzweite-anmerkung'),
+      markeText: marke ? marke.textContent.trim() : null,
+      markeHoehe: markeKasten ? Math.round(markeKasten.height) : 0,
+      // Sitzt sie über dem Ziel (position 'before') — und nicht am Quellabsatz?
+      ueberDemZiel: markeKasten
+        ? Math.round(markeKasten.bottom) <= Math.round(zielKnoten.getBoundingClientRect().top) + 2
+        : false,
+      abstandZurQuelle: markeKasten
+        ? Math.round(Math.abs(markeKasten.top - quellKnoten.getBoundingClientRect().top))
+        : 0,
+      nachher: messen(quelle.id),
+      vorher,
+      ueberlauf: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    }
+
+    window.__ortswechselVorrat = vorrat
+    return ergebnis
+  })
+
+  assert.equal(gesehen.fehler, undefined, gesehen.fehler)
+  assert.equal(gesehen.flaeche, true, 'Der wandernde Absatz trägt keine Fläche')
+  assert.equal(gesehen.klammer, false, 'Der Ortswechsel bekommt zusätzlich die Absatz-Klammer')
+  assert.equal(gesehen.markeText, 'hierher', `Die Zielmarke sagt „${gesehen.markeText}"`)
+  // Die Marke öffnet sich aus der Höhe 0 heraus. Bliebe sie dort, gäbe es sie im DOM,
+  // aber nicht auf dem Schirm — genau das Ende, das sie zeigen soll.
+  assert.ok(gesehen.markeHoehe >= 12, `Die Zielmarke ist nur ${gesehen.markeHoehe}px hoch`)
+  assert.equal(gesehen.ueberDemZiel, true, 'Die Zielmarke sitzt nicht an der Zielstelle')
+  assert.ok(gesehen.abstandZurQuelle > 40, 'Die Zielmarke klebt am Quellabsatz statt am Ziel')
+  // Und der Satzspiegel bleibt, wo er war: die Fläche wächst nach außen.
+  assert.equal(gesehen.nachher.links, gesehen.vorher.links, 'Der Text ist beim Markieren zur Seite gesprungen')
+  assert.equal(gesehen.nachher.breite, gesehen.vorher.breite, 'Der Text ist beim Markieren schmaler geworden')
+  assert.ok(gesehen.ueberlauf <= 1, `Die Fläche lässt die App ${gesehen.ueberlauf}px horizontal überlaufen`)
+
+  // „Ich werd's meistens im Vollbildschirm benutzen, aber wenn ich jetzt irgendwie 'n
+  // kleineres Bild hab […] son Drittel oder zwei Drittel des Bildschirms […] dass da
+  // irgendwie dann nichts umspringt oder verdeckt ist" (Jakob, 8.8.2026). Die Fläche
+  // wächst nach außen — genau dort, wo bei schmalem Fenster am wenigsten Platz ist.
+  for (const breite of [1280, 960, 640]) {
+    await page.setViewportSize({ width: breite, height: 900 })
+    await page.waitForTimeout(80)
+    const schmal = await page.evaluate(() => {
+      const marke = document.querySelector('#editor .onda-zielmarke')
+      const kasten = marke ? marke.getBoundingClientRect() : null
+      return {
+        markeDa: Boolean(marke),
+        markeHoehe: kasten ? Math.round(kasten.height) : 0,
+        markeLinks: kasten ? Math.round(kasten.left) : 0,
+        markeRechts: kasten ? Math.round(kasten.right) : 0,
+        ueberlauf: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      }
+    })
+    assert.equal(schmal.markeDa, true, `Bei ${breite}px fehlt die Zielmarke`)
+    assert.ok(schmal.markeHoehe >= 12, `Bei ${breite}px ist die Zielmarke nur ${schmal.markeHoehe}px hoch`)
+    assert.ok(schmal.markeLinks >= 0 && schmal.markeRechts <= breite,
+      `Bei ${breite}px liegt die Zielmarke außerhalb des Fensters (${schmal.markeLinks}–${schmal.markeRechts})`)
+    assert.ok(schmal.ueberlauf <= 1, `Bei ${breite}px läuft die App ${schmal.ueberlauf}px horizontal über`)
+  }
+
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.evaluate(async () => {
+    const doc = window.AIWT.state.docs.find(kandidat => kandidat.id === window.AIWT.state.active)
+    Object.assign(doc, window.__ortswechselVorrat)
+    window.AIWT.flushSave()
+    window.AIWT.__workspaceTestBridge.reinitialize()
+    await new Promise(fertig => setTimeout(fertig, 200))
   })
 }
 

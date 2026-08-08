@@ -21,6 +21,7 @@ const GUELTIGER_HINWEIS = {
     istGrundursache: true,
     integritaet: true,
     gewinn: 'schaerft',
+    verschiebung: null,
   }],
 }
 

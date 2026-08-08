@@ -40,7 +40,12 @@ test('Ein Absatz wird nur angedeutet, wenn die Anmerkung ihm als Ganzem gilt', a
   // „blocks sollen nur angedeutet werden […] wenn ich feedback zu einem ganzen block
   // paragraphen bekomme."
   assert.match(css, /\.hat-absatzweite-anmerkung/, 'Die Andeutung für absatzweite Anmerkungen fehlt')
-  assert.match(workspace, /function istAbsatzweit\(/)
+  // Die Bedingung selbst: Die Klasse entsteht NUR, wenn die Anmerkung dem ganzen
+  // Absatz gilt. Geprüft wird die Verzweigung, nicht mehr der Name einer Hilfsfunktion
+  // — die gab es bis zum 8.8.2026, ihre einzige Zeile steht jetzt an der Stelle, an
+  // der die Gestalt ohnehin ermittelt wird (eine Ermittlung statt zweier).
+  assert.match(workspace, /if \(findingState\.absatzweit\) klassen\.push\('hat-absatzweite-anmerkung'\)/)
+  assert.match(workspace, /aktuelleAnmerkungIstAbsatzweit = aktuelleAnmerkungGestalt === 'absatz'/)
 
   // Welche Reichweiten den ganzen Absatz meinen, stand bis zum 8.8.2026 als eigene
   // Menge in workspace.js. Sie ist entfallen: die Zuordnung Reichweite → Geste steht

@@ -158,6 +158,10 @@ export function resolveAnnotationPresentation(finding) {
 //   wort    — geschlossene Kontur um die Wendung
 //   satz    — ein Strich darunter, der Satzlaenge folgend
 //   absatz  — eine Klammer am linken Rand, ueber die volle Hoehe
+//   block   — eine ruhige Flaeche um den ganzen Absatz UND eine Marke an der
+//             Zielstelle. Nur der Ortswechsel bekommt sie, denn nur er hat zwei
+//             Enden: „das gehoert woanders hin" ohne sichtbares Wohin ist eine
+//             halbe Aussage. Die Klammer koennte das Ziel nicht zeigen.
 //   keine   — es gibt keine einzelne Stelle: 'Text' meint den ganzen Text, 'Titel'
 //             die Ueberschrift, 'Notiz'/'Notizen' stehen gar nicht im Fliesstext.
 //             Fuer sie bleibt es beim Punkt im Rand; eine erfundene Strecke waere
@@ -174,7 +178,14 @@ const GESTE_JE_REICHWEITE = Object.freeze({
 })
 
 export function markierungsGestalt(kind) {
-  return GESTE_JE_REICHWEITE[ANNOTATION_DEFINITIONS[kind]?.scope] || 'keine'
+  const definition = ANNOTATION_DEFINITIONS[kind]
+  const ausReichweite = GESTE_JE_REICHWEITE[definition?.scope] || 'keine'
+  // Der Ortswechsel bekommt die Flaeche statt der Klammer — aber nur, wo die
+  // Reichweite ueberhaupt auf eine Stelle im Fliesstext zeigt. 'buendeln' und
+  // 'ordnen' verschieben ebenfalls, meinen aber Notizen; die stehen nicht im Text,
+  // und eine Flaeche um nichts waere eine Behauptung.
+  if (definition?.operation === 'move-block' && ausReichweite !== 'keine') return 'block'
+  return ausReichweite
 }
 
 // Bequemer Weg von einem rohen Finding aus — dieselbe Toleranz wie ueberall sonst:

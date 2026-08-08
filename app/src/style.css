@@ -1416,12 +1416,75 @@ body.zen #title:focus { opacity: 1; }
   to { background-size: 100% 2px; }
 }
 
+/* ORTSWECHSEL — die einzige Geste mit ZWEI Enden. Der Absatz, der wandern soll,
+   bekommt eine ruhige Flaeche statt der Klammer: die Klammer sagt „dieser Absatz ist
+   gemeint", die Flaeche sagt „dieser Absatz ist beweglich". Und weit unten oder oben
+   im Text oeffnet sich die Zielmarke — das Wohin, das eine Anmerkung ohne sie
+   schuldig bliebe („Der Ortswechsel hat ein sichtbares Wohin. Ein ‚das gehoert
+   woanders hin' ohne Ziel ist eine halbe Aussage", anmerkungs-varianten.html).
+
+   Die Flaeche ist versenkt, nicht erhoben: der Absatz steht noch da, wo er steht — er
+   wird angehoben, nicht schon verschoben. Ein Rahmen waere ein Kasten, und Kaesten hat
+   dieser Text nicht. */
+#editorView #editor .ProseMirror > [data-block-id].has-local-finding.hat-ortswechsel {
+  border-radius: var(--radius-panel, 10px);
+  background: var(--bg-sunken);
+  /* Der eingerueckte Text bliebe sonst am linken Rand kleben. Negativer Aussenabstand
+     in derselben Groesse, damit die Zeilen NICHT umbrechen wie zuvor: die Flaeche
+     waechst nach aussen, der Satzspiegel bleibt, wo er war. */
+  padding: var(--space-3) var(--space-4);
+  margin: calc(var(--space-3) * -1) calc(var(--space-4) * -1);
+  animation: onda-flaeche-auf var(--dur-ankunft) var(--ease-out) both;
+}
+
+/* Die Klammer waere hier doppelt gemoppelt — die Flaeche sagt bereits „dieser ganze
+   Absatz". Der Punkt am Rand bleibt aber: er ist der Anker fuer die Anmerkung
+   daneben, und ohne ihn verloere die Zeile ihr Gegenueber. */
+#editorView #editor .ProseMirror > [data-block-id].has-local-finding.hat-ortswechsel::before {
+  left: -14px;
+}
+
+/* Die Zielmarke: das Wort und eine gestrichelte Linie bis zum Rand. Gestrichelt,
+   weil hier noch nichts steht — eine durchgezogene Linie waere eine Behauptung.
+   Sie oeffnet sich aus der Hoehe 0 heraus, damit der Text darunter nicht springt,
+   sondern auseinandergeht. */
+#editorView #editor .ProseMirror .onda-zielmarke {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 0;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font: var(--type-caption);
+  user-select: none;
+  animation: onda-ziel-oeffnen 420ms var(--ease-out) 220ms both;
+}
+
+#editorView #editor .ProseMirror .onda-zielmarke__wort { white-space: nowrap; }
+
+#editorView #editor .ProseMirror .onda-zielmarke__linie {
+  flex: 1;
+  height: 2px;
+  border-radius: var(--radius-full);
+  background: repeating-linear-gradient(to right, var(--text-secondary) 0 6px, transparent 6px 12px);
+}
+
+@keyframes onda-flaeche-auf { from { opacity: .4; } }
+@keyframes onda-ziel-oeffnen {
+  from { height: 0; opacity: 0; }
+  to { height: 1.5em; opacity: 1; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   #editorView #editor .ProseMirror > [data-block-id].has-local-finding.hat-absatzweite-anmerkung::before,
+  #editorView #editor .ProseMirror > [data-block-id].has-local-finding.hat-ortswechsel,
   #editorView #editor .ProseMirror .onda-stelle--wort { animation: none; }
   /* Der Strich braucht seinen Endzustand auch ohne Bewegung — ohne ihn bliebe die
      background-size auf ihrem Anfangswert 0 und der Satz waere unmarkiert. */
   #editorView #editor .ProseMirror .onda-stelle--satz { animation: none; background-size: 100% 2px; }
+  /* Und die Zielmarke braucht ihre Hoehe: ohne die Bewegung bliebe sie auf 0 und
+     waere unsichtbar — genau das Ende, das sie zeigen soll. */
+  #editorView #editor .ProseMirror .onda-zielmarke { animation: none; height: 1.5em; opacity: 1; }
 }
 
 
