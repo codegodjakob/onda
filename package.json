@@ -1,0 +1,16 @@
+{
+  "name": "onda",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Onda — ein lokales Schreib- und Denkwerkzeug. Diese Datei buendelt keine Pakete, sie reicht nur weiter: siehe KONVENTIONEN.md, Teil 2.",
+  "scripts": {
+    "dev": "npm --prefix app run dev",
+    "build": "npm --prefix app run build",
+    "test": "npm run test:app; APP=$?; npm run test:werkzeug; if [ $APP -eq 0 ]; then echo '>>> app: GRUEN, 0 fehlgeschlagen.'; else echo '>>> app: ROT.'; fi; exit $APP",
+    "test:app": "npm --prefix app run test:unit",
+    "test:werkzeug": "npm --prefix tools/figma-onda-one-page test || echo '>>> tools/figma-onda-one-page: ROT. Laeuft nur berichtend mit und haelt den App-Teil nicht auf.'",
+    "test:rauch": "npm --prefix app run test:smoke",
+    "waechter": "node betrieb/waechter/alle.mjs"
+  }
+}

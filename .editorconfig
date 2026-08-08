@@ -1,0 +1,30 @@
+# Damit zwei Agents nicht über Einrückung streiten.
+#
+# Das ist alles, was diese Datei will. Sie ist KEIN Linter und KEIN Formatierer: Sie
+# schreibt keine bestehende Datei um und macht aus keinem Stil einen Fehler. Sie sagt
+# dem Editor nur, wie eine NEUE Zeile anfängt — damit nicht die eine Hälfte des Projekts
+# mit Leerzeichen und die andere mit Tabulatoren eingerückt ist und jede Zusammenführung
+# an Weißraum scheitert, den niemand sehen kann.
+#
+# Warum kein Linter: Sein erster Lauf schriebe jede Datei im Baum um. Danach könnte
+# niemand mehr sagen, welche Änderung von wem stammt — und genau das braucht dieses
+# Projekt gerade am wenigsten. Die Begründung steht ausführlich in KONVENTIONEN.md.
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 2
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# In Markdown bedeuten zwei Leerzeichen am Zeilenende einen Zeilenumbruch. Würde man sie
+# wegputzen, veränderte sich der gesetzte Text — deshalb bleiben sie hier stehen.
+[*.md]
+trim_trailing_whitespace = false
+
+# Swift rückt vier ein; so steht es heute in mac/main.swift.
+[*.swift]
+indent_size = 4
