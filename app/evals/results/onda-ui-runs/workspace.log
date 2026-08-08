@@ -2,259 +2,259 @@ TAP version 13
 # Subtest: thread messages receive stable role and timestamp
 ok 1 - thread messages receive stable role and timestamp
   ---
-  duration_ms: 1.849541
+  duration_ms: 1.745083
   type: 'test'
   ...
 # Subtest: thread messages reject invalid roles, empty text, and non-finite timestamps
 ok 2 - thread messages reject invalid roles, empty text, and non-finite timestamps
   ---
-  duration_ms: 0.569709
+  duration_ms: 0.639583
   type: 'test'
   ...
 # Subtest: thread message ids stay unique when timestamps and persisted ids collide
 ok 3 - thread message ids stay unique when timestamps and persisted ids collide
   ---
-  duration_ms: 0.147125
+  duration_ms: 0.174
   type: 'test'
   ...
 # Subtest: normalizeThread safely drops malformed messages and repairs duplicate ids stably
 ok 4 - normalizeThread safely drops malformed messages and repairs duplicate ids stably
   ---
-  duration_ms: 0.421875
+  duration_ms: 0.567583
   type: 'test'
   ...
 # Subtest: workspace migration normalizes global and finding threads without losing valid chat
 ok 5 - workspace migration normalizes global and finding threads without losing valid chat
   ---
-  duration_ms: 0.494125
+  duration_ms: 0.5665
   type: 'test'
   ...
 # Subtest: Thread-Identität bleibt bei Normalisierung stabil, damit laufende Streams nicht in verwaiste Arrays schreiben
 ok 6 - Thread-Identität bleibt bei Normalisierung stabil, damit laufende Streams nicht in verwaiste Arrays schreiben
   ---
-  duration_ms: 0.29725
+  duration_ms: 0.320833
   type: 'test'
   ...
 # Subtest: ensureWorkspaceState entfernt die Interview-Nachricht eines fremden Projekts
 ok 7 - ensureWorkspaceState entfernt die Interview-Nachricht eines fremden Projekts
   ---
-  duration_ms: 0.2115
+  duration_ms: 0.225833
   type: 'test'
   ...
 # Subtest: ensureWorkspaceState behaelt die eigene Interview-Nachricht des Dokuments
 ok 8 - ensureWorkspaceState behaelt die eigene Interview-Nachricht des Dokuments
   ---
-  duration_ms: 0.098916
+  duration_ms: 0.096542
   type: 'test'
   ...
 # Subtest: ensureWorkspaceState raeumt ohne bekanntes Projekt nichts weg
 ok 9 - ensureWorkspaceState raeumt ohne bekanntes Projekt nichts weg
   ---
-  duration_ms: 0.422958
+  duration_ms: 0.429292
   type: 'test'
   ...
 # Subtest: array workspace is replaced with state that survives a JSON roundtrip
 ok 10 - array workspace is replaced with state that survives a JSON roundtrip
   ---
-  duration_ms: 0.730459
+  duration_ms: 0.860333
   type: 'test'
   ...
 # Subtest: annotation workspace migration preserves valid mode, quiet state and recent undo operations
 ok 11 - annotation workspace migration preserves valid mode, quiet state and recent undo operations
   ---
-  duration_ms: 0.260958
+  duration_ms: 0.232125
   type: 'test'
   ...
 # Subtest: array agent is replaced with state that survives a JSON roundtrip
 ok 12 - array agent is replaced with state that survives a JSON roundtrip
   ---
-  duration_ms: 0.136333
+  duration_ms: 0.131292
   type: 'test'
   ...
 # Subtest: ensureWorkspaceState ergänzt decisionsOpen additiv und erhält gespeicherte Werte
 ok 13 - ensureWorkspaceState ergänzt decisionsOpen additiv und erhält gespeicherte Werte
   ---
-  duration_ms: 0.108959
+  duration_ms: 0.100709
   type: 'test'
   ...
 # Subtest: top-level editor nodes become block previews
 ok 14 - top-level editor nodes become block previews
   ---
-  duration_ms: 0.150875
+  duration_ms: 0.137084
   type: 'test'
   ...
 # Subtest: target matching resolves the narrowest containing block
 ok 15 - target matching resolves the narrowest containing block
   ---
-  duration_ms: 0.073417
+  duration_ms: 0.06925
   type: 'test'
   ...
 # Subtest: agent initiative waits for an idle pause and respects dismissal
 ok 16 - agent initiative waits for an idle pause and respects dismissal
   ---
-  duration_ms: 0.089917
+  duration_ms: 0.0875
   type: 'test'
   ...
 # Subtest: agent initiative requires a finite last input timestamp
 ok 17 - agent initiative requires a finite last input timestamp
   ---
-  duration_ms: 0.063417
+  duration_ms: 0.063041
   type: 'test'
   ...
 # Subtest: agent initiative is bound to the visible editor and active document
 ok 18 - agent initiative is bound to the visible editor and active document
   ---
-  duration_ms: 0.047542
+  duration_ms: 0.048917
   type: 'test'
   ...
 # Subtest: a matching paragraph boundary can release a waiting initiative after a short pause
 ok 19 - a matching paragraph boundary can release a waiting initiative after a short pause
   ---
-  duration_ms: 0.058333
+  duration_ms: 0.05625
   type: 'test'
   ...
 # Subtest: composition blocks idle and paragraph-boundary initiatives
 ok 20 - composition blocks idle and paragraph-boundary initiatives
   ---
-  duration_ms: 0.0565
+  duration_ms: 0.057708
   type: 'test'
   ...
 # Subtest: dismissing a message is idempotent
 ok 21 - dismissing a message is idempotent
   ---
-  duration_ms: 0.071834
+  duration_ms: 0.074333
   type: 'test'
   ...
 # Subtest: legacy finding receives a block anchor only for one top-level match
 ok 22 - legacy finding receives a block anchor only for one top-level match
   ---
-  duration_ms: 0.094417
+  duration_ms: 0.092125
   type: 'test'
   ...
 # Subtest: legacy finding stays unanchored when the phrase occurs in two blocks
 ok 23 - legacy finding stays unanchored when the phrase occurs in two blocks
   ---
-  duration_ms: 0.04425
+  duration_ms: 0.042792
   type: 'test'
   ...
 # Subtest: stale persisted block anchor never falls back to text matching
 ok 24 - stale persisted block anchor never falls back to text matching
   ---
-  duration_ms: 0.044708
+  duration_ms: 0.044
   type: 'test'
   ...
 # Subtest: known stale and ambiguous findings remain explicitly classifiable
 ok 25 - known stale and ambiguous findings remain explicitly classifiable
   ---
-  duration_ms: 0.056208
+  duration_ms: 0.055875
   type: 'test'
   ...
 # Subtest: editing finding survives reload and derives the actual user wording
 ok 26 - editing finding survives reload and derives the actual user wording
   ---
-  duration_ms: 0.140042
+  duration_ms: 0.162375
   type: 'test'
   ...
 # Subtest: persisted editing finding remains open with an exact completion candidate
 ok 27 - persisted editing finding remains open with an exact completion candidate
   ---
-  duration_ms: 0.120834
+  duration_ms: 0.114375
   type: 'test'
   ...
 # Subtest: unchanged own version cannot be completed
 ok 28 - unchanged own version cannot be completed
   ---
-  duration_ms: 0.046166
+  duration_ms: 0.044792
   type: 'test'
   ...
 # Subtest: persisted editing finding stays pending while its block text is unchanged
 ok 29 - persisted editing finding stays pending while its block text is unchanged
   ---
-  duration_ms: 0.16225
+  duration_ms: 0.376333
   type: 'test'
   ...
 # Subtest: persisted editing finding keeps a deleted block explicitly stale without guessing
 ok 30 - persisted editing finding keeps a deleted block explicitly stale without guessing
   ---
-  duration_ms: 0.0475
+  duration_ms: 0.099083
   type: 'test'
   ...
 # Subtest: persisted editing finding keeps divergent block text explicitly stale
 ok 31 - persisted editing finding keeps divergent block text explicitly stale
   ---
-  duration_ms: 0.04225
+  duration_ms: 0.074292
   type: 'test'
   ...
 # Subtest: hasUnseenInitiative flags a new, undismissed message while the widget is closed
 ok 32 - hasUnseenInitiative flags a new, undismissed message while the widget is closed
   ---
-  duration_ms: 0.080833
+  duration_ms: 0.119375
   type: 'test'
   ...
 # Subtest: structureHintMap: evidence dot beats style dot per block
 ok 33 - structureHintMap: evidence dot beats style dot per block
   ---
-  duration_ms: 0.104833
+  duration_ms: 0.167292
   type: 'test'
   ...
 # Subtest: resolveEvidenceSources keeps every source inside the example project, demo or not
 ok 34 - resolveEvidenceSources keeps every source inside the example project, demo or not
   ---
-  duration_ms: 0.047917
+  duration_ms: 0.081041
   type: 'test'
   ...
 # Subtest: resolveEvidenceSources filters demo sources out of real projects
 ok 35 - resolveEvidenceSources filters demo sources out of real projects
   ---
-  duration_ms: 0.049708
+  duration_ms: 0.082458
   type: 'test'
   ...
 # Subtest: resolveEvidenceSources keeps sources without an explicit verification status in real projects
 ok 36 - resolveEvidenceSources keeps sources without an explicit verification status in real projects
   ---
-  duration_ms: 0.03925
+  duration_ms: 0.066708
   type: 'test'
   ...
 # Subtest: resolveEvidenceSources treats a missing or malformed source list as empty
 ok 37 - resolveEvidenceSources treats a missing or malformed source list as empty
   ---
-  duration_ms: 0.042916
+  duration_ms: 0.063
   type: 'test'
   ...
 # Subtest: resolveEvidenceSources never throws on a malformed entry inside an otherwise real list
 ok 38 - resolveEvidenceSources never throws on a malformed entry inside an otherwise real list
   ---
-  duration_ms: 0.038041
+  duration_ms: 0.058708
   type: 'test'
   ...
 # Subtest: ohne Rollenkarte ist jeder Absatz ein gewoehnlicher Absatz
 ok 39 - ohne Rollenkarte ist jeder Absatz ein gewoehnlicher Absatz
   ---
-  duration_ms: 0.056542
+  duration_ms: 0.090625
   type: 'test'
   ...
 # Subtest: die Rollenkarte speist block.role
 ok 40 - die Rollenkarte speist block.role
   ---
-  duration_ms: 0.112917
+  duration_ms: 0.170708
   type: 'test'
   ...
 # Subtest: ein von Hand erzeugter Baustein behaelt seine Rolle, solange die Ablage nichts sagt
 ok 41 - ein von Hand erzeugter Baustein behaelt seine Rolle, solange die Ablage nichts sagt
   ---
-  duration_ms: 0.049958
+  duration_ms: 0.08125
   type: 'test'
   ...
 # Subtest: die erkannte Art gewinnt ueber das von Hand gewaehlte Wort
 ok 42 - die erkannte Art gewinnt ueber das von Hand gewaehlte Wort
   ---
-  duration_ms: 0.048583
+  duration_ms: 0.0775
   type: 'test'
   ...
 # Subtest: die Ueberschrift laesst sich weder von der Ablage noch von Hand umwidmen
 ok 43 - die Ueberschrift laesst sich weder von der Ablage noch von Hand umwidmen
   ---
-  duration_ms: 0.04725
+  duration_ms: 0.818083
   type: 'test'
   ...
 1..43
@@ -265,5 +265,5 @@ ok 43 - die Ueberschrift laesst sich weder von der Ablage noch von Hand umwidmen
 # cancelled 0
 # skipped 0
 # todo 0
-# duration_ms 103.457292
+# duration_ms 103.206333
 
