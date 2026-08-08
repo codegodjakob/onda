@@ -3,8 +3,8 @@
   "catalogVersion": "2026-08-05.3",
   "stage": "FERTIGZUSTAND",
   "iteration": 1,
-  "generatedAt": "2026-08-08T12:06:27.679Z",
-  "gitCommit": "47925bbf101e492a1080dcdf42b003cbdaee6d53",
+  "generatedAt": "2026-08-08T12:35:24.711Z",
+  "gitCommit": "5cb5e63030a29cb3d5713c0935893a460ab4f2a0",
   "rubricScores": {
     "truth": 5,
     "authorship": 5,
@@ -24,44 +24,22 @@
     "access_privacy": "Automatisierte Drei-Engine-, Zoom-, Zielgrößen-, Export- und Geheimnisprüfungen bestehen; echte assistive Nutzung bleibt extern, daher Deckel 4,5."
   },
   "coverage": {
-    "passed": 138,
+    "passed": 139,
     "applicable": 147,
-    "ratio": 0.9388
+    "ratio": 0.9456
   },
   "loops": [
     {
       "iteration": 1,
-      "passed": 138,
-      "failed": 9,
+      "passed": 139,
+      "failed": 8,
       "externalOpen": 5,
       "weightedScore": 4.88
     }
   ],
   "massstabVergleich": {
-    "status": "geaendert",
-    "aenderungen": [
-      {
-        "bereich": "eval",
-        "art": "geaendert",
-        "id": "DESIGN-06",
-        "feld": "automation",
-        "vorher": "file-inspection",
-        "jetzt": "integration"
-      },
-      {
-        "bereich": "eval",
-        "art": "geaendert",
-        "id": "DESIGN-06",
-        "feld": "evidence",
-        "vorher": [
-          "Datei-Prüfung: Statustabelle in docs/REDESIGN-IDEEN.md enthält keinen Eintrag 'open' für einen Punkt, dessen Eval bereits bestanden wird"
-        ],
-        "jetzt": [
-          "Datei-Prüfung: Statustabelle in docs/REDESIGN-IDEEN.md enthält keinen Eintrag 'open' für einen Punkt, dessen Eval bereits bestanden wird",
-          "Frische Messung im selben Lauf: ob ein Punkt umgesetzt ist, wird durch Starten der Gestalt-Prüfung jetzt ermittelt — nicht aus dem Ergebnisstand eines früheren Laufs gelesen"
-        ]
-      }
-    ]
+    "status": "unveraendert",
+    "aenderungen": []
   },
   "massstab": {
     "catalogVersion": "2026-08-05.3",
@@ -4027,15 +4005,14 @@
     },
     {
       "id": "DESIGN-06",
-      "status": "failed",
+      "status": "passed",
       "evidence": [
         {
           "kind": "integration",
           "path": "evals/results/laeufe/evals-pruefungen-umgestaltung-entschieden-mjs.log",
           "command": "node evals/pruefungen/umgestaltung-entschieden.mjs"
         }
-      ],
-      "note": "Gebundene Prüfung in diesem Lauf fehlgeschlagen: evals/pruefungen/umgestaltung-entschieden.mjs"
+      ]
     },
     {
       "id": "DESIGN-07",
