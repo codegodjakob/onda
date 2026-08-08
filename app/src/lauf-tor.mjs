@@ -26,7 +26,11 @@ import {
 // Preis des liegengebliebenen Merges — und genau das soll das Tor beenden. Wer einen sechsten
 // Kanal baut, traegt ihn hier ein; der Rueckwachs-Waechter (lauf-tor-waechter.test.mjs)
 // laesst ihn ohnehin nicht am Tor vorbei.
-export const KANAELE = Object.freeze(['interview', 'chat', 'hinweis', 'erweiterung', 'quellen'])
+// 'bausteine' ist der sechste Kanal (Issue #36): die Erkennung der Bausteinarten. Er ist
+// der erste, der von Anfang an durchs Tor gebaut wurde statt die Kopiervorlage ein weiteres
+// Mal abzuschreiben — sein eigener Takt (Absatzbestand statt Schreibpause) liegt im Modell
+// (bausteinlauf-model.mjs), nicht in einer weiteren Sperr-Variable hier daneben.
+export const KANAELE = Object.freeze(['interview', 'chat', 'hinweis', 'erweiterung', 'quellen', 'bausteine'])
 
 const STANDARD_HOOKS = { getJournal: null, persist: null, scheduleSave: null }
 let hooks = { ...STANDARD_HOOKS }

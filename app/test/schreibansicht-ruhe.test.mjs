@@ -246,3 +246,38 @@ test('keine Struktur-Karte trägt mehr „Freier Absatz"', async () => {
   const tabelle = workspace.match(/const ROLE_LABELS = new Map\(\[([\s\S]*?)\]\)/)?.[1] || ''
   assert.doesNotMatch(tabelle, /paragraph/, 'ROLE_LABELS beschriftet den gewöhnlichen Absatz noch')
 })
+
+// Task 8: Der Bausteinlauf hat einen eigenen Takt — Hinweise gehören zu jeder Schreibpause,
+// die Art eines Absatzes ändert sich viel seltener. Er hat aber KEINE eigene Sperre mehr:
+// die hält das Lauf-Tor (#12), wie bei jedem anderen bezahlten Kanal. Eine sechste
+// Kopiervorlage neben dem Tor wäre genau der Rückwachs, den das Tor beenden sollte.
+test('der Bausteinlauf läuft durchs Tor und hat einen eigenen Zeitgeber', async () => {
+  const workspace = await readFile(new URL('../src/workspace.js', import.meta.url), 'utf8')
+  assert.match(workspace, /function fuehreBausteinlaufAus\(/, 'der Lauf wird nirgends ausgeführt')
+  assert.match(workspace, /function planeBausteinlauf\(/, 'der Lauf wird nirgends geplant')
+  assert.match(workspace, /planeBausteinlauf\(\)/, 'planeBausteinlauf hat keinen Aufrufer')
+  assert.match(workspace, /kanal: 'bausteine'/, 'der Lauf geht am Lauf-Tor vorbei')
+  // Kein eigener Sperr-Zustand: Das Tor hält die Kanalsperre (kanalGesperrt/fuehreLaufAus).
+  assert.doesNotMatch(workspace, /let bausteinlaufAktiv/, 'eine sechste eigene Lauf-Sperre ist zurück')
+})
+
+// Entscheidung 2 (Issue #36): Die von Hand gesetzte Textsorte muss den Lauf erreichen,
+// sonst denkt sich das Modell eine zweite aus.
+test('der Bausteinlauf bekommt das Projektwissen mit', async () => {
+  const workspace = await readFile(new URL('../src/workspace.js', import.meta.url), 'utf8')
+  const rumpf = workspace.match(/async function fuehreBausteinlaufAus\([\s\S]*?\n\}/)?.[0] || ''
+  assert.ok(rumpf, 'fuehreBausteinlaufAus nicht gefunden')
+  assert.match(rumpf, /onda/, 'der Lauf reicht kein Projektwissen weiter — die Textsorte wird geraten')
+})
+
+// Die Budgetpause merkt sich, WELCHER Lauf angehalten wurde. Die ausdrückliche Freigabe muss
+// genau den wieder aufnehmen — sonst gibt jemand einen Lauf frei und bezahlt einen anderen.
+// Vor dem Bausteinlauf fiel alles außer 'verstaendnis' auf den Hinweislauf zurück; mit einem
+// sechsten Kanal ist dieser Rückfall eine falsche Auskunft.
+test('die Budget-Freigabe nimmt den pausierten Lauf wieder auf, nicht irgendeinen', async () => {
+  const workspace = await readFile(new URL('../src/workspace.js', import.meta.url), 'utf8')
+  const rumpf = workspace.match(/function starteBewusstFreigegebenenAutomatiklauf\([\s\S]*?\n\}/)?.[0] || ''
+  assert.ok(rumpf, 'starteBewusstFreigegebenenAutomatiklauf nicht gefunden')
+  assert.match(rumpf, /'bausteine'/, 'ein freigegebener Bausteinlauf startet den Hinweislauf statt sich selbst')
+  assert.match(rumpf, /fuehreBausteinlaufAus\(/, 'der freigegebene Bausteinlauf wird nirgends ausgeführt')
+})

@@ -24,7 +24,14 @@ import {
   shouldOpenAgentWidget,
   structureHintMap,
 } from './workspace-model.mjs'
-import { bausteinNamen, bausteinRollen } from './bausteinlauf-model.mjs'
+import {
+  bausteinNamen,
+  bausteinRollen,
+  bestandAusAltenRollen,
+  pruefeBausteinBedarf,
+  strukturSignatur,
+  versucheBausteinlauf,
+} from './bausteinlauf-model.mjs'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import { applySettings } from './ui.js'
@@ -195,6 +202,11 @@ let agentInitiativeTimer = null
 // noch hinweislaufTimer, der Zeitgeber-Griff fuer den Pausen-Ausloeser (planeHinweislauf/
 // clearHinweislaufTimer, H-3).
 let hinweislaufTimer = null
+// Sechster Kanal (Bausteinarten, Issue #36): NUR ein Zeitgeber, keine eigene Sperre — die
+// haelt das Lauf-Tor (kanalGesperrt('bausteine')). Ein eigener Zeitgeber ist trotzdem noetig,
+// weil dieser Kanal in einem anderen Takt laeuft als der Hinweislauf: Hinweise gehoeren zu
+// jeder Schreibpause, die Art eines Absatzes aendert sich viel seltener.
+let bausteinlaufTimer = null
 // Zweiter Kanal (Erweiterungen): eigene Sperre, damit ein Erweiterungslauf und ein
 // Hinweislauf einander nicht ausschliessen -- es sind zwei verschiedene Fragen an
 // denselben Text, und der Cache-Praefix ist derselbe, also kostet der zweite wenig.
@@ -2201,6 +2213,13 @@ function starteBewusstFreigegebenenAutomatiklauf() {
     // wieder auf. starteVerstaendnisEntwurf prueft Dokument und Projekt nach
     // dem asynchronen Schluesselzugriff erneut.
     starteVerstaendnisEntwurf(pausiert.projectId, pausiert.docId)
+    return
+  }
+  // Der Bausteinlauf ist ein eigener bezahlter Kanal (Issue #36). Ohne diesen Zweig fiele
+  // seine Freigabe auf den Hinweislauf zurueck: Jemand gibt einen Lauf frei und bezahlt
+  // einen anderen — und der freigegebene liefe nie.
+  if (pausiert?.typ === 'bausteine') {
+    fuehreBausteinlaufAus({ grund: 'freigabe' })
     return
   }
   if (!pausiert && istInterviewAktiv()) {
@@ -5446,11 +5465,116 @@ function planeHinweislauf() {
   }, entscheidung.verzoegerungMs)
 }
 
+// Ein Dokument aus der Sechser-Zeit verliert seine Rollen nicht: Sie werden EINMALIG zum
+// Anfangsbestand, bevor der erste Lauf sie ersetzt. Das nimmt das ROHE Tiptap-JSON, nicht
+// aktuelleBloecke() — dort gewinnt die Ablage, und gesucht ist gerade das alte Wort
+// (bestandAusAltenRollen).
+//
+// Zusammenspiel mit dem Bedarf, bitte nicht wegoptimieren: planeBausteinlauf sieht beim
+// ersten Mal noch keine Ablage und haelt einen Lauf fuer noetig. Hier wird zuerst uebernommen
+// und der Bedarf DANACH in versucheBausteinlauf erneut geprueft. Trug das Dokument durchgehend
+// alte Rollen, ist der Bedarf damit gedeckt und es entsteht KEINE Anfrage — die Uebernahme
+// kostet nichts.
+function uebernimmAlteRollenEinmalig(workspace) {
+  if (!workspace || workspace.bausteinarten) return
+  const altbestand = bestandAusAltenRollen(ctx.editor.getJSON(), Date.now())
+  if (!altbestand) return
+  workspace.bausteinarten = altbestand
+  ctx?.scheduleSave()
+}
+
+async function fuehreBausteinlaufAus({ grund = 'pause' } = {}) {
+  const doc = ctx?.activeDoc()
+  const workspace = activeWorkspace()
+  if (!doc || !workspace) return { gestartet: false, grund: 'kein-dokument' }
+
+  uebernimmAlteRollenEinmalig(workspace)
+
+  // Alles SYNCHRON vor dem Aufruf einsammeln — wie beim Hinweislauf, aus demselben Grund:
+  // Nach dem ersten await kann das offene Dokument ein anderes sein.
+  const blocks = aktuelleBloecke()
+  const docText = baueDocText(blocks)
+  const docId = doc.id
+  const project = dokumentProjekt(doc)
+  // Das Projektwissen — darin steht die von Hand gesetzte Textsorte, aus der die Arten
+  // abzuleiten sind (Issue #36, Entscheidung 2). Anders als beim Hinweislauf reist es hier
+  // als eigener Parameter mit: baueBausteinKontext nimmt onda selbst entgegen, es braucht
+  // also keine Klammer um runTask.
+  const ondaWissen = ondaQuellen(doc, project)
+
+  const ergebnis = await fuehreLaufAus(
+    { kanal: 'bausteine', ausloeser: grund, signatur: `${docId}:${strukturSignatur(blocks)}` },
+    ({ runTask: torRunTask }) => versucheBausteinlauf({
+      hatDokument: true,
+      istBeispielprojekt: istBeispielDokument(doc),
+      laeuftBereits: false, // die Kanal-Sperre prueft und haelt das Tor (fuehreLaufAus)
+      sperreSetzen: () => {}, // das Modell behaelt seine Parameter fuer die Modell-Tests
+      blocks,
+      bestand: bausteinBestand(workspace),
+      docText,
+      verstaendnis: project ? ensureProjectUnderstanding(project) : null,
+      onda: ondaWissen,
+      hatSchluessel,
+      istNochDasselbeDokument: () => ctx.activeDoc()?.id === docId,
+      beansprucheKostenfreigabe: () => beansprucheAutomatikKosten('bausteine', { docId, grund }),
+      runTask: torRunTask,
+      setzeAgentStatus,
+    }),
+  )
+
+  if (!ergebnis.gestartet) {
+    if (ergebnis.grund === 'monatsbudget-erreicht') {
+      zeigeBudgetPause(workspace)
+      persistWorkspace()
+      refreshWorkspace()
+    }
+    return ergebnis
+  }
+  if (!ergebnis.erfolg) return ergebnis
+
+  // Nach dem await: nur schreiben, wenn immer noch dasselbe Dokument offen ist. Sonst
+  // landeten die Bausteinarten des einen Textes in der Ablage des anderen.
+  if (ctx.activeDoc()?.id !== docId) return { gestartet: true, erfolg: false, fehler: 'dokument-gewechselt' }
+
+  workspace.bausteinarten = ergebnis.bestand
+  ctx?.scheduleSave()
+  refreshWorkspace()
+  return ergebnis
+}
+
+// Derselbe Pausen-Ausloeser wie beim Hinweislauf (AGENT_IDLE_MS), aber mit eigenem Zeitgeber
+// und eigener Bedarfspruefung: Die meisten Pausen fuehren hier zu nichts, weil sich am
+// Absatzbestand nichts geaendert hat. Genau das ist der Sinn des eigenen Takts.
+function planeBausteinlauf() {
+  clearTimeout(bausteinlaufTimer)
+  bausteinlaufTimer = null
+  const doc = ctx?.activeDoc()
+  const workspace = activeWorkspace()
+  if (!doc || !workspace) return
+  if (kanalGesperrt('bausteine')) return
+  if (istBeispielDokument(doc)) return
+  const docId = doc.id
+  const inputState = initiativeInputState(docId)
+  if (!inputState || !Number.isFinite(inputState.lastInputAt)) return
+  if (!editorViewIsVisibleFor(docId) || isComposing) return
+  if (!pruefeBausteinBedarf({ blocks: aktuelleBloecke(), bestand: bausteinBestand(workspace) }).noetig) return
+
+  const scheduledGeneration = inputState.generation
+  bausteinlaufTimer = setTimeout(() => {
+    bausteinlaufTimer = null
+    const currentInputState = initiativeInputState(docId)
+    if (!currentInputState || currentInputState.generation !== scheduledGeneration) return
+    if (!editorViewIsVisibleFor(docId) || isComposing) return
+    fuehreBausteinlaufAus({ grund: 'pause' })
+  }, Math.max(24, AGENT_IDLE_MS - (Date.now() - inputState.lastInputAt)))
+}
+
 function scheduleAgentInitiative() {
   clearAgentInitiativeTimer()
   const docId = ctx?.activeDoc()?.id || null
   activateInitiativeDocument(docId)
   planeHinweislauf()
+  planeBausteinlauf()
   const workspace = activeWorkspace()
   const message = workspace ? nextAgentInitiative(workspace) : null
   const inputState = initiativeInputState(docId)
