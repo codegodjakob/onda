@@ -178,10 +178,20 @@ export function kostenJeUebernahme(journal) {
 //
 // Mapping Ausgang -> Summe: `entscheidung` traegt den Finding-Status als String
 // ('resolved'|'dismissed'|'risk-accepted', siehe fasseEntscheidungenZusammen,
-// agent-findings.mjs:151). 'resolved' UND 'risk-accepted' zaehlen als angenommen (ein
-// bewusst angenommenes Risiko ist immer noch eine Annahme -- dieselbe Lesart wie
-// rueckkopplung-model.mjs), 'dismissed' als verworfen. Jeder andere/unbekannte Wert zaehlt
-// in keiner der beiden Summen (lieber eine Zahl kleiner als eine Zahl falsch).
+// agent-findings.mjs:151). 'resolved' UND 'risk-accepted' zaehlen HIER als angenommen --
+// das ist eine ANDERE Lesart als rueckkopplung-model.mjs: dort bekommt 'risk-accepted'
+// einen eigenen Eimer `risikoAngenommen` (Zeile ~214) und bleibt aus `bewertbar` und der
+// Quote aussen vor (Zeile ~234), damit ein bewusst getragenes Risiko die Nuetzlichkeitsbilanz
+// nicht verzerrt. Hier, im Prompt-Summenblock, zaehlt es dagegen bewusst als Annahme: das
+// Modell soll aus der verdichteten Liste lesen koennen, dass ein Hinweis gewirkt hat, auch
+// wenn die Reaktion "Risiko angenommen" statt "behoben" war. 'dismissed' zaehlt als
+// verworfen. Jeder andere/unbekannte Wert zaehlt in keiner der beiden Summen (lieber eine
+// Zahl kleiner als eine Zahl falsch).
+//
+// Zwei "angenommen"-Lesarten INNERHALB dieser Datei, ebenfalls absichtlich verschieden:
+// monatsZaehlung (oben) ist KIND-basiert (decision.kind==='accept', ohne Risiko-Faelle),
+// verdichteEntscheidungen hier ist OUTCOME-basiert (inkl. risk-accepted) -- Begruendung bei
+// monatsZaehlung.
 export function verdichteEntscheidungen(eintraege, woertlichBehalten = WOERTLICH_BEHALTEN) {
   const grenze = Number.isFinite(woertlichBehalten) ? Math.max(0, Math.trunc(woertlichBehalten)) : WOERTLICH_BEHALTEN
   const gueltig = (Array.isArray(eintraege) ? eintraege : []).filter(e => e && typeof e === 'object')
