@@ -96,7 +96,7 @@ test('Das Plus am Absatz ist fort, das Einfüge-Menü bleibt für die Struktur',
   assert.match(workspace, /function insertBlock\(|const insertBlock/, 'Das Einfügen selbst wurde mit dem Plus gelöscht')
 })
 
-test('Unten links steht der Weg zurück, nicht der eigene Name', async () => {
+test('Unten links stehen nur noch Erscheinung und Einstellungen', async () => {
   const html = await readFile(indexUrl, 'utf8')
   // Direkt an der Fußzeile schneiden. Ein Schnitt von <section id="editorView"> bis zum
   // nächsten </section> endet zu früh: die Seitenleiste enthält selbst <section>-Blöcke.
@@ -105,13 +105,41 @@ test('Unten links steht der Weg zurück, nicht der eigene Name', async () => {
   const fusszeile = html.match(/<div class="onda-side-footer">([\s\S]*?)<\/div>/)?.[1] || ''
   assert.ok(fusszeile.trim(), 'Die Fußzeile der Schreibansicht wurde nicht gefunden')
 
-  // „entferne den nutzer unten links in der schreibansicht den braucht man da nicht.
-  //  nur einstellungen und dark/ligth modus. unten links kann an die stelle der pfeil
-  //  kommen mit dem man zurück zum menü kommt."
+  // Am 7.8.2026 wanderte der Weg zurück in die Fußzeile: „unten links kann an die stelle
+  // der pfeil kommen mit dem man zurück zum menü kommt." Am 8.8.2026 hat Jakob das
+  // zurückgenommen — nicht die Sache, sondern den Ort: „ich find, es sieht einfach
+  // unästhetisch aus." Zwischen Sonne und Zahnrad blieben dem Projektnamen 91 Pixel,
+  // und was übrig blieb, war „Beispiel: Ca…". Der Weg zurück steht jetzt oben und trägt
+  // den ganzen Namen; hier bleiben zwei Zeichen ohne Wortlaut.
   assert.doesNotMatch(fusszeile, /onda-avatar|onda-side-user/, 'Der eigene Name steht wieder in der Fußzeile')
-  assert.match(fusszeile, /id="sidebarBack"/, 'Der Weg zurück fehlt in der Fußzeile')
+  assert.doesNotMatch(fusszeile, /id="sidebarBack"/, 'Der Projektname steht wieder unten links, wo er nicht hinpasst')
   assert.match(fusszeile, /id="themeToggle"/)
   assert.match(fusszeile, /id="kiSettings"/)
+})
+
+test('Oben links stehen Schriftzug und Projektname — beide ungekürzt', async () => {
+  const [html, css] = await Promise.all([readFile(indexUrl, 'utf8'), readFile(styleUrl, 'utf8')])
+
+  // „eigentlich sollte oben links auch dieses Logoschrift sein von onda beziehungsweise
+  //  onda write, leben." — leben heißt: bleiben. In der Seitenleiste fuhr der Schriftzug
+  //  beim Einklappen mit hinaus. Er gehört deshalb in denselben festen Kasten wie die
+  //  Klinke, die schon am Fenster hängt.
+  const band = html.match(/<div class="onda-topbar__lead">([\s\S]*?)<\/div>/)?.[1] || ''
+  assert.match(band, /id="sidebarToggle"/, 'Die Klinke fehlt im festen Band')
+  assert.match(band, /id="ondaHome"/, 'Der Schriftzug hängt nicht am Fenster und fährt mit der Leiste weg')
+
+  // Der Projektname ist die oberste Zeile der Leiste — dort hat er die volle Breite.
+  const marke = html.match(/<div class="onda-brand">([\s\S]*?)<\/div>/)?.[1] || ''
+  assert.match(marke, /id="sidebarBack"/, 'Der Weg zurück steht nicht mehr oben in der Leiste')
+
+  // Die Leiste muss unter dem festen Band anfangen, sonst liegt ihre erste Zeile auf dem
+  // Schriftzug. Genau das war beim ersten Versuch der Fall.
+  const shell = await readFile(shellUrl, 'utf8')
+  assert.match(
+    shell.match(/#editorView \.onda-sidebar \{([^}]*)\}/)?.[1] || '',
+    /padding:\s*var\(--topbar-height\)/,
+    'Die Leiste beginnt wieder auf Höhe des Schriftzugs',
+  )
 })
 
 test('Der Schriftzug oben links führt zur Übersicht', async () => {
@@ -128,14 +156,110 @@ test('Der Schriftzug oben links führt zur Übersicht', async () => {
   assert.match(workspace, /listen\(ui\.back, 'click', onBack\)/)
 })
 
-test('Der Projektname weicht, bevor Erscheinung und Einstellungen verschwinden', async () => {
+test('Nirgends hört Text auf und drei Punkte kommen hinterher', async () => {
+  // „außerdem generell die Regel, ich will, dass nirgendwo einfach der Text aufhört und
+  //  dann Punkt, Punkt, Punkt kommt. sehr unprofessionell. Es soll ja nie der Fall sein."
+  //  (Jakob, 8.8.2026)
+  //
+  // Die Regel gilt dem, was Jakob liest — nicht dem, was an das Modell geht. Ein Prompt
+  // hat ein Zeichenbudget; ein Bildschirm hat Platz zum Umbrechen. Zwei Dateien kürzen
+  // ausschließlich für den Prompt und sind deshalb ausgenommen.
+  const nurFuerDasModell = new Set(['onda-kontext.mjs', 'arbeitskontext-model.mjs'])
+  const ohneKommentare = text => text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+
+  const { readdir } = await import('node:fs/promises')
+  const srcUrl = new URL('../src/', import.meta.url)
+  const dateien = await readdir(srcUrl)
+
+  const funde = []
+  for (const datei of dateien) {
+    const inhalt = ohneKommentare(await readFile(new URL(datei, srcUrl), 'utf8'))
+
+    if (datei.endsWith('.css')) {
+      // Beides schneidet ab UND setzt die Punkte selbst — line-clamp genauso wie
+      // text-overflow. Wer nur das eine verbietet, verschiebt das Problem.
+      if (/text-overflow:\s*ellipsis/.test(inhalt)) funde.push(`${datei}: text-overflow: ellipsis`)
+      if (/line-clamp/.test(inhalt)) funde.push(`${datei}: line-clamp`)
+    }
+
+    if ((datei.endsWith('.js') || datei.endsWith('.mjs')) && !nurFuerDasModell.has(datei)) {
+      // Gesucht ist genau eine Form: ein Schnitt nach n Zeichen, dessen Ergebnis in einer
+      // Zeichenkette steht, an die ein Auslassungszeichen geklebt wird — `${x.slice(0, n)}…`.
+      // Das Muster bleibt bewusst in EINER Zeile. Über den Zeilenumbruch hinweg fing es
+      // language-diagnostics.mjs: dort ist `slice(0, start)` der Text VOR einer Stelle,
+      // und das … eine Zeile darunter gehört zu einer Zeichenklasse für Satzzeichen.
+      if (/(?:slice|substring)\(0,[^)\n]*\)[^\n`]*\}…/.test(inhalt)) {
+        funde.push(`${datei}: Schnitt nach Zeichenzahl mit …`)
+      }
+
+      // Menüpunkte tragen keine drei Punkte („die menüpunkte auch ohne punkte", Jakob,
+      // 8.8.2026). In macOS-Menüs heißen sie „das öffnet noch ein Fenster" — aber das
+      // muss man wissen; wer es nicht weiß, sieht abgeschnittenen Text.
+      //
+      // Nur Beschriftungen, nicht jedes Auslassungszeichen: Platzhalter („Antworten …")
+      // und Verlaufsmeldungen („Agent denkt nach …") bleiben. Dort hört kein Text auf —
+      // dort läuft etwas.
+      for (const [muster, was] of [
+        [/menuItem\([^,\n]+,\s*(['"`])[^'"`\n]*…/, 'Menüpunkt mit …'],
+        [/\blabel:\s*(['"`])[^'"`\n]*…/, 'Beschriftung mit …'],
+      ]) {
+        if (muster.test(inhalt)) funde.push(`${datei}: ${was}`)
+      }
+    }
+  }
+
+  assert.deepEqual(funde, [], `Text wird wieder abgeschnitten:\n  ${funde.join('\n  ')}`)
+})
+
+test('Der Weg zurück trägt den ganzen Projektnamen', async () => {
   const css = await readFile(styleUrl, 'utf8')
   const zurueck = css.match(/\.onda-side-back \{([^}]*)\}/)?.[1] || ''
 
-  // Ohne min-width:0 weigert sich ein Flex-Kind zu schrumpfen, auch wenn text-overflow
-  // gesetzt ist — genau daran fehlte das Zahnrad in der Fußzeile.
-  assert.match(zurueck, /flex:\s*1/, 'Der Weg-zurück-Knopf nimmt sich keinen Platz')
-  assert.match(zurueck, /min-width:\s*0/, 'Ohne min-width:0 verdrängt der Projektname die Knöpfe rechts')
-  assert.match(css, /\.onda-side-back-label \{[^}]*text-overflow:\s*ellipsis/)
+  // Volle Breite statt `flex: 1`: der Name teilt sich die Zeile mit niemandem mehr,
+  // seit er oben steht. `align-items: flex-start` hält den Pfeil auf der ersten Zeile,
+  // wenn der Name auf zwei oder drei geht.
+  assert.match(zurueck, /width:\s*100%/, 'Der Weg-zurück-Knopf nimmt sich nicht die ganze Breite')
+  assert.match(zurueck, /align-items:\s*flex-start/, 'Bei einem langen Namen schwebt der Pfeil zwischen den Zeilen')
+  assert.doesNotMatch(zurueck, /white-space:\s*nowrap/, 'Der Projektname darf umbrechen')
   assert.match(css, /\.onda-side-back-chevron \{[^}]*flex:\s*none/, 'Der Pfeil selbst muss immer sichtbar bleiben')
+})
+
+// Task 7: EINE Stelle, an der Blöcke entstehen. Vorher holte workspace.js die Blöcke an gut
+// zwanzig Stellen direkt aus dem Editor — eine davon zu vergessen hieße, dort still ohne
+// Rollen zu arbeiten, ohne dass ein Test anschlägt. Genau so ist die Lücke entstanden, die
+// dieser Umbau schließt, also hält ein Wächter sie zu.
+//
+// Der reguläre Ausdruck darf hier nirgends im Klartext danebenstehen: Ein Kommentar, der den
+// gesuchten Aufruf beim Namen nennt, ließe den Wächter sich selbst finden statt den Code.
+test('Blöcke entstehen in workspace.js an genau einer Stelle', async () => {
+  const workspace = await readFile(new URL('../src/workspace.js', import.meta.url), 'utf8')
+  assert.match(workspace, /function aktuelleBloecke\(/, 'die eine Blockquelle fehlt')
+  assert.match(workspace, /function bausteinBestand\(/, 'die Ablage wird nirgends gelesen')
+  assert.doesNotMatch(
+    workspace,
+    /getEditorBlocks\(ctx/,
+    'workspace.js holt Blöcke wieder direkt aus dem Editor — dort fehlen dann die Rollen',
+  )
+})
+
+// Task 9 (Issue #36, Kriterium 2): „Freier Absatz" war ein Etikett ohne Aussage — es sah aus
+// wie eine Angabe und war keine. Ein Absatz, den die Erkennung noch nicht gelesen hat und den
+// niemand bewusst als etwas angelegt hat, trägt jetzt gar nichts.
+//
+// Die Auswahl im Menü behält ihr Wort: Dort heißt „Freier Absatz" „lege einen gewöhnlichen
+// Absatz an", und das ist eine Aussage. Deshalb prüft der Wächter die BESCHRIFTUNG der Karten
+// (ROLE_LABELS), nicht die Menü-Auswahl (BLOCK_TYPES).
+test('keine Struktur-Karte trägt mehr „Freier Absatz"', async () => {
+  const workspace = await readFile(new URL('../src/workspace.js', import.meta.url), 'utf8')
+  assert.doesNotMatch(
+    workspace,
+    /\|\| 'Freier Absatz'/,
+    'eine Karte fällt noch auf „Freier Absatz" zurück',
+  )
+  assert.match(workspace, /bausteinNamen\(/, 'die Karten lesen die erkannten Namen nicht')
+  assert.match(workspace, /'Überschrift'/, 'die Überschrift hat ihr Wort verloren')
+  // Die Beschriftungstabelle darf den gewöhnlichen Absatz nicht mehr kennen — sonst käme das
+  // Etikett über ROLE_LABELS.get() zurück, nur ohne den Rückfall daneben.
+  const tabelle = workspace.match(/const ROLE_LABELS = new Map\(\[([\s\S]*?)\]\)/)?.[1] || ''
+  assert.doesNotMatch(tabelle, /paragraph/, 'ROLE_LABELS beschriftet den gewöhnlichen Absatz noch')
 })

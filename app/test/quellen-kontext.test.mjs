@@ -6,7 +6,9 @@ import assert from 'node:assert/strict'
 
 import { QUELLEN_ANFANG_ZEICHEN, anfangsText, baueQuellenKontext, quellenTitel } from '../src/quellen-kontext.mjs'
 import { QUELLENTHEMEN_ANWEISUNG } from '../src/agent-prompts.mjs'
-import { updateLanguageProfile } from '../src/language-profile.mjs'
+import { baueAnfrage } from '../src/agent-tasks.mjs'
+import { ensureMemoryStore } from '../src/memory-model.mjs'
+import { schreibeErkanntes } from '../src/erkanntes-model.mjs'
 
 const quelle = (id, titel, rest = {}) => ({
   id,
@@ -93,39 +95,66 @@ test('Quellen ohne Kennung fallen heraus, statt eine namenlose Zeile zu erzeugen
   assert.deepEqual(liste.map(eintrag => eintrag.id), ['q1'])
 })
 
+// --- Der Anschluss ans Projektwissen ----------------------------------------------------
+// Dieselbe Eigenschaft, die evals/pruefungen/kontext-alle-kanaele.mjs über ALLE Kanäle prüft,
+// hier für diesen einen.
+//
+// Warum dieser Test überhaupt existiert (Issue #30): Der Kanal entstand ohne diesen
+// Anschluss, und JEDER Test in dieser Datei war trotzdem grün. Keiner von ihnen fragte nach
+// etwas, das es hier noch nicht gab — gefunden hat es erst die Prüfung, die eine Eigenschaft
+// über alle Kanäle legt. Ein Test, der nur beschreibt, was gebaut wurde, kann Fehlendes nicht
+// finden. Dieser hier fragt deshalb nach dem Ergebnis: steht das Wissen im Anfragekörper.
+const ERKANNT = 'MARKANTES-PRINZIP-30a7'
+
+function mitWissen() {
+  const memoryStore = ensureMemoryStore(null)
+  schreibeErkanntes(memoryStore, { satz: ERKANNT, at: 1000 })
+  return { project: { id: 'projekt-1' }, doc: null, docs: [], memoryStore }
+}
+
+test('Das Projektwissen erreicht den Anfragekoerper — und steht hinten, nicht im gecachten Praefix', () => {
+  const onda = mitWissen()
+  const kontext = baueQuellenKontext({
+    verstaendnis: { task: 'Seminararbeit' },
+    quellen: [quelle('q1', 'Eins')],
+    onda,
+  })
+
+  // Hinten: die beiden eigenen Bloecke des Kanals stehen unveraendert vorne. Wanderte das
+  // Wissen davor, wuerde die Anweisung erst nach fremdem Text gelesen.
+  assert.equal(kontext.volatiles[0], QUELLENTHEMEN_ANWEISUNG)
+  assert.ok(kontext.volatiles[1].startsWith('Quellen im Projekt: '))
+  assert.ok(kontext.volatiles.length > 2, 'kein einziger Wissensblock angehaengt')
+  assert.ok(kontext.volatiles.slice(2).join('\n').includes(ERKANNT))
+
+  // Und am TATSAECHLICHEN Anfragekoerper, nicht am Zwischenwert: baueAnfrage liest nur
+  // bestimmte Felder, ein Block an falscher Stelle wird stillschweigend verschluckt.
+  const anfrage = baueAnfrage('quellenthemen', kontext)
+  assert.ok(JSON.stringify(anfrage.body).includes(ERKANNT), 'das Wissen erreicht die Anfrage nicht')
+
+  // Nicht in den Zwischenspeicher-Praefix: ein Wissensblock dort entwertet ihn, sobald sich
+  // irgendeine Projektangabe aendert — und dann waere jede Anfrage danach voll zu bezahlen.
+  // Hier traegt genau EIN Block cache_control, denn dieser Kanal fuehrt keinen Dokumenttext.
+  const gecacht = anfrage.body.messages[0].content
+    .filter(block => block && typeof block === 'object' && 'cache_control' in block)
+  assert.equal(gecacht.length, 1)
+  assert.equal(gecacht.some(block => String(block.text || '').includes(ERKANNT)), false)
+})
+
+test('Ohne Wissen entsteht kein Block — auch kein leerer', () => {
+  const ohne = baueQuellenKontext({ quellen: [quelle('q1', 'Eins')], onda: null })
+  assert.equal(ohne.volatiles.length, 2)
+
+  // Gegenprobe: leeres Buendel ist nicht dasselbe wie kein Buendel, muss aber dasselbe
+  // Ergebnis liefern — sonst bezahlte jede Anfrage dafuer, dass nichts bekannt ist.
+  const leer = baueQuellenKontext({ quellen: [quelle('q1', 'Eins')], onda: { project: null } })
+  assert.equal(leer.volatiles.length, 2)
+  assert.equal(JSON.stringify(leer.volatiles).includes(ERKANNT), false)
+})
+
 test('Die Anweisung verbietet Formatrubriken und Sammelgruppen', () => {
   assert.equal(QUELLENTHEMEN_ANWEISUNG.includes('!'), false, 'Ausrufezeichen gefunden')
   assert.match(QUELLENTHEMEN_ANWEISUNG, /Dateityp/)
   assert.match(QUELLENTHEMEN_ANWEISUNG, /Sonstiges/)
   assert.match(QUELLENTHEMEN_ANWEISUNG, /leere Liste/)
-})
-
-// Der Anschluss an die zweite Haelfte. Bis zum 8.8.2026 war dieser Kanal der einzige, der
-// das Projektwissen nicht sah — die Bauweisen-Pruefung (evals/pruefungen/kontext-alle-
-// kanaele.mjs) nannte ihn einen blinden Kanal. Sie prueft, DASS baueOndaBloecke vorkommt;
-// hier steht, dass das Wissen auch wirklich ankommt und wo.
-test('Das Projektwissen erreicht den Kontext — und steht hinten', () => {
-  const languageProfile = updateLanguageProfile({
-    profile: null,
-    projectId: 'p1',
-    changes: { genre: 'scientific', domain: 'MARKANTES-FACH-3c7e' },
-    at: 1000,
-  })
-  const onda = { project: { id: 'p1', name: 'Pr\u00fcfprojekt', languageProfile }, doc: null, docs: [] }
-
-  const ohne = baueQuellenKontext({ quellen: [quelle('q1', 'Eins')] })
-  const mit = baueQuellenKontext({ quellen: [quelle('q1', 'Eins')], onda })
-
-  assert.ok(
-    mit.volatiles.join('\n').includes('MARKANTES-FACH-3c7e'),
-    'die Textsorte erreicht den Kontext nicht',
-  )
-  // Gegenprobe: ohne das Buendel darf die Marke nicht dastehen, sonst kaeme sie von
-  // woanders her und die Suche oben bewiese nichts.
-  assert.equal(ohne.volatiles.join('\n').includes('MARKANTES-FACH-3c7e'), false)
-
-  // Hinten, nicht vorn: verstaendnis und docText tragen cache_control (agent-tasks.mjs).
-  // Ein Wissensblock weiter vorn entwertete den Zwischenspeicher bei jeder Projektaenderung.
-  assert.deepEqual(mit.volatiles.slice(0, ohne.volatiles.length), ohne.volatiles)
-  assert.ok(mit.volatiles.length > ohne.volatiles.length)
 })

@@ -58,10 +58,21 @@ async function assertAxe(page, state) {
   )
 }
 
+// 'networkidle' heisst „das Netz ist ruhig", nicht „die App ist bereit": Das Buendel ist
+// dann geladen, aber noch nicht unbedingt ausgefuehrt, und window.AIWT existiert erst
+// danach. Unter Last (paralleler Eval-Lauf) reisst diese Luecke auf, und der naechste
+// Zugriff scheitert mit „Cannot read properties of undefined (reading 'newProject')" --
+// ein Fehler, der wie ein Befund aussieht und keiner ist.
+async function warteAufApp(page) {
+  await page.waitForFunction(() => Boolean(window.AIWT?.newProject), null, { timeout: 15000 })
+}
+
 async function freshApp(page) {
   await page.goto(baseUrl, { waitUntil: 'networkidle' })
+  await warteAufApp(page)
   await page.evaluate(() => localStorage.clear())
   await page.reload({ waitUntil: 'networkidle' })
+  await warteAufApp(page)
 }
 
 async function seedAccessibleProject(page) {

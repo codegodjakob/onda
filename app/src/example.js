@@ -474,3 +474,58 @@ export function buildExampleMaterial() {
     { id: sid('m'), kind: 'Zitat', text: '„Technology should require the smallest possible amount of attention." — Case, Prinzip 1', x: 172, y: 424 },
   ]
 }
+
+// Das Beispielprojekt bleibt vom Pausen-Ausloeser ausgeschlossen: Eine Vorfuehrung soll
+// nichts kosten und ohne Schluessel funktionieren. Damit die Struktur-Spalte dort trotzdem
+// etwas zeigt, kommt der Bestand mitgeliefert -- so wie die vorgefertigten Anmerkungen auch.
+//
+// Die Namen sind die eines Essays, nicht die einer allgemeinen Liste: 'Anlass' und 'Einwand'
+// wuerde eine Lektorin bei DIESEM Text sagen, 'Kernbehauptung' und 'Gegenposition' stehen im
+// Lehrbuch. Genau dieser Unterschied ist der Zweck der Erkennung, und das Beispiel muss ihn
+// vorfuehren, sonst fuehrt es das Falsche vor.
+//
+// funktion ist die unsichtbare Seite: Sie speist block.role und damit die Rechenlogik
+// (claim-ledger.mjs, argument-projection.mjs). Genau EINE Art traegt claim -- die Projektion
+// verlangt genau eine zentrale Aussage und kehrt sonst wirkungslos zurueck.
+//
+// Die Kennungen und die Zeichenzahlen stammen aus buildExampleBody(), einmal gemessen.
+export function buildExampleBausteinarten() {
+  return {
+    textsorte: 'Essay',
+    arten: [
+      { id: 'art-bsp-anlass', name: 'Anlass', beschreibung: 'Setzt den Gegenstand und sagt, worum es geht.', funktion: 'claim' },
+      { id: 'art-bsp-begruendung', name: 'Begründung', beschreibung: 'Trägt einen Grund für die These nach.', funktion: 'evidence' },
+      { id: 'art-bsp-herkunft', name: 'Herkunft', beschreibung: 'Woher der Gedanke stammt und von wem.', funktion: 'evidence' },
+      { id: 'art-bsp-bild', name: 'Bild', beschreibung: 'Macht den Gedanken an einem konkreten Fall greifbar.', funktion: null },
+      { id: 'art-bsp-massstab', name: 'Maßstab', beschreibung: 'Benennt, woran sich die Behauptung messen lässt.', funktion: null },
+      { id: 'art-bsp-haltung', name: 'Haltung', beschreibung: 'Sagt, was daraus für die eigene Arbeit folgt.', funktion: null },
+      { id: 'art-bsp-einwand', name: 'Einwand', beschreibung: 'Spricht gegen die eigene These.', funktion: 'counterpoint' },
+      { id: 'art-bsp-schluss', name: 'Schluss', beschreibung: 'Führt die Fäden zusammen.', funktion: 'transition' },
+      { id: 'art-bsp-notiz', name: 'Notiz', beschreibung: 'Material für den nächsten Durchgang, noch nicht Text.', funktion: null },
+    ],
+    zuordnung: {
+      'b-calm-auftakt': { artId: 'art-bsp-anlass', zeichen: 227 },
+      'b-calm-warum-1': { artId: 'art-bsp-begruendung', zeichen: 301 },
+      'b-calm-warum-2': { artId: 'art-bsp-begruendung', zeichen: 306 },
+      'b-calm-warum-3': { artId: 'art-bsp-begruendung', zeichen: 316 },
+      'b-calm-geschichte-1': { artId: 'art-bsp-herkunft', zeichen: 203 },
+      'b-calm-geschichte-2': { artId: 'art-bsp-herkunft', zeichen: 176 },
+      'b-calm-beispiele': { artId: 'art-bsp-bild', zeichen: 161 },
+      'b-calm-massstab': { artId: 'art-bsp-massstab', zeichen: 198 },
+      'b-calm-schreiben-1': { artId: 'art-bsp-begruendung', zeichen: 288 },
+      'b-calm-schreiben-2': { artId: 'art-bsp-bild', zeichen: 180 },
+      'b-calm-schreiben-3': { artId: 'art-bsp-haltung', zeichen: 210 },
+      'b-calm-haltung': { artId: 'art-bsp-haltung', zeichen: 240 },
+      'b-calm-einwand': { artId: 'art-bsp-einwand', zeichen: 152 },
+      'b-calm-schluss': { artId: 'art-bsp-schluss', zeichen: 107 },
+      'b-calm-notiz-1': { artId: 'art-bsp-notiz', zeichen: 77 },
+      'b-calm-notiz-2': { artId: 'art-bsp-notiz', zeichen: 65 },
+      'b-calm-notiz-3': { artId: 'art-bsp-notiz', zeichen: 85 },
+      'b-calm-notiz-4': { artId: 'art-bsp-notiz', zeichen: 73 },
+      'b-calm-notiz-5': { artId: 'art-bsp-notiz', zeichen: 89 },
+      'b-calm-notiz-6': { artId: 'art-bsp-notiz', zeichen: 62 },
+    },
+    laufSignatur: '',
+    standAt: 0,
+  }
+}

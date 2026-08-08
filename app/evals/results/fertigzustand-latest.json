@@ -3,8 +3,8 @@
   "catalogVersion": "2026-08-05.3",
   "stage": "FERTIGZUSTAND",
   "iteration": 1,
-  "generatedAt": "2026-08-07T15:01:36.591Z",
-  "gitCommit": "2a7f4a9a93a9331b32f0623872bc75abea9d767e",
+  "generatedAt": "2026-08-08T14:09:36.027Z",
+  "gitCommit": "f43b1a75e1df4e364df27775dcb1f4a060480782",
   "rubricScores": {
     "truth": 5,
     "authorship": 5,
@@ -38,8 +38,21 @@
     }
   ],
   "massstabVergleich": {
-    "status": "unveraendert",
-    "aenderungen": []
+    "status": "geaendert",
+    "aenderungen": [
+      {
+        "bereich": "urteilsweise",
+        "art": "hinzugefuegt",
+        "id": "evals/pruefungen/gestalt.mjs",
+        "jetzt": "je-eval"
+      },
+      {
+        "bereich": "urteilsweise",
+        "art": "hinzugefuegt",
+        "id": "evals/run-onda-ui-quality.mjs",
+        "jetzt": "je-eval"
+      }
+    ]
   },
   "massstab": {
     "catalogVersion": "2026-08-05.3",
@@ -1337,12 +1350,13 @@
       "DESIGN-06": {
         "title": "Die Umgestaltungsentscheidungen sind getroffen",
         "gate": "hard",
-        "automation": "file-inspection",
+        "automation": "integration",
         "given": "docs/REDESIGN-IDEEN.md sammelt Punkte mit Status offen, vereinbart oder verworfen.",
         "when": "Die Umsetzung eines Punktes beginnt.",
         "then": "Dieser Punkt trägt den Status vereinbart oder verworfen mit einer Begründung. Kein Punkt wird umgesetzt, solange er auf offen steht — die Entscheidung liegt beim Nutzer, nicht bei der Umsetzung.",
         "evidence": [
-          "Datei-Prüfung: Statustabelle in docs/REDESIGN-IDEEN.md enthält keinen Eintrag 'open' für einen Punkt, dessen Eval bereits bestanden wird"
+          "Datei-Prüfung: Statustabelle in docs/REDESIGN-IDEEN.md enthält keinen Eintrag 'open' für einen Punkt, dessen Eval bereits bestanden wird",
+          "Frische Messung im selben Lauf: ob ein Punkt umgesetzt ist, wird durch Starten der Gestalt-Prüfung jetzt ermittelt — nicht aus dem Ergebnisstand eines früheren Laufs gelesen"
         ],
         "source": [
           "Anweisung 2026-07-31: erst sammeln, dann umsetzen"
@@ -2958,6 +2972,10 @@
       "ONDA-UI-22": [
         "evals/run-onda-ui-quality.mjs"
       ]
+    },
+    "urteilsweise": {
+      "evals/pruefungen/gestalt.mjs": "je-eval",
+      "evals/run-onda-ui-quality.mjs": "je-eval"
     }
   },
   "evals": [

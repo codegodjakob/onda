@@ -1,6 +1,7 @@
 import { isIntegrityCategory } from './reasoning-model.mjs'
 import { istFremdeInterviewNachricht } from './verstaendnis-interview.mjs'
 import { normalizeAnnotationWorkspace } from './annotation-controller.mjs'
+import { normalisiereBausteinarten } from './bausteinlauf-model.mjs'
 
 const WORKSPACE_VERSION = 3
 const IDLE_BEFORE_INITIATIVE_MS = 3000
@@ -137,22 +138,37 @@ export function ensureWorkspaceState(doc) {
     })
   }
 
+  // Die erkannten Bausteinarten liegen NEBEN dem Text (Spec: "Wo es liegt"). Was hier
+  // ankommt, kann aus einer aelteren Fassung stammen -- entweder es ist vollstaendig
+  // gueltig, oder es ist null. Eine halbe Ablage waere schlimmer als keine.
+  current.bausteinarten = normalisiereBausteinarten(current.bausteinarten)
+
   doc.workspace = current
   return current
 }
 
-export function collectBlockSnapshots(docJson) {
+// rollen: Map<blockId, funktion> aus doc.workspace.bausteinarten (bausteinlauf-model.mjs).
+//
+// Drei Quellen in fester Rangfolge, und die Reihenfolge ist die ganze Entscheidung
+// (Issue #36, Entscheidung 1):
+//
+//   1. Ueberschrift — folgt dem Knotentyp. Keine Vermutung, keine Ablage.
+//   2. Die Ablage — was die KI fuer DIESEN Absatz erkannt hat. Erkanntes gewinnt.
+//   3. node.attrs.semanticRole — die Art, die beim ERZEUGEN von Hand gewaehlt wurde
+//      (insertSemanticBlock, ueber den Knopf "Baustein hinzufuegen").
+//
+// Punkt 3 ist bewusst kein Rueckfall auf alte Zeiten, sondern ein lebender Weg: Der Knopf
+// erzeugt Bausteine und schreibt das Merkmal weiter. Erzeugen und Ueberstimmen sind zwei
+// verschiedene Handlungen -- wer bewusst eine Kernbehauptung anlegt, sieht sie, bis die
+// Erkennung sie benennt. Ohne Punkt 3 waere der Knopf ein Knopf ohne sichtbare Wirkung.
+export function collectBlockSnapshots(docJson, rollen = null) {
   return (docJson && Array.isArray(docJson.content) ? docJson.content : []).map((node, index) => {
     const text = textOf(node).trim()
-    const role = node.type === 'heading' ? 'heading' : (node.attrs && node.attrs.semanticRole) || 'paragraph'
-    return {
-      id: (node.attrs && node.attrs.blockId) || null,
-      index,
-      type: node.type,
-      role,
-      text,
-      excerpt: text.slice(0, 160),
-    }
+    const id = (node.attrs && node.attrs.blockId) || null
+    const role = node.type === 'heading'
+      ? 'heading'
+      : (id && rollen && rollen.get(id)) || (node.attrs && node.attrs.semanticRole) || 'paragraph'
+    return { id, index, type: node.type, role, text, excerpt: text.slice(0, 160) }
   })
 }
 

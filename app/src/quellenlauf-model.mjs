@@ -101,9 +101,8 @@ export async function versucheQuellenlauf({
   quellen = [],
   bestehendeThemen = [],
   verstaendnis = null,
-  // Textsorte, Aussagen-Speicher und Gedaechtnis. Wird nur durchgereicht: was daraus wird,
-  // entscheidet baueQuellenKontext. Ohne diesen Durchreicher waere der Quellenlauf der
-  // einzige Kanal, der das Projektwissen nicht saehe.
+  // Das Projektwissen (Textsorte, Aussagen-Speicher, Nachbartexte, Gedaechtnis). Ohne
+  // es waere dies ein blinder Kanal — siehe quellen-kontext.mjs.
   onda = null,
   vonHand = false,
   sperreSetzen,

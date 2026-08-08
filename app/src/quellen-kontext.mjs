@@ -73,14 +73,18 @@ function quelleFuerPrompt(quelle) {
 //     ein Prompt ist eine Bitte, kein Riegel,
 //   - die vom Agenten gebildeten sind nur ein Vorschlag von letztem Mal. Sie stehen
 //     ebenfalls da, damit dieselbe Ordnung nicht bei jedem Lauf neue Namen bekommt.
+// onda: {project, doc, docs, memoryStore} — Textsorte, Aussagen-Speicher, Nachbartexte
+// und Gedaechtnis (onda-kontext.mjs), ganz hinten in den volatilen Bloecken.
 //
-// onda: {project, doc, docs, memoryStore} — Textsorte, Aussagen-Speicher und Gedaechtnis
-// (onda-kontext.mjs), ganz hinten in den volatiles und damit hinter dem gecachten Praefix.
-// Dass es hier hingehoert, sagt schon die Begruendung oben zum Verstaendnis: dieselben
-// zwanzig Quellen ordnen sich fuer eine Seminararbeit anders als fuer einen Werbetext.
-// Genau diese Angabe steht aber nicht im Verstaendnis, sondern im Stilprofil — ohne die
-// Bloecke bliebe der Satz eine Absicht. Der Aussagen-Speicher wirkt in dieselbe Richtung:
-// wofuer die Quellen im Projekt einstehen sollen, ordnet sie besser als jeder Titel.
+// Dieser Kanal ging ohne das Wissen an den Start und war damit ein BLINDER Kanal. Kein
+// Unit-Test hat es gemerkt — sie belegen jede Quelle einzeln. Gemeldet hat es die
+// Eigenschafts-Pruefung, die ueber ALLE Kanaele laeuft (evals/pruefungen/
+// kontext-alle-kanaele.mjs, KONTEXT-01 baulich). Genau dafuer steht sie da.
+//
+// Fuer die Themenbildung zaehlt vor allem die Textsorte: dieselben zwanzig Quellen ordnen
+// sich fuer eine Seminararbeit anders als fuer einen Werbetext. Die Nachbartexte helfen
+// mit, weil eine Gruppe, die nur in EINEM Text vorkommt, oft keine Gruppe ist, sondern
+// ein Abschnitt.
 export function baueQuellenKontext({
   verstaendnis = null,
   quellen = [],

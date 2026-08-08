@@ -320,6 +320,32 @@ export function getFindingQueue(doc) {
   }
 }
 
+// Ist das Verwerfen DIESER Anmerkung eine Risikoannahme?
+//
+// Die Regel lag bisher innen in decideFinding und entschied dort still, ob eine
+// Verwerfung als 'risk-accepted' oder als 'dismissed' verbucht wird. Seit die
+// Oberflaeche dieselbe Frage stellen muss — die Risiko-Tafel erscheint genau dann,
+// wenn das Verwerfen wirklich ein angenommenes Risiko ist — braucht sie einen Namen
+// und einen Platz. Ein zweiter Nachbau in der Oberflaeche waere der sichere Weg,
+// dass Tafel und Buchfuehrung eines Tages auseinanderdriften.
+//
+// Die Textart reist am Finding mit (agent-findings.mjs hinweisZuFinding). Ohne sie
+// entscheidet dieselbe Vier-Arten-Regel wie bisher (textart-regeln.mjs: fehlende
+// Textart heisst fail-closed "alle vier"). Mit ihr wird die Liste nur enger: in
+// einem Gedicht gibt es gar keine Integritaetsfrage, in einem Marketingtext nur die
+// falsche Tatsachenbehauptung.
+export function istRisikoAnnahme(finding) {
+  if (!finding) return false
+  // Nachschlagen ueber hasOwnProperty: sonst liefert 'constructor' oder 'toString'
+  // eine geerbte Funktion statt undefined (gleiche Vorsicht wie eigenerWert in
+  // textart-regeln.mjs).
+  const exact = Object.prototype.hasOwnProperty.call(INTEGRITY_ANNOTATION_CATEGORIES, finding.anmerkungsart)
+    ? INTEGRITY_ANNOTATION_CATEGORIES[finding.anmerkungsart]
+    : null
+  if (exact && isIntegrityCategory(exact, finding.textart)) return true
+  return isIntegrityCategory(finding.category, finding.textart)
+}
+
 export function decideFinding(doc, findingId, decision, at = Date.now()) {
   ensureReasoningModel(doc)
   const finding = doc.findings.find(item => item.id === findingId)
@@ -330,17 +356,7 @@ export function decideFinding(doc, findingId, decision, at = Date.now()) {
   }
 
   let outcome = 'resolved'
-  if (decision.kind === 'reject') {
-    // Die Textart reist am Finding mit (agent-findings.mjs hinweisZuFinding). Ohne sie
-    // entscheidet dieselbe Vier-Arten-Regel wie bisher.
-    const exactIntegrityCategory = INTEGRITY_ANNOTATION_CATEGORIES[finding.anmerkungsart]
-    const exactIntegrity = exactIntegrityCategory
-      ? isIntegrityCategory(exactIntegrityCategory, finding.textart)
-      : false
-    outcome = isIntegrityCategory(finding.category, finding.textart) || exactIntegrity
-      ? 'risk-accepted'
-      : 'dismissed'
-  }
+  if (decision.kind === 'reject') outcome = istRisikoAnnahme(finding) ? 'risk-accepted' : 'dismissed'
   finding.status = outcome
   finding.decidedAt = at
   const appliedText = String(decision.appliedText || '')
@@ -352,9 +368,6 @@ export function decideFinding(doc, findingId, decision, at = Date.now()) {
     kind: decision.kind,
     outcome,
     reason: decision.reason || '',
-    rejectionScope: decision.kind === 'reject' && typeof decision.rejectionScope === 'string'
-      ? decision.rejectionScope
-      : '',
     appliedText,
     // Betroffene Passage zum Entscheidungszeitpunkt. Dadurch bleibt im Verlauf
     // sichtbar, welcher Wortlaut aus Übernahme, eigener Fassung oder Verwerfen
