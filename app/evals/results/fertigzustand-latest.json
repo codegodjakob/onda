@@ -3,8 +3,8 @@
   "catalogVersion": "2026-08-05.3",
   "stage": "FERTIGZUSTAND",
   "iteration": 1,
-  "generatedAt": "2026-08-08T12:35:24.711Z",
-  "gitCommit": "5cb5e63030a29cb3d5713c0935893a460ab4f2a0",
+  "generatedAt": "2026-08-08T12:45:35.083Z",
+  "gitCommit": "0a4de36acc441c22bc4b93bcc8044366e8dcc9c8",
   "rubricScores": {
     "truth": 5,
     "authorship": 5,
@@ -24,15 +24,15 @@
     "access_privacy": "Automatisierte Drei-Engine-, Zoom-, Zielgrößen-, Export- und Geheimnisprüfungen bestehen; echte assistive Nutzung bleibt extern, daher Deckel 4,5."
   },
   "coverage": {
-    "passed": 139,
+    "passed": 142,
     "applicable": 147,
-    "ratio": 0.9456
+    "ratio": 0.966
   },
   "loops": [
     {
       "iteration": 1,
-      "passed": 139,
-      "failed": 8,
+      "passed": 142,
+      "failed": 5,
       "externalOpen": 5,
       "weightedScore": 4.88
     }
@@ -4211,7 +4211,7 @@
     },
     {
       "id": "KONTEXT-01",
-      "status": "failed",
+      "status": "passed",
       "evidence": [
         {
           "kind": "integration",
@@ -4223,12 +4223,11 @@
           "path": "evals/results/laeufe/test-onda-kontext-test-mjs.log",
           "command": "node --test test/onda-kontext.test.mjs"
         }
-      ],
-      "note": "Gebundene Prüfung in diesem Lauf fehlgeschlagen: evals/pruefungen/kontext-alle-kanaele.mjs"
+      ]
     },
     {
       "id": "KONTEXT-02",
-      "status": "failed",
+      "status": "passed",
       "evidence": [
         {
           "kind": "integration",
@@ -4240,12 +4239,11 @@
           "path": "evals/results/laeufe/test-onda-kontext-test-mjs.log",
           "command": "node --test test/onda-kontext.test.mjs"
         }
-      ],
-      "note": "Gebundene Prüfung in diesem Lauf fehlgeschlagen: evals/pruefungen/kontext-alle-kanaele.mjs"
+      ]
     },
     {
       "id": "KONTEXT-03",
-      "status": "failed",
+      "status": "passed",
       "evidence": [
         {
           "kind": "integration",
@@ -4257,8 +4255,7 @@
           "path": "evals/results/laeufe/test-onda-kontext-test-mjs.log",
           "command": "node --test test/onda-kontext.test.mjs"
         }
-      ],
-      "note": "Gebundene Prüfung in diesem Lauf fehlgeschlagen: evals/pruefungen/kontext-alle-kanaele.mjs"
+      ]
     },
     {
       "id": "KONTEXT-04",
