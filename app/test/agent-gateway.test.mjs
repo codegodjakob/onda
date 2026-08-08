@@ -20,6 +20,7 @@ const GUELTIGER_HINWEIS = {
     vorschlag: null,
     istGrundursache: true,
     integritaet: true,
+    gewinn: 'schaerft',
   }],
 }
 
