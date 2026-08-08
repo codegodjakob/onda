@@ -3972,6 +3972,29 @@ function positionLocalSurface(blockId) {
   local.style.top = `${below ? blockRect.bottom - layerRect.top + 14 : blockRect.top - layerRect.top}px`
   local.hidden = Boolean(scrollRect && (blockRect.bottom < scrollRect.top || blockRect.top > scrollRect.bottom))
 
+  // Danebenstehen heisst am Absatz ausgerichtet -- aber nie ueber den Bildrand hinaus.
+  // Eine hohe Anmerkung reichte sonst unten heraus, und weil die Flaeche nicht rollt, war
+  // ihr letzter Knopf unerreichbar. Bei der Risiko-Tafel (#38) ist das der Abbrechen-Knopf
+  // — also genau der Ausweg, der ihr Pflichtfeld ueberhaupt vertretbar macht. Gemessen am
+  // 08.08.2026 auf 640px Fensterhoehe: Abbrechen lag bei 644–676, die Tafel selbst ist nur
+  // 550px hoch. Sie haette also gepasst; sie wurde nur zu tief angesetzt.
+  //
+  // Nur schieben, nicht schrumpfen: Passt die Flaeche ins Sichtfeld, rutscht sie so weit
+  // hoch wie noetig. Passt sie nicht, bleibt sie am Absatz — dann ist Hochschieben keine
+  // Rettung, sondern nur eine andere Art, oben abzuschneiden.
+  if (!below) {
+    const sichtOben = scrollRect ? Math.max(0, scrollRect.top) : 0
+    const sichtUnten = scrollRect ? Math.min(window.innerHeight, scrollRect.bottom) : window.innerHeight
+    const hoehe = local.getBoundingClientRect().height
+    const rand = 12
+    if (hoehe > 0 && hoehe + rand * 2 <= sichtUnten - sichtOben) {
+      const gewuenscht = Math.min(Math.max(blockRect.top, sichtOben + rand), sichtUnten - rand - hoehe)
+      if (Math.abs(gewuenscht - blockRect.top) > 0.5) {
+        local.style.top = `${gewuenscht - layerRect.top}px`
+      }
+    }
+  }
+
   const localRect = local.getBoundingClientRect()
   const feedbackBottom = below ? localRect.bottom : blockRect.bottom
 
