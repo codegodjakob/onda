@@ -113,3 +113,52 @@ jobs:
       - name: Server beenden
         if: always()
         run: kill "$(cat /tmp/onda-server.pid)" 2>/dev/null || true
+
+  # Zweiter Auftrag: das Figma-Werkzeug in tools/figma-onda-one-page.
+  #
+  # WARUM es ihn gibt: Der Auftrag oben setzt `working-directory: app` und sieht
+  # damit ausschliesslich die App. tools/figma-onda-one-page lief deshalb in
+  # KEINER Pruefung mit — obwohl der Ordner ueber die letzten 40 Commits mehr
+  # Aenderungen hatte als workspace.js und style.css. Ab hier laeuft er mit.
+  #
+  # WARUM er nur berichtet: `continue-on-error: true`. Dort sind heute 10 von 262
+  # Pruefungen rot, und niemand weiss bisher, ob das veraltete Erwartungen oder
+  # kaputter Code sind. Ein rotes Licht, das niemand gruen bekommt, ist schlimmer
+  # als gar keines: man lernt, es wegzuklicken — und klickt dann auch das naechste
+  # weg. Dieser Auftrag macht den Pull Request also NICHT rot; er zeigt nur, wie
+  # der Stand ist. Sobald die 10 gruen sind, kann die Zeile ersatzlos weg.
+  figma-werkzeug:
+    name: Figma-Werkzeug (nur berichtend)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true
+    defaults:
+      run:
+        working-directory: tools/figma-onda-one-page
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          # Es gibt genau EINE Sperrdatei im Projekt. Das Figma-Werkzeug hat
+          # bewusst keine eigene: sein Bau greift auf app/node_modules zu.
+          cache-dependency-path: app/package-lock.json
+
+      # Nicht im Werkzeugordner, sondern in app/ — dort liegt die package.json
+      # mit esbuild, den der naechste Schritt ueber ../../app/node_modules
+      # aufruft.
+      - name: Pakete installieren
+        run: npm ci
+        working-directory: app
+
+      # Erst bauen, dann pruefen — dieselbe Reihenfolge wie im `verify`-Skript
+      # des Werkzeugs. Umgekehrt kaeme der Bau nie dran, weil ein fehlgeschlagener
+      # Schritt den Auftrag abbricht und die Tests heute rot sind.
+      - name: Bundle bauen
+        run: npm run build
+
+      - name: Tests
+        run: npm test

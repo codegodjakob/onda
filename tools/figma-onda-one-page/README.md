@@ -2,11 +2,18 @@
 
 Lokales Figma-Development-Plugin für die bestehende `Page 1` der Datei `Claude Code`.
 
+## Bauen
+
+Figma lädt nicht `src/`, sondern die daraus erzeugte Datei `dist/code.js` — nach jeder Änderung am Quelltext baut dieser eine Befehl sie neu (das Bau-Werkzeug liegt in `app/node_modules`, dieses Plugin hat bewusst keine eigenen Pakete):
+
+```sh
+cd tools/figma-onda-one-page && npm run build
+```
+
 ## Lokale Prüfung
 
 ```sh
 node --test tools/figma-onda-one-page/test/*.test.mjs
-app/node_modules/.bin/esbuild tools/figma-onda-one-page/src/runtime.mjs --bundle --format=iife --platform=browser --target=es2017 --outfile=tools/figma-onda-one-page/dist/code.js
 ```
 
 ## Bedienung
