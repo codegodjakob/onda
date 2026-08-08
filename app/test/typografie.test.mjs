@@ -24,11 +24,26 @@ function ohneKommentare(quelle) {
   return quelle.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|\s)\/\/[^\n]*/g, '$1')
 }
 
+// { recursive: true } (Node 22), damit ein künftiger Unterordner unter app/src/ nicht
+// stillschweigend übergangen wird: ein flaches Lesen verschluckt Unterverzeichnisse samt
+// allem darin — die Prüfung bliebe grün, ohne die neuen Dateien je gesehen zu haben.
+// Vorbild: app/test/lauf-tor-waechter.test.mjs:15-24. Die zurückgegebenen Pfade sind
+// relativ und mit '/' getrennt, so wie new URL(name, srcDir) sie erwartet.
+//
+// Die Untergrenze darunter ist der eigentliche Punkt: Ohne sie wäre diese Prüfung auch
+// dann grün, wenn app/src/ leer wäre — eine Schleife über null Dateien beschwert sich
+// nie. Genau so sieht eine Prüfung aus, die still lügt.
 async function alleQuellen() {
-  const namen = await readdir(srcDir)
-  const treffer = namen.filter(name => /\.(css|js|mjs)$/.test(name))
+  const namen = await readdir(srcDir, { recursive: true })
+  const treffer = namen
+    .map(name => String(name).split('\\').join('/'))
+    .filter(name => /\.(css|js|mjs)$/.test(name))
   const inhalte = await Promise.all(treffer.map(name => readFile(new URL(name, srcDir), 'utf8')))
-  return treffer.map((name, i) => [name, inhalte[i]])
+  const quellen = treffer.map((name, i) => [name, inhalte[i]])
+  assert.ok(quellen.length >= 4,
+    `Nur ${quellen.length} Quelldateien unter app/src/ gelesen — dort liegen normalerweise `
+    + 'Dutzende. Entweder ist der Ordner leer, oder er liegt nicht mehr dort, wo hier gesucht wird.')
+  return quellen
 }
 
 test('Kein einziges Element im Programm wird großgeschrieben', async () => {
