@@ -135,14 +135,16 @@ async function runEditor(browser) {
   // zurück.
   assert.equal(await page.evaluate(() => window.AIWT.__workspaceTestBridge.gehoertRueckgaengigDerAnmerkung()), false)
 
+  // Ein Stilvorschlag verschwindet beim Verwerfen WORTLOS. Hier stand bis zum
+  // 8.8.2026 die Frage „Was soll Onda daraus lernen?" mit drei Knöpfen, von denen
+  // zwei aus dieser einen Anmerkung eine Dauerregel machten. Eine Anmerkung gilt für
+  // eine Stelle in einem Text, einmal (Issue #38) — es gibt nichts zu wählen.
   await page.getByRole('button', { name: 'Original behalten' }).click()
-  const consequence = page.getByRole('region', { name: 'Folge des Verwerfens wählen' })
-  await consequence.waitFor({ state: 'visible' })
-  assert.match(await consequence.textContent(), /ähnlicher Hinweis darf später wieder erscheinen/)
-  assert.match(await consequence.textContent(), /Andere Texte bleiben unberührt/)
-  assert.match(await consequence.textContent(), /anderen Projekten zurück/)
-  await consequence.getByRole('button', { name: /In diesem Text nicht mehr/ }).click()
   assert.equal(await page.evaluate(() => window.AIWT.state.docs.find(doc => doc.id === window.AIWT.state.active).findings.find(item => item.id === 'onda-editor-smoke').status), 'dismissed')
+  assert.equal(await page.getByRole('region', { name: 'Folge des Verwerfens wählen' }).count(), 0, 'Die Frage nach dem Verwerfungsumfang ist zurück')
+  // Und keine Tafel: ein Satzstil-Vorschlag ist keine Integritätsfrage, ihn zu
+  // verwerfen ist keine Risikoannahme.
+  assert.equal(await page.locator('.integrity-risk-confirmation').count(), 0, 'Die Risiko-Tafel erscheint bei einem Stilvorschlag')
   // Auch das Verwerfen ist eine Entscheidung über eine Anmerkung — dieselbe Taste holt
   // sie zurück. Früher lag dafür ein Link "Entscheidung zurücknehmen" in der Leiste.
   await page.locator('#editor .ProseMirror').click()
@@ -172,30 +174,21 @@ async function runEditor(browser) {
 // Begründung, die als Entscheidung stehenbleibt — statt dass eine Integritätsfrage
 // still abgelegt wird.
 //
-// WARUM diese Prüfung den Zustand von Hand setzt, statt „Verwerfen" zu klicken:
-// Bis zum 5. August 2026 öffnete „Verwerfen" bei einer Integritätsfrage genau diese
-// Tafel — handleSuggestionReject setzte riskConfirmationFindingId. Commit 92190c1
-// ("Notizmodus und Verwerfungsumfang vollenden") hat diese Zeile entfernt; derselbe
-// Knopf setzt heute pendingRejectionFindingId und fragt nach dem Verwerfungsumfang.
-// Im ganzen src/ wird riskConfirmationFindingId seither NUR NOCH auf null gesetzt.
+// Der Weg dorthin ist seit dem 8.8.2026 (Issue #38) der normale Knopf: Wer eine
+// Integritätsfrage verwirft, bekommt die Tafel. Wer einen Stilvorschlag verwirft,
+// bekommt sie nicht — das prüft runEditor weiter oben.
 //
-// Die Tafel selbst ist geblieben und wird bei jedem Zeichnen abgefragt
-// (workspace.js:3174). Sie erscheint also weiterhin — aber nur für ein GESPEICHERTES
-// Dokument, dessen Arbeitszustand den Verweis von damals noch trägt. Genau diese Lage
-// wird hier gestellt. Ohne sie hätte der Zustand, der die Tafel überhaupt erscheinen
-// lässt, überhaupt keinen Beleg: weder im Browser noch am Modell.
+// Bis dahin musste diese Prüfung den Zustand riskConfirmationFindingId von Hand
+// stellen, weil Commit 92190c1 der Tafel ihren Auslöser genommen hatte. Dass sie
+// jetzt klicken kann, IST der Beweis, dass der Auslöser zurück ist.
 async function runRisikoTafel(browser) {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } })
   await openExample(page)
 
-  // Der Zustand wird VOR injectFinding gesetzt: injectFinding zeichnet neu, und erst
-  // beim Zeichnen fragt renderIntegrityRiskConfirmation danach. Umgekehrt bliebe die
-  // Tafel bis zum nächsten Anlass unsichtbar.
-  const stelleTafel = (findingId, createdAt) => page.evaluate(({ id, at }) => {
+  // Setzt eine Integritätsfrage an den Text — mehr nicht. Die Tafel holt sich die
+  // Prüfung danach selbst, über den Knopf.
+  const setzeIntegritaetsfrage = (findingId, createdAt) => page.evaluate(({ id, at }) => {
     const block = window.AIWT.__blockIdentityTestBridge.getBlocks().find(kandidat => kandidat.text.length > 24)
-    const doc = window.AIWT.state.docs.find(kandidat => kandidat.id === window.AIWT.state.active)
-    doc.workspace.riskConfirmationFindingId = id
-    doc.workspace.riskReason = ''
     window.AIWT.__workspaceTestBridge.injectFinding({
       id, status: 'open', placement: 'passage', blockId: block.id, target: block.text.slice(0, 28),
       // 'source' ohne Textart IST eine Integritätsfrage: eine fehlende Textart bedeutet
@@ -220,7 +213,7 @@ async function runRisikoTafel(browser) {
     }
   }, findingId)
 
-  await stelleTafel('onda-risiko-annehmen', -20)
+  await setzeIntegritaetsfrage('onda-risiko-annehmen', -20)
   const anmerkung = page.locator('#localAgentLayer [data-finding-id="onda-risiko-annehmen"]')
   await anmerkung.waitFor({ state: 'visible' })
   // Die Tafel hängt IN der heutigen Anmerkung — dem .onda-annotation aus renderAnnotation.
@@ -229,6 +222,9 @@ async function runRisikoTafel(browser) {
   // sind sie gescheitert.
   assert.equal(await anmerkung.evaluate(node => node.classList.contains('onda-annotation')), true)
   assert.equal(await anmerkung.getAttribute('data-annotation-form'), 'source')
+
+  // Der Auslöser: der ganz normale Verwerfen-Knopf der Anmerkung.
+  await anmerkung.getByRole('button', { name: 'Verwerfen', exact: true }).click()
   const tafel = anmerkung.locator('.integrity-risk-confirmation')
   await tafel.waitFor({ state: 'visible' })
   assert.equal(await tafel.getAttribute('aria-label'), 'Wissenschaftliches Risiko bewusst annehmen')
@@ -236,8 +232,23 @@ async function runRisikoTafel(browser) {
   assert.match(await tafel.textContent(), /unbelegte Behauptung/)
   assert.equal(await tafel.locator('textarea').getAttribute('aria-label'), 'Begründung für die bewusste Risikoannahme')
 
+  // Die Begründung ist PFLICHT. Ohne sie ist der Bestätigungsknopf gesperrt — und der
+  // Ausweg ist es nie, sonst wäre die Pflicht eine Sackgasse.
+  const annehmen = tafel.getByRole('button', { name: 'Wissenschaftliches Risiko bewusst annehmen', exact: true })
+  const abbrechen = tafel.getByRole('button', { name: 'Abbrechen', exact: true })
+  assert.equal(await annehmen.isDisabled(), true, 'Ohne Begründung lässt sich das Risiko annehmen')
+  assert.equal(await abbrechen.isDisabled(), false, 'Abbrechen ist gesperrt — die Pflicht wird zur Sackgasse')
+  assert.equal(await tafel.locator('.integrity-risk-reason-label').textContent(), 'Begründung')
+  // Der Ausweg steht zu lesen, nicht bloß im Knopf.
+  assert.match(await tafel.textContent(), /Brich ab, dann bleibt die Anmerkung offen/)
+
+  // Leerzeichen sind keine Begründung — sonst wäre die Pflicht mit der Leertaste umgangen.
+  await tafel.locator('textarea').fill('    ')
+  assert.equal(await annehmen.isDisabled(), true, 'Leerzeichen zählen als Begründung')
+
   await tafel.locator('textarea').fill('Die Quelle bleibt für diese Fassung bewusst offen.')
-  await tafel.getByRole('button', { name: 'Wissenschaftliches Risiko bewusst annehmen', exact: true }).click()
+  assert.equal(await annehmen.isDisabled(), false, 'Der Knopf bleibt trotz Begründung gesperrt')
+  await annehmen.click()
   await anmerkung.waitFor({ state: 'detached' })
   // Der Kern: nicht 'dismissed', sondern 'risk-accepted' — und die getippte Begründung
   // steht in der Entscheidung, nicht bloß im Feld.
@@ -252,8 +263,11 @@ async function runRisikoTafel(browser) {
   // Und der andere Weg: Abbrechen nimmt kein Risiko an. Die Anmerkung bleibt offen, es
   // wird nichts festgeschrieben, und die halb getippte Begründung wird nicht heimlich
   // aufbewahrt.
-  await stelleTafel('onda-risiko-abbrechen', -19)
-  const zweite = page.locator('#localAgentLayer [data-finding-id="onda-risiko-abbrechen"] .integrity-risk-confirmation')
+  await setzeIntegritaetsfrage('onda-risiko-abbrechen', -19)
+  const zweiteAnmerkung = page.locator('#localAgentLayer [data-finding-id="onda-risiko-abbrechen"]')
+  await zweiteAnmerkung.waitFor({ state: 'visible' })
+  await zweiteAnmerkung.getByRole('button', { name: 'Verwerfen', exact: true }).click()
+  const zweite = zweiteAnmerkung.locator('.integrity-risk-confirmation')
   await zweite.waitFor({ state: 'visible' })
   await zweite.locator('textarea').fill('Doch nicht — ich suche den Beleg.')
   await zweite.getByRole('button', { name: 'Abbrechen', exact: true }).click()

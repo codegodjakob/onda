@@ -3,8 +3,6 @@ import assert from 'node:assert/strict'
 import {
   acceptsKindInMode,
   annotationSummary,
-  annotationSignature,
-  createSuppressionStore,
   createAnnotationController,
   normalizeAnnotationWorkspace,
   orderedAnnotations,
@@ -113,26 +111,32 @@ test('Notizmodus lässt nur Notizarten, Textmodus nur Textarten zu', () => {
   assert.equal(acceptsKindInMode('text', 'grammatik'), true)
 })
 
-test('Verwerfungsumfänge bleiben getrennt und widerrufbar', () => {
-  const store = createSuppressionStore()
-  const documentRecord = store.reject({
-    findingId: 'f-1', signature: 'wortwahl|sehr gut', documentId: 'a', scope: 'document', at: 1,
-  })
-  assert.equal(store.suppresses('wortwahl|sehr gut', 'a'), true)
-  assert.equal(store.suppresses('wortwahl|sehr gut', 'b'), false)
+// Hier standen zwei Prüfungen des Unterdrückungsspeichers ("Verwerfungsumfänge
+// bleiben getrennt und widerrufbar", "einmalige Verwerfung unterdrückt keinen
+// künftigen ähnlichen Fund"). Der Speicher ist fort (Issue #38) — eine Anmerkung
+// gilt für eine Stelle in einem Text, einmal, und wird nie zur Dauerregel.
+//
+// An seine Stelle tritt keine neue Prüfung hier, sondern eine anderswo: dass ein
+// einmal verworfener Hinweis überhaupt nichts unterdrückt, ist jetzt keine
+// Eigenschaft eines Speichers mehr, sondern die Abwesenheit eines Speichers.
+// Geprüft wird stattdessen die Unterscheidung, die geblieben ist —
+// istRisikoAnnahme() in reasoning-model.test.mjs.
 
-  const personalRecord = store.reject({
-    findingId: 'f-2', signature: 'ton|man-du', documentId: 'a', scope: 'personal', at: 2,
-  })
-  assert.equal(store.suppresses('ton|man-du', 'b'), true)
-  assert.equal(store.revoke(personalRecord.id), true)
-  assert.equal(store.suppresses('ton|man-du', 'b'), false)
-  assert.equal(store.records().some(record => record.id === documentRecord.id), true)
-})
+test('der Arbeitszustand legt keine Unterdrückungsfelder mehr an', () => {
+  // Ein frischer Arbeitszustand darf die beiden Felder gar nicht erst bekommen —
+  // sonst wüchse der Speicher über die Normalisierung wieder nach.
+  const frisch = normalizeAnnotationWorkspace({})
+  assert.equal('annotationSuppressions' in frisch, false)
+  assert.equal('pendingRejectionFindingId' in frisch, false)
 
-test('einmalige Verwerfung unterdrückt keinen künftigen ähnlichen Fund', () => {
-  const store = createSuppressionStore()
-  store.reject({ findingId: 'f-1', signature: 'satzstil|lang', documentId: 'a', scope: 'once', at: 1 })
-  assert.equal(store.suppresses('satzstil|lang', 'a'), false)
-  assert.equal(annotationSignature({ anmerkungsart: 'satzstil', target: '  Sehr   lang  ' }), 'satzstil|sehr lang')
+  // Und die Gegenprobe für gespeicherte Daten von früher: Wer einmal „in diesem Text
+  // nicht mehr" geklickt hat, trägt die Einträge noch mit sich. Sie dürfen den Aufbau
+  // nicht stören. Dass sie nicht mehr WIRKEN, liegt daran, dass niemand sie mehr liest
+  // — der Filter beim Aufbauen der Anmerkungen ist fort (workspace.js).
+  const alt = normalizeAnnotationWorkspace({
+    annotationSuppressions: [{ id: 'alt-1', signature: 'wortwahl|sehr gut', scope: 'document' }],
+    pendingRejectionFindingId: 'f-1',
+  })
+  assert.equal(alt.annotationMode, 'text')
+  assert.deepEqual(alt.undoStack, [])
 })
