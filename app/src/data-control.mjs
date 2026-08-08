@@ -1,3 +1,12 @@
+// Die Datenhoheit: alles herausgeben, alles zurückspielen, alles löschen.
+// exportAllLocalData baut ein vollständiges Paket aus Texten, Projekten, Einstellungen,
+// Gedächtnis und Lauf-Chronik, mit Verzeichnis und Fingerabdruck. Geheimnisfelder
+// (API-Schlüssel, Passwörter, Sitzungsmarken) werden dabei ausgeschieden und beim Einspielen
+// zurückgewiesen — der Schlüssel liegt im Schlüsselbund und gehört in keine Datei, die man
+// verschickt. emptyLocalState ist der Zustand nach dem Alles-Löschen. Rein rechnend,
+// kein DOM, node-testbar.
+//
+// Gehört zur Browser-App (src/editor.js): benutzt von audit-ui.mjs.
 const EXPORT_KIND = 'ai-writing-tool-complete-export'
 const REQUIRED_COLLECTIONS = Object.freeze(['docs', 'projects'])
 const REQUIRED_OBJECTS = Object.freeze(['settings', 'memoryStore'])

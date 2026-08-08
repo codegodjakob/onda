@@ -1,3 +1,10 @@
+// Der Autorschaftsnachweis: aus der Herkunftsspur eines Projekts (provenance-model.mjs)
+// wird belegt, was der Mensch geschrieben hat und was von der KI kam — wortgleich
+// übernommene Vorschläge, veränderte Vorschläge, bloße Analyse. Daraus entsteht die
+// Erklärung zur KI-Nutzung, wie viele Einrichtungen sie verlangen. Rein rechnend, kein DOM,
+// node-testbar.
+//
+// Gehört zur Browser-App (src/editor.js): benutzt von audit-ui.mjs.
 import { buildProjectProvenanceSnapshot } from './provenance-model.mjs'
 
 const ACTIVITY_BY_KIND = Object.freeze({

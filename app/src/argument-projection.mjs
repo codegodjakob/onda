@@ -1,3 +1,10 @@
+// Was sich aus markierten Textbausteinen OHNE Raten ableiten lässt — und sonst nichts.
+// Ein als Beleg markierter Baustein stützt die eine zentrale Aussage, ein als Gegenposition
+// markierter widerspricht ihr. Gibt es nicht genau eine zentrale Aussage, entsteht keine
+// Beziehung. Jede so gezogene Beziehung trägt ihre Begründung im Klartext mit.
+// Rein rechnend, kein DOM, node-testbar.
+//
+// Gehört zur Browser-App (src/editor.js): benutzt von argument-ui.mjs und language-ui.mjs.
 import {
   createArgumentEvent,
   createArgumentRelation,

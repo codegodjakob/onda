@@ -1,3 +1,11 @@
+// Der mitgelieferte Beispieltext und sein Umzug auf eine neue Fassung. Ein Beispiel, das der
+// Nutzer nie angefasst hat, wird beim Versionssprung ersetzt; eines, in dem er geschrieben
+// hat, verliert nur seine Markierung und bleibt unangetastet stehen. Erkannt wird das über
+// einen Fingerabdruck des Wortlauts, damit auch alte Beispiele ohne Markierung
+// wiedererkannt werden, statt sich zu verdoppeln. Rein rechnend, kein DOM, node-testbar.
+//
+// Gehört zur Browser-App (src/editor.js): src/editor.js ruft migrateExampleSeed beim Laden
+// auf, src/workspace.js prüft über seedBodySignature, ob das Beispiel noch unberührt ist.
 export const EXAMPLE_PROJECT_ID = 'p-example'
 export const EXAMPLE_SEED_KEY = 'calm-technology'
 

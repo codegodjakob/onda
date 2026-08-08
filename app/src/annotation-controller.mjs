@@ -1,3 +1,10 @@
+// Der Zustand der Anmerkungen, ohne jedes Aussehen: Arbeitsbereich normalisieren
+// (Anmerkungsmodus, Ruhe, aktive Anmerkung), Reihenfolge nach Dringlichkeit, kurze
+// Zusammenfassung, Unterdrücken in drei Reichweiten (einmal / dieser Text / dauerhaft)
+// und ein Rückgängig-Stapel von höchstens 20 Schritten. Kein DOM, node-testbar.
+//
+// Gehört zur Browser-App (src/editor.js): src/workspace-model.mjs und src/workspace.js
+// benutzen die Funktionen; gezeichnet wird das Ergebnis von annotation-components.mjs.
 import { isAnnotationKindAllowed, resolveAnnotationPresentation } from './annotation-contract.mjs'
 
 const ANNOTATION_MODES = new Set(['text', 'notiz'])

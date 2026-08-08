@@ -1,3 +1,12 @@
+// Die DOM-Bausteine einer Anmerkung: aus einem Finding wird die sichtbare Karte am Rand,
+// die Marke im Text, der Korrektur-, Umschreib- oder Einfüge-Vorschlag, der Bereichshinweis,
+// die Titelkorrektur und das Gespräch. Braucht ein document, läuft also im Browser und nicht
+// in node; die Form der Findings kommt aus annotation-contract.mjs.
+//
+// Gehört zu BEIDEN Einstiegspunkten. Die Browser-App (src/editor.js) zeichnet über
+// src/workspace.js damit die Anmerkungen im Text; der zweite Zugang, das Anmerkungslabor
+// (annotation-lab.html über src/annotation-lab.mjs), zeigt dieselben Bausteine einzeln.
+// Genau deshalb liegt das Zeichnen hier und nicht in einer der beiden Oberflächen.
 import { resolveAnnotationPresentation, normalizeAnnotationFinding } from './annotation-contract.mjs'
 import { ondaIcon } from './onda-icons.mjs'
 

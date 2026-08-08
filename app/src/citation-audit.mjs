@@ -1,3 +1,11 @@
+// Die Zitatprüfung, deterministisch und ohne Modell. Drei Fragen: Stimmt ein direktes Zitat
+// zeichengenau mit der verifizierten Fundstelle überein (nach Angleich von Anführungszeichen
+// und Leerraum)? Meint die Quellenangabe wirklich das geprüfte Werk — Ausgabe, Fassung,
+// Bestätigung? Und stimmen die Belege im Text mit dem Literaturverzeichnis und dem
+// geforderten Stil zusammen? Eine Paraphrase darf außerdem nicht stärker behaupten als die
+// Quelle. Rein rechnend, kein DOM, node-testbar.
+//
+// Gehört zur Browser-App (src/editor.js): benutzt von final-audit.mjs.
 const STRENGTH = Object.freeze({
   descriptive: 0,
   associational: 1,

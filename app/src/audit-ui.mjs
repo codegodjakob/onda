@@ -1,3 +1,10 @@
+// Die Oberfläche für den Schluss eines Textes und für die Datenhoheit. Sie zeigt die
+// Schlussprüfung nach Gruppen (final-audit.mjs), den Autorschaftsnachweis und die Erklärung
+// zur KI-Nutzung (authorship-proof.mjs), gibt den Text in Markdown, HTML oder JATS aus
+// (publication-export.mjs) und bedient Voll-Export, Einspielen und Alles-Löschen
+// (data-control.mjs). Braucht ein document.
+//
+// Gehört zur Browser-App (src/editor.js): src/workspace.js ruft createAuditUi auf.
 import { buildAiUsageDeclaration, buildAuthorshipProof } from './authorship-proof.mjs'
 import {
   exportAllLocalData,

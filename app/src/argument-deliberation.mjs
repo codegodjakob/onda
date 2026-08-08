@@ -1,3 +1,10 @@
+// Das Abwägen im Argumentteil: welches Gegenargument ist das stärkste (nach Belegkraft und
+// Zuversicht), welche Wege durch die Argumentation gibt es, sind diese Wege in sich stimmig,
+// und wie wird eine Abwägungsrunde angelegt und an das Modell angehängt. Rein rechnend,
+// kein DOM, node-testbar; die Datenform kommt aus argument-model.mjs.
+//
+// Gehört zur Browser-App (src/editor.js): benutzt wird es von argument-ui.mjs, das
+// src/workspace.js einbindet.
 import {
   createArgumentEvent,
   ensureArgumentModel,

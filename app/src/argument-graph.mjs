@@ -1,3 +1,11 @@
+// Aus dem Argumentmodell wird ein Graph: Aussagen als Knoten, Beziehungen als Kanten.
+// Darauf sitzen die Untersuchungen — welche Aussage hängt in der Luft, welcher Widerspruch
+// bleibt unbeantwortet (analyzeArgumentGraph), was zieht eine Änderung nach sich
+// (analyzeArgumentImpact), und wie werden Befunde über Läufe hinweg zusammengeführt, statt
+// bei jedem Lauf neu zu entstehen. Rein rechnend, kein DOM, node-testbar.
+//
+// Gehört zur Browser-App (src/editor.js): benutzt von argument-ui.mjs und
+// source-library-ui.mjs, beide eingebunden über src/workspace.js.
 import {
   createArgumentEvent,
   ensureArgumentModel,

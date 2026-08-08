@@ -1,3 +1,11 @@
+// Die Datenform des Argumentteils — die Wurzel, auf der dort alles andere aufsitzt.
+// Hier stehen die erlaubten Werte (Aussageart, Zentralität, Geltung, Belegstand,
+// Unsicherheit, Beziehungsart, Zuversicht), die Fabriken für Aussagen, Beziehungen und
+// Ereignisse, die Korrekturen mit Ereignisspur und die Integritätsprüfungen. Diese Datei
+// holt sich bewusst nichts aus dem Projekt; kein DOM, node-testbar.
+//
+// Gehört zur Browser-App (src/editor.js): darauf bauen argument-graph.mjs,
+// argument-deliberation.mjs, argument-projection.mjs, claim-ledger.mjs und argument-ui.mjs.
 export const ARGUMENT_CLAIM_KINDS = Object.freeze(['fact', 'definition', 'value', 'inference'])
 export const ARGUMENT_CENTRALITY = Object.freeze(['central', 'supporting'])
 export const ARGUMENT_VALIDITY = Object.freeze(['asserted', 'qualified', 'contested', 'withdrawn'])

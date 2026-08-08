@@ -1,3 +1,11 @@
+// Die Schlussprüfung vor der Abgabe. Sie sammelt alle offenen Befunde eines Textes —
+// Integrität, Belege, Zitation (citation-audit.mjs), angenommene Risiken, Weiteres, Stil —
+// und ordnet sie in genau dieser Reihenfolge, damit Stil nie vor einem Faktenzweifel steht.
+// Harte Blocker sind ausgewiesen: sie sagen, dass dieser Text noch nicht fertig ist.
+// Jedes Ergebnis trägt Regel- und Modellstand mit, damit ein alter Befund erkennbar auf
+// alten Regeln beruht. Rein rechnend, kein DOM, node-testbar.
+//
+// Gehört zur Browser-App (src/editor.js): benutzt von audit-ui.mjs.
 import { auditCitationConsistency, auditQuotationOrParaphrase } from './citation-audit.mjs'
 
 export const FINAL_AUDIT_RULE_VERSION = '2026-07-30.1'

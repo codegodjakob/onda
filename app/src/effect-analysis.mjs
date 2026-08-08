@@ -1,3 +1,11 @@
+// Die Wirkungsanalyse: Was tut eine Passage im Text (informieren, begründen, einordnen),
+// und an wen richtet sich das Ganze? Antworten bleiben ausdrücklich HYPOTHESEN — ohne eine
+// echte Reaktion des Publikums kann niemand die Wirkung wissen, und das Ergebnis sagt das
+// selbst. Dazu die Stilmittel-Sicht: welches Mittel liegt vor, was soll es leisten, welches
+// Missverständnis kann es erzeugen (Wortlaute aus stilmittel.mjs). Rein rechnend, kein DOM,
+// node-testbar.
+//
+// Gehört zur Browser-App (src/editor.js): benutzt von language-ui.mjs.
 import { stilmittel } from './stilmittel.mjs'
 
 function isObject(value) {

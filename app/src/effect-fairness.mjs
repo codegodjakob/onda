@@ -1,3 +1,10 @@
+// Die Fairnessprüfung für überzeugende Texte. Sie greift nur bei Textsorten, die überzeugen
+// sollen (Marketing, Kampagne), oder bei unbekannter Textsorte; sonst meldet sie ausdrücklich
+// "nicht zutreffend", statt einem Sachtext Vorwürfe zu machen. Gesucht wird dreierlei: eine
+// Behauptung, die stärker auftritt als ihr Beleg; ein Druckmuster, das mit Angst oder Schuld
+// arbeitet; und eine tragende Aussage auf dünnem Beleg. Rein rechnend, kein DOM, node-testbar.
+//
+// Gehört zur Browser-App (src/editor.js): benutzt von language-ui.mjs.
 const PERSUASIVE_GENRES = new Set(['marketing', 'campaign'])
 const STRONG_CLAIM = /\b(?:garantiert|zweifellos|immer|jede[rmns]?|ausnahmslos|sicher)\b/iu
 const EXPLOITATIVE = /\b(?:nur heute|du willst doch nicht|schuld am|wenn dir .* wichtig ist|sonst wirst du|angst haben)\b/iu

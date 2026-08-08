@@ -1,3 +1,10 @@
+// Das Aussagenregister: ein Absatz wird in einzelne, für sich prüfbare Aussagen zerlegt
+// (nur an klaren Satzgrenzen und nur, wenn beide Teile ein Prädikat tragen — im Zweifel
+// bleibt der Absatz ungeteilt), und das Register wird mit dem Text im Gleichstand gehalten:
+// unveränderte Aussagen behalten ihre Kennung samt Belegen, geänderte werden neu gefasst,
+// verschwundene als veraltet abgelegt statt gelöscht. Rein rechnend, kein DOM, node-testbar.
+//
+// Gehört zur Browser-App (src/editor.js): benutzt von argument-ui.mjs und language-ui.mjs.
 import {
   createArgumentClaim,
   createArgumentEvent,

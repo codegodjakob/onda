@@ -1,3 +1,14 @@
+// DER ZWEITE EINSTIEGSPUNKT — kein Fehlläufer, kein Überbleibsel.
+//
+// Diese Datei ist das Modul, das annotation-lab.html lädt: das Anmerkungslabor. Es zeigt
+// jede Anmerkungsart einmal an einem festen Beispiel (aus evals/fixtures/annotation-cases.mjs),
+// hell oder dunkel über ?theme=, einzeln wählbar über ?kind= und ?state=. Dadurch lassen
+// sich Aussehen und Verhalten einer Anmerkung prüfen, ohne die ganze Schreibumgebung
+// hochzufahren — und die Bild-Prüfungen haben eine Seite, die sich nie von selbst ändert.
+//
+// Es ist also NICHT so, dass hier eine Datei am Einstiegspunkt src/editor.js vorbeiläuft.
+// Onda hat zwei Einstiegspunkte, und das hier ist der zweite. Gezeichnet wird mit denselben
+// Bausteinen wie in der App: annotation-components.mjs.
 import { ANNOTATION_CASES, annotationCase } from '../evals/fixtures/annotation-cases.mjs'
 import { kindInfo } from './annotation-contract.mjs'
 import { renderAnnotation, renderAnnotationMark } from './annotation-components.mjs'

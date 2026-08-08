@@ -1,3 +1,10 @@
+// Die Oberfläche des Argumentteils: der Abgleich zwischen Text und Argumentmodell und die
+// Ansichten dazu. Ein Lauf bringt der Reihe nach das Aussagenregister auf Stand
+// (claim-ledger.mjs), zieht die sicheren Beziehungen (argument-projection.mjs), prüft die
+// Belegverweise (argument-model.mjs), untersucht den Graphen (argument-graph.mjs) und führt
+// die Befunde mit den bisherigen zusammen. Braucht ein document.
+//
+// Gehört zur Browser-App (src/editor.js): src/workspace.js ruft createArgumentUi auf.
 import {
   analyzeArgumentImpact,
   analyzeArgumentGraph,

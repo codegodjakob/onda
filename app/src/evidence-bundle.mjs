@@ -1,3 +1,13 @@
+// Das Belegbündel je Aussage: welche Quellen sprechen dafür, welche dagegen, wie gut sind sie
+// in acht getrennten Hinsichten (Einschlägigkeit, Methode, Aktualität, Unabhängigkeit,
+// Transparenz, Stichprobe, Interessenkonflikte, Übereinstimmung). Ausdrücklich verboten und
+// mit einer eigenen Prüfung abgesichert ist eine einzige Wahrheitsnote: wer acht Hinsichten
+// zu einer Zahl verrechnet, wirft genau die Auskunft weg, wegen der man hinsieht. Ändert sich
+// eine Quelle später (Korrektur, Rückzug, neue Fassung), trägt propagateSourceEvent das in
+// alle betroffenen Bündel nach. Rein rechnend, kein DOM, node-testbar.
+//
+// Gehört zur Browser-App (src/editor.js): benutzt von research-synthesis.mjs und
+// source-library-ui.mjs.
 const FORBIDDEN_SCORE_KEY = /^(truthScore|truth_score|wahrheitsscore|globalScore|global_score|overallScore|overall_score|score)$/i
 const QUALITY_DIMENSIONS = Object.freeze([
   'relevance',
