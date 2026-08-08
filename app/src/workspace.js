@@ -206,6 +206,9 @@ let momentTimer = null
 // Seitenleiste ("N Hinweise warten aufs Aufschauen — jetzt zeigen"); die zaehlte
 // Anmerkungen und ist mit der Flaeche gefallen.
 let momentVonHand = false
+// Wann zuletzt ueber einen Hinweis entschieden wurde. Steuert, ab wann die Ruhe fuer
+// den naechsten Moment zaehlt (momente-model.mjs, aktuellerMoment).
+let letzteEntscheidungAt = null
 // Was einmal auf dem Schirm stand, bleibt stehen. Der Moment entscheidet ueber das
 // ERSTE Erscheinen, nicht ueber das Bleiben — sonst verschwindet eine Karte, die man
 // gerade liest, sobald man wieder tippt. Wird mit dem Dokument zurueckgesetzt.
@@ -3050,6 +3053,7 @@ function momentJetzt(docId = ctx?.activeDoc()?.id) {
     anGrenze,
     editorSichtbar: editorViewIsVisibleFor(docId),
     vonHand: momentVonHand,
+    letzteEntscheidungAt,
   })
 }
 
@@ -3066,8 +3070,13 @@ function planeMomentwechsel() {
   if (!docId || !inputState || !Number.isFinite(inputState.lastInputAt)) return
   if (!editorViewIsVisibleFor(docId)) return
 
-  const ruhe = Date.now() - inputState.lastInputAt
-  const anGrenze = inputState.boundaryGeneration === inputState.generation
+  // Ab derselben Regung rechnen wie aktuellerMoment, sonst plant der Zeitgeber die
+  // Neuzeichnung auf einen Moment, der noch gar nicht erreicht ist — und der naechste
+  // Hinweis bliebe liegen, bis zufaellig etwas anderes neu zeichnet.
+  const entschieden = Number.isFinite(letzteEntscheidungAt) && letzteEntscheidungAt > inputState.lastInputAt
+  const ruhe = Date.now() - (entschieden ? letzteEntscheidungAt : inputState.lastInputAt)
+  const anGrenze = !entschieden
+    && inputState.boundaryGeneration === inputState.generation
     && Number.isFinite(inputState.boundaryAt)
   const schwellen = [anGrenze ? INNEHALTEN_AN_GRENZE_MS : INNEHALTEN_MS, AUFSCHAUEN_MS]
   const naechste = schwellen.find(schwelle => schwelle > ruhe)
@@ -3127,7 +3136,13 @@ function visiblePassageFindingRecords(doc, blocks) {
     const placement = resolveFindingPlacement(finding, blocks)
     if (placement.kind !== 'anchored' && placement.kind !== 'stale') continue
     const migrated = !hadBlockId && Boolean(finding.blockId)
-    merkeGezeigt(doc?.id, finding.id)
+    // HIER wird NICHT gemerkt. Bis zum 8.8.2026 stand an dieser Stelle
+    // merkeGezeigt(...) — und zwar fuer JEDEN Hinweis, der gerade erscheinen DUERFTE.
+    // Auf dem Schirm steht aber immer nur einer (currentPassageFinding). Alle uebrigen
+    // galten damit als gezeigt, ohne je gezeigt worden zu sein, und umgingen von da an
+    // die Moment-Regel dauerhaft: „was einmal stand, bleibt stehen" wurde zu „was
+    // einmal durfte, darf immer". Genau daran lief die Kette weiter, die Jakob am
+    // 8.8.2026 beschrieb. Gemerkt wird jetzt der, der wirklich gezeigt wird.
     records.push({ finding, block: placement.block, placementKind: placement.kind, migrated })
   }
   return records
@@ -3137,6 +3152,10 @@ function currentPassageFinding(doc, blocks) {
   const records = visiblePassageFindingRecords(doc, blocks)
   const chosen = annotationController?.current(momentJetzt(doc?.id)) || records[0]?.finding || null
   const record = records.find(candidate => candidate.finding.id === chosen?.id)
+  // Erst hier steht fest, welcher Hinweis wirklich auf den Schirm kommt — und nur der
+  // darf als gezeigt gelten. Der Vermerk sorgt dafuer, dass eine Karte, die man gerade
+  // liest, nicht verschwindet, sobald man wieder tippt (siehe darfErscheinen).
+  if (record?.finding?.id) merkeGezeigt(doc?.id, record.finding.id)
   return record || { finding: null, block: null, placementKind: null, migrated: records.some(item => item.migrated) }
 }
 
@@ -3388,11 +3407,13 @@ function targetDocumentRange(blockId, target) {
 function decideAndAdvance(finding, decision, { refresh = true, restoreFocus = true } = {}) {
   const doc = ctx.activeDoc()
   const workspace = activeWorkspace()
-  // Ueber einen Hinweis zu entscheiden IST ein Aufschauen. Wer gerade Rueckmeldung
-  // durcharbeitet, schreibt nicht — der naechste Hinweis darf sofort folgen, statt
-  // 45 Sekunden Ruhe abzuwarten. Gilt bis zum naechsten Tastendruck; sobald wieder
-  // getippt wird, setzt recordRealEditorInput es zurueck.
-  momentVonHand = true
+  // Ueber einen Hinweis zu entscheiden ist eine Regung wie ein Tastendruck — und
+  // beginnt die Wartezeit von vorn. Bis zum 8.8.2026 stand hier `momentVonHand =
+  // true`, was den Moment sofort auf 'aufschauen' hob: jedes Wegklicken gab damit
+  // den naechsten Hinweis frei, und es entstand eine Kette, die lief, solange offene
+  // Hinweise da waren. Ein Zuruecksetzen ist nicht noetig — sobald wieder getippt
+  // wird, ist lastInputAt juenger und der Zeitpunkt hier ohne Wirkung.
+  letzteEntscheidungAt = Date.now()
   // Angenommen heisst: das hat gestimmt. Dann traegt auch das Prinzip dahinter.
   // Verworfenes wandert NICHT in den Speicher -- ein zurueckgewiesener Hinweis ist
   // keine Erkenntnis, und ihn trotzdem zu behalten waere das Gegenteil von

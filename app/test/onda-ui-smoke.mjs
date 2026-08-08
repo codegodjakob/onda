@@ -427,6 +427,7 @@ async function runShell(browser) {
   await assertBausteinHinzufuegen(page)
   await assertQuellenFensterEineHandschrift(page)
   await assertGesteZeigtAufDieStelle(page)
+  await assertEntscheidungOeffnetKeineKette(page)
   await assertRuhigeLage(page)
 
   await page.setViewportSize({ width: 320, height: 760 })
@@ -598,6 +599,121 @@ async function assertZweiGesten(page) {
   assert.equal(await page.locator('#materialTree').isVisible(), true)
   assert.equal(await page.locator('#materialModal').count(), 0, 'Der Pfeil hat ein Fenster geöffnet')
   await page.locator('#materialTreeToggle').click()
+}
+
+// „Wenn ich eins wegklick, dann kommt direkt das Nächste. Das soll nicht so sein. […]
+// auch wenn die AI mehrere Sachen hat, sollen die eben nach und nach erst kommen."
+// (Jakob, 8.8.2026)
+//
+// Bis dahin loeste das Entscheiden selbst den Moment 'Aufschauen' aus — jedes
+// Wegklicken gab damit den naechsten Hinweis frei, und die Kette lief, solange offene
+// Hinweise da waren. Die Regel dazu steht in momente-model.mjs und ist dort auch
+// einzeln geprueft; hier geht es um den ganzen Weg im Browser.
+async function assertEntscheidungOeffnetKeineKette(page) {
+  await page.setViewportSize({ width: 1440, height: 900 })
+
+  const vorbereitet = await page.evaluate(async () => {
+    const doc = window.AIWT.state.docs.find(kandidat => kandidat.id === window.AIWT.state.active)
+    // Leeren UND sichern. Zwei Stolperstellen dabei, beide im Beispielprojekt:
+    // die Hinweise stehen nicht nur in findings, sondern werden aus den Altbestaenden
+    // coach und lane neu erzeugt (editor.js, ensureDocShape → ensureReasoningModel).
+    // Wer nur findings leert, hat sie beim naechsten Zeichnen alle wieder.
+    //
+    // Vorher WEGLEGEN, nicht wegwerfen: der Beispieltext traegt 35 Hinweise, und die
+    // Pruefungen danach in diesem Lauf rechnen mit ihnen. Ohne das Zuruecklegen fiel
+    // spaeter die mobile Zeichen-Pruefung mit „nur 0px breit" — an einer Stelle, die
+    // mit dem Takt nichts zu tun hat.
+    window.__taktVorrat = {
+      findings: doc.findings, decisions: doc.decisions, coach: doc.coach, lane: doc.lane,
+    }
+    doc.findings = []
+    doc.decisions = []
+    doc.coach = []
+    doc.lane = []
+    window.AIWT.flushSave()
+    const bausteine = window.AIWT.__blockIdentityTestBridge.getBlocks().filter(kandidat => kandidat.text.length > 40)
+    if (bausteine.length < 2) return { fehler: 'zu wenige Bausteine im Beispieltext' }
+
+    // Zwei Hinweise, beide mit Moment 'aufschauen' (Kategorie struktur). Waeren sie
+    // 'sofort', sagte die Pruefung nichts ueber den Takt.
+    //
+    // Beide auf EINMAL in den Text legen, nicht nacheinander ueber injectFinding.
+    // Der Unterschied ist der Kern der Pruefung: injectFinding zeichnet jedes Mal neu,
+    // also stuende zwischendurch der erste Hinweis kurz auf dem Schirm und gaelte
+    // danach als „schon gezeigt" — und was einmal stand, darf zu Recht immer wieder
+    // stehen (darfErscheinen). Die Pruefung haette sich ihre eigene Ausnahme gebaut.
+    // So kommt es auch im Betrieb: EIN Lauf liefert mehrere Hinweise zugleich.
+    const bauen = (nummer, baustein) => ({
+      id: `takt-${nummer}`, status: 'open', placement: 'passage', blockId: baustein.id,
+      target: baustein.text.slice(0, 24), action: `${baustein.text.slice(0, 24)} — anders`,
+      short: 'Beleg.', why: 'Beleg.', folge: 'Beleg.',
+      anmerkungsart: 'gliederung', kiKategorie: 'struktur', createdAt: nummer,
+    })
+    doc.findings.push(bauen(1, bausteine[0]), bauen(2, bausteine[1]))
+    window.AIWT.flushSave()
+    window.AIWT.__workspaceTestBridge.reinitialize()
+    await new Promise(fertig => setTimeout(fertig, 400))
+    return { offen: doc.findings.filter(f => f.status === 'open').length }
+  })
+  assert.equal(vorbereitet.fehler, undefined, vorbereitet.fehler)
+  assert.equal(vorbereitet.offen, 2, 'Der Prüfstand hat nicht zwei offene Hinweise')
+
+  // Schreiben setzt „ich schaue ausdrücklich hin" zurück — sonst stünde der Moment
+  // dauerhaft auf 'aufschauen' und die Prüfung liefe ins Leere.
+  await page.locator('#editor .ProseMirror').click()
+  await page.keyboard.type(' ')
+  await page.waitForTimeout(120)
+
+  const sichtbar = () => page.locator('#localAgentLayer .onda-annotation').count()
+  assert.equal(await sichtbar(), 1, 'Vor der Entscheidung steht nicht genau eine Anmerkung')
+
+  // Und jetzt der eigentliche Fall: entscheiden und sofort nachsehen.
+  //
+  // Die Beschriftung haengt an der Anmerkungsart — bei 'gliederung' heisst das Paar
+  // „Gliedern" und „Lassen". Gesucht wird deshalb der zweite Weg ueber seine Rolle in
+  // der Karte statt ueber ein geratenes Wort.
+  //
+  // Und das Weglegen ist ZWEISTUFIG: der Knopf oeffnet erst die Rueckfrage nach dem
+  // Grund, entschieden ist erst danach. Wer hier aufhoert, hat gar nichts entschieden
+  // — die Pruefung sah dann eine Anmerkung, die nur ihre Rueckfrage zeigte, und haette
+  // rot gemeldet, ohne dass etwas kaputt war.
+  const wege = page.locator('#localAgentLayer .onda-annotation .aura-note__acts button')
+  assert.ok(await wege.count() >= 2, 'Die Anmerkung bietet keine Entscheidung an')
+  await wege.nth(1).click()
+  const gruende = page.locator('#localAgentLayer .aura-rejection__choice')
+  await gruende.first().waitFor()
+  await gruende.first().click()
+  await page.waitForTimeout(500)
+
+  assert.equal(
+    await sichtbar(),
+    0,
+    'Nach dem Wegklicken steht sofort die nächste Anmerkung da — die Kette läuft weiter',
+  )
+
+  // Der zweite Hinweis ist nicht verloren, nur zurückgehalten: er steht weiter offen.
+  const zustaende = await page.evaluate(() => {
+    const doc = window.AIWT.state.docs.find(kandidat => kandidat.id === window.AIWT.state.active)
+    return doc.findings.map(f => f.status)
+  })
+  assert.equal(zustaende.filter(z => z === 'open').length, 1, 'Der zurückgehaltene Hinweis ist verschwunden statt zu warten')
+  assert.ok(zustaende.some(z => z !== 'open'), 'Es wurde gar nichts entschieden — die Prüfung misst nichts')
+
+  // Und den Beispieltext zuruecklegen, wie er war.
+  await page.evaluate(() => {
+    const doc = window.AIWT.state.docs.find(kandidat => kandidat.id === window.AIWT.state.active)
+    const vorrat = window.__taktVorrat
+    if (vorrat) {
+      doc.findings = vorrat.findings
+      doc.decisions = vorrat.decisions
+      doc.coach = vorrat.coach
+      doc.lane = vorrat.lane
+      delete window.__taktVorrat
+    }
+    window.AIWT.flushSave()
+    window.AIWT.__workspaceTestBridge.reinitialize()
+  })
+  await page.waitForTimeout(200)
 }
 
 // „Ich erkenn dann gar nicht direkt, um was es geht. Ich muss dann lesen, ich muss erst

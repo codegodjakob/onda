@@ -205,3 +205,69 @@ test('schonGezeigt hebt die Zurueckhaltung nur fuer diesen einen Eintrag auf', (
   assert.equal(darfErscheinen('weiterfuehrung', 'innehalten', false), false)
   assert.ok(darfErscheinen('weiterfuehrung', 'innehalten', true))
 })
+
+// --- Eine Entscheidung schliesst einen Durchgang, sie oeffnet keinen ----------
+// Bis zum 8.8.2026 hob eine Entscheidung den Moment sofort auf 'aufschauen'. Damit gab
+// jedes Wegklicken den naechsten Hinweis frei, und die Kette lief, solange offene
+// Hinweise da waren. Jakob: „wenn ich eins wegklick, dann kommt direkt das Naechste.
+// Das soll nicht so sein."
+
+test('Nach einer Entscheidung faengt die Wartezeit von vorn an', () => {
+  const jetzt = 1_000_000
+  // Jemand hat lange nicht getippt — vor der Aenderung waere das 'aufschauen' gewesen,
+  // und der naechste Hinweis stuende sofort da.
+  assert.equal(aktuellerMoment({ jetzt, lastInputAt: jetzt - 60_000 }), 'aufschauen')
+
+  // Gerade entschieden: die Ruhe zaehlt ab hier, also von vorn.
+  assert.equal(
+    aktuellerMoment({ jetzt, lastInputAt: jetzt - 60_000, letzteEntscheidungAt: jetzt - 200 }),
+    'sofort',
+    'Die Entscheidung setzt die Wartezeit nicht zurueck — die Kette laeuft weiter',
+  )
+})
+
+test('Nach der Entscheidung gelten dieselben Schwellen wie nach dem Tippen', () => {
+  const jetzt = 1_000_000
+  const nach = abstand => aktuellerMoment({
+    jetzt, lastInputAt: jetzt - 90_000, letzteEntscheidungAt: jetzt - abstand,
+  })
+  assert.equal(nach(500), 'sofort')
+  assert.equal(nach(INNEHALTEN_MS), 'innehalten')
+  assert.equal(nach(AUFSCHAUEN_MS), 'aufschauen', 'Nach der vollen Ruhe darf der naechste kommen')
+})
+
+test('Eine Grenze von VOR der Entscheidung ist verbraucht', () => {
+  const jetzt = 1_000_000
+  // Ohne diese Regel genuegten 300 ms nach dem Wegklicken, und die Kette waere nur
+  // kuerzer geworden statt unterbrochen.
+  assert.equal(
+    aktuellerMoment({ jetzt, lastInputAt: jetzt - 60_000, anGrenze: true, letzteEntscheidungAt: jetzt - 400 }),
+    'sofort',
+    'Die alte Satzgrenze laesst den naechsten Hinweis doch sofort durch',
+  )
+  // Ohne Entscheidung traegt dieselbe Grenze weiterhin — daran aendert sich nichts.
+  assert.equal(
+    aktuellerMoment({ jetzt, lastInputAt: jetzt - 400, anGrenze: true }),
+    'innehalten',
+  )
+})
+
+test('Wer nach der Entscheidung weiterschreibt, faellt zurueck in die normale Regel', () => {
+  const jetzt = 1_000_000
+  // Der Tastendruck ist juenger als die Entscheidung: sie ist damit ohne Wirkung, und
+  // es braucht kein Zuruecksetzen von Hand.
+  assert.equal(
+    aktuellerMoment({ jetzt, lastInputAt: jetzt - 5_000, letzteEntscheidungAt: jetzt - 40_000 }),
+    'innehalten',
+  )
+})
+
+test('Ausdrueckliches Hinsehen schlaegt die Wartezeit weiterhin', () => {
+  // 'vonHand' bleibt, was es war: jemand hat ausdruecklich hingesehen. Nur das
+  // Entscheiden zaehlt nicht mehr dazu.
+  const jetzt = 1_000_000
+  assert.equal(
+    aktuellerMoment({ jetzt, lastInputAt: jetzt - 100, letzteEntscheidungAt: jetzt - 100, vonHand: true }),
+    'aufschauen',
+  )
+})

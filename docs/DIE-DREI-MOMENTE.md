@@ -44,17 +44,39 @@ versteckt sich auch nicht" weiter unten.
 |---|---|---|
 | **sofort** | Immer. Sobald etwas da ist, ist es zu sehen. | — |
 | **beim Innehalten** | Ein Satz- oder Absatzende und danach 0,3 Sekunden Ruhe — oder 3 Sekunden Ruhe an beliebiger Stelle. | `INNEHALTEN_AN_GRENZE_MS = 300`, `INNEHALTEN_MS = 3000` |
-| **beim Aufschauen** | 45 Sekunden Ruhe, die Schreibansicht verlassen — oder gerade über einen Hinweis entschieden. | `AUFSCHAUEN_MS = 45000` |
+| **beim Aufschauen** | 45 Sekunden Ruhe — oder die Schreibansicht verlassen. | `AUFSCHAUEN_MS = 45000` |
 
 Der dritte Fall hieß bis zum 7. August 2026 „von Hand angefordert" und meinte eine Zeile
 in der Seitenleiste: „N Hinweise warten aufs Aufschauen — jetzt zeigen." Die Zeile zählte
-Anmerkungen und ist mit `docs/PHILOSOPHIE.md` §1 gefallen. Geblieben ist der Gedanke
-dahinter: wer gerade über einen Hinweis entscheidet, schreibt nicht — der nächste darf
-sofort folgen, statt 45 Sekunden Ruhe abzuwarten. Einen Knopf dafür gibt es nicht und
-soll es nicht geben.
+Anmerkungen und ist mit `docs/PHILOSOPHIE.md` §1 gefallen. Einen Knopf dafür gibt es
+nicht und soll es nicht geben.
 
-Alle drei Zahlen stehen in `app/src/momente-model.mjs`, Zeilen 62–64. Die Entscheidung
-selbst trifft die Funktion `aktuellerMoment` (Zeilen 88–107).
+**Geändert am 8. August 2026: Eine Entscheidung schließt einen Durchgang, sie öffnet
+keinen.** Bis dahin löste das Entscheiden über einen Hinweis selbst den Moment
+*Aufschauen* aus, begründet mit: wer entscheidet, schreibt gerade nicht, also darf der
+nächste sofort folgen. Der erste Halbsatz stimmt. Der Schluss daraus war falsch — die
+Grenze, die eine Entscheidung schafft, ist das **Ende dieser Rückmeldung**, nicht der
+Beginn eines Rechts auf die nächste.
+
+In der Praxis erzeugte jedes Wegklicken sofort die nächste Anmerkung, und die Kette lief
+so lange, wie es offene Hinweise gab. Jakob am 8.8.2026: „wenn ich eins wegklick, dann
+kommt direkt das Nächste. Das soll nicht so sein. […] auch wenn die AI mehrere Sachen
+hat, sollen die eben nach und nach erst kommen."
+
+Jetzt zählt die Ruhe ab der **letzten Regung**, und Entscheiden ist eine — genau wie
+Tippen. Wer gerade entschieden hat, fängt die Wartezeit von vorn an. Das ist keine
+künstliche Sperre, sondern dieselbe Regel für beide Arten von Tätigkeit. Eine Satz- oder
+Absatzgrenze, die *vor* der Entscheidung lag, ist dabei verbraucht; sonst genügten 0,3
+Sekunden nach dem Wegklicken und die Kette wäre nur kürzer geworden statt unterbrochen.
+
+Die Forschung dahinter steht in `docs/research/2026-08-08-rhythmus-der-anmerkungen.md`:
+Unterbrechung an einer Aufgabengrenze kostet messbar weniger Wiederaufnahme-Zeit und
+weniger Ärger als dieselbe sofort ([Iqbal & Bailey, CHI
+2008](https://dl.acm.org/doi/10.1145/1357054.1357070)).
+
+Alle drei Zahlen stehen in `app/src/momente-model.mjs`. Die Entscheidung selbst trifft
+die Funktion `aktuellerMoment` — sie nimmt dafür seit dem 8.8.2026 einen zusätzlichen
+Wert `letzteEntscheidungAt` entgegen.
 
 **Warum der Ort mitzählt und nicht nur die Zeit.** Eine Pause mitten im Satz ist
 Nachdenken. Eine Pause nach dem Punkt ist ein Innehalten. Deshalb genügt an einer
