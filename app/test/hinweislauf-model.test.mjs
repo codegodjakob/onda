@@ -683,3 +683,39 @@ test('ohne Rueckkopplung sieht der Kontext genau aus wie zuvor', async () => {
   }))
   assert.deepEqual(leer.volatiles, ohne.volatiles, 'eine leere Bilanz darf keinen Block erzeugen')
 })
+
+// --- Hoechstens ein „traegt" je Durchgang ------------------------------------
+// Die Stufe entscheidet, was zuerst auf den Schirm kommt. Eine Stufe, die jeder
+// beanspruchen darf, ordnet nichts mehr. Der Prompt bittet darum; ein Prompt ist eine
+// Bitte, kein Riegel — der Riegel steht in verarbeiteHinweise.
+
+test('Beanspruchen mehrere Hinweise „traegt", behaelt es nur der erste', () => {
+  const ergebnis = verarbeiteHinweisantwort({
+    geliefert: [
+      beispielHinweis({ gewinn: 'traegt' }),
+      beispielHinweis({ anker: 'anderem Anker drin', gewinn: 'traegt' }),
+    ],
+    docText: DOC_TEXT, blocks: BLOCKS, findings: [], decisions: [], jetzt: 1000,
+  })
+  assert.equal(ergebnis.uebernommen.length, 2, 'Zurueckgestuft wird, nicht verworfen')
+  assert.deepEqual(ergebnis.uebernommen.map(f => f.gewinn), ['traegt', 'schaerft'])
+})
+
+test('Ein einzelnes „traegt" bleibt unangetastet', () => {
+  const ergebnis = verarbeiteHinweisantwort({
+    geliefert: [
+      beispielHinweis({ gewinn: 'glaettet' }),
+      beispielHinweis({ anker: 'anderem Anker drin', gewinn: 'traegt' }),
+    ],
+    docText: DOC_TEXT, blocks: BLOCKS, findings: [], decisions: [], jetzt: 1000,
+  })
+  assert.deepEqual(ergebnis.uebernommen.map(f => f.gewinn), ['glaettet', 'traegt'])
+})
+
+test('Ein erfundener Wert wird zur Mitte, nicht zur Spitze', () => {
+  const ergebnis = verarbeiteHinweisantwort({
+    geliefert: [beispielHinweis({ gewinn: 'weltbewegend' })],
+    docText: DOC_TEXT, blocks: BLOCKS, findings: [], decisions: [], jetzt: 1000,
+  })
+  assert.equal(ergebnis.uebernommen[0].gewinn, 'schaerft')
+})

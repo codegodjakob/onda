@@ -137,3 +137,59 @@ test('Jede Art hat einen Rang, und Unbekanntes landet hinten', () => {
   assert.equal(tragweite('gibtesnicht'), 9)
   assert.equal(verbindlichkeit('gibtesnicht'), 9)
 })
+
+// --- Der Gewinn: was der Text konkret gewinnt --------------------------------
+// Die Stufen darueber ordnen ARTEN. Der Gewinn ordnet FAELLE — er ist der Ort, an dem
+// das Modell sagen darf, dass ausgerechnet dieses eine Wort den Text traegt.
+
+test('Der Gewinn schlaegt die Tragweite', () => {
+  // Eine Wortwahl, die den Text trägt, kommt vor eine Gliederung, die ihn nur glättet.
+  // Ohne diese Stufe wäre die Reihenfolge umgekehrt — die Gliederung reicht weiter.
+  assert.deepEqual(
+    reihenfolge(
+      hinweis('a-gliederung', 'gliederung', { gewinn: 'glaettet' }),
+      hinweis('z-wort', 'wortwahl', { gewinn: 'traegt' }),
+    ),
+    ['z-wort', 'a-gliederung'],
+  )
+})
+
+test('Der Gewinn schlaegt die Integritaet NICHT', () => {
+  // Eine unbelegte Behauptung bleibt vorn, auch wenn anderswo mehr zu gewinnen ist.
+  // Sonst könnte sich jeder Hinweis mit einer Selbsteinschätzung vor die Belegfrage
+  // schieben — und die Integrität wäre verhandelbar.
+  assert.deepEqual(
+    reihenfolge(
+      hinweis('a-wort', 'wortwahl', { gewinn: 'traegt' }),
+      hinweis('z-beleg', 'beleg', { gewinn: 'glaettet', category: 'source', textart: 'scientific' }),
+    ),
+    ['z-beleg', 'a-wort'],
+  )
+})
+
+test('Ohne Angabe gilt die Mitte — weder Strafe noch Einladung', () => {
+  // Ältere gespeicherte Hinweise tragen das Feld nicht. Sie dürfen dadurch weder nach
+  // hinten fallen noch sich vordrängen.
+  assert.deepEqual(
+    reihenfolge(
+      hinweis('a-alt', 'wortwahl'),
+      hinweis('z-glaettet', 'wortwahl', { gewinn: 'glaettet' }),
+    ),
+    ['a-alt', 'z-glaettet'],
+  )
+  assert.deepEqual(
+    reihenfolge(
+      hinweis('a-traegt', 'wortwahl', { gewinn: 'traegt' }),
+      hinweis('z-alt', 'wortwahl'),
+    ),
+    ['a-traegt', 'z-alt'],
+  )
+  // Und ein erfundener Wert schiebt sich nicht nach vorn.
+  assert.deepEqual(
+    reihenfolge(
+      hinweis('a-erfunden', 'wortwahl', { gewinn: 'ueberragend' }),
+      hinweis('z-traegt', 'wortwahl', { gewinn: 'traegt' }),
+    ),
+    ['z-traegt', 'a-erfunden'],
+  )
+})

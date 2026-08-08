@@ -17,6 +17,10 @@ const UNDERSTANDING_DEFAULTS = Object.freeze({
 })
 
 const PRIORITY_RANK = Object.freeze({ critical: 0, high: 1, normal: 2, low: 3 })
+// Was der Text gewinnt (agent-tasks.mjs, HINWEISE_SCHEMA). Fehlt der Wert oder ist er
+// unbekannt, gilt die Mitte — weder Strafe fuer aeltere Eintraege noch Einladung, das
+// Feld wegzulassen.
+const GEWINN_RANG = Object.freeze({ traegt: 0, schaerft: 1, glaettet: 2 })
 const INTEGRITY_CATEGORIES = new Set(['fact', 'source', 'citation', 'method', 'logic'])
 const INTEGRITY_ANNOTATION_CATEGORIES = Object.freeze({ beleg: 'source', faktencheck: 'fact', widerspruch: 'logic' })
 const COMPLETED_STATUSES = new Set(['resolved', 'dismissed', 'superseded'])
@@ -260,13 +264,13 @@ export function isIntegrityCategory(category, textart) {
 //    benennt sie selbst (istGrundursache → priority 'high').
 // 2. INTEGRITAET vor allem Uebrigen. Ein fehlender Beleg oder ein Widerspruch ist keine
 //    Frage des Geschmacks; was davon in dieser Textsorte bindet, sagt textart-regeln.
-// 3. TRAGWEITE: was weiter in den Text reicht, kommt zuerst. Das ist die Ordnung, die
+// 4. TRAGWEITE: was weiter in den Text reicht, kommt zuerst. Das ist die Ordnung, die
 //    die Schreibzentrums-Didaktik seit vierzig Jahren vorgibt — Aufbau vor Grammatik —,
 //    und sie spart Arbeit: an Saetzen zu feilen, die eine Umstellung ohnehin loescht,
 //    ist verschwendet (docs/research/2026-08-05-feld-feedback-didaktik.md, Abschnitt 3).
-// 4. VERBINDLICHKEIT bei gleicher Tragweite: Fehler vor Empfehlung vor Geschmack.
+// 5. VERBINDLICHKEIT bei gleicher Tragweite: Fehler vor Empfehlung vor Geschmack.
 //    Erst hier — sonst kaeme der Kommafehler wieder vor der Gliederung.
-// 5. ALTER, und dann die Kennung, damit die Reihenfolge ueberhaupt eindeutig ist.
+// 6. ALTER, und dann die Kennung, damit die Reihenfolge ueberhaupt eindeutig ist.
 export function vergleicheHinweise(a, b) {
   const priority = (PRIORITY_RANK[a.priority] ?? PRIORITY_RANK.normal)
     - (PRIORITY_RANK[b.priority] ?? PRIORITY_RANK.normal)
@@ -274,6 +278,15 @@ export function vergleicheHinweise(a, b) {
   const integrity = Number(isIntegrityCategory(b.category, b.textart))
     - Number(isIntegrityCategory(a.category, a.textart))
   if (integrity) return integrity
+
+  // 3. GEWINN: was der Text konkret gewinnt. Das Modell sagt es je Fall — und das ist
+  //    der Unterschied zur Tragweite darunter: die ordnet ARTEN („eine Gliederungsfrage
+  //    reicht weiter als eine Wortwahl"), der Gewinn ordnet FAELLE. Hier darf ausgerechnet
+  //    dieses eine Wort vor die Gliederung, wenn es den Text traegt. Hoechstens ein
+  //    Hinweis je Durchgang darf das beanspruchen (hinweislauf-model.mjs).
+  const gewinnRang = GEWINN_RANG[a.gewinn] ?? GEWINN_RANG.schaerft
+  const gewinnRangB = GEWINN_RANG[b.gewinn] ?? GEWINN_RANG.schaerft
+  if (gewinnRang !== gewinnRangB) return gewinnRang - gewinnRangB
 
   const artA = anmerkungsartVon(a)
   const artB = anmerkungsartVon(b)
