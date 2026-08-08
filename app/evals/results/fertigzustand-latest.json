@@ -3,8 +3,8 @@
   "catalogVersion": "2026-08-05.3",
   "stage": "FERTIGZUSTAND",
   "iteration": 1,
-  "generatedAt": "2026-08-08T12:54:59.035Z",
-  "gitCommit": "4fa0b45620178b2bc4a219cb86932b45e219bd7b",
+  "generatedAt": "2026-08-08T13:14:29.071Z",
+  "gitCommit": "5fa505b0f4ef49132b89d4aa22b0be95e59e0927",
   "rubricScores": {
     "truth": 5,
     "authorship": 5,
@@ -38,8 +38,21 @@
     }
   ],
   "massstabVergleich": {
-    "status": "unveraendert",
-    "aenderungen": []
+    "status": "geaendert",
+    "aenderungen": [
+      {
+        "bereich": "urteilsweise",
+        "art": "hinzugefuegt",
+        "id": "evals/pruefungen/gestalt.mjs",
+        "jetzt": "je-eval"
+      },
+      {
+        "bereich": "urteilsweise",
+        "art": "hinzugefuegt",
+        "id": "evals/run-onda-ui-quality.mjs",
+        "jetzt": "je-eval"
+      }
+    ]
   },
   "massstab": {
     "catalogVersion": "2026-08-05.3",
@@ -2959,6 +2972,10 @@
       "ONDA-UI-22": [
         "evals/run-onda-ui-quality.mjs"
       ]
+    },
+    "urteilsweise": {
+      "evals/pruefungen/gestalt.mjs": "je-eval",
+      "evals/run-onda-ui-quality.mjs": "je-eval"
     }
   },
   "evals": [
