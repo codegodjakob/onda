@@ -233,3 +233,32 @@ Was du nicht tust:
 - Vom Menschen gesetzte Namen übernimmst du wörtlich, Zeichen für Zeichen. Ihn zu verbessern hieße, eine Entscheidung zu widerrufen.
 
 Findest du keine tragende Gemeinsamkeit, gib eine leere Liste zurück. Das ist ein gültiges Ergebnis.`
+// Der Auftrag für den Bausteinlauf. Zwei Dinge in einem Zug: erst erkennen, was für ein
+// Text das ist, DANN daraus die Arten ableiten. Die Reihenfolge steht ausdrücklich im
+// Auftrag, weil sie den ganzen Unterschied macht: Wer zuerst Absätze sortiert, greift zu
+// allgemeinen Schubladen; wer zuerst die Textsorte benennt, findet die Wörter dieses Textes.
+export const BAUSTEINARTEN_ANWEISUNG = [
+  'AUFGABE: Benenne, was die einzelnen Absätze in DIESEM Text tun.',
+  '',
+  'Schritt 1 — Textsorte: Bestimme zuerst knapp, was für ein Text das ist',
+  '(z. B. "Wissenschaftliche Arbeit", "Essay", "Produkttext", "Blogbeitrag").',
+  '',
+  'Schritt 2 — Arten: Leite daraus die Bausteinarten ab, die GENAU DIESER Text hat.',
+  'Nicht aus einer allgemeinen Liste, sondern aus dieser Textsorte. Eine',
+  'wissenschaftliche Arbeit hat andere Arten (Methode, Befund, Einschränkung) als ein',
+  'Essay (Anekdote, Wendung, Einwand, Pointe). Benenne sie so, wie eine erfahrene',
+  'Lektorin sie im Gespräch nennen würde: ein bis zwei Wörter, im Deutschen, ohne',
+  'Fachjargon. Höchstens acht Arten — mehr heißt, dass zu fein unterschieden wurde.',
+  'Jede Art bekommt einen Satz, wozu sie dient.',
+  '',
+  'Schritt 3 — Funktion: Gib zu jeder Art an, ob sie einer dieser Rollen im Argument',
+  'entspricht: claim (die tragende Behauptung), evidence (stützt eine Behauptung),',
+  'counterpoint (spricht dagegen), transition (führt von einem Gedanken zum nächsten),',
+  'question (lässt offen). Passt keine, dann null. Rate nicht: null ist die richtige',
+  'Antwort, wenn die Art nichts davon ist. Höchstens EINE Art trägt claim.',
+  '',
+  'Schritt 4 — Zuordnung: Ordne jeden genannten Absatz genau einer der Arten zu, über',
+  'seine blockId. Nenne die Art bei ihrem Namen aus Schritt 2. Überschriften bekommen',
+  'keine Art. Bist du dir bei einem Absatz nicht sicher, lass ihn weg — ein fehlender',
+  'Name ist besser als ein falscher.',
+].join('\n')

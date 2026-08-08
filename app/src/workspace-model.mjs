@@ -1,6 +1,7 @@
 import { isIntegrityCategory } from './reasoning-model.mjs'
 import { istFremdeInterviewNachricht } from './verstaendnis-interview.mjs'
 import { normalizeAnnotationWorkspace } from './annotation-controller.mjs'
+import { normalisiereBausteinarten } from './bausteinlauf-model.mjs'
 
 const WORKSPACE_VERSION = 3
 const IDLE_BEFORE_INITIATIVE_MS = 3000
@@ -137,22 +138,28 @@ export function ensureWorkspaceState(doc) {
     })
   }
 
+  // Die erkannten Bausteinarten liegen NEBEN dem Text (Spec: "Wo es liegt"). Was hier
+  // ankommt, kann aus einer aelteren Fassung stammen -- entweder es ist vollstaendig
+  // gueltig, oder es ist null. Eine halbe Ablage waere schlimmer als keine.
+  current.bausteinarten = normalisiereBausteinarten(current.bausteinarten)
+
   doc.workspace = current
   return current
 }
 
-export function collectBlockSnapshots(docJson) {
+// rollen: Map<blockId, funktion> aus doc.workspace.bausteinarten (bausteinlauf-model.mjs).
+// Das alte Merkmal node.attrs.semanticRole wird bewusst NICHT mehr gelesen: Seit dem
+// 7. August 2026 liegen die Bausteinarten neben dem Text, und zwei Quellen für dieselbe
+// Angabe sind eine Quelle zu viel. Bestehende Dokumente verlieren nichts —
+// bestandAusAltenRollen hebt alte Merkmale beim ersten Laden in die Ablage.
+export function collectBlockSnapshots(docJson, rollen = null) {
   return (docJson && Array.isArray(docJson.content) ? docJson.content : []).map((node, index) => {
     const text = textOf(node).trim()
-    const role = node.type === 'heading' ? 'heading' : (node.attrs && node.attrs.semanticRole) || 'paragraph'
-    return {
-      id: (node.attrs && node.attrs.blockId) || null,
-      index,
-      type: node.type,
-      role,
-      text,
-      excerpt: text.slice(0, 160),
-    }
+    const id = (node.attrs && node.attrs.blockId) || null
+    const role = node.type === 'heading'
+      ? 'heading'
+      : (id && rollen && rollen.get(id)) || 'paragraph'
+    return { id, index, type: node.type, role, text, excerpt: text.slice(0, 160) }
   })
 }
 
