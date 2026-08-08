@@ -626,14 +626,51 @@ test('ohne Rollenkarte ist jeder Absatz ein gewoehnlicher Absatz', () => {
   assert.deepEqual(blocks.map(block => block.role), ['heading', 'paragraph'])
 })
 
-test('die Rollenkarte speist block.role, das alte Merkmal nicht mehr', () => {
+test('die Rollenkarte speist block.role', () => {
   const docJson = {
     content: [
       { type: 'heading', attrs: { level: 2, blockId: 'h1' }, content: [{ type: 'text', text: 'Titel' }] },
-      { type: 'paragraph', attrs: { blockId: 'b1', semanticRole: 'claim' }, content: [{ type: 'text', text: 'Alt.' }] },
+      { type: 'paragraph', attrs: { blockId: 'b1' }, content: [{ type: 'text', text: 'Alt.' }] },
       { type: 'paragraph', attrs: { blockId: 'b2' }, content: [{ type: 'text', text: 'Neu.' }] },
     ],
   }
   const blocks = collectBlockSnapshots(docJson, new Map([['b2', 'counterpoint']]))
   assert.deepEqual(blocks.map(block => block.role), ['heading', 'paragraph', 'counterpoint'])
+})
+
+// Entscheidung 1 (Issue #36): Der Knopf "Baustein hinzuefuegen" bleibt. Er ERZEUGT einen
+// Absatz einer gewaehlten Art -- das ist etwas anderes als eine erkannte Art zu ueberstimmen.
+// Wer bewusst eine Kernbehauptung anlegt, soll sie auch sehen, bis die Erkennung greift.
+// Sonst waere der Knopf ein Knopf ohne sichtbare Wirkung.
+test('ein von Hand erzeugter Baustein behaelt seine Rolle, solange die Ablage nichts sagt', () => {
+  const docJson = {
+    content: [
+      { type: 'paragraph', attrs: { blockId: 'b1', semanticRole: 'claim' }, content: [{ type: 'text', text: 'Von Hand.' }] },
+      { type: 'paragraph', attrs: { blockId: 'b2' }, content: [{ type: 'text', text: 'Einfach so.' }] },
+    ],
+  }
+  assert.deepEqual(collectBlockSnapshots(docJson).map(block => block.role), ['claim', 'paragraph'])
+})
+
+// Die Rangfolge ist der ganze Punkt: Erkanntes gewinnt. Sonst waere die Handvergabe doch
+// wieder ein Ueberstimmen -- nur eines, das rueckwaerts wirkt.
+test('die erkannte Art gewinnt ueber das von Hand gewaehlte Wort', () => {
+  const docJson = {
+    content: [
+      { type: 'paragraph', attrs: { blockId: 'b1', semanticRole: 'claim' }, content: [{ type: 'text', text: 'Von Hand.' }] },
+    ],
+  }
+  const blocks = collectBlockSnapshots(docJson, new Map([['b1', 'evidence']]))
+  assert.deepEqual(blocks.map(block => block.role), ['evidence'])
+})
+
+// Eine Ueberschrift bleibt eine Ueberschrift -- sie folgt dem Knotentyp, nicht der Ablage
+// und nicht einem alten Merkmal.
+test('die Ueberschrift laesst sich weder von der Ablage noch von Hand umwidmen', () => {
+  const docJson = {
+    content: [
+      { type: 'heading', attrs: { level: 2, blockId: 'h1', semanticRole: 'claim' }, content: [{ type: 'text', text: 'Titel' }] },
+    ],
+  }
+  assert.deepEqual(collectBlockSnapshots(docJson, new Map([['h1', 'evidence']])).map(block => block.role), ['heading'])
 })

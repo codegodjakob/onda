@@ -148,17 +148,26 @@ export function ensureWorkspaceState(doc) {
 }
 
 // rollen: Map<blockId, funktion> aus doc.workspace.bausteinarten (bausteinlauf-model.mjs).
-// Das alte Merkmal node.attrs.semanticRole wird bewusst NICHT mehr gelesen: Seit dem
-// 7. August 2026 liegen die Bausteinarten neben dem Text, und zwei Quellen für dieselbe
-// Angabe sind eine Quelle zu viel. Bestehende Dokumente verlieren nichts —
-// bestandAusAltenRollen hebt alte Merkmale beim ersten Laden in die Ablage.
+//
+// Drei Quellen in fester Rangfolge, und die Reihenfolge ist die ganze Entscheidung
+// (Issue #36, Entscheidung 1):
+//
+//   1. Ueberschrift — folgt dem Knotentyp. Keine Vermutung, keine Ablage.
+//   2. Die Ablage — was die KI fuer DIESEN Absatz erkannt hat. Erkanntes gewinnt.
+//   3. node.attrs.semanticRole — die Art, die beim ERZEUGEN von Hand gewaehlt wurde
+//      (insertSemanticBlock, ueber den Knopf "Baustein hinzufuegen").
+//
+// Punkt 3 ist bewusst kein Rueckfall auf alte Zeiten, sondern ein lebender Weg: Der Knopf
+// erzeugt Bausteine und schreibt das Merkmal weiter. Erzeugen und Ueberstimmen sind zwei
+// verschiedene Handlungen -- wer bewusst eine Kernbehauptung anlegt, sieht sie, bis die
+// Erkennung sie benennt. Ohne Punkt 3 waere der Knopf ein Knopf ohne sichtbare Wirkung.
 export function collectBlockSnapshots(docJson, rollen = null) {
   return (docJson && Array.isArray(docJson.content) ? docJson.content : []).map((node, index) => {
     const text = textOf(node).trim()
     const id = (node.attrs && node.attrs.blockId) || null
     const role = node.type === 'heading'
       ? 'heading'
-      : (id && rollen && rollen.get(id)) || 'paragraph'
+      : (id && rollen && rollen.get(id)) || (node.attrs && node.attrs.semanticRole) || 'paragraph'
     return { id, index, type: node.type, role, text, excerpt: text.slice(0, 160) }
   })
 }

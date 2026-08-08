@@ -138,11 +138,13 @@ function knotenText(node) {
 // 'paragraph' war die Voreinstellung, keine Entscheidung — daraus entsteht nichts.
 //
 // WICHTIG: Diese Funktion nimmt das ROHE Tiptap-JSON, nicht die Bloecke aus
-// collectBlockSnapshots. Seit dem 7. August 2026 liest collectBlockSnapshots das alte
-// Merkmal semanticRole nicht mehr (die Bausteinart liegt neben dem Text). Ueber Bloecke
-// gefuettert fände diese Funktion also NIE eine alte Rolle und waere ein stiller No-Op.
-// Sie ist die einzige Stelle im Programm, die das Alt-Merkmal noch kennt -- genau das
-// ist ihre Aufgabe.
+// collectBlockSnapshots. Der Grund ist NICHT, dass die Bloecke das Merkmal verloren
+// haetten -- collectBlockSnapshots liest semanticRole weiterhin, als dritte und letzte
+// Quelle (Issue #36, Entscheidung 1). Der Grund ist die Rangfolge dort: Sobald die Ablage
+// etwas sagt, gewinnt sie, und dann saehe diese Funktion nicht mehr das ALTE Wort, sondern
+// das neue. Sie braucht aber genau das alte, denn sie laeuft nur einmal -- bevor es eine
+// Ablage gibt. Ueber Bloecke gefuettert waere sie also nicht falsch, sondern blind fuer
+// den einen Fall, fuer den es sie gibt.
 export function bestandAusAltenRollen(docJson, jetzt = Date.now()) {
   const knoten = docJson && Array.isArray(docJson.content) ? docJson.content : []
   const arten = []
