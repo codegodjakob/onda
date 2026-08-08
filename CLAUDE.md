@@ -33,6 +33,7 @@ Einzelner Kontext — `CONTEXT.md` und `docs/adr/` im Projektwurzelverzeichnis. 
 |---|---|
 | `docs/PHILOSOPHIE.md` | Die Gestaltungsgrundsätze. Entschieden, nicht gesammelt — eine Oberfläche, die einem widerspricht, ist falsch |
 | `docs/ONDA-SYSTEM.md` | Das ganze System in 16 Kapiteln |
+| `docs/DIE-GESTE-IM-TEXT.md` | Wie die KI im Text zeigt, welche Stelle sie meint — fünf Gesten, keine Farbe |
 | `docs/VISION-GEGEN-GEBAUTES.md` | Der Abstract gegen den Code geprüft |
 | `docs/REDESIGN-IDEEN.md` | Gesammelte Umgestaltungsideen, noch nichts entschieden |
 | `docs/ABNAHME-ETAPPE-A.md` | Abnahme der zehn Kriterien für den KI-Anschluss |
