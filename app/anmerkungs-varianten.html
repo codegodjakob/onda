@@ -23,7 +23,7 @@ body { margin: 0; }
 button { font: inherit; }
 
 .kopf { width: min(100%, 1100px); margin-inline: auto; padding: var(--space-8) var(--space-6) var(--space-6); }
-.kopf__aura { width: 48px; height: 18px; margin-bottom: var(--space-5); border-radius: var(--radius-full); background: var(--gradient-aura); box-shadow: var(--shadow-glow); }
+.kopf__aura { width: 48px; height: 18px; margin-bottom: var(--space-5); border-radius: var(--radius-full); background: var(--bg-sunken); border: 1px solid var(--border-strong); }
 .kopf h1 { margin: 0; font: var(--type-display); letter-spacing: var(--tracking-tighter); }
 .kopf p { max-width: 62ch; margin: var(--space-4) 0 0; color: var(--text-secondary); font: var(--type-body); line-height: var(--leading-relaxed); }
 
@@ -33,7 +33,7 @@ button { font: inherit; }
 .steuer__label { color: var(--text-tertiary); font: var(--type-rubrik); }
 .knopf { min-height: 44px; padding: 0 var(--space-4); border: 1px solid var(--border-default); border-radius: var(--radius-control);
   background: var(--bg-surface); color: var(--text-primary); cursor: pointer; font: var(--type-label); }
-.knopf[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-tint); }
+.knopf[aria-pressed="true"] { border-color: var(--text-primary); background: var(--bg-sunken); }
 .knopf:hover { background: var(--bg-hover); }
 .masz { margin-left: auto; color: var(--text-tertiary); font: var(--type-caption); font-variant-numeric: tabular-nums; }
 
@@ -70,7 +70,7 @@ button { font: inherit; }
    =========================================================================== */
 
 /* 1 · WORT — das Wort selbst, mit der Alternative direkt dahinter. */
-.mark-wort { border-radius: var(--radius-sm); background: var(--accent-tint); padding: 1px 3px;
+.mark-wort { border-radius: var(--radius-sm); background: var(--bg-sunken); border: 1px solid var(--border-strong); padding: 0 3px;
   box-decoration-break: clone; -webkit-box-decoration-break: clone; }
 .mark-wort__neu { margin-left: 6px; color: var(--text-secondary); font-style: italic; opacity: 0; }
 .zeigt .mark-wort__neu { animation: einblenden var(--dur-normal) var(--ease-out) 520ms both; }
@@ -78,7 +78,7 @@ button { font: inherit; }
 /* 2 · SATZ — ein Strich, der sich unter den Satz zieht. Als Hintergrundbild,
    damit er ueber Zeilenumbrueche hinweg auf JEDER Zeile erscheint; ein
    Pseudo-Element waere ein einziger Kasten und liefe quer durch den Absatz. */
-.mark-satz { background-image: linear-gradient(var(--accent), var(--accent));
+.mark-satz { background-image: linear-gradient(var(--text-primary), var(--text-primary));
   background-repeat: no-repeat; background-position: 0 100%; background-size: 0% 2px;
   padding-bottom: 3px; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
 .zeigt .mark-satz { animation: strich-ziehen 620ms var(--ease-out) 120ms both; }
@@ -86,19 +86,19 @@ button { font: inherit; }
 /* 3 · ABSATZ — eine Klammer am linken Rand, ueber die volle Absatzhoehe. */
 .mark-absatz { position: relative; padding-left: var(--space-4); }
 .mark-absatz::before { content: ""; position: absolute; left: 0; top: 2px; bottom: 2px; width: 8px;
-  border: 2px solid var(--accent); border-right: 0; border-radius: 3px 0 0 3px;
+  border: 2px solid var(--text-primary); border-right: 0; border-radius: 3px 0 0 3px;
   transform-origin: 50% 0; transform: scaleY(0); }
 .zeigt .mark-absatz::before { animation: klammer-wachsen 460ms var(--ease-out) 120ms both; }
 
 /* 4 · ORTSWECHSEL — zwei Stellen: die Flaeche, um die es geht, und die Marke,
    wohin sie soll. Ohne das sichtbare Wohin waere es eine halbe Aussage. */
-.mark-block { position: relative; border-radius: var(--radius-panel); background: var(--accent-tint);
+.mark-block { position: relative; border-radius: var(--radius-panel); background: var(--bg-sunken);
   padding: var(--space-3) var(--space-4); opacity: 0; }
 .zeigt .mark-block { animation: einblenden var(--dur-slow) var(--ease-out) 120ms both; }
-.mark-ziel { display: flex; align-items: center; gap: var(--space-2); height: 0; overflow: hidden; color: var(--accent); font: var(--type-caption); }
+.mark-ziel { display: flex; align-items: center; gap: var(--space-2); height: 0; overflow: hidden; color: var(--text-secondary); font: var(--type-caption); }
 .zeigt .mark-ziel { animation: ziel-oeffnen 420ms var(--ease-out) 460ms both; }
 .mark-ziel__linie { flex: 1; height: 2px; border-radius: var(--radius-full);
-  background: repeating-linear-gradient(90deg, var(--accent) 0 6px, transparent 6px 12px); }
+  background: repeating-linear-gradient(90deg, var(--text-secondary) 0 6px, transparent 6px 12px); }
 
 @keyframes strich-ziehen { from { background-size: 0% 2px; } to { background-size: 100% 2px; } }
 @keyframes klammer-wachsen { from { transform: scaleY(0); } to { transform: scaleY(1); } }
@@ -113,13 +113,13 @@ button { font: inherit; }
 .zeigt .notiz { animation: einblenden var(--dur-normal) var(--ease-out) 760ms both; }
 
 .notiz__kopf { display: flex; align-items: baseline; gap: var(--space-2); color: var(--text-tertiary); font: var(--type-rubrik); }
-.notiz__umfang { color: var(--accent); }
+.notiz__umfang { color: var(--text-primary); font-weight: var(--fw-medium); }
 .notiz__satz { margin: var(--space-2) 0 0; color: var(--text-secondary); font: var(--type-body); line-height: var(--leading-normal); }
 .notiz__gesten { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-3); }
 .geste { min-height: 36px; padding: 0 var(--space-3); border: 1px solid transparent; border-radius: var(--radius-control);
   background: var(--bg-sunken); color: var(--text-primary); cursor: pointer; font: var(--type-caption); }
-.geste--ja { background: var(--accent); color: var(--on-accent); }
-.geste:hover { border-color: var(--accent); }
+.geste--ja { background: var(--text-primary); color: var(--bg-app); }
+.geste:hover { border-color: var(--border-strong); }
 
 /* Zugeklappt: eine ruhige Zeile, die nur sagt, worum es geht. Sie steht immer
    da — dadurch entsteht beim Aufklappen kein Erscheinen, nur ein Oeffnen. */
@@ -129,7 +129,7 @@ button { font: inherit; }
 .notiz__kurz summary { display: flex; align-items: center; gap: var(--space-2); min-height: 36px;
   color: var(--text-tertiary); font: var(--type-caption); cursor: pointer; list-style: none; }
 .notiz__kurz summary::-webkit-details-marker { display: none; }
-.notiz__kurz summary::before { content: "›"; color: var(--accent); transition: transform var(--dur-fast) var(--ease-out); }
+.notiz__kurz summary::before { content: "›"; color: var(--text-tertiary); transition: transform var(--dur-fast) var(--ease-out); }
 .notiz__kurz[open] summary::before { transform: rotate(90deg); }
 .notiz__kurz > div { padding: var(--space-3) 0 0; }
 
@@ -311,7 +311,7 @@ button { font: inherit; }
   <h3>Was noch offen ist</h3>
   <ul>
     <li>Hier stehen vier Anmerkungen gleichzeitig, damit man sie vergleichen kann. Im Programm ist immer nur <em>eine</em> sichtbar.</li>
-    <li>Die Farbe ist überall dieselbe. Ob Dringlichkeit über Farbe laufen soll — oder besser gar nicht —, ist nicht entschieden.</li>
+    <li><strong>Keine Farbe.</strong> Die vier Gesten unterscheiden sich allein durch ihre Form: geschlossene Kontur beim Wort, Strich beim Satz, Klammer beim Absatz, Fläche mit Ziel beim Ortswechsel. Damit bleibt Farbe für später frei — und die Formen müssen von sich aus tragen, statt sich auf einen Farbton zu verlassen.</li>
     <li>Ob eine weggelegte Anmerkung ihre Markierung behalten darf, hängt daran, ob sie sagen kann, wann sie wiederkommt (siehe <code>docs/research/2026-08-08-rhythmus-der-anmerkungen.md</code>).</li>
   </ul>
 </section>
