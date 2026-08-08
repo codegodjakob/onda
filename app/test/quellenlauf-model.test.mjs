@@ -15,6 +15,8 @@ import {
   verarbeiteQuellenthemen,
   versucheQuellenlauf,
 } from '../src/quellenlauf-model.mjs'
+import { ensureMemoryStore } from '../src/memory-model.mjs'
+import { schreibeErkanntes } from '../src/erkanntes-model.mjs'
 
 const quellen = anzahl => Array.from({ length: anzahl }, (unused, index) => ({ id: `q${index + 1}` }))
 
@@ -165,6 +167,44 @@ test('Der Ablauf: Sperre vor dem ersten await, dann Schluessel, Projekt, Kosten,
   ])
   assert.equal(ergebnis.erfolg, true)
   assert.deepEqual(ergebnis.gruppen.map(gruppe => gruppe.name), ['Wahrnehmung'])
+})
+
+// Der Lauf reicht das Projektwissen durch. Ohne diesen Test waere der Anschluss zwar in
+// quellen-kontext.mjs gebaut und dort auch geprueft — aber niemand haette bemerkt, wenn der
+// Lauf ihn nicht mehr mitgibt. Genau so entstand Issue #30: jedes Stueck fuer sich in
+// Ordnung, die Kette dazwischen nicht.
+test('Der Lauf gibt das Projektwissen an den Kontext weiter', async () => {
+  const MARKE = 'MARKANTES-PRINZIP-30b4'
+  const memoryStore = ensureMemoryStore(null)
+  schreibeErkanntes(memoryStore, { satz: MARKE, at: 1000 })
+
+  const faengt = () => {
+    const gesehen = []
+    return {
+      gesehen,
+      runTask: async (task, kontext) => {
+        gesehen.push(...kontext.volatiles)
+        return { daten: { gruppen: [] } }
+      },
+    }
+  }
+
+  const mit = faengt()
+  await versucheQuellenlauf(laufWerkzeug({
+    onda: { project: { id: 'p1' }, doc: null, docs: [], memoryStore },
+    runTask: mit.runTask,
+  }).argumente)
+  assert.ok(
+    mit.gesehen.join('\n').includes(MARKE),
+    'das Projektwissen erreicht den Kontext des Laufs nicht — der Kanal ist blind',
+  )
+
+  // Gegenprobe: ohne Wissen bleibt es bei den zwei eigenen Bloecken des Kanals. Sonst
+  // bewiese die Suche oben nichts, weil die Marke von woanders kaeme.
+  const ohne = faengt()
+  await versucheQuellenlauf(laufWerkzeug({ runTask: ohne.runTask }).argumente)
+  assert.equal(ohne.gesehen.length, 2)
+  assert.equal(ohne.gesehen.join('\n').includes(MARKE), false)
 })
 
 test('Ohne Schluessel kostet der Lauf nichts und die Sperre faellt wieder', async () => {
