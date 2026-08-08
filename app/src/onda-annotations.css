@@ -30,7 +30,18 @@
 
 .onda-annotation {
   display: flex; flex-direction: column; gap: var(--space-3); width: 100%;
-  padding: var(--space-4) var(--space-5); overflow-wrap: anywhere;
+  padding: var(--space-4) var(--space-5);
+  /* Wie ein zu langes Wort umbricht. Bis zum 8.8.2026 stand hier `overflow-wrap: anywhere`
+     — eine Erlaubnis, JEDES Wort an JEDER Stelle zu zerschneiden. Solange die Karte 340px
+     breit war, hat sie niemand eingelöst; seit sie auf 270px schrumpft, stand in der
+     Vergleichszeile „Konzentati / on".
+     Deutsch trennt nach Silben und setzt einen Strich: aus „Benachrichtigungsunterbrechungen"
+     wird „Benachrichtigungsunterbre-chungen", nicht „…unterbrec / hungen". Das Wort bleibt
+     lesbar, weil der Strich ansagt, dass es weitergeht. Möglich ist das nur, weil
+     index.html `lang="de"` trägt — ohne Sprache kennt der Browser keine Silben.
+     break-word bleibt als Notbremse darunter: greift erst, wenn es keine Trennstelle gibt,
+     und verhindert dann, dass Text seitlich aus der Karte läuft. */
+  hyphens: auto; -webkit-hyphens: auto; overflow-wrap: break-word;
   border: 1px solid var(--border-subtle); border-radius: var(--radius-overlay);
   background: var(--bg-surface); box-shadow: var(--shadow-md); color: var(--text-primary);
   font-family: var(--font-sans); text-align: left;
@@ -68,11 +79,25 @@
 .aura-note__details summary { width: fit-content; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
 .aura-note__rule { margin: var(--space-2) 0 0; padding: var(--space-3) var(--space-4); border-radius: var(--radius-panel); background: var(--bg-sunken); color: var(--text-secondary); font: var(--type-caption); }
 
+/* Die Vergleichszeile zeigt zwei Schreibweisen nebeneinander — daran hängt ihr ganzer
+   Sinn: man soll den Unterschied auf einen Blick sehen. Dafür müssen beide Wörter ganz
+   dastehen, und dafür brauchen sie Platz, keine Sonderrechte.
+   Bis zum 8.8.2026 teilte hier ein Raster die Zeile stur in zwei Hälften. In der 270px
+   schmalen Karte blieben davon 78px je Hälfte — für „Konzentation" (87px) zu wenig. Das
+   Raster gab nicht nach, also gab das Wort nach.
+   Eine umbrechende Reihe entscheidet dagegen am Inhalt statt an einer Schwelle: Passen
+   beide Wörter nebeneinander, stehen sie nebeneinander; passen sie nicht, rutscht das
+   zweite mitsamt Pfeil eine Zeile tiefer und hat dort die ganze Breite. Das gilt für
+   jedes Wort und jede Kartenbreite, ohne dass irgendwo eine Zahl geraten werden müsste. */
 .aura-correction__comparison {
-  display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); align-items: center; gap: var(--space-3);
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-3);
   padding: var(--space-3) var(--space-4); border-radius: var(--radius-panel); background: var(--bg-sunken); font: var(--type-body);
 }
-.aura-correction__comparison > svg { color: var(--text-tertiary); }
+/* Der Pfeil gehört zum neuen Wort, nicht zum alten: rutscht das Wort eine Zeile tiefer,
+   geht er mit und führt es an („› Konzentration"). Bliebe er am Ende der ersten Zeile
+   hängen, zeigte er ins Leere. */
+.aura-correction__ziel { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
+.aura-correction__comparison svg { flex: none; color: var(--text-tertiary); }
 .aura-rewrite__text, .aura-slot__text, .aura-region__proposal {
   margin: 0; padding: var(--space-3) var(--space-4); border-radius: var(--radius-panel);
   background: var(--bg-sunken); color: var(--text-primary); font: var(--type-body); line-height: var(--leading-relaxed);
@@ -85,7 +110,11 @@
 .aura-region__samples { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .aura-region__sample { padding: var(--space-2) var(--space-3); border-radius: var(--radius-control); background: var(--bg-surface); color: var(--text-secondary); font: var(--type-caption); box-shadow: var(--shadow-xs); }
 .aura-note__source, .aura-note__compare { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-4); border-radius: var(--radius-panel); background: var(--bg-sunken); }
-.aura-note__srclink { display: inline-flex; align-items: center; gap: var(--space-2); color: var(--text-link); font: var(--type-label); text-decoration: none; }
+/* Hier — und nur hier — ist „an jeder Stelle brechen" richtig. Fehlt einer Quelle der
+   Titel, steht ihre nackte Web-Adresse in der Zeile (annotation-components.mjs), und die
+   hat weder Leerzeichen noch Silben: sie liefe sonst quer aus der Karte. Ein Trennstrich
+   wäre dort sogar schädlich, weil er wie ein Teil der Adresse aussähe. */
+.aura-note__srclink { display: inline-flex; align-items: center; gap: var(--space-2); color: var(--text-link); font: var(--type-label); text-decoration: none; overflow-wrap: anywhere; hyphens: none; -webkit-hyphens: none; }
 .aura-note__srclink:hover { text-decoration: underline; text-underline-offset: 2px; }
 .aura-note__excerpt { margin: 0; padding-left: var(--space-3); border-left: 2px solid var(--border-default); color: var(--text-secondary); font: var(--type-body); line-height: var(--leading-relaxed); }
 .aura-note__srcmeta, .aura-note__cmpref { color: var(--text-tertiary); font: var(--type-caption); }
@@ -119,8 +148,11 @@
   .onda-annotation { padding: var(--space-4); }
   .aura-note__head { flex-wrap: wrap; }
   .aura-note__scope { width: 100%; margin-left: 24px; }
-  .aura-correction__comparison { grid-template-columns: 1fr; }
-  .aura-correction__comparison > svg { transform: rotate(90deg); }
+  /* Die Vergleichszeile stand hier bis zum 8.8.2026 noch einmal eigens auf eine Spalte
+     umgestellt. Das ist entfallen: Sie bricht jetzt von allein um, wenn die Wörter nicht
+     nebeneinander passen — und zwar bei JEDER Breite, nicht erst unter 480px. Genau da
+     lag der Fehler: die Karte war bei 1280px Fensterbreite schon zu schmal, das Fenster
+     aber weit über der Schwelle, also griff die Regel nie. */
   .aura-action { flex: 1 1 auto; }
 }
 @media (prefers-reduced-motion: reduce) {

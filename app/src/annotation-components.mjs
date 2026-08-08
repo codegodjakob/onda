@@ -102,10 +102,15 @@ export function renderCorrection(finding, callbacks = {}) {
   const { surface, normalized, presentation } = annotationSurface(finding, 'correction', 'aura-correction')
   surface.append(annotationHeader(normalized, presentation, presentation.priority === 'fehler' ? 'edit' : 'sparkle'))
   if (normalized.short) surface.append(element('p', 'aura-note__body', normalized.short))
+  // Pfeil und neues Wort sind EIN Stück. Die Zeile bricht um, wenn beide Schreibweisen
+  // nicht nebeneinander passen (onda-annotations.css); bliebe der Pfeil dabei am Ende
+  // der ersten Zeile stehen, zeigte er ins Leere. So führt er das neue Wort an.
   const comparison = element('div', 'aura-correction__comparison')
   comparison.append(element('span', 'aura-note__from', normalized.target))
-  comparison.append(ondaIcon('chevron-right', { size: 16 }))
-  comparison.append(element('span', 'aura-note__to', normalized.action || normalized.suggestion))
+  const ziel = element('span', 'aura-correction__ziel')
+  ziel.append(ondaIcon('chevron-right', { size: 16 }))
+  ziel.append(element('span', 'aura-note__to', normalized.action || normalized.suggestion))
+  comparison.append(ziel)
   surface.append(comparison)
   const why = explanation(normalized)
   if (why) surface.append(why)
