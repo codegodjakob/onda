@@ -226,14 +226,26 @@ export function blasenPfad(masse) {
 //                 gerade am Orb und dafuer eine schaerfere Biegung weiter unten.
 //   griffKoerper  dasselbe am anderen Ende, an der Kante des Koerpers.
 //   fussWeite     wie weit links vom Orb die Kurve auf der Oberkante landet.
+// EINE REIHE VON BREIT NACH SCHLANK. Jakob am 8. August 2026: "tendenziell eher wie
+// säule aber so elegant wie taille." Also keine vier verstreuten Einfaelle mehr,
+// sondern eine Achse mit fuenf Punkten darauf. Die beiden Enden sind die Formen, die
+// er genannt hat; die drei dazwischen sind die Gefaesse, die genau das koennen — ein
+// voller Koerper an einem Hals, der sich zusammennimmt.
+//
+// Was von links nach rechts passiert: die Taille wird enger (17 → 5), der Ansatz am
+// Orb rutscht ein wenig weiter herum (8° → 16°), und der Fuss wird schmaler. Alles
+// andere bleibt.
 export const FORMEN = {
-  stiel: { art: 'bogen' },
-  // Durchgehend geschwungen, in der Mitte am schmalsten: ein Tropfen, der sich zieht.
-  tropfen: { art: 'kurve', winkel: 16, taille: 5, griffOrb: 0.55, griffKoerper: 0.32, fussWeite: 30 },
-  // Oben schmal, nach unten stetig weiter: der Koerper greift nach dem Orb.
-  trichter: { art: 'kurve', winkel: 34, taille: 9, griffOrb: 0.14, griffKoerper: 0.80, fussWeite: 48 },
   // Kraeftig, fast in Orbbreite, mit weiten Kehlen statt einer Taille.
   saeule: { art: 'kurve', winkel: 8, taille: 17, griffOrb: 0.50, griffKoerper: 0.50, fussWeite: 42 },
+  kelch: { art: 'kurve', winkel: 8, taille: 14, griffOrb: 0.52, griffKoerper: 0.50, fussWeite: 44 },
+  amphore: { art: 'kurve', winkel: 10, taille: 11, griffOrb: 0.55, griffKoerper: 0.45, fussWeite: 44 },
+  karaffe: { art: 'kurve', winkel: 12, taille: 8, griffOrb: 0.58, griffKoerper: 0.38, fussWeite: 40 },
+  // Durchgehend geschwungen, in der Mitte am schmalsten: ein Tropfen, der sich zieht.
+  tropfen: { art: 'kurve', winkel: 16, taille: 5, griffOrb: 0.55, griffKoerper: 0.32, fussWeite: 30 },
+  // Gerade Kanten und Kehlen statt Kurven. Bleibt als Vergleichsmass stehen, bis
+  // entschieden ist — es ist die Bauweise, von der die Reihe wegfuehrt.
+  stiel: { art: 'bogen' },
 }
 
 export const FORM_NAMEN = Object.keys(FORMEN)
@@ -411,7 +423,7 @@ export function erzeugeKontur(svg) {
   return {
     svg,
     setzeForm(neueForm) {
-      form = FORMEN[neueForm] ? neueForm : 'stiel'
+      form = FORMEN[neueForm] ? neueForm : 'amphore'
     },
     get form() { return form },
     setzeMasse(neueBreite, neueHoehe, neuerHals = 0) {

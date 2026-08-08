@@ -507,7 +507,7 @@ function blaseMisstUndZeichnet(fenster, blase) {
   const hals = blaseHalsLaenge(fenster)
   if (!blaseIstMoeglich(kasten.width, kasten.height, undefined, hals)) return null
   if (!blaseKontur || blaseKontur.svg !== blase) blaseKontur = erzeugeKontur(blase)
-  blaseKontur?.setzeForm(document.documentElement.dataset.blaseForm || 'stiel')
+  blaseKontur?.setzeForm(document.documentElement.dataset.blaseForm || 'amphore')
   blaseKontur?.setzeMasse(kasten.width, kasten.height, hals)
   return blaseKontur
 }
@@ -627,12 +627,15 @@ const HALS_FASSUNGEN = [
   ['kurz', 'kurz'],
 ]
 
-// Vier Halsformen. Was sie unterscheidet, steht in FORMEN in onda-blase.mjs.
+// Eine Reihe von breit nach schlank. Was sie unterscheidet, steht in FORMEN in
+// onda-blase.mjs; „Amphore" liegt in der Mitte und ist voreingestellt.
 const HALS_FORMEN = [
-  ['stiel', 'Stiel'],
-  ['tropfen', 'Tropfen'],
-  ['trichter', 'Trichter'],
   ['saeule', 'Säule'],
+  ['kelch', 'Kelch'],
+  ['amphore', 'Amphore'],
+  ['karaffe', 'Karaffe'],
+  ['tropfen', 'Tropfen'],
+  ['stiel', 'Stiel'],
 ]
 
 function variantenSchalterAn() {
@@ -703,7 +706,7 @@ function variantenReihe(wort, fassungen, feld, schluessel, standard) {
 function renderHalsUmschalter() {
   if (!variantenSchalterAn()) return () => {}
   const leiste = createNode('div', 'onda-varianten')
-  leiste.append(variantenReihe('Form', HALS_FORMEN, 'blaseForm', 'ondaBlaseForm', 'stiel'))
+  leiste.append(variantenReihe('Form', HALS_FORMEN, 'blaseForm', 'ondaBlaseForm', 'amphore'))
   leiste.append(variantenReihe('Länge', HALS_FASSUNGEN, 'blaseHals', 'ondaBlaseHals', 'gemischt'))
   document.body.append(leiste)
   return () => leiste.remove()
