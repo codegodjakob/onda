@@ -296,6 +296,45 @@ async function runRisikoTafel(browser) {
     feldinhalt: '',
   })
   await page.close()
+
+  // Der Ausweg muss auch auf einem FLACHEN Bildschirm sichtbar sein. „Sichtbar, nicht
+  // bloß vorhanden" ist keine Formulierung, sondern eine Messung: Die Tafel ist hoch
+  // (Folge, Feld, Hinweiszeile, zwei Knöpfe), und die Anmerkung richtete sich am Absatz
+  // aus, ohne den Fensterrand zu kennen. Auf 640px Fensterhöhe lag „Abbrechen" dadurch
+  // bei 644–676 — außerhalb des Bildes, und die Fläche rollt nicht. Dabei ist die Tafel
+  // nur rund 550px hoch, hätte also gepasst. Ein Pflichtfeld, dessen Ausweg man nicht
+  // erreicht, ist eine Sackgasse; genau der Ausweg macht die Pflicht vertretbar (#38).
+  const flach = await browser.newPage({ viewport: { width: 1440, height: 640 } })
+  await openExample(flach)
+  await flach.evaluate(() => {
+    const block = window.AIWT.__blockIdentityTestBridge.getBlocks().find(kandidat => kandidat.text.length > 24)
+    const doc = window.AIWT.state.docs.find(kandidat => kandidat.id === window.AIWT.state.active)
+    doc.findings = []
+    doc.lane = []
+    doc.coach = []
+    doc.decisions = []
+    window.AIWT.__workspaceTestBridge.injectFinding({
+      id: 'onda-risiko-flach', status: 'open', placement: 'passage', blockId: block.id,
+      target: block.text.slice(0, 28), category: 'source', anmerkungsart: 'beleg',
+      priority: 'critical', createdAt: -17,
+      short: 'Für diese Aussage fehlt ein belastbarer Beleg.',
+      why: 'Ohne Beleg bleibt die Aussage wissenschaftlich nicht abgesichert.',
+      consequence: 'Die Arbeit kann an dieser Stelle eine unbelegte Behauptung enthalten.',
+    })
+  })
+  const flacheAnmerkung = flach.locator('#localAgentLayer [data-finding-id="onda-risiko-flach"]')
+  await flacheAnmerkung.waitFor({ state: 'visible' })
+  await flacheAnmerkung.getByRole('button', { name: 'Verwerfen', exact: true }).click()
+  await flach.locator('.integrity-risk-confirmation').waitFor({ state: 'visible' })
+  const lage = await flach.evaluate(() => {
+    const kasten = document.querySelector('.integrity-risk-cancel').getBoundingClientRect()
+    return { oben: kasten.top, unten: kasten.bottom, fenster: window.innerHeight }
+  })
+  assert.ok(
+    lage.unten <= lage.fenster && lage.oben >= 0,
+    `„Abbrechen" liegt außerhalb des Bildes: ${Math.round(lage.oben)}–${Math.round(lage.unten)} bei ${lage.fenster}px Fensterhöhe`,
+  )
+  await flach.close()
 }
 
 // „Hinweise ohne sichere Textstelle" (workspace.js unplacedPassageFindings /
