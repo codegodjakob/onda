@@ -627,14 +627,11 @@ const HALS_FASSUNGEN = [
   ['kurz', 'kurz'],
 ]
 
-// Eine Reihe von breit nach schlank. Was sie unterscheidet, steht in FORMEN in
-// onda-blase.mjs; „Amphore" liegt in der Mitte und ist voreingestellt.
+// Die zwei, die uebrig sind. Sie unterscheiden sich nur in der Taille: 22px gegen
+// 16px. „Stiel" bleibt als Vergleichsmass daneben, bis eine von beiden feststeht.
 const HALS_FORMEN = [
-  ['saeule', 'Säule'],
-  ['kelch', 'Kelch'],
   ['amphore', 'Amphore'],
   ['karaffe', 'Karaffe'],
-  ['tropfen', 'Tropfen'],
   ['stiel', 'Stiel'],
 ]
 
