@@ -877,10 +877,15 @@ async function assertBlaseWaechstAusDemOrb(page) {
 
   // (c) Der gezeichnete Sitzkreis liegt auf dem Orb. Aus dem Pfad gelesen: die beiden
   //     letzten Bögen enden am obersten und am rechtesten Punkt des Sitzes.
+  // Der Pfad umläuft den Sitz in zwei Bögen. Seit der Hals mittig unter dem Orb hängt,
+  // ist der zweite davon derjenige, der am OBERSTEN Punkt des Sitzes endet — dort
+  // fängt der Pfad an und dort hört er auf. Die Mitte des Sitzes liegt einen Radius
+  // darunter. (Vorher endete ein Bogen am obersten und einer am rechtesten Punkt; da
+  // ließ sich die Mitte aus zwei verschiedenen Bögen zusammensetzen.)
   const sitzAusPfad = d => {
     const boegen = [...d.matchAll(/A 22 22 0 0 1 (-?[\d.]+) (-?[\d.]+)/g)]
     assert.equal(boegen.length, 2, `Der Pfad hat ${boegen.length} Sitzbögen statt zwei: ${d}`)
-    return { x: Number(boegen[0][1]), y: Number(boegen[1][2]) }
+    return { x: Number(boegen[1][1]), y: Number(boegen[1][2]) + 22 }
   }
   assert.ok(lage.bilder.length >= 10, `Nur ${lage.bilder.length} Zwischenbilder — die Blase springt statt zu wachsen`)
   const letztes = sitzAusPfad(lage.bilder[lage.bilder.length - 1])

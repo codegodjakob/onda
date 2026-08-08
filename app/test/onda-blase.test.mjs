@@ -4,13 +4,15 @@ import assert from 'node:assert/strict'
 import {
   BEWEGUNG,
   ECK_R,
-  HALS_B,
+  FUSS_R,
+  HALS_HALB,
   KEHL_R,
   KOPF_R,
   KOPF_VERSATZ,
   MINDEST_BREITE,
   MINDEST_HOEHE,
   SCHULTER,
+  SCHWUNG_R,
   SITZ_R,
   blaseIstMoeglich,
   blasenFortschritt,
@@ -35,69 +37,85 @@ test('Der Sitz IST der Orb — der Radius ist abgeleitet, nicht gewaehlt', () =>
 
   const g = blasenGeometrie({ links: 0, rechts: 380, oben: 0, unten: 560 })
   assert.deepEqual(g.sitz, { x: 380 - 22, y: 22, r: 22 })
-  // Die beiden Punkte, an denen der Sitz die Kanten der Orb-Tastflaeche beruehrt.
-  assert.deepEqual(g.sitzRechts, { x: 380, y: 22 })
+  // Der oberste Punkt des Sitzes ist zugleich Anfang und Ende des Pfades.
   assert.deepEqual(g.sitzOben, { x: 380 - 22, y: 0 })
 })
 
-test('Beide Kehlen gehen exakt tangential in Hals und Sitz ueber', () => {
-  const g = blasenGeometrie({ links: 10, rechts: 380, oben: 4, unten: 560, halsL: 100 })
-
-  // Die Fusskehle beruehrt beide Enden mit ihrem Radius — sie ist ein echter Fillet
-  // und keine hingebogene Kurve.
-  assert.ok(Math.abs(abstand(g.kehle, g.kehleUnten) - KEHL_R) < NAH)
-  assert.ok(Math.abs(abstand(g.kehle, g.halsLinks) - KEHL_R) < NAH)
-
-  // Am Uebergang in die Panel-Oberkante steht der Radiusvektor der Kehle senkrecht,
-  // ihre Tangente also waagerecht — wie die Kante selbst.
-  assert.equal(g.kehleUnten.x, g.kehle.x)
-  assert.equal(g.kehleUnten.y, g.kante)
-
-  // Am Uebergang in den Hals steht er waagerecht, die Tangente also senkrecht — wie
-  // die Halskante. Oben tut die Kopfkehle dasselbe, nur andersherum.
-  assert.equal(g.halsLinks.y, g.kehle.y)
-  assert.equal(g.halsLinks.x, g.kopfHals.x)
-  assert.ok(Math.abs(abstand(g.kopfkehle, g.kopfHals) - KOPF_R) < NAH)
-  assert.equal(g.kopfHals.y, g.kopfkehle.y)
-
-  // Und die Kopfkehle beruehrt den Sitz von aussen: der Abstand der Mittelpunkte ist
-  // die Summe der Radien, und der Beruehrpunkt liegt auf ihrer Verbindung. Genau dort
-  // haben beide Bogen dieselbe Tangente — sonst saesse an dieser Stelle eine Ecke.
-  assert.ok(Math.abs(abstand(g.sitz, g.kopfkehle) - (SITZ_R + KOPF_R)) < NAH)
-  assert.ok(Math.abs(abstand(g.sitz, g.kopfSitz) - SITZ_R) < NAH)
-  assert.ok(Math.abs(abstand(g.kopfkehle, g.kopfSitz) - KOPF_R) < NAH)
-
-  // Und rechts endet der Sitz mit senkrechter Tangente auf der rechten Panelkante —
-  // dort brauchen die beiden keine Kehle, weil sie ohnehin zusammenfallen. Diese Kante
-  // ist zugleich die rechte Halskante: EINE Linie vom Orb bis in die untere Ecke.
-  assert.ok(Math.abs(abstand(g.sitz, g.sitzRechts) - SITZ_R) < NAH)
-  assert.equal(g.sitzRechts.x, g.rechts)
+test('Der Hals haengt mittig unter dem Orb', () => {
+  // Jakobs Wunsch vom 8. August 2026, und er ist messbar: die Achse des Halses ist die
+  // Achse des Orbs. Vorher lief die rechte Halskante mit der rechten Panelkante
+  // zusammen — der Hals sass also unter der rechten Haelfte des Orbs.
+  const g = blasenGeometrie({ links: 0, rechts: 380, oben: 0, unten: 660, halsL: 100 })
+  const achse = (g.kopfHalsLinks.x + g.kopfHalsRechts.x) / 2
+  assert.equal(achse, g.sitz.x, 'Der Hals haengt nicht unter der Mitte des Orbs')
+  assert.equal(g.kopfHalsRechts.x - g.kopfHalsLinks.x, 2 * HALS_HALB)
+  // Und er haengt SENKRECHT: beide Kanten fangen auf derselben Hoehe an und hoeren
+  // auf derselben Hoehe auf.
+  assert.equal(g.kopfHalsLinks.y, g.kopfHalsRechts.y)
+  assert.equal(g.halsFussLinks.y, g.halsFussRechts.y)
 })
 
-test('Ein Hals in Sitzbreite laesst die Kopfkehle auf null zusammenfallen', () => {
-  // Die Probe darauf, dass die neue Geometrie die alte enthaelt: bei halsB = 2 x SITZ_R
-  // ist die Halskante die Tangente des Sitzes, die Kopfkehle also ueberfluessig.
-  const g = blasenGeometrie({ links: 0, rechts: 380, oben: 0, unten: 560, halsB: 2 * SITZ_R })
-  assert.ok(Math.abs(g.kopfHals.y - g.sitz.y) < NAH, 'Die Kopfkehle sitzt nicht auf Sitzhoehe')
-  assert.ok(Math.abs(g.kopfSitz.x - (g.sitz.x - SITZ_R)) < NAH)
-  assert.ok(Math.abs(g.kopfSitz.y - g.sitz.y) < NAH)
+test('Alle vier Uebergaenge sind echte Fillets — nirgends eine Ecke', () => {
+  const g = blasenGeometrie({ links: 10, rechts: 380, oben: 4, unten: 660, halsL: 100 })
+
+  // OBEN, beide Seiten: die Kehle beruehrt den Sitz von AUSSEN. Der Abstand der
+  // Mittelpunkte ist die Summe der Radien, und der Beruehrpunkt liegt auf ihrer
+  // Verbindung — genau dort haben beide Boegen dieselbe Tangente.
+  for (const [kehle, sitzpunkt, halspunkt] of [
+    [g.kopfkehleLinks, g.kopfSitzLinks, g.kopfHalsLinks],
+    [g.kopfkehleRechts, g.kopfSitzRechts, g.kopfHalsRechts],
+  ]) {
+    assert.ok(Math.abs(abstand(g.sitz, kehle) - (SITZ_R + KOPF_R)) < NAH)
+    assert.ok(Math.abs(abstand(g.sitz, sitzpunkt) - SITZ_R) < NAH)
+    assert.ok(Math.abs(abstand(kehle, sitzpunkt) - KOPF_R) < NAH)
+    // An der Halskante steht der Radiusvektor waagerecht, die Tangente also senkrecht.
+    assert.ok(Math.abs(abstand(kehle, halspunkt) - KOPF_R) < NAH)
+    assert.equal(halspunkt.y, kehle.y)
+  }
+  // Und die beiden Kehlen sitzen spiegelbildlich zur Orbmitte.
+  assert.ok(Math.abs((g.kopfSitzLinks.x + g.kopfSitzRechts.x) / 2 - g.sitz.x) < NAH)
+  assert.equal(g.kopfSitzLinks.y, g.kopfSitzRechts.y)
+
+  // LINKS UNTEN: eine Kehle vom Hals in die Oberkante. Am Hals senkrechte Tangente,
+  // an der Oberkante waagerechte.
+  assert.ok(Math.abs(abstand(g.fusskehle, g.halsFussLinks) - FUSS_R) < NAH)
+  assert.ok(Math.abs(abstand(g.fusskehle, g.fussUnten) - FUSS_R) < NAH)
+  assert.equal(g.halsFussLinks.y, g.fusskehle.y)
+  assert.equal(g.fussUnten.x, g.fusskehle.x)
+  assert.equal(g.fussUnten.y, g.kante)
+
+  // RECHTS UNTEN: das S. Zwei parallele Senkrechte — Halskante und Panelkante — lassen
+  // sich nicht mit einem einzigen Bogen verbinden. Beide Boegen sind gleich gross, und
+  // in der Mitte, wo sie sich treffen, steht die Tangente waagerecht.
+  assert.ok(Math.abs(abstand(g.schwungOben, g.halsFussRechts) - SCHWUNG_R) < NAH)
+  assert.ok(Math.abs(abstand(g.schwungOben, g.schwungMitte) - SCHWUNG_R) < NAH)
+  assert.ok(Math.abs(abstand(g.schwungUnten, g.schwungMitte) - SCHWUNG_R) < NAH)
+  assert.ok(Math.abs(abstand(g.schwungUnten, g.kanteRechts) - SCHWUNG_R) < NAH)
+  assert.equal(g.schwungOben.x, g.schwungMitte.x, 'In der Mitte des S steht die Tangente schief')
+  assert.equal(g.schwungUnten.x, g.schwungMitte.x)
+  assert.equal(g.kanteRechts.x, g.rechts, 'Das S landet nicht auf der Panelkante')
+
+  // BEIDE SCHULTERN FALLEN GLEICH TIEF. Sonst saesse die Blase schief unter ihrem Hals.
+  assert.equal(g.kanteRechts.y, g.kante)
+  assert.equal(2 * SCHWUNG_R, FUSS_R)
 })
 
 test('Bei den Mindestmassen laeuft kein Segment rueckwaerts', () => {
-  assert.equal(MINDEST_BREITE, HALS_B + KEHL_R + ECK_R)
+  assert.equal(MINDEST_BREITE, SITZ_R + HALS_HALB + FUSS_R + ECK_R)
   assert.equal(MINDEST_HOEHE, SCHULTER + 2 * ECK_R)
   // Die Schulter ist gerechnet, nicht gesetzt: Sitz, Kopfkehle, Fusskehle.
-  assert.equal(SCHULTER, SITZ_R + KOPF_VERSATZ + KEHL_R)
-  assert.ok(Math.abs(KOPF_VERSATZ - Math.sqrt((SITZ_R + KOPF_R) ** 2 - (HALS_B - SITZ_R + KOPF_R) ** 2)) < NAH)
+  assert.equal(SCHULTER, SITZ_R + KOPF_VERSATZ + FUSS_R)
+  assert.ok(Math.abs(KOPF_VERSATZ - Math.sqrt((SITZ_R + KOPF_R) ** 2 - (HALS_HALB + KOPF_R) ** 2)) < NAH)
+  assert.equal(KEHL_R, 10, 'KOPF_R haengt an --radius-panel')
 
   const g = blasenGeometrie({ links: 0, rechts: MINDEST_BREITE, oben: 0, unten: MINDEST_HOEHE })
   // Die Oberkante laeuft von links+ECK_R bis zum Kehlenanfang — genau bis dorthin und
   // keinen Pixel zurueck. Ein Pixel weniger, und der Pfad schluege einen Haken.
-  assert.ok(g.kehleUnten.x >= g.links + ECK_R, 'Die Oberkante laeuft rueckwaerts')
+  assert.ok(g.fussUnten.x >= g.links + ECK_R, 'Die Oberkante laeuft rueckwaerts')
   // Die linke Kante laeuft von unten-ECK_R bis kante+ECK_R.
   assert.ok(g.unten - ECK_R >= g.kante + ECK_R, 'Die linke Kante laeuft rueckwaerts')
   // Und genau an der Mindestgroesse sind beide Strecken null: das IST die Untergrenze.
-  assert.equal(g.kehleUnten.x, g.links + ECK_R)
+  assert.equal(g.fussUnten.x, g.links + ECK_R)
   assert.equal(g.unten - ECK_R, g.kante + ECK_R)
 
   assert.equal(blaseIstMoeglich(MINDEST_BREITE, MINDEST_HOEHE, 0), true)
@@ -111,27 +129,32 @@ test('Bei den Mindestmassen laeuft kein Segment rueckwaerts', () => {
 
 test('Der Pfad ist eine einzige geschlossene Silhouette', () => {
   const d = blasenPfad({ links: 0, rechts: 380, oben: 0, unten: 560 })
-  assert.match(d, /^M 380 22 /, 'Der Pfad beginnt am rechten Punkt des Sitzes')
+  assert.match(d, /^M 358 0 /, 'Der Pfad beginnt am obersten Punkt des Sitzes')
   assert.match(d, /Z$/, 'Der Pfad ist nicht geschlossen')
-  // Drei Ecken (R16), zwei Kehlen (R10), zwei Haelften des Sitzes (R22) — sieben
-  // Boegen, ein Teilzug. Zwei Teilzuege waeren zwei Formen, und genau das soll es
-  // nicht sein.
-  assert.equal((d.match(/A /g) || []).length, 7)
+  // Drei Ecken (R16), zwei Kopfkehlen (R10), eine Fusskehle (R14), zwei Boegen im S
+  // (R7), zwei Haelften des Sitzes (R22) — zehn Boegen, EIN Teilzug. Zwei Teilzuege
+  // waeren zwei Formen, und genau das soll es nicht sein.
+  assert.equal((d.match(/A /g) || []).length, 10)
   assert.equal((d.match(/M /g) || []).length, 1)
   assert.equal((d.match(/Z/g) || []).length, 1)
-  // Beide Kehlen laufen gegen den Uhrzeigersinn (Sweep 0) — sie sind konkav. Alle
-  // anderen Boegen laufen mit (Sweep 1). Ein konvexer Fillet waere eine Beule.
-  assert.equal((d.match(/A 10 10 0 0 0 /g) || []).length, 2)
+  // Alle Kehlen laufen gegen den Uhrzeigersinn (Sweep 0) — sie sind konkav. Ecken und
+  // Sitz laufen mit (Sweep 1). Im S kommt beides genau einmal vor: erst konkav vom
+  // Hals weg, dann konvex in die Kante hinein.
+  assert.equal((d.match(/A 10 10 0 0 0 /g) || []).length, 2, 'Die Kopfkehlen sind nicht konkav')
+  assert.equal((d.match(/A 14 14 0 0 0 /g) || []).length, 1, 'Die Fusskehle ist nicht konkav')
+  assert.equal((d.match(/A 7 7 0 0 0 /g) || []).length, 1, 'Das S faengt nicht konkav an')
+  assert.equal((d.match(/A 7 7 0 0 1 /g) || []).length, 1, 'Das S endet nicht konvex')
   assert.equal((d.match(/A 22 22 0 0 1 /g) || []).length, 2)
+  assert.equal((d.match(/A 16 16 0 0 1 /g) || []).length, 3)
 })
 
 test('Der Hals verschiebt nur den Koerper — der Sitz bleibt, wo der Orb ist', () => {
   const ohne = blasenGeometrie({ links: 0, rechts: 380, oben: 0, unten: 560 })
   const mit = blasenGeometrie({ links: 0, rechts: 380, oben: 0, unten: 660, halsL: 100 })
   assert.deepEqual(mit.sitz, ohne.sitz, 'Der Sitz wandert mit dem Hals')
-  assert.deepEqual(mit.sitzRechts, ohne.sitzRechts)
   assert.deepEqual(mit.sitzOben, ohne.sitzOben)
-  assert.deepEqual(mit.kopfSitz, ohne.kopfSitz, 'Die Kopfkehle setzt woanders am Sitz an')
+  assert.deepEqual(mit.kopfSitzLinks, ohne.kopfSitzLinks, 'Die Kehle setzt woanders am Sitz an')
+  assert.deepEqual(mit.kopfSitzRechts, ohne.kopfSitzRechts)
   // Die Oberkante des Koerpers rutscht um genau die Halslaenge nach unten.
   assert.ok(Math.abs((mit.kante - ohne.kante) - 100) < NAH)
   // Und der gerade Teil des Halses ist genau so lang wie bestellt.
@@ -151,8 +174,10 @@ test('Der Hals waechst mit — bei Bild eins ist er null', () => {
   // Und am Anfang ist der Koerper genau die Mindesthoehe, ohne Hals darueber.
   assert.ok(Math.abs((masse(0).unten - masse(0).oben) - MINDEST_HOEHE) < NAH)
 
-  // Der Hals zaehlt nicht zum Koerper: was er belegt, muss zusaetzlich da sein.
-  assert.equal(blaseIstMoeglich(380, MINDEST_HOEHE + 120 + 1, 0.5, 120), true)
+  // Der Hals zaehlt nicht zum Koerper: was er belegt, muss zusaetzlich da sein. Nicht
+  // auf den Pixel genau geprueft — MINDEST_HOEHE enthaelt eine Wurzel, und auf der
+  // Grenze entscheidet dann die letzte Bitstelle statt der Geometrie.
+  assert.equal(blaseIstMoeglich(380, MINDEST_HOEHE + 122, 0.5, 120), true)
   assert.equal(blaseIstMoeglich(380, MINDEST_HOEHE + 120, 0.5, 120), false)
 })
 

@@ -1849,10 +1849,10 @@ body.zen #title:focus { opacity: 1; }
      der Umschalter zwei Dinge auf einmal, und die Wahl waere keine. */
 
   /* Die Schulter: vom oberen Kastenrand bis zur Oberkante des Koerpers, wenn der
-     gerade Teil des Halses null lang ist. Sitz (22) + Kopfkehle (27,71) + Fusskehle
-     (10). Die 27,71 sind gerechnet und stehen in onda-blase.mjs als KOPF_VERSATZ;
+     gerade Teil des Halses null lang ist. Sitz (22) + Kopfkehle (26,46) + Fusskehle
+     (14). Die 26,46 sind gerechnet und stehen in onda-blase.mjs als KOPF_VERSATZ;
      onda-design-contract.test.mjs haelt die Zahl hier mit der dort zusammen. */
-  --blase-schulter: 59.71px;
+  --blase-schulter: 62.46px;
   /* Der kleinste Rand ueber dem Koerper, und er ist abgeleitet: Orb und Schulter
      belegen die Strecke ohnehin, ein Fingerbreit Luft kommt dazu. Waere der Rand
      kleiner, klemmte der Hals bei niedrigen Fenstern auf null, und die Blase saesse

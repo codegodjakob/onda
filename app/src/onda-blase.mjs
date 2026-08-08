@@ -9,10 +9,23 @@
 //
 // Stattdessen waechst die GEOMETRIE. Der Kasten hat von der ersten Sekunde an seine
 // Endgroesse, nur der gezeichnete Pfad waechst darin. Der Ursprung ist deshalb kein
-// Punkt, an dem eine Transformation ansetzt, sondern die zwei Kanten, die im Pfad
-// konstant bleiben: die rechte und die obere. Sie SIND der Orb. Und weil der
-// Sitzkreis in JEDEM Zwischenzustand im Pfad steht, kann die Verbindung zum Orb
-// waehrend des Wachsens gar nicht abreissen.
+// Punkt, an dem eine Transformation ansetzt, sondern der SITZKREIS, der in jedem
+// Zwischenzustand an derselben Stelle im Pfad steht. Er IST der Orb — und deshalb kann
+// die Verbindung waehrend des Wachsens gar nicht abreissen.
+//
+// DER HALS HAENGT MITTIG UNTER DEM ORB. Jakob am 8. August 2026: "sie soll organisch
+// aus dem orb rausfliessen und in die sprechblase mit weichen uebergaengen und der
+// hals soll zentriert mittig in relation zum orb sein." Vorher lief die rechte
+// Halskante mit der rechten Panelkante zusammen; der Hals sass damit unter der rechten
+// Haelfte des Orbs und nicht unter seiner Mitte.
+//
+// Alle vier Uebergaenge sind echte Fillets — an jeder Nahtstelle haben beide Boegen
+// dieselbe Tangente, nirgends sitzt eine Ecke:
+//   oben  zwei Kehlen, symmetrisch, die den Hals aus dem Orb herausfuehren
+//   links eine Kehle in die Oberkante des Koerpers
+//   rechts ein S aus zwei Boegen in die rechte Panelkante — dort stehen zwei
+//          PARALLELE Senkrechte gegeneinander, und die kann ein einzelner Bogen nicht
+//          verbinden. Beide Radien sind gleich gross, also ist das S symmetrisch.
 //
 // WARUM SVG UND NICHT border-radius ODER clip-path. Die Kehle zwischen Sitzkreis und
 // Panelkante ist konkav — einen negativen Radius gibt es in CSS nicht. Und ein Clip
@@ -29,37 +42,45 @@ export const ECK_R = 16
 // --radius-panel: die konkave Kehle, die den Sitz in die Panelkante fuehrt.
 export const KEHL_R = 10
 
-// DIE BREITE DES HALSES. Schmaler als der Sitz, und das ist am laufenden Programm
-// entschieden, nicht ausgedacht: ein Hals in Sitzbreite (44px) ist bei 40px Laenge
-// noch schoen — bei den 148px, die eine mittig sitzende Blase braucht, ist er ein
-// 44px breiter Streifen ueber die halbe Fensterhoehe, und das liest sich wie ein
-// falsch gezeichnetes Fenster, nicht wie eine Verbindung. 28px ist die Breite, bei
-// der die Strecke wieder ein Hals ist und der Sitz trotzdem sichtbar darauf steht.
-export const HALS_B = 28
-// Die Kehle am KOPF des Halses. Derselbe Radius wie am Fuss: der Hals setzt oben an
-// wie unten. Bei einem Hals in Sitzbreite faellt sie von selbst auf null zusammen —
-// dann ist die Halskante die Tangente des Sitzes, und es gab hier nie einen Bogen.
+// DIE HALBE HALSBREITE. Der Hals ist 16px breit — etwa halb so breit wie der sichtbare
+// Farbkreis des Orbs (30px). Am laufenden Programm entschieden: ein Hals in Sitzbreite
+// (44px) ist bei 40px Laenge noch schoen, wird aber bei den 120px, die eine mittig
+// sitzende Blase braucht, zu einem Streifen ueber die halbe Fensterhoehe. Alles unter
+// 12px wiederum reisst optisch ab, sobald die Blase weit unten sitzt.
+export const HALS_HALB = 8
+
+// Die zwei Kehlen am Orb. --radius-panel, derselbe Radius wie ueberall im Haus.
 export const KOPF_R = KEHL_R
+
+// DIE RECHTE SCHULTER ist ein S aus zwei gleich grossen Boegen. Sie muss von der
+// rechten Halskante bis zur rechten Panelkante reichen — die Strecke ist gerechnet und
+// nicht gewaehlt: der Orb steht mit seiner Mitte SITZ_R von der Panelkante entfernt,
+// der Hals belegt davon HALS_HALB, der Rest gehoert dem S. Zwei gleiche Viertelboegen
+// legen zusammen genau ihren doppelten Radius zur Seite und ebenso weit nach unten.
+export const SCHWUNG_R = (SITZ_R - HALS_HALB) / 2
+
+// DIE LINKE KEHLE fuehrt den Hals in die Oberkante des Koerpers. Ihr Radius ist so
+// gewaehlt, dass sie genauso tief faellt wie das S auf der anderen Seite — sonst saesse
+// die Blase auf zwei verschieden hohen Schultern.
+export const FUSS_R = SITZ_R - HALS_HALB
 
 // Wie weit unter der Sitzmitte die Kopfkehle die Halskante erreicht. Gerechnet, nicht
 // gemessen: Kehle und Sitz beruehren sich von aussen, ihre Mittelpunkte haben also den
 // Abstand SITZ_R + KOPF_R, und der Kehlmittelpunkt liegt KOPF_R neben der Halskante.
 // Der Satz des Pythagoras auf dieses Dreieck, mehr ist es nicht.
-export const KOPF_VERSATZ = kopfVersatz(SITZ_R, KOPF_R, HALS_B)
+export const KOPF_VERSATZ = kopfVersatz(SITZ_R, KOPF_R, HALS_HALB)
 
 // Die Schulter: vom oberen Kastenrand bis zur Oberkante des Koerpers, wenn der gerade
 // Teil des Halses null lang ist. Sitz, Kopfkehle und Fusskehle brauchen diese Strecke
 // ohnehin. Steht auch in style.css als --blase-schulter — onda-design-contract.test.mjs
 // haelt beide Zahlen zusammen, damit die Mitte nicht auf zwei Rechnungen beruht.
-export const SCHULTER = SITZ_R + KOPF_VERSATZ + KEHL_R
+export const SCHULTER = SITZ_R + KOPF_VERSATZ + FUSS_R
 
 // Kleinste Groesse, bei der der Pfad noch aufgeht: darunter wuerden sich Eckbogen und
 // Kehle ueberschneiden und der Pfad schluege Haken. Beides gilt fuer den KOERPER der
 // Blase — der gerade Teil des Halses kommt oben drauf und hat keine Untergrenze.
-// In der Breite setzt seit dem schlanken Hals ER die Grenze und nicht mehr der Sitz:
-// die Oberkante muss von der Ecke bis zur Fusskehle reichen, und beide haengen am
-// Hals. Der Sitz darf breiter sein als der Koerper — er sitzt ja darueber.
-export const MINDEST_BREITE = HALS_B + KEHL_R + ECK_R
+// In der Breite muss die Oberkante von der linken Ecke bis zur Fusskehle reichen.
+export const MINDEST_BREITE = SITZ_R + HALS_HALB + FUSS_R + ECK_R
 export const MINDEST_HOEHE = SCHULTER + 2 * ECK_R
 
 // Die Bewegung. Beide Richtungen benutzen --ease-standard, in motion.css woertlich
@@ -86,88 +107,100 @@ function rund(wert) {
 }
 
 // Alle Eckpunkte und Kreismittelpunkte der Silhouette, in Bildschirmkoordinaten des
-// Blasenkastens (Ursprung oben links). `rechts` und `oben` sind die Kanten, die der
-// Orb festhaelt; `links` und `unten` sind die, die wachsen.
-// `halsL` ist die Laenge des Halses: die Strecke, um die der KOERPER unter den Sitz
-// rutscht. Der Sitz bleibt, wo er ist — er IST der Orb, und der Orb sitzt in der
-// Topbar. Bei halsL = 0 kommt exakt die Silhouette von vorher heraus, weil dann
-// halsLinks und sitzLinks derselbe Punkt sind.
+// Blasenkastens (Ursprung oben links). Der Sitz haengt an `rechts` und `oben` — das
+// sind die Kanten des Orbs, und sie ruehren sich nie. `links` und `unten` wachsen.
+//
+// `halsL` ist die Laenge des GERADEN Stuecks im Hals. Die vier Kehlen kommen oben und
+// unten dazu; bei halsL = 0 sitzen sie unmittelbar aufeinander, und die Silhouette ist
+// die kleinste, die noch aufgeht.
 export function blasenGeometrie({
   links, rechts, oben = 0, unten, halsL = 0,
-  sitzR = SITZ_R, eckR = ECK_R, kehlR = KEHL_R, halsB = HALS_B, kopfR = KOPF_R,
+  sitzR = SITZ_R, eckR = ECK_R, halsHalb = HALS_HALB, kopfR = KOPF_R,
+  schwungR = (sitzR - halsHalb) / 2, fussR = sitzR - halsHalb,
 }) {
-  // Die RECHTE Halskante ist die rechte Panelkante — dieselbe Senkrechte, die auch den
-  // Sitz an seinem rechtesten Punkt beruehrt. Sie laeuft in einem Zug vom Sitz bis in
-  // die untere rechte Ecke, und deshalb kann die Verbindung zum Orb waehrend des
-  // Wachsens gar nicht abreissen. Nur die LINKE Halskante ist neu, und nur sie braucht
-  // an beiden Enden eine Kehle.
+  // Die Mitte des Orbs — und damit die Achse des Halses. Er haengt symmetrisch daran.
   const mitteX = rechts - sitzR
-  const kanteX = rechts - halsB
-  const versatz = kopfVersatz(sitzR, kopfR, halsB)
+  const linkeKante = mitteX - halsHalb
+  const rechteKante = mitteX + halsHalb
+  const versatz = kopfVersatz(sitzR, kopfR, halsHalb)
   // Wo der gerade Teil des Halses anfaengt und aufhoert.
   const halsKopf = oben + sitzR + versatz
   const halsFuss = halsKopf + halsL
-  // Oberkante des Panelkoerpers. Der Sitz ragt darueber hinaus — er ist der Orb.
-  const kante = halsFuss + kehlR
+  // Oberkante des Koerpers. Beide Schultern fallen gleich tief — links eine Kehle mit
+  // Radius fussR, rechts zwei Boegen mit je schwungR, und 2 x schwungR = fussR.
+  const kante = halsFuss + fussR
   // Der Beruehrpunkt von Kopfkehle und Sitz liegt auf der Verbindung der beiden
-  // Mittelpunkte, im Abstand sitzR vom Sitzmittelpunkt. Das ist die Stelle, an der
-  // beide Bogen dieselbe Tangente haben — also keine Ecke entsteht.
+  // Mittelpunkte, im Abstand sitzR vom Sitzmittelpunkt. Genau dort haben beide Boegen
+  // dieselbe Tangente — also entsteht keine Ecke.
   const spanne = sitzR + kopfR
+  const kopfAus = sitzR * (halsHalb + kopfR) / spanne
+  const kopfAb = oben + sitzR + sitzR * versatz / spanne
   return {
     links, rechts, oben, unten, kante, halsL, halsKopf, halsFuss,
-    sitzR, eckR, kehlR, halsB, kopfR,
+    sitzR, eckR, kopfR, halsHalb, schwungR, fussR,
     sitz: { x: mitteX, y: oben + sitzR, r: sitzR },
-    kehle: { x: kanteX - kehlR, y: halsFuss, r: kehlR },
-    kopfkehle: { x: kanteX - kopfR, y: halsKopf, r: kopfR },
-    // Wo der Sitz die rechte Panelkante beruehrt: dort steht seine Tangente
-    // senkrecht, genau wie die Kante selbst.
-    sitzRechts: { x: rechts, y: oben + sitzR },
     sitzOben: { x: mitteX, y: oben },
-    // Wo Kopfkehle und Sitz sich treffen. Bei einem Hals in Sitzbreite faellt der
-    // Punkt auf den linken Scheitel des Sitzes, und die Kopfkehle wird null lang.
-    kopfSitz: {
-      x: mitteX - sitzR * (halsB - sitzR + kopfR) / spanne,
-      y: oben + sitzR + sitzR * versatz / spanne,
-    },
-    // Wo die Kopfkehle die Halskante erreicht — von hier laeuft der Hals gerade.
-    kopfHals: { x: kanteX, y: halsKopf },
-    // Wo der Hals in die Fusskehle laeuft.
-    halsLinks: { x: kanteX, y: halsFuss },
-    // Wo die Kehle in die Panel-Oberkante laeuft: dort waagerecht, wie die Kante.
-    kehleUnten: { x: kanteX - kehlR, y: kante },
+    // Die zwei Kehlen, die den Hals aus dem Orb herausfuehren. Spiegelbildlich.
+    kopfkehleLinks: { x: linkeKante - kopfR, y: halsKopf, r: kopfR },
+    kopfkehleRechts: { x: rechteKante + kopfR, y: halsKopf, r: kopfR },
+    kopfSitzLinks: { x: mitteX - kopfAus, y: kopfAb },
+    kopfSitzRechts: { x: mitteX + kopfAus, y: kopfAb },
+    // Wo die Kopfkehlen die Halskanten erreichen — von hier laeuft der Hals gerade.
+    kopfHalsLinks: { x: linkeKante, y: halsKopf },
+    kopfHalsRechts: { x: rechteKante, y: halsKopf },
+    // Wo der gerade Hals in die Schultern laeuft.
+    halsFussLinks: { x: linkeKante, y: halsFuss },
+    halsFussRechts: { x: rechteKante, y: halsFuss },
+    // Links: eine Kehle in die Oberkante. Dort waagerecht, wie die Kante selbst.
+    fusskehle: { x: linkeKante - fussR, y: halsFuss, r: fussR },
+    fussUnten: { x: linkeKante - fussR, y: kante },
+    // Rechts: das S. Erst konkav vom Hals weg, dann konvex in die Panelkante hinein.
+    // In der Mitte, wo beide Boegen sich treffen, steht die Tangente waagerecht.
+    schwungOben: { x: rechteKante + schwungR, y: halsFuss, r: schwungR },
+    schwungMitte: { x: rechteKante + schwungR, y: halsFuss + schwungR },
+    schwungUnten: { x: rechteKante + schwungR, y: halsFuss + 2 * schwungR, r: schwungR },
+    kanteRechts: { x: rechts, y: kante },
   }
 }
 
 // Aus der aeusseren Beruehrung zweier Kreise. Steht als KOPF_VERSATZ auch fuer die
 // Hausmasse bereit; als Funktion, damit die Geometrie auch mit anderen Massen aufgeht.
-function kopfVersatz(sitzR, kopfR, halsB) {
-  const kathete = halsB - sitzR + kopfR
+function kopfVersatz(sitzR, kopfR, halsHalb) {
+  const kathete = halsHalb + kopfR
   return Math.sqrt(Math.max(0, (sitzR + kopfR) ** 2 - kathete ** 2))
 }
 
-// Eine durchgehende Silhouette, im Uhrzeigersinn: rechte Kante hinunter, um den
-// unteren Rand, die linke Kante hinauf, die Oberkante entlang nach rechts, dann die
-// konkave Fusskehle in den Hals, den Hals hinauf, die Kopfkehle in den Sitzkreis und
-// ueber ihn zurueck zum Anfang.
+// Eine durchgehende Silhouette, im Uhrzeigersinn und in einem Zug. Sie faengt oben am
+// Orb an, laeuft um seine rechte Haelfte herum, ueber die rechte Kopfkehle in den Hals,
+// den Hals hinunter, ueber das S in die rechte Panelkante, um den Koerper herum, ueber
+// die Fusskehle zurueck in den Hals, hinauf, und ueber die linke Kopfkehle wieder auf
+// den Orb.
 export function blasenPfad(masse) {
   const g = blasenGeometrie(masse)
-  const { links, rechts, oben, unten, kante, sitzR, eckR, kehlR, kopfR } = g
+  const { links, rechts, oben, unten, kante, sitzR, eckR, kopfR, schwungR, fussR } = g
   return [
-    `M ${rund(rechts)} ${rund(oben + sitzR)}`,
+    `M ${rund(g.sitzOben.x)} ${rund(g.sitzOben.y)}`,
+    // Die rechte Haelfte des Orbs hinunter bis dorthin, wo die Kehle ansetzt.
+    `A ${sitzR} ${sitzR} 0 0 1 ${rund(g.kopfSitzRechts.x)} ${rund(g.kopfSitzRechts.y)}`,
+    `A ${kopfR} ${kopfR} 0 0 0 ${rund(g.kopfHalsRechts.x)} ${rund(g.kopfHalsRechts.y)}`,
+    // Die rechte Halskante. Bei einem geraden Hals von null Laenge ist sie null Pixel
+    // lang, und die Kehle geht unmittelbar in das S ueber.
+    `V ${rund(g.halsFussRechts.y)}`,
+    // Das S: konkav vom Hals weg, dann konvex in die Panelkante. Zwei parallele
+    // Senkrechte lassen sich nicht mit einem einzigen Bogen verbinden.
+    `A ${schwungR} ${schwungR} 0 0 0 ${rund(g.schwungMitte.x)} ${rund(g.schwungMitte.y)}`,
+    `A ${schwungR} ${schwungR} 0 0 1 ${rund(g.kanteRechts.x)} ${rund(g.kanteRechts.y)}`,
     `V ${rund(unten - eckR)}`,
     `A ${eckR} ${eckR} 0 0 1 ${rund(rechts - eckR)} ${rund(unten)}`,
     `H ${rund(links + eckR)}`,
     `A ${eckR} ${eckR} 0 0 1 ${rund(links)} ${rund(unten - eckR)}`,
     `V ${rund(kante + eckR)}`,
     `A ${eckR} ${eckR} 0 0 1 ${rund(links + eckR)} ${rund(kante)}`,
-    `H ${rund(g.kehleUnten.x)}`,
-    `A ${kehlR} ${kehlR} 0 0 0 ${rund(g.halsLinks.x)} ${rund(g.halsLinks.y)}`,
-    // Die linke Halskante. Bei einem geraden Hals von null Laenge ist sie null Pixel
-    // lang, und die beiden Kehlen sitzen unmittelbar aufeinander.
-    `V ${rund(g.kopfHals.y)}`,
-    `A ${kopfR} ${kopfR} 0 0 0 ${rund(g.kopfSitz.x)} ${rund(g.kopfSitz.y)}`,
+    `H ${rund(g.fussUnten.x)}`,
+    `A ${fussR} ${fussR} 0 0 0 ${rund(g.halsFussLinks.x)} ${rund(g.halsFussLinks.y)}`,
+    `V ${rund(g.kopfHalsLinks.y)}`,
+    `A ${kopfR} ${kopfR} 0 0 0 ${rund(g.kopfSitzLinks.x)} ${rund(g.kopfSitzLinks.y)}`,
     `A ${sitzR} ${sitzR} 0 0 1 ${rund(g.sitzOben.x)} ${rund(g.sitzOben.y)}`,
-    `A ${sitzR} ${sitzR} 0 0 1 ${rund(g.sitzRechts.x)} ${rund(g.sitzRechts.y)}`,
     'Z',
   ].join(' ')
 }
