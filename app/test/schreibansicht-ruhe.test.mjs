@@ -206,3 +206,43 @@ test('Der Weg zurück trägt den ganzen Projektnamen', async () => {
   assert.doesNotMatch(zurueck, /white-space:\s*nowrap/, 'Der Projektname darf umbrechen')
   assert.match(css, /\.onda-side-back-chevron \{[^}]*flex:\s*none/, 'Der Pfeil selbst muss immer sichtbar bleiben')
 })
+
+// Task 7: EINE Stelle, an der Blöcke entstehen. Vorher holte workspace.js die Blöcke an gut
+// zwanzig Stellen direkt aus dem Editor — eine davon zu vergessen hieße, dort still ohne
+// Rollen zu arbeiten, ohne dass ein Test anschlägt. Genau so ist die Lücke entstanden, die
+// dieser Umbau schließt, also hält ein Wächter sie zu.
+//
+// Der reguläre Ausdruck darf hier nirgends im Klartext danebenstehen: Ein Kommentar, der den
+// gesuchten Aufruf beim Namen nennt, ließe den Wächter sich selbst finden statt den Code.
+test('Blöcke entstehen in workspace.js an genau einer Stelle', async () => {
+  const workspace = await readFile(new URL('../src/workspace.js', import.meta.url), 'utf8')
+  assert.match(workspace, /function aktuelleBloecke\(/, 'die eine Blockquelle fehlt')
+  assert.match(workspace, /function bausteinBestand\(/, 'die Ablage wird nirgends gelesen')
+  assert.doesNotMatch(
+    workspace,
+    /getEditorBlocks\(ctx/,
+    'workspace.js holt Blöcke wieder direkt aus dem Editor — dort fehlen dann die Rollen',
+  )
+})
+
+// Task 9 (Issue #36, Kriterium 2): „Freier Absatz" war ein Etikett ohne Aussage — es sah aus
+// wie eine Angabe und war keine. Ein Absatz, den die Erkennung noch nicht gelesen hat und den
+// niemand bewusst als etwas angelegt hat, trägt jetzt gar nichts.
+//
+// Die Auswahl im Menü behält ihr Wort: Dort heißt „Freier Absatz" „lege einen gewöhnlichen
+// Absatz an", und das ist eine Aussage. Deshalb prüft der Wächter die BESCHRIFTUNG der Karten
+// (ROLE_LABELS), nicht die Menü-Auswahl (BLOCK_TYPES).
+test('keine Struktur-Karte trägt mehr „Freier Absatz"', async () => {
+  const workspace = await readFile(new URL('../src/workspace.js', import.meta.url), 'utf8')
+  assert.doesNotMatch(
+    workspace,
+    /\|\| 'Freier Absatz'/,
+    'eine Karte fällt noch auf „Freier Absatz" zurück',
+  )
+  assert.match(workspace, /bausteinNamen\(/, 'die Karten lesen die erkannten Namen nicht')
+  assert.match(workspace, /'Überschrift'/, 'die Überschrift hat ihr Wort verloren')
+  // Die Beschriftungstabelle darf den gewöhnlichen Absatz nicht mehr kennen — sonst käme das
+  // Etikett über ROLE_LABELS.get() zurück, nur ohne den Rückfall daneben.
+  const tabelle = workspace.match(/const ROLE_LABELS = new Map\(\[([\s\S]*?)\]\)/)?.[1] || ''
+  assert.doesNotMatch(tabelle, /paragraph/, 'ROLE_LABELS beschriftet den gewöhnlichen Absatz noch')
+})

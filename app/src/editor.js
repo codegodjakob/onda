@@ -15,7 +15,7 @@ import { ensureErweiterungen } from './erweiterung-model.mjs'
 import { ensureWorkspaceState } from './workspace-model.mjs'
 import { DEFAULT_SETTINGS, normalizeSettings } from './settings-model.mjs'
 import { BlockIdentity, ensureTopLevelBlockIds, getActiveBlockId, getEditorBlocks, insertSemanticBlock, replaceAnchoredText, replaceAnchoredTexts, replaceFindingTarget } from './block-identity.js'
-import { buildExampleStructure, buildExampleNarrative, buildExampleCoach, buildExampleLane, buildExampleBody, buildExampleMaterial, buildExampleUnderstanding, buildExampleAgentMessages } from './example.js'
+import { buildExampleStructure, buildExampleNarrative, buildExampleCoach, buildExampleLane, buildExampleBody, buildExampleMaterial, buildExampleUnderstanding, buildExampleAgentMessages, buildExampleBausteinarten } from './example.js'
 import { EXAMPLE_PROJECT_ID, migrateExampleSeed } from './example-seed.mjs'
 import { initGateway, hatSchluessel, setzeSchluessel, loescheSchluessel } from './agent-gateway.mjs'
 import { ensureProjectEvidenceShape } from './source-model.mjs'
@@ -73,7 +73,12 @@ const TRASH_DAYS = 30
 const SCHEMA = 12
 // 10: Der Beispieltext trägt jetzt jede der 29 Anmerkungsarten. Ohne diesen Schritt
 // behielten alle, die die App schon benutzen, die alte Fassung mit fünf Arten.
-const EX_VERSION = 10
+// 11: Der Beispieltext bringt seine Bausteinarten mit. Ohne diesen Schritt bliebe die
+// Struktur-Spalte bei allen, die die App schon benutzen, für immer namenlos — im
+// Beispiel läuft nie eine Erkennung, die sie nachträglich füllen könnte. Ein selbst
+// bearbeiteter Beispieltext wird dabei nicht überschrieben: Er verliert nur seine
+// Markierung und bleibt als eigener Text stehen (migrateExampleSeed).
+const EX_VERSION = 11
 
 // Schmaler Rückkanal der nativen saveimg-Brücke. Der frühere Bildeditor ist
 // nicht mehr Teil der Onda-Oberfläche; die Mac-Startprobe prüft diesen
@@ -270,7 +275,12 @@ function buildExampleDocumentSeed() {
     structure: struct, narrative: buildExampleNarrative(struct),
     coach: buildExampleCoach(), lane: buildExampleLane(),
     provenance: { actor: 'demo', action: 'example-seed', createdAt: now() },
-    workspace: { agent: { messages: buildExampleAgentMessages() } },
+    workspace: {
+      agent: { messages: buildExampleAgentMessages() },
+      // Mitgeliefert, weil im Beispiel nie ein Lauf startet (istBeispielDokument).
+      // Ohne diesen Bestand bliebe die Struktur-Spalte dort fuer immer namenlos.
+      bausteinarten: buildExampleBausteinarten(),
+    },
   })
 }
 

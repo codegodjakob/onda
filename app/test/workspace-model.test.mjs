@@ -239,13 +239,15 @@ test('ensureWorkspaceState ergänzt decisionsOpen additiv und erhält gespeicher
 })
 
 test('top-level editor nodes become block previews', () => {
+  // Die Rolle von p1 kommt seit Task 7 aus der Rollenkarte, nicht mehr aus einem
+  // Tiptap-Merkmal am Knoten -- die Karte speist collectBlockSnapshots als zweites Argument.
   const blocks = collectBlockSnapshots({
     type: 'doc',
     content: [
       { type: 'heading', attrs: { blockId: 'h1', level: 2 }, content: [{ type: 'text', text: 'Kapitel' }] },
-      { type: 'paragraph', attrs: { blockId: 'p1', semanticRole: 'claim' }, content: [{ type: 'text', text: 'Eine tragende Aussage.' }] },
+      { type: 'paragraph', attrs: { blockId: 'p1' }, content: [{ type: 'text', text: 'Eine tragende Aussage.' }] },
     ],
-  })
+  }, new Map([['p1', 'claim']]))
   assert.deepEqual(blocks.map(({ id, role, excerpt }) => ({ id, role, excerpt })), [
     { id: 'h1', role: 'heading', excerpt: 'Kapitel' },
     { id: 'p1', role: 'claim', excerpt: 'Eine tragende Aussage.' },
@@ -612,4 +614,63 @@ test('resolveEvidenceSources treats a missing or malformed source list as empty'
 test('resolveEvidenceSources never throws on a malformed entry inside an otherwise real list', () => {
   const malformed = [null, undefined, 'x']
   assert.deepEqual(resolveEvidenceSources(malformed, false), malformed)
+})
+
+test('ohne Rollenkarte ist jeder Absatz ein gewoehnlicher Absatz', () => {
+  const blocks = collectBlockSnapshots({
+    content: [
+      { type: 'heading', attrs: { level: 2, blockId: 'h1' }, content: [{ type: 'text', text: 'Titel' }] },
+      { type: 'paragraph', attrs: { blockId: 'b1' }, content: [{ type: 'text', text: 'Ein Absatz.' }] },
+    ],
+  })
+  assert.deepEqual(blocks.map(block => block.role), ['heading', 'paragraph'])
+})
+
+test('die Rollenkarte speist block.role', () => {
+  const docJson = {
+    content: [
+      { type: 'heading', attrs: { level: 2, blockId: 'h1' }, content: [{ type: 'text', text: 'Titel' }] },
+      { type: 'paragraph', attrs: { blockId: 'b1' }, content: [{ type: 'text', text: 'Alt.' }] },
+      { type: 'paragraph', attrs: { blockId: 'b2' }, content: [{ type: 'text', text: 'Neu.' }] },
+    ],
+  }
+  const blocks = collectBlockSnapshots(docJson, new Map([['b2', 'counterpoint']]))
+  assert.deepEqual(blocks.map(block => block.role), ['heading', 'paragraph', 'counterpoint'])
+})
+
+// Entscheidung 1 (Issue #36): Der Knopf "Baustein hinzuefuegen" bleibt. Er ERZEUGT einen
+// Absatz einer gewaehlten Art -- das ist etwas anderes als eine erkannte Art zu ueberstimmen.
+// Wer bewusst eine Kernbehauptung anlegt, soll sie auch sehen, bis die Erkennung greift.
+// Sonst waere der Knopf ein Knopf ohne sichtbare Wirkung.
+test('ein von Hand erzeugter Baustein behaelt seine Rolle, solange die Ablage nichts sagt', () => {
+  const docJson = {
+    content: [
+      { type: 'paragraph', attrs: { blockId: 'b1', semanticRole: 'claim' }, content: [{ type: 'text', text: 'Von Hand.' }] },
+      { type: 'paragraph', attrs: { blockId: 'b2' }, content: [{ type: 'text', text: 'Einfach so.' }] },
+    ],
+  }
+  assert.deepEqual(collectBlockSnapshots(docJson).map(block => block.role), ['claim', 'paragraph'])
+})
+
+// Die Rangfolge ist der ganze Punkt: Erkanntes gewinnt. Sonst waere die Handvergabe doch
+// wieder ein Ueberstimmen -- nur eines, das rueckwaerts wirkt.
+test('die erkannte Art gewinnt ueber das von Hand gewaehlte Wort', () => {
+  const docJson = {
+    content: [
+      { type: 'paragraph', attrs: { blockId: 'b1', semanticRole: 'claim' }, content: [{ type: 'text', text: 'Von Hand.' }] },
+    ],
+  }
+  const blocks = collectBlockSnapshots(docJson, new Map([['b1', 'evidence']]))
+  assert.deepEqual(blocks.map(block => block.role), ['evidence'])
+})
+
+// Eine Ueberschrift bleibt eine Ueberschrift -- sie folgt dem Knotentyp, nicht der Ablage
+// und nicht einem alten Merkmal.
+test('die Ueberschrift laesst sich weder von der Ablage noch von Hand umwidmen', () => {
+  const docJson = {
+    content: [
+      { type: 'heading', attrs: { level: 2, blockId: 'h1', semanticRole: 'claim' }, content: [{ type: 'text', text: 'Titel' }] },
+    ],
+  }
+  assert.deepEqual(collectBlockSnapshots(docJson, new Map([['h1', 'evidence']])).map(block => block.role), ['heading'])
 })
