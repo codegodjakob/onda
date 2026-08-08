@@ -1,3 +1,34 @@
+// workspace.js — die Schreibflaeche von Onda: der Tiptap-Editor, die Seitenspalten und der
+// Draht zum Agenten. Einstiegspunkt: app/src/editor.js. Importe alphabetisch nach Pfad (W9).
+
+import { baueDocText } from './agent-findings.mjs'
+import { hatSchluessel, setzeSchluessel, loescheSchluessel } from './agent-gateway.mjs'
+import { aktuellerAgentStatus, beiAgentStatus, setzeAgentStatus, statuszeileFuer } from './agent-status.mjs'
+import { MODELLE, TASK_TABLE } from './agent-tasks.mjs'
+import { bilanzVorlesetext } from './anmerkung-wortlaut.mjs'
+import { renderAnnotation } from './annotation-components.mjs'
+import { ANNOTATION_DEFINITIONS, resolveAnnotationPresentation } from './annotation-contract.mjs'
+import {
+  annotationSignature,
+  annotationSummary,
+  createAnnotationController,
+  createSuppressionStore,
+} from './annotation-controller.mjs'
+import {
+  invertAnnotationOperation,
+  planAnnotationOperation,
+  validateAnnotationOperation,
+} from './annotation-operations.mjs'
+import { analyzeArgumentImpact } from './argument-graph.mjs'
+import { createArgumentUi } from './argument-ui.mjs'
+import { createAuditUi } from './audit-ui.mjs'
+import {
+  entscheideStimmenmerkmal,
+  projiziereAutorentwicklung,
+  schlageStimmenmerkmalVor,
+  speichereStimmenmerkmal,
+  ueberholeStimmenmerkmal,
+} from './autorentwicklung-model.mjs'
 import {
   applyAnchoredReplacements,
   getActiveBlockId,
@@ -9,7 +40,95 @@ import {
   replaceAnchoredTexts,
   replaceFindingTarget,
 } from './block-identity.js'
+import {
+  baueChatKontext,
+  baueFindingZusatzAnweisung,
+  chatFehlerText,
+  entscheidungsEintraege,
+  erkenneHinweisBitte,
+  fuehreChatVorgangAus,
+  planVerlaufVerdichtung,
+} from './chat-kontext.mjs'
+import { erkanntesListe, schreibeErkanntes, ueberholeErkanntes } from './erkanntes-model.mjs'
+import {
+  ART_ERKLAERUNG,
+  ART_LABEL,
+  ensureErweiterungen,
+  legeErweiterungWeg,
+  merkeErweiterung,
+  sichtbareErweiterungen,
+} from './erweiterung-model.mjs'
+import { darfAutomatischLaufen, versucheErweiterungslauf } from './erweiterungslauf-model.mjs'
+import { EXAMPLE_PROJECT_ID, seedBodySignature } from './example-seed.mjs'
+import { pruefePausenAusloeser, versucheHinweislauf } from './hinweislauf-model.mjs'
+import { createLanguageUi } from './language-ui.mjs'
+import { letzteBezahlteSignatur } from './lauf-journal.mjs'
+// Das Lauf-Tor (Issue #12): Sperre, Signatur, Buchung und Journal fuer jeden bezahlten
+// Lauf. Alle vier Kanaele (Interview, Chat, Hinweis, Erweiterung, Task 8 schliesst die
+// Reihe) laufen jetzt ausschliesslich hierueber — kein Kanal importiert runTask mehr
+// direkt aus agent-gateway.mjs, jeder bekommt es als Parameter von fuehreLaufAus'
+// laufFn (siehe starteVerstaendnisEntwurf/sendeInterviewAntwort, sendeAgentenChat/
+// sendeLocalChat, fuehreHinweislaufAus, fuehreErweiterungslaufAus).
+import { fuehreLaufAus, kanalGesperrt, merkeKarteGezeigt, torJournal } from './lauf-tor.mjs'
+import { createMemoryUi } from './memory-ui.mjs'
+import {
+  AUFSCHAUEN_MS,
+  INNEHALTEN_AN_GRENZE_MS,
+  INNEHALTEN_MS,
+  aktuellerMoment,
+  artVon,
+  darfErscheinen,
+  istSatzende,
+} from './momente-model.mjs'
+import {
+  BEWEGUNG,
+  blaseIstMoeglich,
+  erzeugeKontur,
+  kurveOut,
+  kurveStandard,
+  laesseBlaseWachsen,
+  tokenDauer,
+} from './onda-blase.mjs'
+import { ondaIcon } from './onda-icons.mjs'
+import { ergaenzeOndaKontext } from './onda-kontext.mjs'
+// quellenTitel liegt im Kontext-Bauer, weil dort schon entschieden ist, wie eine Quelle
+// heisst (metadata.title.value, source-model.mjs). Zwei Fassungen waeren zwei Namen fuer
+// dieselbe Quelle — im Prompt der eine, auf dem Schirm der andere.
+import { quellenTitel } from './quellen-kontext.mjs'
+import {
+  OHNE_THEMA,
+  OHNE_THEMA_NAME,
+  benenneThemaUm,
+  beschreibeThema,
+  ensureQuellenThemen,
+  legeThemaAn,
+  loescheThema,
+  themenBaum,
+  uebernimmThemenvorschlag,
+  verschiebeQuelle,
+} from './quellen-thema-model.mjs'
+import { darfAutomatischOrdnen, quellenSignatur, versucheQuellenlauf } from './quellenlauf-model.mjs'
 import { decideFinding, ensureProjectUnderstanding, ensureReasoningModel, getFindingQueue, isIntegrityCategory, istInterviewOffen, loeseSchutz, markiereEntwurfVersucht, markiereGeschuetzt, mergeVerstaendnis } from './reasoning-model.mjs'
+import {
+  bilanziereRueckmeldung,
+  entscheideRueckkopplung,
+  erstelleRueckkopplungsvorschlag,
+  rueckkopplungTabelle,
+} from './rueckkopplung-model.mjs'
+import {
+  beansprucheAutomatiklauf,
+  budgetStand,
+  gibNaechstenAutomatiklaufFrei,
+} from './settings-model.mjs'
+import { createSourceLibraryUi } from './source-library-ui.mjs'
+import { applySettings } from './ui.js'
+import {
+  interviewNachrichtId,
+  istBeispielProjekt,
+  planeInterviewNachricht,
+  projektZumDokument,
+} from './verstaendnis-interview.mjs'
+import { baueVerstaendnisKontext } from './verstaendnis-kontext.mjs'
 import {
   appendThreadMessage,
   completeEditingFinding,
@@ -26,122 +145,6 @@ import {
 } from './workspace-model.mjs'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
-import { applySettings } from './ui.js'
-import { hatSchluessel, setzeSchluessel, loescheSchluessel } from './agent-gateway.mjs'
-// Das Lauf-Tor (Issue #12): Sperre, Signatur, Buchung und Journal fuer jeden bezahlten
-// Lauf. Alle vier Kanaele (Interview, Chat, Hinweis, Erweiterung, Task 8 schliesst die
-// Reihe) laufen jetzt ausschliesslich hierueber — kein Kanal importiert runTask mehr
-// direkt aus agent-gateway.mjs, jeder bekommt es als Parameter von fuehreLaufAus'
-// laufFn (siehe starteVerstaendnisEntwurf/sendeInterviewAntwort, sendeAgentenChat/
-// sendeLocalChat, fuehreHinweislaufAus, fuehreErweiterungslaufAus).
-import { fuehreLaufAus, kanalGesperrt, merkeKarteGezeigt, torJournal } from './lauf-tor.mjs'
-import { letzteBezahlteSignatur } from './lauf-journal.mjs'
-import { aktuellerAgentStatus, beiAgentStatus, setzeAgentStatus, statuszeileFuer } from './agent-status.mjs'
-import { EXAMPLE_PROJECT_ID, seedBodySignature } from './example-seed.mjs'
-import { MODELLE, TASK_TABLE } from './agent-tasks.mjs'
-import { baueVerstaendnisKontext } from './verstaendnis-kontext.mjs'
-import { ergaenzeOndaKontext } from './onda-kontext.mjs'
-import { erkanntesListe, schreibeErkanntes, ueberholeErkanntes } from './erkanntes-model.mjs'
-import {
-  entscheideStimmenmerkmal,
-  projiziereAutorentwicklung,
-  schlageStimmenmerkmalVor,
-  speichereStimmenmerkmal,
-  ueberholeStimmenmerkmal,
-} from './autorentwicklung-model.mjs'
-import {
-  interviewNachrichtId,
-  istBeispielProjekt,
-  planeInterviewNachricht,
-  projektZumDokument,
-} from './verstaendnis-interview.mjs'
-import { baueDocText } from './agent-findings.mjs'
-import { pruefePausenAusloeser, versucheHinweislauf } from './hinweislauf-model.mjs'
-import {
-  bilanziereRueckmeldung,
-  entscheideRueckkopplung,
-  erstelleRueckkopplungsvorschlag,
-  rueckkopplungTabelle,
-} from './rueckkopplung-model.mjs'
-import { darfAutomatischLaufen, versucheErweiterungslauf } from './erweiterungslauf-model.mjs'
-import {
-  ART_ERKLAERUNG,
-  ART_LABEL,
-  ensureErweiterungen,
-  legeErweiterungWeg,
-  merkeErweiterung,
-  sichtbareErweiterungen,
-} from './erweiterung-model.mjs'
-import {
-  AUFSCHAUEN_MS,
-  INNEHALTEN_AN_GRENZE_MS,
-  INNEHALTEN_MS,
-  aktuellerMoment,
-  artVon,
-  darfErscheinen,
-  istSatzende,
-} from './momente-model.mjs'
-import {
-  baueChatKontext,
-  baueFindingZusatzAnweisung,
-  chatFehlerText,
-  entscheidungsEintraege,
-  erkenneHinweisBitte,
-  fuehreChatVorgangAus,
-  planVerlaufVerdichtung,
-} from './chat-kontext.mjs'
-import {
-  beansprucheAutomatiklauf,
-  budgetStand,
-  gibNaechstenAutomatiklaufFrei,
-} from './settings-model.mjs'
-import { createSourceLibraryUi } from './source-library-ui.mjs'
-import {
-  OHNE_THEMA,
-  OHNE_THEMA_NAME,
-  benenneThemaUm,
-  beschreibeThema,
-  ensureQuellenThemen,
-  legeThemaAn,
-  loescheThema,
-  themenBaum,
-  uebernimmThemenvorschlag,
-  verschiebeQuelle,
-} from './quellen-thema-model.mjs'
-// quellenTitel liegt im Kontext-Bauer, weil dort schon entschieden ist, wie eine Quelle
-// heisst (metadata.title.value, source-model.mjs). Zwei Fassungen waeren zwei Namen fuer
-// dieselbe Quelle — im Prompt der eine, auf dem Schirm der andere.
-import { quellenTitel } from './quellen-kontext.mjs'
-import { darfAutomatischOrdnen, quellenSignatur, versucheQuellenlauf } from './quellenlauf-model.mjs'
-import { createMemoryUi } from './memory-ui.mjs'
-import { createArgumentUi } from './argument-ui.mjs'
-import { createLanguageUi } from './language-ui.mjs'
-import { analyzeArgumentImpact } from './argument-graph.mjs'
-import { createAuditUi } from './audit-ui.mjs'
-import {
-  annotationSignature,
-  annotationSummary,
-  createAnnotationController,
-  createSuppressionStore,
-} from './annotation-controller.mjs'
-import { renderAnnotation } from './annotation-components.mjs'
-import { ANNOTATION_DEFINITIONS, resolveAnnotationPresentation } from './annotation-contract.mjs'
-import {
-  invertAnnotationOperation,
-  planAnnotationOperation,
-  validateAnnotationOperation,
-} from './annotation-operations.mjs'
-import { ondaIcon } from './onda-icons.mjs'
-import { bilanzVorlesetext } from './anmerkung-wortlaut.mjs'
-import {
-  BEWEGUNG,
-  blaseIstMoeglich,
-  erzeugeKontur,
-  kurveOut,
-  kurveStandard,
-  laesseBlaseWachsen,
-  tokenDauer,
-} from './onda-blase.mjs'
 
 const BLOCK_TYPES = [
   ['paragraph', 'Freier Absatz'],
