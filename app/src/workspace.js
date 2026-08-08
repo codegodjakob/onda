@@ -91,10 +91,17 @@ import {
   planVerlaufVerdichtung,
 } from './chat-kontext.mjs'
 import {
+  aktuellerMonat,
   beansprucheAutomatiklauf,
   budgetStand,
   gibNaechstenAutomatiklaufFrei,
 } from './settings-model.mjs'
+import {
+  MINDESTZAHL_ERTRAG,
+  kostenJeUebernahme,
+  monatsZaehlung,
+  weglegenQuote,
+} from './lauf-bilanz.mjs'
 import { createSourceLibraryUi } from './source-library-ui.mjs'
 import {
   OHNE_THEMA,
@@ -2088,12 +2095,19 @@ function buildKiSettingsBody(body) {
   const verbrauch = createNode('section', 'ki-verbrauch')
   body.append(verbrauch)
   renderKiVerbrauch(verbrauch)
+  // Ertrag (Issue #13): was aus den Läufen wurde, nicht nur was sie kosteten. Zwischen
+  // Verbrauch und Budget — die drei zusammen sind die vollstaendige Kostenrechnung: was
+  // reinging, was dabei herauskam, was die Grenze dafuer ist.
+  const ertrag = createNode('section', 'ki-ertrag')
+  body.append(ertrag)
+  renderKiErtrag(ertrag)
   const budget = createNode('section', 'ki-budget')
   body.append(budget)
   renderKiBudget(budget)
   const abmelden = beiAgentStatus(() => {
     if (!verbrauch.isConnected) { abmelden(); return }
     renderKiVerbrauch(verbrauch)
+    renderKiErtrag(ertrag)
     renderKiBudget(budget)
   })
 }
@@ -2139,25 +2153,113 @@ function renderKiModelle(container) {
     + 'das schnelle für Routine. Das hält die Kosten niedrig.'))
 }
 
+// Monatsname aus einem 'YYYY-MM'-Schluessel — dieselbe Umwandlung, die renderKiVerbrauch
+// schon fuer den laufenden Monat brauchte, jetzt auch fuer den Vormonat. Bei kaputtem
+// Schluessel bleibt der rohe Text stehen, statt zu werfen.
+function monatsName(monatSchluessel) {
+  try {
+    return new Date(monatSchluessel + '-01T00:00:00').toLocaleDateString('de-DE', { month: 'long', year: 'numeric' })
+  } catch {
+    return monatSchluessel
+  }
+}
+
 function renderKiVerbrauch(container) {
   container.replaceChildren()
   container.append(createNode('span', 'onda-eyebrow', 'Verbrauch'))
   const usage = ctx?.state?.settings?.usage
   if (!usage || (!usage.inputTokens && !usage.outputTokens)) {
     container.append(createNode('p', 'ki-verbrauch-leer', 'Diesen Monat noch keine Läufe.'))
-    return
+  } else {
+    container.append(
+      createNode('p', null, `${monatsName(usage.monat)}: ${formatTokenZahl(usage.inputTokens)} Tokens hinein · ${formatTokenZahl(usage.outputTokens)} Tokens heraus`),
+      createNode('p', null, `Aus dem Zwischenspeicher gelesen: ${formatTokenZahl(usage.cacheReadTokens)} · hineingeschrieben: ${formatTokenZahl(usage.cacheWriteTokens)}`),
+      createNode('p', 'ki-verbrauch-kosten',
+        `Geschätzte Kosten: ${((usage.kostenCents || 0) / 100).toLocaleString('de-DE', { style: 'currency', currency: 'USD' })}`
+        + ' — Schätzung nach Preisstand 07/2026; verbindlich ist die Abrechnung im Anthropic-Konto.'),
+    )
   }
-  let monatsName = usage.monat
-  try {
-    monatsName = new Date(usage.monat + '-01T00:00:00').toLocaleDateString('de-DE', { month: 'long', year: 'numeric' })
-  } catch {}
-  container.append(
-    createNode('p', null, `${monatsName}: ${formatTokenZahl(usage.inputTokens)} Tokens hinein · ${formatTokenZahl(usage.outputTokens)} Tokens heraus`),
-    createNode('p', null, `Aus dem Zwischenspeicher gelesen: ${formatTokenZahl(usage.cacheReadTokens)} · hineingeschrieben: ${formatTokenZahl(usage.cacheWriteTokens)}`),
-    createNode('p', 'ki-verbrauch-kosten',
-      `Geschätzte Kosten: ${((usage.kostenCents || 0) / 100).toLocaleString('de-DE', { style: 'currency', currency: 'USD' })}`
-      + ' — Schätzung nach Preisstand 07/2026; verbindlich ist die Abrechnung im Anthropic-Konto.'),
-  )
+
+  // Vormonats-Zeile (Task 3: settings.usageHistorie, neuester Eintrag zuletzt) — nur wenn
+  // schon ein Monat abgeschlossen ist. Kompakt mit Absicht: die volle Aufschluesselung
+  // steht oben fuer den laufenden Monat, hier reicht der Vergleichswert.
+  const historie = ctx?.state?.settings?.usageHistorie
+  if (Array.isArray(historie) && historie.length) {
+    const vormonat = historie[historie.length - 1]
+    container.append(createNode('p', 'ki-verbrauch-vormonat',
+      `Vormonat (${monatsName(vormonat.monat)}): ${formatTokenZahl(vormonat.inputTokens)} Tokens hinein · ${formatTokenZahl(vormonat.outputTokens)} Tokens heraus, `
+      + `${((vormonat.kostenCents || 0) / 100).toLocaleString('de-DE', { style: 'currency', currency: 'USD' })} geschätzt.`))
+  }
+}
+
+// Klarnamen der acht Hinweisarten (HINWEISARTEN, rueckkopplung-model.mjs — selbst aus
+// KATEGORIE_ZU_CATEGORY abgeleitet, siehe dort). 'quelle' heisst hier wie ueberall sonst
+// in der Oberflaeche "Beleg" (siehe dimensionLabel in renderErkanntes und
+// annotation-contract.mjs LEGACY_GERMAN_KIND) — zwei Namen fuer dieselbe Art waeren zwei
+// Wahrheiten.
+const HINWEISART_LABEL = Object.freeze({
+  fakt: 'Fakt',
+  quelle: 'Beleg',
+  methode: 'Methode',
+  logik: 'Logik',
+  struktur: 'Struktur',
+  wirkung: 'Wirkung',
+  erklaerung: 'Erklärung',
+  sprache: 'Sprache',
+})
+
+// Dieselbe Ausschlussregel wie rueckkopplungsDaten (siehe dort): das Beispielprojekt
+// bleibt draussen, seine Entscheidungen sind eine Vorfuehrung, keine echte Rueckmeldung
+// dieser Person. Trashed-Dokumente filtern weglegenQuote/monatsZaehlung selbst heraus
+// (istNichtWeggeworfen, lauf-bilanz.mjs) — hier nicht doppelt.
+function ertragsDokumente() {
+  return (ctx?.state?.docs || []).filter(doc => doc && doc.projectId !== EXAMPLE_PROJECT_ID)
+}
+
+// Der Ertrag-Abschnitt (Issue #13): was aus den Hinweisen und Erweiterungen wurde, die
+// Onda vorgeschlagen hat. Reine Auskunft, keine Bewertung — kein "gut"/"schlecht", nur
+// Zahlen mit sichtbarer Basis. Unterhalb von MINDESTZAHL_ERTRAG bewerteten Faellen steht
+// der ehrliche Satz statt einer Quote, die bei so wenigen Faellen Rauschen waere.
+function renderKiErtrag(container) {
+  container.replaceChildren()
+  container.append(createNode('span', 'onda-eyebrow', 'Ertrag'))
+  container.append(createNode('p', 'ki-ertrag-intro',
+    'Was aus den Hinweisen und Erweiterungen wurde, die die KI vorgeschlagen hat — '
+    + 'reine Zahlen, keine Bewertung.'))
+
+  const dokumente = ertragsDokumente()
+
+  const bilanz = bilanziereRueckmeldung({ dokumente: rueckkopplungsDaten() })
+  if (bilanz.gesamt.bewertbar < MINDESTZAHL_ERTRAG) {
+    container.append(createNode('p', 'ki-ertrag-basis',
+      `Noch zu wenig entschieden für eine ehrliche Quote (${bilanz.gesamt.bewertbar} von ${MINDESTZAHL_ERTRAG} nötig).`))
+  } else {
+    bilanz.proArt
+      .filter(zeile => zeile.angeboten > 0)
+      .forEach(zeile => {
+        const label = HINWEISART_LABEL[zeile.art] || zeile.art
+        container.append(createNode('p', 'ki-ertrag-art', `${label}: ${zeile.angenommen} von ${zeile.bewertbar} angenommen`))
+      })
+  }
+
+  const weglegen = weglegenQuote(dokumente)
+  if (weglegen.aussage === 'quote') {
+    container.append(createNode('p', 'ki-ertrag-weglegen', `Erweiterungen: ${weglegen.weg} von ${weglegen.bewertbar} weggelegt.`))
+  } else {
+    container.append(createNode('p', 'ki-ertrag-basis',
+      `Noch zu wenig Erweiterungen entschieden für eine ehrliche Quote (${weglegen.bewertbar} von ${MINDESTZAHL_ERTRAG} nötig).`))
+  }
+
+  const monat = monatsZaehlung(dokumente, aktuellerMonat())
+  container.append(createNode('p', 'ki-ertrag-monat',
+    `Diesen Monat: ${monat.angenommeneHinweise} Hinweise angenommen · ${monat.gemerkteErweiterungen} Erweiterungen gemerkt`))
+
+  const kosten = kostenJeUebernahme(torJournal())
+  if (kosten.aussage === 'quote') {
+    container.append(createNode('p', 'ki-ertrag-kosten',
+      `Kosten je Übernahme: ${(kosten.centsJeUebernahme / 100).toLocaleString('de-DE', { style: 'currency', currency: 'USD' })} `
+      + `(${kosten.uebernommen} Übernahmen).`))
+  }
 }
 
 function starteBewusstFreigegebenenAutomatiklauf() {

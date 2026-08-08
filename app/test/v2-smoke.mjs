@@ -1214,6 +1214,20 @@ async function runSystem8BudgetGate(browser) {
   await page.locator('#kiSettings').click()
   const dialog = page.locator('#kiModal[role="dialog"]')
   await expectVisible(dialog)
+
+  // Issue #13 (Task 4): der Ertrag-Abschnitt steht zwischen Verbrauch und Budget. Frisches
+  // Projekt, noch keine einzige Entscheidung — hier MUSS der ehrliche "noch zu wenig"-Satz
+  // stehen, nie eine Quote aus zu wenigen Fällen.
+  const ertrag = dialog.locator('.ki-ertrag')
+  await expectVisible(ertrag)
+  assert.match(await ertrag.locator('.onda-eyebrow').textContent(), /^Ertrag$/)
+  assert.match(await ertrag.textContent(), /Diesen Monat/, 'Der Monats-Satz fehlt im frischen Zustand')
+  assert.match(
+    await ertrag.textContent(),
+    /Noch zu wenig entschieden/,
+    'Ohne Entscheidungen muss der ehrliche "noch zu wenig"-Satz stehen, keine Quote',
+  )
+
   await dialog.locator('#kiBudgetInput').fill('0.50')
   await dialog.locator('.ki-budget-form').getByRole('button', { name: 'Grenze speichern', exact: true }).click()
   assert.match(await dialog.locator('.ki-budget-status').textContent(), /Grenze erreicht/)
@@ -1225,6 +1239,24 @@ async function runSystem8BudgetGate(browser) {
     const project = window.AIWT.state.projects.find(candidate => candidate.id === doc.projectId)
     project.understanding.entwurfVersuchtAm = null
     window.__llmMock.aufrufe.length = 0
+
+    // Zwölf entschiedene Hinweise — über der Mindestzahl (10) aus lauf-bilanz.mjs. Ab
+    // hier darf der Ertrag-Abschnitt eine echte Quote mit Basis zeigen statt des
+    // "noch zu wenig"-Satzes.
+    const jetzt = Date.now()
+    doc.findings = Array.from({ length: 12 }, (_, index) => ({
+      id: `ertrag-finding-${index}`,
+      kiKategorie: 'fakt',
+      status: 'resolved',
+    }))
+    doc.decisions = doc.findings.map(finding => ({
+      id: `decision-${finding.id}-${jetzt}`,
+      findingId: finding.id,
+      kind: 'accept',
+      outcome: 'resolved',
+      at: jetzt,
+    }))
+    window.AIWT.persist()
     window.AIWT.__workspaceTestBridge.reinitialize()
   })
   await page.waitForTimeout(100)
@@ -1233,6 +1265,13 @@ async function runSystem8BudgetGate(browser) {
 
   await page.locator('#kiSettings').click()
   await expectVisible(dialog)
+
+  // Mit den zwölf entschiedenen Hinweisen zeigt der Ertrag-Abschnitt jetzt eine Zeile mit
+  // sichtbarer Basis ("X von Y") statt des "noch zu wenig"-Satzes.
+  const ertragMitBasis = await dialog.locator('.ki-ertrag').textContent()
+  assert.match(ertragMitBasis, /\d+ von \d+ angenommen/, 'Die Quote mit Basis fehlt trotz zwölf entschiedener Hinweise')
+  assert.doesNotMatch(ertragMitBasis, /Noch zu wenig entschieden für eine ehrliche Quote/)
+
   assert.match(await dialog.locator('.ki-budget-status--paused').textContent(), /Automatische Läufe sind pausiert/)
   await dialog.getByRole('button', { name: 'Genau einen automatischen Lauf freigeben', exact: true }).click()
   await page.waitForFunction(() => window.__llmMock.aufrufe.length === 1)
