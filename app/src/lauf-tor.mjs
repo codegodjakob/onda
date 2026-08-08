@@ -22,7 +22,7 @@ import {
 //
 // 'quellen' kam beim Merge nach main am 8.8.2026 dazu: der Kanal entstand am 8.8., drei Tage
 // nachdem dieser Zweig fertig war, und hatte die Kopiervorlage ein FUENFTES Mal abgeschrieben
-// (eigene Sperr-Variable, eigene Signatur). Genau das benennt system/LEITSTAND.md als den
+// (eigene Sperr-Variable, eigene Signatur). Genau das benennt betrieb/LEITSTAND.md als den
 // Preis des liegengebliebenen Merges — und genau das soll das Tor beenden. Wer einen sechsten
 // Kanal baut, traegt ihn hier ein; der Rueckwachs-Waechter (lauf-tor-waechter.test.mjs)
 // laesst ihn ohnehin nicht am Tor vorbei.

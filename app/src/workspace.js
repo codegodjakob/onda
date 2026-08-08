@@ -5189,7 +5189,7 @@ async function fuehreQuellenlaufAus({ vonHand = false } = {}) {
 
   // DER FUENFTE KANAL LAEUFT DURCHS TOR. Genau darum ging es bei Issue #12: die
   // Kopiervorlage "eigene Sperr-Variable + eigene Signatur-Merkliste" war zum fuenften Mal
-  // abgeschrieben worden, und system/LEITSTAND.md hat es benannt — dieser Kanal entstand am
+  // abgeschrieben worden, und betrieb/LEITSTAND.md hat es benannt — dieser Kanal entstand am
   // 8.8., drei Tage NACHDEM der Zweig fertig war, der die vier anderen ablöste.
   //
   // Wie bei den anderen: laeuftBereits/sperreSetzen werden No-ops, die Kanal-Sperre prueft
