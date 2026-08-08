@@ -935,10 +935,10 @@ async function assertBlaseWaechstAusDemOrb(page) {
   assert.equal(danach.klassen, '', `Am Fenster bleibt "${danach.klassen}" hängen`)
 }
 
-// „ich will das die sprechblase immer horizontal zentriert auf der seite sitzt in der
-// rechten spalte" — Jakob am 8. August 2026. Gemeint ist die senkrechte Mitte: die
-// Blase klebte oben, jetzt steht ihr Körper mittig, und der Hals überbrückt, was
-// zwischen dem Orb in der Topbar und dieser Mitte liegt.
+// „länge: mischung aus mittig und lang" — Jakob am 8. August 2026. Voreingestellt ist
+// deshalb das arithmetische Mittel aus beiden Enden: der Körper wandert mit der
+// Fensterhöhe zur Mitte, aber nur halb so schnell. Beide Enden gibt es weiter einzeln,
+// und „mittig" muss dann auch wirklich mittig sitzen.
 //
 // Geprüft wird an der SILHOUETTE, nicht am Kasten: der Kasten reicht bis zum Orb
 // hinauf, sichtbar ist aber erst der Körper. Seine Oberkante ist der Endpunkt des
@@ -946,6 +946,27 @@ async function assertBlaseWaechstAusDemOrb(page) {
 // läuft der Pfad). Wer stattdessen den Kasten misst, bekommt jede Halslänge als
 // „mittig" bestätigt.
 async function assertBlaseSitztMittigAmHals(page) {
+  const messen = () => page.evaluate(() => {
+    const kasten = document.getElementById('agentWidget').getBoundingClientRect()
+    const orb = document.getElementById('ondaAura').getBoundingClientRect()
+    const d = document.querySelector('.onda-blase__pfad').getAttribute('d')
+    const ecken = [...d.matchAll(/A 16 16 0 0 1 (-?[\d.]+) (-?[\d.]+)/g)]
+    const stil = getComputedStyle(document.getElementById('editorView'))
+    const zahl = name => parseFloat(stil.getPropertyValue(name))
+    return {
+      oben: kasten.top,
+      unten: kasten.bottom,
+      kante: ecken.length === 3 ? Number(ecken[2][2]) : null,
+      eckenAnzahl: ecken.length,
+      orbUnten: orb.bottom,
+      hals: zahl('--blase-hals'),
+      halsMittig: zahl('--blase-hals-mittig'),
+      halsLang: zahl('--blase-hals-lang'),
+      schulter: zahl('--blase-schulter'),
+      fensterhoehe: window.innerHeight,
+    }
+  })
+
   for (const hoehe of [900, 1100]) {
     await page.setViewportSize({ width: 1440, height: hoehe })
     await page.waitForTimeout(30)
@@ -956,46 +977,46 @@ async function assertBlaseSitztMittigAmHals(page) {
     })
     await page.waitForFunction(() => !document.getElementById('agentWidget').classList.contains('waechst'))
 
-    const lage = await page.evaluate(() => {
-      const kasten = document.getElementById('agentWidget').getBoundingClientRect()
-      const orb = document.getElementById('ondaAura').getBoundingClientRect()
-      const d = document.querySelector('.onda-blase__pfad').getAttribute('d')
-      const ecken = [...d.matchAll(/A 16 16 0 0 1 (-?[\d.]+) (-?[\d.]+)/g)]
-      const stil = getComputedStyle(document.getElementById('editorView'))
-      return {
-        oben: kasten.top,
-        unten: kasten.bottom,
-        kante: ecken.length === 3 ? Number(ecken[2][2]) : null,
-        eckenAnzahl: ecken.length,
-        orbUnten: orb.bottom,
-        hals: parseFloat(stil.getPropertyValue('--blase-hals')),
-        schulter: parseFloat(stil.getPropertyValue('--blase-schulter')),
-        fensterhoehe: window.innerHeight,
-      }
-    })
-
+    const lage = await messen()
     assert.equal(lage.eckenAnzahl, 3, `Der Pfad hat ${lage.eckenAnzahl} Ecken statt drei`)
-    const koerperOben = lage.oben + lage.kante
-    const randOben = koerperOben
-    const randUnten = lage.fensterhoehe - lage.unten
+
+    // Voreingestellt ist die Mischung: genau zwischen den beiden Enden, nicht auf
+    // einem davon. Das ist der Unterschied zwischen „gemischt" und „einfach mittig".
     assert.ok(
-      Math.abs(randOben - randUnten) <= 1.5,
-      `Die Blase sitzt bei ${hoehe}px Höhe nicht mittig: ${randOben.toFixed(1)}px oben gegen ${randUnten.toFixed(1)}px unten`,
+      Math.abs(lage.hals - (lage.halsMittig + lage.halsLang) / 2) <= 0.5,
+      `Bei ${hoehe}px ist der Hals ${lage.hals.toFixed(1)}px statt der Mischung`
+      + ` ${((lage.halsMittig + lage.halsLang) / 2).toFixed(1)}px`,
     )
+    assert.ok(lage.halsMittig > lage.halsLang, 'Die Mischung hat bei dieser Höhe keine zwei Enden')
 
     // Der Hals ist wirklich eine Strecke und keine Behauptung: der Körper fängt
     // deutlich unter dem Orb an. Vor dieser Änderung überlappten sich beide.
+    const koerperOben = lage.oben + lage.kante
     assert.ok(
       koerperOben > lage.orbUnten + 40,
       `Der Hals ist nur ${(koerperOben - lage.orbUnten).toFixed(1)}px lang — die Blase klebt wieder am Orb`,
     )
 
     // Und die Rechnung in CSS deckt sich mit dem, was gezeichnet wurde. Laufen die
-    // beiden auseinander, stimmt die Mitte nur zufällig.
+    // beiden auseinander, stimmt die Lage nur zufällig.
     assert.ok(
       Math.abs(lage.kante - (lage.schulter + lage.hals)) <= 1,
       `Gezeichnete Oberkante ${lage.kante.toFixed(2)} gegen gerechnete ${(lage.schulter + lage.hals).toFixed(2)}`,
     )
+
+    // Und das eine Ende der Mischung hält sein Versprechen: auf „mittig" gestellt
+    // sitzt der Körper wirklich in der Mitte, oben und unten derselbe Rand.
+    await page.evaluate(() => { document.documentElement.dataset.blaseHals = 'mittig' })
+    await page.waitForTimeout(60)
+    const mittig = await messen()
+    const randOben = mittig.oben + mittig.kante
+    const randUnten = mittig.fensterhoehe - mittig.unten
+    assert.ok(
+      Math.abs(randOben - randUnten) <= 1.5,
+      `„mittig" sitzt bei ${hoehe}px nicht mittig: ${randOben.toFixed(1)}px oben gegen ${randUnten.toFixed(1)}px unten`,
+    )
+    await page.evaluate(() => { delete document.documentElement.dataset.blaseHals })
+    await page.waitForTimeout(60)
   }
 
   await page.setViewportSize({ width: 1440, height: 1000 })

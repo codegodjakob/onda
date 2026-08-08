@@ -1826,6 +1826,21 @@ body.zen #title:focus { opacity: 1; }
   initial-value: 0px;
 }
 
+/* Die beiden Enden der Mischung ebenfalls angemeldet — nicht fuer das Zeichnen,
+   sondern damit der Rauchtest nachrechnen kann, ob die Voreinstellung wirklich in der
+   Mitte zwischen ihnen liegt. Ohne Anmeldung liest er den Rechenausdruck. */
+@property --blase-hals-mittig {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 0px;
+}
+
+@property --blase-hals-lang {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 96px;
+}
+
 /* DIE BLASE SITZT AM ORB — und der Sitz ist keine Schaetzung, sondern gerechnet.
    .onda-topbar__aside steht fest bei right: var(--space-5), ist var(--topbar-height)
    hoch und zentriert seine Kinder; #ondaAura ist das letzte Kind und 44px gross. Also
@@ -1840,13 +1855,20 @@ body.zen #title:focus { opacity: 1; }
 
   /* DER HALS. Vom Sitz bis zur Oberkante des Koerpers.
 
-     Voreingestellt ist „mittig": Jakob will die Blase senkrecht in der Mitte der
-     rechten Spalte. Damit ist die Halslaenge KEINE freie Wahl mehr, sondern eine
-     Folge — sie ist genau die Strecke, die zwischen dem Orb in der Topbar und dieser
-     Mitte uebrig bleibt. Wird das Fenster hoeher, wird der Hals laenger.
+     Voreingestellt ist „gemischt", und das ist Jakobs Ansage vom 8. August 2026:
+     "länge: mischung aus mittig und lang". Beide Enden der Mischung gibt es einzeln:
 
-     Der Koerper behaelt in allen drei Fassungen dieselbe Groesse. Sonst veraenderte
-     der Umschalter zwei Dinge auf einmal, und die Wahl waere keine. */
+       mittig  Der Koerper steht senkrecht in der Mitte. Die Laenge ist dann keine
+               Wahl mehr, sondern eine Folge — und laeuft bei hohen Fenstern weit
+               (320px bei 1300px Fensterhoehe).
+       lang    Fest 96px. Ruehrt sich nie, egal wie hoch das Fenster ist.
+
+     Die Mischung ist das arithmetische Mittel aus beiden: die Blase wandert mit dem
+     Fenster zur Mitte hin, aber nur halb so schnell. Bei 900px Fensterhoehe sind das
+     107px, bei 1300px 207px.
+
+     Der Koerper behaelt in allen Fassungen dieselbe Groesse. Sonst veraenderte der
+     Umschalter zwei Dinge auf einmal, und die Wahl waere keine. */
 
   /* Die Schulter: vom oberen Kastenrand bis zur Oberkante des Koerpers, wenn der
      gerade Teil des Halses null lang ist. Sitz (22) + Kopfkehle (26,46) + Fusskehle
@@ -1860,7 +1882,9 @@ body.zen #title:focus { opacity: 1; }
   --blase-rand: calc(var(--blase-oben) + var(--blase-schulter) + var(--space-4));
   /* 528px ist die Koerperhoehe von vorher: 560 minus der damaligen Schulter von 32. */
   --blase-koerper: min(528px, calc(100dvh - 2 * var(--blase-rand)));
-  --blase-hals-wunsch: calc((100dvh - var(--blase-koerper)) / 2 - var(--blase-oben) - var(--blase-schulter));
+  --blase-hals-mittig: calc((100dvh - var(--blase-koerper)) / 2 - var(--blase-oben) - var(--blase-schulter));
+  --blase-hals-lang: 96px;
+  --blase-hals-wunsch: calc((var(--blase-hals-mittig) + var(--blase-hals-lang)) / 2);
   /* clamp faengt die kurzen Fenster ab: unten darf der Koerper nicht hinauslaufen,
      oben darf der Hals nicht negativ werden — ein negativer Hals zoege die Kehle
      durch den Sitz, und der Pfad schluege Haken. */
@@ -1873,12 +1897,14 @@ body.zen #title:focus { opacity: 1; }
   --blase-schatten: drop-shadow(0 4px 8px rgba(28, 26, 23, 0.06)) drop-shadow(0 16px 32px rgba(28, 26, 23, 0.1));
 }
 
-/* ZWEI FESTE HALSLAENGEN ZUM VERGLEICH. Sie haengen nicht an der Fensterhoehe — bei
-   ihnen bleibt die Blase oben angeschlagen und der Hals ist gesetzt. Nur damit am
-   laufenden Programm zu sehen ist, was „mittig" gegen einen kurzen Weg eintauscht.
-   Umgeschaltet wird ueber den Varianten-Umschalter; er ist keine Dauereinrichtung. */
+/* DIE DREI ANDEREN LAENGEN ZUM VERGLEICH. „mittig" haengt an der Fensterhoehe, „lang"
+   und „kurz" nicht — bei ihnen bleibt die Blase oben angeschlagen und der Hals ist
+   gesetzt. Nur damit am laufenden Programm zu sehen ist, was die Mischung gegen ihre
+   beiden Enden eintauscht. Umgeschaltet wird ueber den Varianten-Umschalter; er ist
+   keine Dauereinrichtung. */
+[data-blase-hals="mittig"] #editorView { --blase-hals-wunsch: var(--blase-hals-mittig); }
+[data-blase-hals="lang"] #editorView { --blase-hals-wunsch: var(--blase-hals-lang); }
 [data-blase-hals="kurz"] #editorView { --blase-hals-wunsch: 40px; }
-[data-blase-hals="lang"] #editorView { --blase-hals-wunsch: 96px; }
 
 /* Der Umschalter selbst. Absichtlich schlicht: er ist ein Geruest, kein Bauteil, und
    verschwindet mit der Entscheidung wieder. Er sitzt unten links, wo weder Text noch
@@ -1890,8 +1916,9 @@ body.zen #title:focus { opacity: 1; }
   bottom: var(--space-4);
   transform: translateX(-50%);
   display: flex;
-  align-items: center;
-  gap: var(--space-2);
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-1);
   padding: var(--space-2) var(--space-3);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-overlay);
@@ -1900,7 +1927,16 @@ body.zen #title:focus { opacity: 1; }
   font: var(--type-caption);
 }
 
-.onda-varianten__wort { color: var(--text-tertiary); }
+.onda-varianten__reihe {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.onda-varianten__wort {
+  color: var(--text-tertiary);
+  min-width: 4ch;
+}
 
 .onda-varianten__knopf {
   border: 1px solid transparent;

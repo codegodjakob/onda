@@ -361,10 +361,18 @@ test('Die Sprechblase trägt dieselbe Fläche, Linie und Tiefe wie das Fenster, 
   assert.equal(Number(geschrieben[1]), Math.round(SCHULTER * 100) / 100,
     'Die Schulter in style.css weicht von der gerechneten in onda-blase.mjs ab')
 
-  // Und die Mitte ist wirklich die Mitte: der Wunschwert für den Hals ist die halbe
-  // Restfläche minus dem, was Orb und Schulter oben schon belegen.
+  // Die Mitte ist wirklich die Mitte: die halbe Restfläche, minus dem, was Orb und
+  // Schulter oben schon belegen.
+  const mittig = css.match(/--blase-hals-mittig:\s*calc\(([^;]+)\);/)
+  assert.ok(mittig, 'Es gibt keine Rechnung für die mittige Lage')
+  assert.match(mittig[1], /\(100dvh - var\(--blase-koerper\)\) \/ 2/,
+    'Die mittige Lage rechnet nicht aus der Mitte')
+
+  // Und voreingestellt ist die MISCHUNG aus mittig und lang — Jakobs Ansage vom
+  // 8. August 2026. Das arithmetische Mittel, nicht das eine oder das andere.
   const wunsch = css.match(/--blase-hals-wunsch:\s*calc\(([^;]+)\);/)
   assert.ok(wunsch, 'Es gibt keine Rechnung für die Halslänge')
-  assert.match(wunsch[1], /\(100dvh - var\(--blase-koerper\)\) \/ 2/,
-    'Die Halslänge rechnet nicht aus der Mitte')
+  assert.match(wunsch[1], /var\(--blase-hals-mittig\)\s*\+\s*var\(--blase-hals-lang\)/,
+    'Die Halslänge mischt nicht mittig und lang')
+  assert.match(wunsch[1], /\)\s*\/\s*2/, 'Die Mischung ist kein Mittelwert')
 })

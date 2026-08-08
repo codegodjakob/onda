@@ -507,6 +507,7 @@ function blaseMisstUndZeichnet(fenster, blase) {
   const hals = blaseHalsLaenge(fenster)
   if (!blaseIstMoeglich(kasten.width, kasten.height, undefined, hals)) return null
   if (!blaseKontur || blaseKontur.svg !== blase) blaseKontur = erzeugeKontur(blase)
+  blaseKontur?.setzeForm(document.documentElement.dataset.blaseForm || 'stiel')
   blaseKontur?.setzeMasse(kasten.width, kasten.height, hals)
   return blaseKontur
 }
@@ -620,9 +621,18 @@ function blaseFolgt(offen) {
 // Programm ist er nicht da. Sobald Jakob gewaehlt hat, fliegt er raus und die
 // gewaehlte Laenge steht fest in style.css.
 const HALS_FASSUNGEN = [
+  ['gemischt', 'gemischt'],
   ['mittig', 'mittig'],
   ['lang', 'lang'],
   ['kurz', 'kurz'],
+]
+
+// Vier Halsformen. Was sie unterscheidet, steht in FORMEN in onda-blase.mjs.
+const HALS_FORMEN = [
+  ['stiel', 'Stiel'],
+  ['tropfen', 'Tropfen'],
+  ['trichter', 'Trichter'],
+  ['saeule', 'Säule'],
 ]
 
 function variantenSchalterAn() {
@@ -633,55 +643,68 @@ function variantenSchalterAn() {
   }
 }
 
-function halsFassungMerken(name) {
+function variantenMerken(schluessel, name) {
   try {
-    window.localStorage?.setItem('ondaBlaseHals', name)
+    window.localStorage?.setItem(schluessel, name)
   } catch {
     // Ohne Speicher faellt nur das Erinnern weg, nicht das Umschalten.
   }
 }
 
-function halsFassungSetzen(name) {
-  // 'mittig' ist die Voreinstellung und braucht kein Attribut — so steht im HTML
-  // nichts, was nach der Entscheidung wieder weggeraeumt werden muesste.
-  if (name === 'mittig') delete document.documentElement.dataset.blaseHals
-  else document.documentElement.dataset.blaseHals = name
+function variantenLesen(schluessel, erlaubt, standard) {
+  let gemerkt = null
+  try {
+    gemerkt = window.localStorage?.getItem(schluessel)
+  } catch {
+    gemerkt = null
+  }
+  return erlaubt.some(([name]) => name === gemerkt) ? gemerkt : standard
 }
 
-function renderHalsUmschalter() {
-  if (!variantenSchalterAn()) return () => {}
-  let gemerkt = 'mittig'
-  try {
-    gemerkt = window.localStorage?.getItem('ondaBlaseHals') || 'mittig'
-  } catch {
-    gemerkt = 'mittig'
-  }
-  if (!HALS_FASSUNGEN.some(([name]) => name === gemerkt)) gemerkt = 'mittig'
-  halsFassungSetzen(gemerkt)
+// Die Voreinstellung braucht kein Attribut — so steht im HTML nichts, was nach der
+// Entscheidung wieder weggeraeumt werden muesste.
+function variantenSetzen(feld, name, standard) {
+  if (name === standard) delete document.documentElement.dataset[feld]
+  else document.documentElement.dataset[feld] = name
+}
 
-  const leiste = createNode('div', 'onda-varianten')
-  leiste.append(createNode('span', 'onda-varianten__wort', 'Hals'))
-  const knoepfe = HALS_FASSUNGEN.map(([name, wort]) => {
-    const knopf = createNode('button', 'onda-varianten__knopf', wort)
+// Die Kontur haengt an Werten, die sich gerade geaendert haben. Der ResizeObserver
+// merkt die Groesse von selbst — aber erst im naechsten Bild, und die FORM merkt er
+// gar nicht, weil sie den Kasten nicht anfasst.
+function blaseNeuZeichnen() {
+  const ui = elements()
+  if (!blaseSteht || !ui.agentWidget || !ui.blase) return
+  blaseMisstUndZeichnet(ui.agentWidget, ui.blase)?.zeichne(1, 1)
+}
+
+function variantenReihe(wort, fassungen, feld, schluessel, standard) {
+  const gemerkt = variantenLesen(schluessel, fassungen, standard)
+  variantenSetzen(feld, gemerkt, standard)
+
+  const reihe = createNode('div', 'onda-varianten__reihe')
+  reihe.append(createNode('span', 'onda-varianten__wort', wort))
+  const knoepfe = fassungen.map(([name, beschriftung]) => {
+    const knopf = createNode('button', 'onda-varianten__knopf', beschriftung)
     knopf.type = 'button'
     knopf.dataset.fassung = name
     knopf.setAttribute('aria-pressed', String(name === gemerkt))
     knopf.addEventListener('click', () => {
-      halsFassungSetzen(name)
-      halsFassungMerken(name)
+      variantenSetzen(feld, name, standard)
+      variantenMerken(schluessel, name)
       knoepfe.forEach(anderer => anderer.setAttribute('aria-pressed', String(anderer === knopf)))
-      // Die Kontur haengt an einer Groesse, die sich gerade geaendert hat. Der
-      // ResizeObserver merkt das von selbst — aber erst im naechsten Bild, und bis
-      // dahin stuende der alte Pfad in der neuen Huelle.
-      const ui = elements()
-      if (blaseSteht && ui.agentWidget && ui.blase) {
-        const kontur = blaseMisstUndZeichnet(ui.agentWidget, ui.blase)
-        kontur?.zeichne(1, 1)
-      }
+      blaseNeuZeichnen()
     })
-    leiste.append(knopf)
+    reihe.append(knopf)
     return knopf
   })
+  return reihe
+}
+
+function renderHalsUmschalter() {
+  if (!variantenSchalterAn()) return () => {}
+  const leiste = createNode('div', 'onda-varianten')
+  leiste.append(variantenReihe('Form', HALS_FORMEN, 'blaseForm', 'ondaBlaseForm', 'stiel'))
+  leiste.append(variantenReihe('Länge', HALS_FASSUNGEN, 'blaseHals', 'ondaBlaseHals', 'gemischt'))
   document.body.append(leiste)
   return () => leiste.remove()
 }
