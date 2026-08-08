@@ -455,6 +455,7 @@ test('die Namensbruecke haelt, wenn Runde 2 die Arten umsortiert und eine weglae
 })
 
 import { versucheBausteinlauf } from '../src/bausteinlauf-model.mjs'
+import { updateLanguageProfile } from '../src/language-profile.mjs'
 
 function laufAufbau(ueberschreibung = {}) {
   let gesperrt = false
@@ -551,4 +552,25 @@ test('ein Fehler wird gemeldet, nicht verschluckt — und die Sperre faellt', as
   assert.equal(ergebnis.fehler, 'schema')
   assert.equal(aufbau.liestSperre(), false)
   assert.equal(status.at(-1).zustand, 'fehler')
+})
+
+// Der Kanal kann das Projektwissen anhaengen (bausteinarten-kontext.test.mjs) — hier steht,
+// dass der Lauf es auch WIRKLICH durchreicht. Ohne diese Gegenprobe koennte der Parameter
+// still auf dem Weg verlorengehen: der Kanal waere geprueft, der Prompt trotzdem blind.
+test('der Lauf reicht das Projektwissen bis in den Kontext durch', async () => {
+  const project = {
+    id: 'projekt-baustein',
+    languageProfile: updateLanguageProfile({
+      profile: null,
+      projectId: 'projekt-baustein',
+      changes: { genre: 'scientific', domain: 'MARKANTES-FACH-4e8b' },
+      at: 1000,
+    }),
+  }
+  const aufbau = laufAufbau({ onda: { project, doc: { id: 'doc-1' } } })
+  await versucheBausteinlauf(aufbau.optionen)
+  assert.equal(aufbau.aufrufe.length, 1)
+  const volatiles = aufbau.aufrufe[0].kontext.volatiles
+  assert.ok(volatiles.some(block => /MARKANTES-FACH-4e8b/.test(block)),
+    'das Projektwissen erreicht den Lauf nicht — der Prompt bliebe blind')
 })

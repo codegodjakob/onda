@@ -3,6 +3,7 @@
 // ({verstaendnis, docText, volatiles}). Vorbild: hinweis-kontext.mjs.
 import { BAUSTEINARTEN_ANWEISUNG } from './agent-prompts.mjs'
 import { benennbar } from './bausteinarten-vertrag.mjs'
+import { baueOndaBloecke } from './onda-kontext.mjs'
 
 export const ANRISS_ZEICHEN = 120
 
@@ -41,17 +42,32 @@ function bisherigerStand(bestand) {
     + 'Behalte diese Namen bei, wo sie weiter passen — benenne nur um, wenn der alte Name falsch geworden ist.'
 }
 
+// onda: {project, doc, docs, memoryStore} — Textsorte, Aussagen-Speicher, Nachbartexte und
+// Gedaechtnis (onda-kontext.mjs), ganz hinten in den volatilen Bloecken.
+//
+// Dieser Kanal entstand, bevor die Regel „jeder Kanal haengt das Projektwissen an" galt, und
+// war beim Einsammeln (#33) ein BLINDER Kanal. Kein Unit-Test hat es gemerkt — sie belegen
+// jede Quelle einzeln. Gemeldet hat es die Eigenschafts-Pruefung ueber ALLE Kanaele
+// (evals/pruefungen/kontext-alle-kanaele.mjs, KONTEXT-01 baulich); derselbe Fall wie zuvor
+// beim Quellen-Kanal.
+//
+// Fuer die Bausteinarten zaehlt vor allem die TEXTSORTE, und zwar staerker als bei jedem
+// anderen Kanal: Schritt 1 des Auftrags oben ist woertlich „bestimme zuerst, was fuer ein
+// Text das ist". Weiss Onda das bereits aus dem Sprachprofil, muss das Modell nicht raten —
+// und eine wissenschaftliche Arbeit bekommt Methode und Befund statt Anekdote und Pointe.
 export function baueBausteinKontext({
   verstaendnis = null,
   docText = '',
   blocks = [],
   bestand = null,
   offene = null,
+  onda = null,
 } = {}) {
   const volatiles = [BAUSTEINARTEN_ANWEISUNG]
   const stand = bisherigerStand(bestand)
   if (stand) volatiles.push(stand)
   const verzeichnis = absatzVerzeichnis(blocks, offene)
   if (verzeichnis) volatiles.push(verzeichnis)
+  if (onda) volatiles.push(...baueOndaBloecke(onda))
   return { verstaendnis, docText, volatiles }
 }

@@ -272,6 +272,9 @@ export async function versucheBausteinlauf({
   bestand = null,
   docText = '',
   verstaendnis = null,
+  // Das Projektwissen (Textsorte, Aussagen-Speicher, Nachbartexte, Gedaechtnis). Es reist
+  // unveraendert bis in den Kontext durch; ohne es waere dies ein blinder Kanal.
+  onda = null,
   grenze = UMSCHREIB_GRENZE,
   sperreSetzen,
   hatSchluessel,
@@ -299,7 +302,7 @@ export async function versucheBausteinlauf({
     }
 
     // bedarf.offene bestimmt, welche Absätze das Modell überhaupt benennen soll.
-    const kontext = baueBausteinKontext({ verstaendnis, docText, blocks, bestand, offene: bedarf.offene })
+    const kontext = baueBausteinKontext({ verstaendnis, docText, blocks, bestand, offene: bedarf.offene, onda })
     setzeAgentStatus({ zustand: 'laeuft' })
     const { daten } = await runTask('bausteinarten', kontext)
     setzeAgentStatus({ zustand: 'bereit' })
