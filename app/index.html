@@ -77,15 +77,25 @@
            links oben steht: der Tastaturweg muss der gleiche sein wie der Blick
            (WCAG 2.4.3). Stand sie hinter der Leiste, kam der sichtbar erste Knopf als
            fünfunddreißigster. Der Platz bleibt davon unberührt — position:fixed. -->
+      <!-- Der Schriftzug steht bei der Klinke, nicht in der Leiste. In der Leiste fuhr er
+           beim Einklappen mit ihr hinaus — oben links wohnte er also nicht, er war dort
+           nur zu Besuch. Am Fenster verankert bleibt er, was er ist: der Name des
+           Programms und der Weg nach Hause (Jakob, 8.8.2026). -->
       <div class="onda-topbar__lead">
         <button id="sidebarToggle" class="onda-icon-btn" type="button" aria-controls="ondaSidebar" aria-expanded="true"></button>
+        <button id="ondaHome" class="onda-wordmark onda-wordmark-btn" type="button" title="Zur Übersicht" aria-label="Zur Projekt- und Dokumentübersicht">Onda Write</button>
       </div>
 
       <aside id="ondaSidebar" class="onda-sidebar">
+        <!-- Wo man ist, steht ganz oben — dort sucht man es. Unten links, eingeklemmt
+             zwischen zwei Zahnrädern, blieben von „Beispiel: Calm Technology" 91 Pixel
+             übrig: elf Zeichen und drei Punkte. Hier hat der Name die volle Breite und
+             darf umbrechen. -->
         <div class="onda-brand">
-          <!-- Der Name ist der Weg nach Hause. Wer oben links auf das Logo klickt,
-               erwartet die Übersicht — das ist in jedem Programm so. -->
-          <button id="ondaHome" class="onda-wordmark onda-wordmark-btn" type="button" title="Zur Übersicht" aria-label="Zur Projekt- und Dokumentübersicht">Onda</button>
+          <button id="sidebarBack" class="onda-side-back" type="button" title="Zur Übersicht" aria-label="Zur Projekt- und Dokumentübersicht">
+            <span class="onda-side-back-chevron" aria-hidden="true"></span>
+            <span class="onda-side-back-label">Projekt</span>
+          </button>
         </div>
 
         <!-- Genau drei Abschnitte: Projektverständnis · Struktur · Quellen.
@@ -120,14 +130,11 @@
           </section>
         </nav>
 
-        <!-- Unten links stand der eigene Name mit Bildzeichen. Wer allein an seinem
-             Rechner schreibt, muss nicht daran erinnert werden, wer er ist. An seiner
-             Stelle steht jetzt der Weg zurück zur Übersicht. -->
+        <!-- Unten links stand erst der eigene Name, dann der Weg zurück. Beides ist fort:
+             wer allein an seinem Rechner schreibt, muss nicht daran erinnert werden, wer
+             er ist, und der Weg zurück steht jetzt oben. Übrig bleiben zwei Zeichen ohne
+             Wortlaut — an ihnen kann nichts abgeschnitten werden. -->
         <div class="onda-side-footer">
-          <button id="sidebarBack" class="onda-side-back" type="button" title="Zur Übersicht" aria-label="Zur Projekt- und Dokumentübersicht">
-            <span class="onda-side-back-chevron" aria-hidden="true"></span>
-            <span class="onda-side-back-label">Projekt</span>
-          </button>
           <button id="themeToggle" class="onda-icon-btn" title="Erscheinung wechseln" aria-label="Erscheinung wechseln"></button>
           <button id="kiSettings" class="onda-icon-btn" title="KI-Anschluss" aria-label="KI-Anschluss einrichten" aria-haspopup="dialog" aria-controls="kiModal"></button>
         </div>
