@@ -3,6 +3,7 @@
 // ausschliesslich {verstaendnis, docText, volatiles, verlauf, anfrage}; eigene Feldnamen
 // wuerden still verschluckt.
 import { QUELLENTHEMEN_ANWEISUNG } from './agent-prompts.mjs'
+import { baueOndaBloecke } from './onda-kontext.mjs'
 
 // KEIN docText, und das ist eine Entscheidung: nach welchen Themen die Quellen eines
 // Projekts stehen, ist eine Frage des Projekts und nicht des gerade offenen Textes.
@@ -72,7 +73,27 @@ function quelleFuerPrompt(quelle) {
 //     ein Prompt ist eine Bitte, kein Riegel,
 //   - die vom Agenten gebildeten sind nur ein Vorschlag von letztem Mal. Sie stehen
 //     ebenfalls da, damit dieselbe Ordnung nicht bei jedem Lauf neue Namen bekommt.
-export function baueQuellenKontext({ verstaendnis = null, quellen = [], bestehendeThemen = [] } = {}) {
+//
+// onda: {project, doc, docs, memoryStore} — Textsorte, Aussagen-Speicher, Nachbartexte,
+// Gedaechtnis und persoenlich Erkanntes (onda-kontext.mjs), als LETZTE volatile Bloecke.
+//
+// WARUM dieser Kanal das Wissen genauso braucht wie die vier anderen: nach welchen Themen
+// zwanzig Quellen zerfallen, entscheidet nicht die Quellenmenge, sondern der Zweck. Fuer
+// eine Seminararbeit ueber Aufmerksamkeit ordnen sich dieselben Titel nach Begriffen, fuer
+// einen Werbetext nach Belegkraft. Der Aussagen-Speicher sagt dazu, was das Projekt bereits
+// behauptet — eine Gruppe, die eine tragende Aussage stuetzt, ist eine bessere Gruppe als
+// eine, die nur ein Stichwort teilt.
+//
+// WOHIN sie gehoeren: ausschliesslich nach volatiles, nie in den gecachten Praefix. Die
+// Begruendung steht bei onda-kontext.mjs (Zeile 11-17) und gilt hier unveraendert. In diesem
+// Kanal traegt ohnehin nur das Projektverstaendnis cache_control — einen docText gibt es
+// hier bewusst nicht (siehe oben).
+export function baueQuellenKontext({
+  verstaendnis = null,
+  quellen = [],
+  bestehendeThemen = [],
+  onda = null,
+} = {}) {
   const volatiles = [QUELLENTHEMEN_ANWEISUNG]
 
   const liste = (Array.isArray(quellen) ? quellen : []).filter(quelle => quelle?.id).map(quelleFuerPrompt)
@@ -93,6 +114,8 @@ export function baueQuellenKontext({ verstaendnis = null, quellen = [], bestehen
       + JSON.stringify(eigene.map(thema => ({ name: thema.name, warum: String(thema.warum || '') }))),
     )
   }
+
+  if (onda) volatiles.push(...baueOndaBloecke(onda))
 
   return { verstaendnis, volatiles }
 }

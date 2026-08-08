@@ -5041,6 +5041,10 @@ async function fuehreQuellenlaufAus({ vonHand = false } = {}) {
     quellen,
     bestehendeThemen,
     verstaendnis,
+    // Der Lauf haengt am Projekt, nicht am Dokument — das Wissen aber gehoert trotzdem dazu:
+    // wonach sich Quellen ordnen, entscheidet der Zweck des Projekts, nicht ihre Menge.
+    // ondaQuellen liefert null ohne Projekt; dann haengt baueQuellenKontext nichts an.
+    onda: ondaQuellen(doc, project),
     vonHand,
     sperreSetzen: wert => { quellenlaufAktiv = wert },
     hatSchluessel,
