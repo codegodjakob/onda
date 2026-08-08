@@ -1,5 +1,5 @@
 import { istIntegritaetsfrageFuerCategory } from './textart-regeln.mjs'
-import { normalizeAnnotationFinding } from './annotation-contract.mjs'
+import { anmerkungsartVon, normalizeAnnotationFinding, tragweite, verbindlichkeit } from './annotation-contract.mjs'
 
 const UNDERSTANDING_DEFAULTS = Object.freeze({
   task: '',
@@ -248,13 +248,40 @@ export function isIntegrityCategory(category, textart) {
   return istIntegritaetsfrageFuerCategory(textart, category)
 }
 
-function compareFindings(a, b) {
+// Die Rangfolge, in der Hinweise an die Reihe kommen. Fuenf Stufen, jede mit einem
+// Grund — und das Alter ist ausdruecklich die letzte.
+//
+// Bis zum 8.8.2026 waren es drei: Grundursache, Integritaet, Alter. Damit standen ein
+// Kommafehler und eine zerfallende Gliederung gleichauf, sobald beides gleich alt war.
+// Jakob dazu: „was ist die Aufgabe, die die am meisten Impact hat, die man als
+// Naechstes umsetzen sollte?" — genau die Frage beantwortete die Sortierung nicht.
+//
+// 1. GRUNDURSACHE vor Symptom. Wer die Wurzel loest, loest die Folgen mit. Das Modell
+//    benennt sie selbst (istGrundursache → priority 'high').
+// 2. INTEGRITAET vor allem Uebrigen. Ein fehlender Beleg oder ein Widerspruch ist keine
+//    Frage des Geschmacks; was davon in dieser Textsorte bindet, sagt textart-regeln.
+// 3. TRAGWEITE: was weiter in den Text reicht, kommt zuerst. Das ist die Ordnung, die
+//    die Schreibzentrums-Didaktik seit vierzig Jahren vorgibt — Aufbau vor Grammatik —,
+//    und sie spart Arbeit: an Saetzen zu feilen, die eine Umstellung ohnehin loescht,
+//    ist verschwendet (docs/research/2026-08-05-feld-feedback-didaktik.md, Abschnitt 3).
+// 4. VERBINDLICHKEIT bei gleicher Tragweite: Fehler vor Empfehlung vor Geschmack.
+//    Erst hier — sonst kaeme der Kommafehler wieder vor der Gliederung.
+// 5. ALTER, und dann die Kennung, damit die Reihenfolge ueberhaupt eindeutig ist.
+export function vergleicheHinweise(a, b) {
   const priority = (PRIORITY_RANK[a.priority] ?? PRIORITY_RANK.normal)
     - (PRIORITY_RANK[b.priority] ?? PRIORITY_RANK.normal)
   if (priority) return priority
   const integrity = Number(isIntegrityCategory(b.category, b.textart))
     - Number(isIntegrityCategory(a.category, a.textart))
   if (integrity) return integrity
+
+  const artA = anmerkungsartVon(a)
+  const artB = anmerkungsartVon(b)
+  const reichweite = tragweite(artA) - tragweite(artB)
+  if (reichweite) return reichweite
+  const bindung = verbindlichkeit(artA) - verbindlichkeit(artB)
+  if (bindung) return bindung
+
   const created = (a.createdAt || 0) - (b.createdAt || 0)
   if (created) return created
   return String(a.id).localeCompare(String(b.id), 'de')
@@ -266,16 +293,16 @@ export function getFindingQueue(doc) {
   const openIds = new Set(open.map(finding => finding.id))
   const parked = open
     .filter(finding => finding.rootCauseId && openIds.has(finding.rootCauseId))
-    .sort(compareFindings)
+    .sort(vergleicheHinweise)
   const parkedIds = new Set(parked.map(finding => finding.id))
-  const ready = open.filter(finding => !parkedIds.has(finding.id)).sort(compareFindings)
+  const ready = open.filter(finding => !parkedIds.has(finding.id)).sort(vergleicheHinweise)
 
   return {
     current: ready[0] || null,
     upcoming: ready.slice(1),
     parked,
-    acceptedRisks: doc.findings.filter(finding => finding.status === 'risk-accepted').sort(compareFindings),
-    completed: doc.findings.filter(finding => COMPLETED_STATUSES.has(finding.status)).sort(compareFindings),
+    acceptedRisks: doc.findings.filter(finding => finding.status === 'risk-accepted').sort(vergleicheHinweise),
+    completed: doc.findings.filter(finding => COMPLETED_STATUSES.has(finding.status)).sort(vergleicheHinweise),
     pendingCount: open.length,
   }
 }

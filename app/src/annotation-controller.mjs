@@ -1,7 +1,7 @@
 import { isAnnotationKindAllowed, resolveAnnotationPresentation } from './annotation-contract.mjs'
+import { vergleicheHinweise } from './reasoning-model.mjs'
 
 const ANNOTATION_MODES = new Set(['text', 'notiz'])
-const PRIORITY_RANK = Object.freeze({ fehler: 0, empfehlung: 1, geschmack: 2 })
 const SAFE_CORRECTION_KINDS = new Set(['rechtschreibung', 'grammatik', 'zeichensetzung'])
 const MAX_UNDO_OPERATIONS = 20
 const SUPPRESSION_SCOPES = new Set(['once', 'document', 'personal'])
@@ -110,21 +110,15 @@ export function createSuppressionStore({ documentRecords = [], personalRecords =
   }
 }
 
+// EINE Rangfolge, nicht zwei. Bis zum 8.8.2026 sortierte diese Stelle anders als die
+// Warteschlange im Modell (reasoning-model.mjs): hier stand die Verbindlichkeit vorn
+// und die Grundursache erst danach, dort war es umgekehrt — und von Tragweite wusste
+// keine von beiden. Auf dem Schirm entschied diese hier, gemessen wurde die andere.
+//
+// Zwei Sortierungen fuer dieselbe Frage sind zwei Wahrheiten. Der Vergleich liegt jetzt
+// im Modell, das die Hinweise besitzt, und wird von hier nur benutzt.
 export function orderedAnnotations(findings, _moment = 'aufschauen') {
-  return openFindings(findings).sort((left, right) => {
-    const leftPresentation = resolveAnnotationPresentation(left)
-    const rightPresentation = resolveAnnotationPresentation(right)
-    const priority = (PRIORITY_RANK[leftPresentation.priority] ?? PRIORITY_RANK.geschmack)
-      - (PRIORITY_RANK[rightPresentation.priority] ?? PRIORITY_RANK.geschmack)
-    if (priority) return priority
-
-    const rootCause = Number(Boolean(right.istGrundursache)) - Number(Boolean(left.istGrundursache))
-    if (rootCause) return rootCause
-
-    const createdAt = (Number(left.createdAt) || 0) - (Number(right.createdAt) || 0)
-    if (createdAt) return createdAt
-    return String(left.id || '').localeCompare(String(right.id || ''), 'de')
-  })
+  return openFindings(findings).sort(vergleicheHinweise)
 }
 
 export function annotationSummary(findings) {

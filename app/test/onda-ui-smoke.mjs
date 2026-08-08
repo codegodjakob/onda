@@ -428,6 +428,7 @@ async function runShell(browser) {
   await assertQuellenFensterEineHandschrift(page)
   await assertGesteZeigtAufDieStelle(page)
   await assertEntscheidungOeffnetKeineKette(page)
+  await assertWichtigstesZuerst(page)
   await assertRuhigeLage(page)
 
   await page.setViewportSize({ width: 320, height: 760 })
@@ -599,6 +600,60 @@ async function assertZweiGesten(page) {
   assert.equal(await page.locator('#materialTree').isVisible(), true)
   assert.equal(await page.locator('#materialModal').count(), 0, 'Der Pfeil hat ein Fenster geöffnet')
   await page.locator('#materialTreeToggle').click()
+}
+
+// „Was ist die Anmerkung, die die höchste hat zum Gelingen des Textes?" (Jakob, 8.8.2026)
+//
+// Die Rangfolge selbst ist rein und in hinweis-rangfolge.test.mjs Fall für Fall
+// geprüft. Hier geht es um etwas anderes: dass sie auch WIRKLICH auf den Schirm kommt.
+// Bis zum 8.8.2026 sortierte die Oberfläche nach einer eigenen, abweichenden Regel —
+// eine Änderung am Modell hätte die Anzeige gar nicht erreicht.
+async function assertWichtigstesZuerst(page) {
+  await page.setViewportSize({ width: 1440, height: 900 })
+
+  const gezeigt = await page.evaluate(async () => {
+    const doc = window.AIWT.state.docs.find(kandidat => kandidat.id === window.AIWT.state.active)
+    const vorrat = { findings: doc.findings, decisions: doc.decisions, coach: doc.coach, lane: doc.lane }
+    doc.findings = []; doc.decisions = []; doc.coach = []; doc.lane = []
+
+    const bausteine = window.AIWT.__blockIdentityTestBridge.getBlocks().filter(k => k.text.length > 40)
+    // Der Kommafehler ist ÄLTER und ein Fehler; die Gliederung ist jünger und nur eine
+    // Empfehlung. Nach der alten Regel hätte der Kommafehler gewonnen — zweimal.
+    doc.findings.push(
+      {
+        id: 'rang-komma', status: 'open', placement: 'passage', blockId: bausteine[0].id,
+        target: bausteine[0].text.slice(0, 20), action: `${bausteine[0].text.slice(0, 20)}.`,
+        short: 'Beleg.', why: 'Beleg.', folge: 'Beleg.',
+        anmerkungsart: 'zeichensetzung', kiKategorie: 'sprache', priority: 'normal', createdAt: 1,
+      },
+      {
+        id: 'rang-gliederung', status: 'open', placement: 'passage', blockId: bausteine[1].id,
+        target: bausteine[1].text.slice(0, 20), action: `${bausteine[1].text.slice(0, 20)} — anders`,
+        short: 'Beleg.', why: 'Beleg.', folge: 'Beleg.',
+        anmerkungsart: 'gliederung', kiKategorie: 'struktur', priority: 'normal', createdAt: 999,
+      },
+    )
+    window.AIWT.flushSave()
+    window.AIWT.__workspaceTestBridge.reinitialize()
+    await new Promise(fertig => setTimeout(fertig, 500))
+
+    const welche = document.querySelector('#localAgentLayer .onda-annotation')?.dataset.findingId || null
+
+    doc.findings = vorrat.findings
+    doc.decisions = vorrat.decisions
+    doc.coach = vorrat.coach
+    doc.lane = vorrat.lane
+    window.AIWT.flushSave()
+    window.AIWT.__workspaceTestBridge.reinitialize()
+    return welche
+  })
+  await page.waitForTimeout(200)
+
+  assert.equal(
+    gezeigt,
+    'rang-gliederung',
+    'Auf dem Schirm steht der Kommafehler statt der Gliederung — die Oberfläche sortiert wieder nach eigener Regel',
+  )
 }
 
 // „Wenn ich eins wegklick, dann kommt direkt das Nächste. Das soll nicht so sein. […]

@@ -174,3 +174,63 @@ export function markierungsGestalt(kind) {
 export function gestaltFuerFinding(finding) {
   return markierungsGestalt(normalizeAnnotationFinding(finding).anmerkungsart)
 }
+
+// --- Was zuerst drankommt ----------------------------------------------------
+// „Was ist die Anmerkung, die die hoechste hat zum Gelingen des Textes? Also was ist
+// die Aufgabe, die die am meisten Impact hat, die man als Naechstes umsetzen sollte?"
+// (Jakob, 8.8.2026)
+//
+// Bis dahin sortierte die Warteschlange nach Grundursache, Integritaet und dann ALTER.
+// Ein Kommafehler und eine zerfallende Gliederung standen gleichauf, sobald beides
+// gleich alt war. Wirkung kam nicht vor.
+//
+// Zwei Masse, beide aus Feldern, die jede Art ohnehin traegt — nichts wird geraten und
+// nichts kostet einen zusaetzlichen Modellaufruf:
+//
+// TRAGWEITE: Wie weit reicht die Frage in den Text? Ein zerrissener roter Faden trifft
+// alles, eine Wortwahl ein Wort. Die Reihenfolge deckt sich mit dem, was die
+// Schreibzentrums-Didaktik seit vierzig Jahren sagt — Higher-Order Concerns
+// (These, Aufbau, Argumentation) vor Lower-Order Concerns (Grammatik, Wortwahl) —,
+// und zwar nicht zufaellig: hoehere Ordnung heisst weitere Reichweite. Die Begruendung
+// ist doppelt (docs/research/2026-08-05-feld-feedback-didaktik.md, Abschnitt 3):
+// HOC-Probleme zerstoeren das Verstehen, LOC-Probleme nur den Eindruck — und Arbeit an
+// Saetzen, die eine Umstellung ohnehin loescht, ist verschwendet.
+//
+// VERBINDLICHKEIT: Wie sehr ist es eine Frage von richtig und falsch? Ein Fehler ist
+// keine Meinung, eine Empfehlung schon eher, Geschmack ganz. Sie entscheidet ERST bei
+// gleicher Tragweite — sonst kaeme der Kommafehler wieder vor der Gliederung.
+const TRAGWEITE_JE_REICHWEITE = Object.freeze({
+  Text: 0,        // der ganze Text: roter Faden, Widerspruch, Terminologie
+  Titel: 1,       // die Ueberschrift nennt den ganzen Text
+  Abschnitt: 2,
+  Absatz: 3,
+  Satz: 4,
+  Wort: 5,
+  Notiz: 6,       // steht gar nicht im Fliesstext
+  Notizen: 6,
+})
+
+const VERBINDLICHKEIT_JE_PRIORITAET = Object.freeze({
+  fehler: 0,
+  empfehlung: 1,
+  geschmack: 2,
+})
+
+// Unbekanntes landet hinten, nie vorn. Eine Art, die niemand kennt, darf sich nicht an
+// die Spitze schieben — fail-closed wie ueberall im Haus.
+export function tragweite(kind) {
+  const reichweite = ANNOTATION_DEFINITIONS[kind]?.scope
+  return TRAGWEITE_JE_REICHWEITE[reichweite] ?? 9
+}
+
+export function verbindlichkeit(kind) {
+  const prioritaet = ANNOTATION_DEFINITIONS[kind]?.priority
+  return VERBINDLICHKEIT_JE_PRIORITAET[prioritaet] ?? 9
+}
+
+// Nur die Art, ohne das ganze Finding zu kopieren. normalizeAnnotationFinding legt bei
+// jedem Aufruf ein neues Objekt an; beim Sortieren geschieht das n·log n mal.
+export function anmerkungsartVon(finding) {
+  const source = finding && typeof finding === 'object' && !Array.isArray(finding) ? finding : {}
+  return ALL_KIND_SET.has(source.anmerkungsart) ? source.anmerkungsart : inferLegacyKind(source)
+}
