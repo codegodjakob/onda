@@ -27,6 +27,7 @@ import { baueErweiterungKontext } from '../../src/erweiterung-kontext.mjs'
 import { baueChatKontext } from '../../src/chat-kontext.mjs'
 import { baueVerstaendnisKontext } from '../../src/verstaendnis-kontext.mjs'
 import { baueQuellenKontext } from '../../src/quellen-kontext.mjs'
+import { baueBausteinKontext } from '../../src/bausteinarten-kontext.mjs'
 import { baueAnfrage } from '../../src/agent-tasks.mjs'
 import { updateLanguageProfile } from '../../src/language-profile.mjs'
 import { synchronizeClaimLedger } from '../../src/claim-ledger.mjs'
@@ -145,6 +146,18 @@ const KANAELE = Object.freeze({
     baue: onda => baueQuellenKontext({
       verstaendnis: { task: 'Aufsatz' },
       quellen: [{ id: 'q1', type: 'web', metadata: { title: { value: 'Eine Quelle' } } }],
+      onda,
+    }),
+  },
+  // Der Bausteinarten-Kanal kam mit dem Einsammeln der Zweig-Inventur (#33) dazu und war
+  // dabei zunaechst blind — genau der Befund von #30, nur eine Runde spaeter. Er fuehrt
+  // Projektverstaendnis UND Dokumenttext, also zwei gecachte Bloecke.
+  bausteinarten: {
+    gecacht: 2,
+    baue: onda => baueBausteinKontext({
+      verstaendnis: { task: 'Aufsatz' },
+      docText: 'Dokumenttext',
+      blocks: [{ id: 'b1', type: 'paragraph', role: 'paragraph', text: 'Ein Absatz.' }],
       onda,
     }),
   },
