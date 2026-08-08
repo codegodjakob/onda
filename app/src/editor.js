@@ -139,7 +139,7 @@ export function activeDoc() { return state.docs.find(d => d.id === state.active)
 
 // Ein Text trägt seine Coach- und Formulierungs-Karten bei sich — Altbestand,
 // den ensureReasoningModel in Hinweise übernimmt.
-function ensureDocShape(d) {
+export function ensureDocShape(d) {
   if (!Array.isArray(d.coach)) d.coach = []
   if (!Array.isArray(d.lane)) d.lane = []
   if (!d.provenance || typeof d.provenance !== 'object' || Array.isArray(d.provenance)) {
@@ -153,7 +153,7 @@ function ensureDocShape(d) {
   return d
 }
 // Ein Projekt trägt sein Material (Canvas) — geteilt über alle Texte des Projekts.
-function ensureProjectShape(p) {
+export function ensureProjectShape(p) {
   if (!Array.isArray(p.material)) p.material = []
   ensureProjectEvidenceShape(p)
   // Muss NACH ensureProjectEvidenceShape stehen: die Selbstheilung wirft Zuordnungen zu
@@ -201,6 +201,51 @@ export function purgeTrash() {
   state.docs = state.docs.filter(d => !(d.trashed && (d.trashedAt || 0) < cutoff))
 }
 
+// ---------- Der Schema-Stand eines gespeicherten Datenbestands ----------
+// Jede gespeicherte Datei traegt seit Schema 1 die Nummer der Fassung, die sie
+// geschrieben hat (`schemaVersion`). Fehlt sie ganz, stammt der Stand aus der Zeit
+// davor — dafuer steht die 0.
+export const VOR_SCHEMA_1 = 0
+
+export function leseSchemaStand(roheNummer) {
+  return Number.isFinite(roheNummer) ? Math.trunc(roheNummer) : VOR_SCHEMA_1
+}
+
+// Die sechs Schritte, die einen geladenen Stand auf die heutige Form zurechtbiegen —
+// in einer festen Reihenfolge, jeder mit Namen, damit nachlesbar ist, was wann
+// geschieht. Die Reihenfolge ist nicht beliebig: „Projekte" muss vor „Texte" laufen,
+// weil Texte an Projekten haengen, und beide vor „Beispieltext", der Texte und
+// Projekte anlegt bzw. ersetzt.
+//
+// Alle sechs sind Selbstheilung, keine Einbahn-Umstellung: jeder Schritt ergaenzt nur,
+// was fehlt, und laesst Vorhandenes stehen. Darum laufen sie auch dann, wenn der Stand
+// schon die heutige Nummer traegt — eine Datei kann von Hand bearbeitet oder beim
+// Speichern abgebrochen worden sein.
+const ZURECHTBIEGE_SCHRITTE = [
+  { name: 'Einstellungen', fuehreAus(d) { state.settings = normalizeSettings(d && d.settings) } },
+  { name: 'Gedaechtnisspeicher', fuehreAus(d) { state.memoryStore = ensureMemoryStore(d && d.memoryStore) } },
+  { name: 'Lauf-Journal', fuehreAus(d) { state.laufJournal = normalisiereLaufJournal(d && d.laufJournal) } },
+  // Struktur/Narrative/Material sind seit Schema 3 dabei — bestehende Projekte und
+  // Texte bekommen hier die leeren Felder nachgereicht.
+  { name: 'Projekte', fuehreAus() { state.projects.forEach(ensureProjectShape) } },
+  { name: 'Texte', fuehreAus() { state.docs.forEach(ensureDocShape) } },
+  // Das „Calm Technology"-Beispiel wandert einmalig in ein eigenes, echtes Projekt.
+  {
+    name: 'Beispieltext',
+    fuehreAus() {
+      migrateExampleSeed({
+        docs: state.docs,
+        projects: state.projects,
+        settings: state.settings,
+        targetVersion: EX_VERSION,
+        legacyBody: buildExampleBody(),
+        createProject: buildExampleProjectSeed,
+        createSeed: buildExampleDocumentSeed,
+      })
+    },
+  },
+]
+
 function load() {
   let d = null
   if (NATIVE) {
@@ -214,11 +259,22 @@ function load() {
       } catch (e) {}
     }
   }
+
+  // Die mitgeschriebene Schema-Nummer wird hier gelesen und ausgewertet. Bis hierher
+  // wurde `d.schemaVersion` beim Speichern gesetzt und beim Laden ignoriert.
+  const gefundenesSchema = leseSchemaStand(d && d.schemaVersion)
+  if (d && gefundenesSchema > SCHEMA) {
+    // Ein neueres Onda hat diesen Stand geschrieben. Wir laden ihn trotzdem, aber es
+    // muss im Protokoll stehen: was diese Fassung nicht kennt, schreibt sie beim
+    // naechsten Speichern nicht mit zurueck.
+    console.warn(`[laden] Dieser Stand traegt Schema ${gefundenesSchema}, diese Onda-Fassung kennt ${SCHEMA}. Er wurde von einer neueren Fassung geschrieben — Felder, die diese Fassung nicht kennt, gehen beim naechsten Speichern verloren.`)
+  } else if (d && gefundenesSchema < SCHEMA) {
+    const herkunft = gefundenesSchema === VOR_SCHEMA_1 ? 'ohne Schema-Nummer (vor Schema 1)' : `Schema ${gefundenesSchema}`
+    console.info(`[laden] Stand ${herkunft} wird auf Schema ${SCHEMA} gehoben — Reihenfolge: ${ZURECHTBIEGE_SCHRITTE.map(s => s.name).join(' → ')}`)
+  }
+
   state.docs = (d && Array.isArray(d.docs)) ? d.docs : []
   state.active = d ? d.active : null
-  state.settings = normalizeSettings(d && d.settings)
-  state.memoryStore = ensureMemoryStore(d && d.memoryStore)
-  state.laufJournal = normalisiereLaufJournal(d && d.laufJournal)
   // Projekte: bestehende Texte wandern in ein Standard-Projekt (Migration).
   state.projects = (d && Array.isArray(d.projects) && d.projects.length) ? d.projects : []
   if (!state.projects.length) {
@@ -227,19 +283,7 @@ function load() {
   state.docs.forEach(x => {
     if (!x.projectId || !state.projects.some(p => p.id === x.projectId)) x.projectId = state.projects[0].id
   })
-  // Struktur/Narrative/Material sind neu (Schema 3) — bestehende Texte bekommen leere Felder,
-  // das „Calm Technology"-Beispiel wandert einmalig in ein eigenes, echtes Projekt.
-  state.projects.forEach(ensureProjectShape)
-  state.docs.forEach(ensureDocShape)
-  migrateExampleSeed({
-    docs: state.docs,
-    projects: state.projects,
-    settings: state.settings,
-    targetVersion: EX_VERSION,
-    legacyBody: buildExampleBody(),
-    createProject: buildExampleProjectSeed,
-    createSeed: buildExampleDocumentSeed,
-  })
+  for (const schritt of ZURECHTBIEGE_SCHRITTE) schritt.fuehreAus(d)
   state.activeProject = (d && d.activeProject && state.projects.some(p => p.id === d.activeProject))
     ? d.activeProject : state.projects[0].id
   purgeTrash()

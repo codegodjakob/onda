@@ -5,17 +5,17 @@
 // der naechste Speichervorgang schreibt die zurechtgebogene Fassung zurueck.
 //
 // Diese Pruefung schiebt drei echte alte Staende (app/test/gespeicherte-staende/,
-// dort steht in LIESMICH.md, woher jeder stammt) durch die vier Zurechtbiege-Funktionen,
-// die als Modul importierbar sind, und weist FELD FUER FELD nach, dass nichts fehlt:
+// dort steht in LIESMICH.md, woher jeder stammt) durch ALLE SECHS Zurechtbiege-Funktionen
+// des Ladewegs und weist FELD FUER FELD nach, dass nichts fehlt:
 //
 //   normalizeSettings        aus src/settings-model.mjs
 //   ensureMemoryStore        aus src/memory-model.mjs
 //   normalisiereLaufJournal  aus src/lauf-journal.mjs
+//   ensureProjectShape       aus src/editor.js
+//   ensureDocShape           aus src/editor.js
 //   migrateExampleSeed       aus src/example-seed.mjs
 //
-// Die zwei uebrigen Schritte des Ladewegs, ensureDocShape und ensureProjectShape, liegen
-// heute noch lokal in src/editor.js und sind von hier aus nicht erreichbar. Der Rauchtest
-// gespeicherter-stand-smoke.mjs deckt sie im echten Browser mit ab.
+// Das ist auch die Reihenfolge, in der src/editor.js sie beim Laden abarbeitet.
 
 import test from 'node:test'
 import assert from 'node:assert/strict'
@@ -26,6 +26,38 @@ import { normalizeSettings } from '../src/settings-model.mjs'
 import { ensureMemoryStore } from '../src/memory-model.mjs'
 import { normalisiereLaufJournal } from '../src/lauf-journal.mjs'
 import { EXAMPLE_PROJECT_ID, migrateExampleSeed, seedBodySignature } from '../src/example-seed.mjs'
+
+// ensureDocShape und ensureProjectShape liegen in src/editor.js — der Datei, die auch
+// den Tiptap-Editor aufbaut. Damit sie sich hier ueberhaupt laden laesst, braucht Node
+// eine handbreite Attrappe von `window` und `document`. Die Attrappe tut nichts; sie
+// existiert nur, damit die Bibliotheken beim Import nicht ins Leere greifen. Deshalb
+// steht der Import als `await import(...)` HINTER der Attrappe und nicht oben bei den
+// anderen — die stehenden `import`-Zeilen laufen sonst zuerst.
+function attrappenElement() {
+  return {
+    style: {}, dataset: {}, children: [],
+    classList: { add() {}, remove() {}, toggle() {}, contains() { return false } },
+    appendChild() {}, setAttribute() {}, addEventListener() {},
+    querySelector() { return null }, querySelectorAll() { return [] },
+  }
+}
+globalThis.document = {
+  documentElement: attrappenElement(), body: attrappenElement(), head: attrappenElement(),
+  addEventListener() {}, removeEventListener() {},
+  querySelector() { return null }, querySelectorAll() { return [] },
+  getElementById() { return null },
+  createElement() { return attrappenElement() }, createTextNode() { return {} },
+}
+globalThis.window = {
+  webkit: undefined, addEventListener() {}, removeEventListener() {},
+  matchMedia: () => ({ matches: false, addEventListener() {}, addListener() {} }),
+  document: globalThis.document,
+  navigator: { userAgent: 'node', platform: 'node' },
+  getSelection() { return null },
+}
+globalThis.localStorage = { getItem() { return null }, setItem() {} }
+
+const { ensureDocShape, ensureProjectShape } = await import('../src/editor.js')
 
 const STAENDE = ['stand-schema-08.json', 'stand-schema-10.json', 'stand-schema-12.json']
 
@@ -179,6 +211,89 @@ test('stand-schema-12.json: das Lauf-Journal ueberlebt mit allen 29 gezeigten An
   )
 })
 
+// ---------- ensureProjectShape ----------
+
+test('stand-schema-08.json: ein Projekt aus der Zeit vor den Quellen bekommt die fehlenden Faecher — und behaelt sein Material', () => {
+  const stand = ladeStand('stand-schema-08.json')
+  const projekt = ensureProjectShape(structuredClone(stand.projects[0]))
+
+  jedesFeldUeberlebt(stand.projects[0], projekt)
+
+  assert.equal(projekt.id, 'p-uni')
+  assert.ok(Array.isArray(projekt.material) && projekt.material.length === stand.projects[0].material.length,
+    'das Material des Projekts hat den Ladeweg nicht ueberlebt')
+  // Die Faecher, die es zu Schema 8 noch nicht gab, entstehen leer statt zu fehlen.
+  for (const fach of ['sources', 'quellenThemen', 'researchRuns', 'languageReports', 'finalAudits']) {
+    assert.ok(fach in projekt, `das Fach ${fach} fehlt nach ensureProjectShape`)
+  }
+})
+
+test('stand-schema-10.json und stand-schema-12.json: jedes Projekt ueberlebt ensureProjectShape Feld fuer Feld', () => {
+  for (const datei of ['stand-schema-10.json', 'stand-schema-12.json']) {
+    const stand = ladeStand(datei)
+    stand.projects.forEach(original => {
+      const projekt = ensureProjectShape(structuredClone(original))
+      jedesFeldUeberlebt(original, projekt, { pfad: `${datei}:${original.id}` })
+    })
+  }
+})
+
+test('ensureProjectShape laeuft zweimal hintereinander zum selben Ergebnis — es ist Selbstheilung, keine Einbahn-Umstellung', () => {
+  const stand = ladeStand('stand-schema-08.json')
+  const einmal = ensureProjectShape(structuredClone(stand.projects[0]))
+  const zweimal = ensureProjectShape(structuredClone(einmal))
+  assert.deepEqual(zweimal, einmal, 'ein zweiter Durchlauf hat das Projekt veraendert')
+})
+
+// ---------- ensureDocShape ----------
+
+test('stand-schema-08.json: ein Text ohne Anmerkungsfaecher bekommt sie leer — und behaelt seinen Wortlaut', () => {
+  const stand = ladeStand('stand-schema-08.json')
+  const ohneFaecher = stand.docs.find(d => d.id === 'd-alt-notizen')
+  assert.equal(ohneFaecher.coach, undefined, 'der Stand soll gerade einen Text ohne Coach-Karten tragen')
+
+  const text = ensureDocShape(structuredClone(ohneFaecher))
+
+  jedesFeldUeberlebt(ohneFaecher, text)
+  assert.equal(text.body, ohneFaecher.body, 'der Wortlaut wurde veraendert')
+  assert.deepEqual(text.coach, [])
+  assert.deepEqual(text.lane, [])
+  assert.equal(text.provenance.actor, 'user', 'die fehlende Herkunft entsteht als Nutzer-Herkunft')
+  assert.equal(text.provenance.createdAt, ohneFaecher.updated, 'die erfundene Herkunftszeit nimmt den letzten Stand des Textes')
+})
+
+test('stand-schema-10.json: eine Anmerkung ohne Art wird zur Formulierung, und keine Anmerkung geht verloren', () => {
+  const stand = ladeStand('stand-schema-10.json')
+  const original = stand.docs.find(d => d.id === 'd-zehn-essay')
+  const ohneArt = original.lane.filter(c => !c.kind)
+  assert.ok(ohneArt.length >= 1, 'der Stand soll gerade eine Anmerkung ohne Art tragen')
+
+  const text = ensureDocShape(structuredClone(original))
+
+  jedesFeldUeberlebt(original, text)
+  assert.equal(text.lane.length, original.lane.length, 'es sind Anmerkungen verschwunden')
+  text.lane.forEach(c => assert.ok(c.kind, 'eine Anmerkung ist ohne Art geblieben'))
+  ohneArt.forEach(alt => {
+    const jetzt = text.lane.find(c => c.id === alt.id)
+    assert.equal(jetzt.kind, 'form', 'die Anmerkung ohne Art wurde nicht zur Formulierung')
+  })
+})
+
+test('stand-schema-12.json: jeder Text ueberlebt ensureDocShape Feld fuer Feld', () => {
+  const stand = ladeStand('stand-schema-12.json')
+  stand.docs.forEach(original => {
+    const text = ensureDocShape(structuredClone(original))
+    jedesFeldUeberlebt(original, text, { pfad: `d-12:${original.id}` })
+  })
+})
+
+test('ensureDocShape laeuft zweimal hintereinander zum selben Ergebnis', () => {
+  const stand = ladeStand('stand-schema-08.json')
+  const einmal = ensureDocShape(structuredClone(stand.docs[0]))
+  const zweimal = ensureDocShape(structuredClone(einmal))
+  assert.deepEqual(zweimal, einmal, 'ein zweiter Durchlauf hat den Text veraendert')
+})
+
 // ---------- migrateExampleSeed ----------
 
 test('stand-schema-08.json: ohne Beispielprojekt entsteht eines — und kein eigener Text geht dabei verloren', () => {
@@ -265,14 +380,22 @@ test('stand-schema-12.json: ein angefasster Beispieltext wird nicht ueberschrieb
   assert.notEqual(danach.exampleSeed, true, 'der angefasste Text traegt weiterhin die Saat-Markierung und waere beim naechsten Sprung faellig')
 })
 
-test('alle drei Staende: jeder Text und jedes Projekt ist nach allen vier Schritten noch da', () => {
+// ---------- alle sechs Schritte hintereinander, in der Reihenfolge des Ladewegs ----------
+
+test('alle drei Staende: jeder Text und jedes Projekt ist nach allen SECHS Schritten noch da', () => {
   for (const datei of STAENDE) {
     const stand = ladeStand(datei)
     const docs = structuredClone(stand.docs)
     const projects = structuredClone(stand.projects)
+    // 1. normalizeSettings, 2. ensureMemoryStore, 3. normalisiereLaufJournal
     const settings = normalizeSettings(stand.settings, '2026-08')
     ensureMemoryStore(structuredClone(stand.memoryStore ?? null))
     normalisiereLaufJournal(structuredClone(stand.laufJournal ?? null))
+    // 4. ensureProjectShape, 5. ensureDocShape — in genau dieser Reihenfolge, weil
+    // Texte an Projekten haengen.
+    projects.forEach(ensureProjectShape)
+    docs.forEach(ensureDocShape)
+    // 6. migrateExampleSeed
     migrateExampleSeed({
       docs,
       projects,
