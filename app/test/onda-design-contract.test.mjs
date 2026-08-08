@@ -2,6 +2,8 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 
+import { SCHULTER } from '../src/onda-blase.mjs'
+
 const tokensUrl = new URL('../src/onda-tokens.css', import.meta.url)
 const styleUrl = new URL('../src/style.css', import.meta.url)
 const shellUrl = new URL('../src/onda-shell.css', import.meta.url)
@@ -349,4 +351,28 @@ test('Die Sprechblase trägt dieselbe Fläche, Linie und Tiefe wie das Fenster, 
   assert.match(konturFenster, /animation:\s*none/, 'Die Ankunftsbewegung reißt den Sitz vom Orb los')
   assert.match(konturFenster, /background:\s*transparent/)
   assert.doesNotMatch(konturFenster, /border-radius/, 'Der Radius bleibt am Fenster stehen — er ist die Rückfallebene')
+
+  // DIE SCHULTER STEHT ZWEIMAL: in onda-blase.mjs gerechnet, in style.css als Zahl.
+  // CSS kann die Wurzel nicht ziehen, die in KOPF_VERSATZ steckt — deshalb die Zahl.
+  // Laufen die beiden auseinander, sitzt die Blase nicht mehr mittig, sondern um die
+  // Differenz daneben, und niemand sähe, woher der Versatz kommt.
+  const geschrieben = css.match(/--blase-schulter:\s*([\d.]+)px/)
+  assert.ok(geschrieben, 'In style.css steht keine --blase-schulter')
+  assert.equal(Number(geschrieben[1]), Math.round(SCHULTER * 100) / 100,
+    'Die Schulter in style.css weicht von der gerechneten in onda-blase.mjs ab')
+
+  // Die Mitte ist wirklich die Mitte: die halbe Restfläche, minus dem, was Orb und
+  // Schulter oben schon belegen.
+  const mittig = css.match(/--blase-hals-mittig:\s*calc\(([^;]+)\);/)
+  assert.ok(mittig, 'Es gibt keine Rechnung für die mittige Lage')
+  assert.match(mittig[1], /\(100dvh - var\(--blase-koerper\)\) \/ 2/,
+    'Die mittige Lage rechnet nicht aus der Mitte')
+
+  // Und voreingestellt ist die MISCHUNG aus mittig und lang — Jakobs Ansage vom
+  // 8. August 2026. Das arithmetische Mittel, nicht das eine oder das andere.
+  const wunsch = css.match(/--blase-hals-wunsch:\s*calc\(([^;]+)\);/)
+  assert.ok(wunsch, 'Es gibt keine Rechnung für die Halslänge')
+  assert.match(wunsch[1], /var\(--blase-hals-mittig\)\s*\+\s*var\(--blase-hals-lang\)/,
+    'Die Halslänge mischt nicht mittig und lang')
+  assert.match(wunsch[1], /\)\s*\/\s*2/, 'Die Mischung ist kein Mittelwert')
 })

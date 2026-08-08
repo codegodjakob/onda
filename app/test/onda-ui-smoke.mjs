@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict'
-import { createServer } from 'node:http'
-import { readFile, mkdir } from 'node:fs/promises'
-import { extname, resolve, sep } from 'node:path'
+import { mkdir } from 'node:fs/promises'
+import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
 import AxeBuilder from '@axe-core/playwright'
@@ -9,38 +8,15 @@ import AxeBuilder from '@axe-core/playwright'
 import { ALL_ANNOTATION_KINDS } from '../src/annotation-contract.mjs'
 import { MINDEST_BREITE, MINDEST_HOEHE } from '../src/onda-blase.mjs'
 import { ensureProjectSidebarOpen } from './helpers/onda-navigation.mjs'
+import { starteAppServer } from './helpers/onda-server.mjs'
 
 const appRoot = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const requestedSection = process.argv.includes('--section')
   ? process.argv[process.argv.indexOf('--section') + 1]
   : 'all'
 const screenshots = process.argv.includes('--screenshots')
-const mimeByExtension = {
-  '.css': 'text/css', '.html': 'text/html', '.js': 'text/javascript',
-  '.mjs': 'text/javascript', '.woff2': 'font/woff2',
-}
 
-let staticServer = null
-let baseUrl = process.env.AIWT_URL
-if (!baseUrl) {
-  staticServer = createServer(async (request, response) => {
-    try {
-      const pathname = decodeURIComponent(new URL(request.url, 'http://127.0.0.1').pathname)
-      const target = resolve(appRoot, pathname === '/' ? 'index.html' : pathname.slice(1))
-      if (target !== appRoot && !target.startsWith(`${appRoot}${sep}`)) {
-        response.writeHead(403).end()
-        return
-      }
-      const content = await readFile(target)
-      response.writeHead(200, { 'content-type': mimeByExtension[extname(target)] || 'application/octet-stream' })
-      response.end(content)
-    } catch {
-      response.writeHead(404).end()
-    }
-  })
-  await new Promise(resolveListening => staticServer.listen(0, '127.0.0.1', resolveListening))
-  baseUrl = `http://127.0.0.1:${staticServer.address().port}/`
-}
+const { baseUrl, stop: serverStoppen } = await starteAppServer()
 
 async function runComponents(browser) {
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 } })
@@ -489,6 +465,7 @@ async function runShell(browser) {
   await assertTextNeverShrinks(page)
   await assertOrbStaysPut(page)
   await assertBlaseWaechstAusDemOrb(page)
+  await assertBlaseSitztMittigAmHals(page)
   await assertKlinkeBleibtStehen(page)
   await assertDreiAbschnitte(page)
   await assertZweiGesten(page)
@@ -1195,10 +1172,15 @@ async function assertBlaseWaechstAusDemOrb(page) {
 
   // (c) Der gezeichnete Sitzkreis liegt auf dem Orb. Aus dem Pfad gelesen: die beiden
   //     letzten Bögen enden am obersten und am rechtesten Punkt des Sitzes.
+  // Der Pfad umläuft den Sitz in zwei Bögen. Seit der Hals mittig unter dem Orb hängt,
+  // ist der zweite davon derjenige, der am OBERSTEN Punkt des Sitzes endet — dort
+  // fängt der Pfad an und dort hört er auf. Die Mitte des Sitzes liegt einen Radius
+  // darunter. (Vorher endete ein Bogen am obersten und einer am rechtesten Punkt; da
+  // ließ sich die Mitte aus zwei verschiedenen Bögen zusammensetzen.)
   const sitzAusPfad = d => {
     const boegen = [...d.matchAll(/A 22 22 0 0 1 (-?[\d.]+) (-?[\d.]+)/g)]
     assert.equal(boegen.length, 2, `Der Pfad hat ${boegen.length} Sitzbögen statt zwei: ${d}`)
-    return { x: Number(boegen[0][1]), y: Number(boegen[1][2]) }
+    return { x: Number(boegen[1][1]), y: Number(boegen[1][2]) + 22 }
   }
   assert.ok(lage.bilder.length >= 10, `Nur ${lage.bilder.length} Zwischenbilder — die Blase springt statt zu wachsen`)
   const letztes = sitzAusPfad(lage.bilder[lage.bilder.length - 1])
@@ -1246,6 +1228,99 @@ async function assertBlaseWaechstAusDemOrb(page) {
   }))
   assert.equal(danach.konturVersteckt, true, 'Die Kontur bleibt nach dem Schließen stehen')
   assert.equal(danach.klassen, '', `Am Fenster bleibt "${danach.klassen}" hängen`)
+}
+
+// „länge: mischung aus mittig und lang" — Jakob am 8. August 2026. Voreingestellt ist
+// deshalb das arithmetische Mittel aus beiden Enden: der Körper wandert mit der
+// Fensterhöhe zur Mitte, aber nur halb so schnell. Beide Enden gibt es weiter einzeln,
+// und „mittig" muss dann auch wirklich mittig sitzen.
+//
+// Geprüft wird an der SILHOUETTE, nicht am Kasten: der Kasten reicht bis zum Orb
+// hinauf, sichtbar ist aber erst der Körper. Seine Oberkante ist der Endpunkt des
+// dritten 16er-Bogens (unten rechts, unten links, oben links — in dieser Reihenfolge
+// läuft der Pfad). Wer stattdessen den Kasten misst, bekommt jede Halslänge als
+// „mittig" bestätigt.
+async function assertBlaseSitztMittigAmHals(page) {
+  const messen = () => page.evaluate(() => {
+    const kasten = document.getElementById('agentWidget').getBoundingClientRect()
+    const orb = document.getElementById('ondaAura').getBoundingClientRect()
+    const d = document.querySelector('.onda-blase__pfad').getAttribute('d')
+    const ecken = [...d.matchAll(/A 16 16 0 0 1 (-?[\d.]+) (-?[\d.]+)/g)]
+    const stil = getComputedStyle(document.getElementById('editorView'))
+    const zahl = name => parseFloat(stil.getPropertyValue(name))
+    return {
+      oben: kasten.top,
+      unten: kasten.bottom,
+      kante: ecken.length === 3 ? Number(ecken[2][2]) : null,
+      eckenAnzahl: ecken.length,
+      orbUnten: orb.bottom,
+      hals: zahl('--blase-hals'),
+      halsMittig: zahl('--blase-hals-mittig'),
+      halsLang: zahl('--blase-hals-lang'),
+      schulter: zahl('--blase-schulter'),
+      fensterhoehe: window.innerHeight,
+    }
+  })
+
+  for (const hoehe of [900, 1100]) {
+    await page.setViewportSize({ width: 1440, height: hoehe })
+    await page.waitForTimeout(30)
+    await page.evaluate(() => {
+      if (!document.getElementById('editorView').classList.contains('is-agent-open')) {
+        document.getElementById('ondaAura').click()
+      }
+    })
+    await page.waitForFunction(() => !document.getElementById('agentWidget').classList.contains('waechst'))
+
+    const lage = await messen()
+    assert.equal(lage.eckenAnzahl, 3, `Der Pfad hat ${lage.eckenAnzahl} Ecken statt drei`)
+
+    // Voreingestellt ist die Mischung: genau zwischen den beiden Enden, nicht auf
+    // einem davon. Das ist der Unterschied zwischen „gemischt" und „einfach mittig".
+    assert.ok(
+      Math.abs(lage.hals - (lage.halsMittig + lage.halsLang) / 2) <= 0.5,
+      `Bei ${hoehe}px ist der Hals ${lage.hals.toFixed(1)}px statt der Mischung`
+      + ` ${((lage.halsMittig + lage.halsLang) / 2).toFixed(1)}px`,
+    )
+    assert.ok(lage.halsMittig > lage.halsLang, 'Die Mischung hat bei dieser Höhe keine zwei Enden')
+
+    // Der Hals ist wirklich eine Strecke und keine Behauptung: der Körper fängt
+    // deutlich unter dem Orb an. Vor dieser Änderung überlappten sich beide.
+    const koerperOben = lage.oben + lage.kante
+    assert.ok(
+      koerperOben > lage.orbUnten + 40,
+      `Der Hals ist nur ${(koerperOben - lage.orbUnten).toFixed(1)}px lang — die Blase klebt wieder am Orb`,
+    )
+
+    // Und die Rechnung in CSS deckt sich mit dem, was gezeichnet wurde. Laufen die
+    // beiden auseinander, stimmt die Lage nur zufällig.
+    assert.ok(
+      Math.abs(lage.kante - (lage.schulter + lage.hals)) <= 1,
+      `Gezeichnete Oberkante ${lage.kante.toFixed(2)} gegen gerechnete ${(lage.schulter + lage.hals).toFixed(2)}`,
+    )
+
+    // Und das eine Ende der Mischung hält sein Versprechen — nachgerechnet statt
+    // umgeschaltet, denn den Umschalter gibt es nicht mehr: WÄRE der Hals so lang wie
+    // --blase-hals-mittig, dann säße der Körper wirklich in der Mitte, oben und unten
+    // derselbe Rand. Ohne diese Probe wäre „gemischt" der Mittelwert aus einer Zahl,
+    // die niemand mehr prüft.
+    const koerper = (lage.unten - lage.oben) - lage.schulter - lage.hals
+    const randObenMittig = lage.oben + lage.schulter + lage.halsMittig
+    const randUntenMittig = lage.fensterhoehe - (randObenMittig + koerper)
+    assert.ok(
+      Math.abs(randObenMittig - randUntenMittig) <= 1.5,
+      `Bei ${hoehe}px stellt --blase-hals-mittig den Körper nicht mittig:`
+      + ` ${randObenMittig.toFixed(1)}px oben gegen ${randUntenMittig.toFixed(1)}px unten`,
+    )
+  }
+
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await page.evaluate(() => {
+    if (document.getElementById('editorView').classList.contains('is-agent-open')) {
+      document.getElementById('ondaAura').click()
+    }
+  })
+  await page.waitForTimeout(400)
 }
 
 async function assertOndaSurface(locator, name, { radius = '0px' } = {}) {
@@ -1422,5 +1497,5 @@ try {
   console.log(`ONDA UI ${requestedSection}: PASS`)
 } finally {
   await browser.close()
-  if (staticServer) await new Promise(resolveClose => staticServer.close(resolveClose))
+  await serverStoppen()
 }

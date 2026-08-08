@@ -6,8 +6,9 @@ import {
   ETAPPE_A_USAGE,
   ETAPPE_A_VERSTAENDNIS,
 } from '../evals/fixtures/etappe-a-transport.mjs'
+import { starteAppServer } from './helpers/onda-server.mjs'
 
-const baseUrl = process.env.AIWT_URL || 'http://127.0.0.1:4173/'
+const { baseUrl } = await starteAppServer()
 
 async function oeffneFrischeApp(page) {
   await page.goto(baseUrl, { waitUntil: 'networkidle' })

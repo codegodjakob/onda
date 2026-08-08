@@ -49,5 +49,10 @@ node evals/run-fertigzustand.mjs   # Fertigzustand frisch messen
 node evals/zeichne-stand.mjs       # Diagramm dazu
 ```
 
-Browser-Prüfungen brauchen einen lokalen Server auf Port 4173 (`cd app && python3 -m
-http.server 4173`).
+Browser-Prüfungen bringen ihren Server selbst mit, auf einem Port, den das
+Betriebssystem vergibt. Man muss also vorher nichts starten. Wer ausdrücklich gegen
+einen laufenden Server prüfen will, setzt `AIWT_URL`.
+
+Der feste Port 4173 ist am 8. August 2026 abgeschafft worden: er gehört dem, der ihn
+zuerst belegt, und bei zwei gleichzeitigen Arbeitskopien prüfte der Test dann die
+falsche. `mac/build.sh` lief davon zufällig rot. Siehe `app/test/helpers/onda-server.mjs`.

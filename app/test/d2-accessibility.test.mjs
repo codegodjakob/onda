@@ -1,44 +1,11 @@
 import assert from 'node:assert/strict'
 import AxeBuilder from '@axe-core/playwright'
 import { chromium } from 'playwright'
-import { createServer } from 'node:http'
-import { readFile } from 'node:fs/promises'
-import { extname, resolve, sep } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { starteAppServer } from './helpers/onda-server.mjs'
 
 const tags = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']
-const appRoot = resolve(fileURLToPath(new URL('..', import.meta.url)))
-const mimeByExtension = {
-  '.css': 'text/css',
-  '.html': 'text/html',
-  '.js': 'text/javascript',
-  '.json': 'application/json',
-  '.mjs': 'text/javascript',
-  '.woff2': 'font/woff2',
-}
 
-let staticServer = null
-let baseUrl = process.env.AIWT_URL
-if (!baseUrl) {
-  staticServer = createServer(async (request, response) => {
-    try {
-      const pathname = decodeURIComponent(new URL(request.url, 'http://127.0.0.1').pathname)
-      const target = resolve(appRoot, pathname === '/' ? 'index.html' : pathname.slice(1))
-      if (target !== appRoot && !target.startsWith(`${appRoot}${sep}`)) {
-        response.writeHead(403).end()
-        return
-      }
-      const content = await readFile(target)
-      response.writeHead(200, { 'content-type': mimeByExtension[extname(target)] || 'application/octet-stream' })
-      response.end(content)
-    } catch {
-      response.writeHead(404).end()
-    }
-  })
-  await new Promise(resolveListening => staticServer.listen(0, '127.0.0.1', resolveListening))
-  const address = staticServer.address()
-  baseUrl = `http://127.0.0.1:${address.port}/`
-}
+const { baseUrl, stop: serverStoppen } = await starteAppServer()
 
 async function assertAxe(page, state) {
   await page.evaluate(async () => {
@@ -208,5 +175,5 @@ try {
   console.log('SYSTEM-11 axe WCAG 2.1 A/AA: PASS')
 } finally {
   await browser.close()
-  if (staticServer) await new Promise(resolveClose => staticServer.close(resolveClose))
+  await serverStoppen()
 }

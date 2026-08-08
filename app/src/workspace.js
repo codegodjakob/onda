@@ -147,6 +147,7 @@ import {
   kurveStandard,
   laesseBlaseWachsen,
   tokenDauer,
+  tokenLaenge,
 } from './onda-blase.mjs'
 
 const BLOCK_TYPES = [
@@ -635,11 +636,18 @@ function blaseAntriebAbbrechen() {
   blaseFaeltZurueck = false
 }
 
+// Wie lang der Hals gerade ist, entscheidet style.css — bei der Fassung „mittig"
+// rechnet es die Strecke aus der Fensterhoehe aus. Hier wird nur gelesen.
+function blaseHalsLaenge(fenster) {
+  return tokenLaenge('--blase-hals', fenster)
+}
+
 function blaseMisstUndZeichnet(fenster, blase) {
   const kasten = fenster.getBoundingClientRect()
-  if (!blaseIstMoeglich(kasten.width, kasten.height)) return null
+  const hals = blaseHalsLaenge(fenster)
+  if (!blaseIstMoeglich(kasten.width, kasten.height, undefined, hals)) return null
   if (!blaseKontur || blaseKontur.svg !== blase) blaseKontur = erzeugeKontur(blase)
-  blaseKontur?.setzeMasse(kasten.width, kasten.height)
+  blaseKontur?.setzeMasse(kasten.width, kasten.height, hals)
   return blaseKontur
 }
 
@@ -768,7 +776,12 @@ function blaseBeobachten() {
     kontur.zeichne(1, 1)
     blaseZeigen(ui.blase, true)
   })
-  beobachter.observe(ui.agentWidget)
+  // AUSDRUECKLICH die Randbox. Der Standard waere der Inhaltskasten — und den haelt
+  // das obere Polster konstant, weil es genau um die Halslaenge waechst. Bei einem
+  // hoeheren Fenster wurde der Kasten also 100px groesser, der Inhaltskasten blieb auf
+  // den Pixel gleich, der Beobachter schwieg, und die Kontur behielt den alten Hals:
+  // die Blase sass sichtbar zu hoch, ohne dass irgendetwas fehlgeschlagen waere.
+  beobachter.observe(ui.agentWidget, { box: 'border-box' })
   blaseBeobachter = beobachter
   return () => {
     beobachter.disconnect()

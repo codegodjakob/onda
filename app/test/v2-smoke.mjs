@@ -2,11 +2,12 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { collapseProjectSidebar, ensureProjectSidebarOpen } from './helpers/onda-navigation.mjs'
+import { starteAppServer } from './helpers/onda-server.mjs'
 
 const require = createRequire(import.meta.url)
 const { chromium } = require('playwright')
 
-const baseUrl = process.env.AIWT_URL || 'http://127.0.0.1:4173/'
+const { baseUrl } = await starteAppServer()
 const screenshotDir = process.env.AIWT_SCREENSHOT_DIR || '/tmp'
 
 function assertOndaRahmenSteht() {

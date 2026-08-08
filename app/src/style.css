@@ -1917,6 +1917,33 @@ body.zen #title:focus { opacity: 1; }
   animation: ondaHintIn var(--dur-normal) var(--ease-out);
 }
 
+/* ANGEMELDET, damit JavaScript die Halslaenge LESEN kann. Eine gewoehnliche
+   CSS-Eigene-Eigenschaft gibt getComputedStyle den Rechenausdruck zurueck, nicht das
+   Ergebnis — aus "clamp(0px, calc(…), …)" wird beim Auslesen keine Zahl. Mit einer
+   Anmeldung als <length> rechnet der Browser sie aus und liefert Pixel. So bleibt die
+   Formel an genau EINER Stelle stehen, hier, und wird in onda-blase.mjs nicht ein
+   zweites Mal geschrieben. */
+@property --blase-hals {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 0px;
+}
+
+/* Die beiden Enden der Mischung ebenfalls angemeldet — nicht fuer das Zeichnen,
+   sondern damit der Rauchtest nachrechnen kann, ob die Voreinstellung wirklich in der
+   Mitte zwischen ihnen liegt. Ohne Anmeldung liest er den Rechenausdruck. */
+@property --blase-hals-mittig {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 0px;
+}
+
+@property --blase-hals-lang {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 96px;
+}
+
 /* DIE BLASE SITZT AM ORB — und der Sitz ist keine Schaetzung, sondern gerechnet.
    .onda-topbar__aside steht fest bei right: var(--space-5), ist var(--topbar-height)
    hoch und zentriert seine Kinder; #ondaAura ist das letzte Kind und 44px gross. Also
@@ -1928,12 +1955,48 @@ body.zen #title:focus { opacity: 1; }
   --blase-rechts: var(--space-5);
   --blase-oben: calc((var(--topbar-height) - var(--orb-tastflaeche)) / 2);
   --blase-breite: min(380px, calc(100vw - 2 * var(--space-5)));
-  --blase-hoehe: min(560px, calc(100dvh - var(--blase-oben) - var(--space-5)));
+
+  /* DER HALS. Vom Sitz bis zur Oberkante des Koerpers.
+
+     Die Laenge ist Jakobs Ansage vom 8. August 2026: "länge: mischung aus mittig und
+     lang". Sie steht als arithmetisches Mittel zweier Rechnungen da:
+
+       --blase-hals-mittig  stellt den Koerper senkrecht in die Mitte. Die Laenge ist
+                            dann keine Wahl mehr, sondern eine Folge — und laeuft bei
+                            hohen Fenstern weit (320px bei 1300px Fensterhoehe).
+       --blase-hals-lang    fest 96px. Ruehrt sich nie, egal wie hoch das Fenster ist.
+
+     Die Blase wandert also mit dem Fenster zur Mitte hin, aber nur halb so schnell.
+     Bei 900px Fensterhoehe sind das 107px, bei 1300px 207px. */
+
+  /* Die Schulter: vom oberen Kastenrand bis zur Oberkante des Koerpers, wenn der
+     Hals null lang ist. Der Orb belegt davon 44px, der Rest ist der kuerzeste Weg, auf
+     dem die Halskurve den Kreis noch verlassen und sich zur Kante drehen kann. Steht
+     auch in onda-blase.mjs als SCHULTER — onda-design-contract.test.mjs haelt beide
+     Zahlen zusammen. */
+  --blase-schulter: 62px;
+  /* Der kleinste Rand ueber dem Koerper, und er ist abgeleitet: Orb und Schulter
+     belegen die Strecke ohnehin, ein Fingerbreit Luft kommt dazu. Waere der Rand
+     kleiner, klemmte der Hals bei niedrigen Fenstern auf null, und die Blase saesse
+     nicht mehr mittig, ohne dass irgendwo etwas fehlschluege. */
+  --blase-rand: calc(var(--blase-oben) + var(--blase-schulter) + var(--space-4));
+  /* 528px ist die Koerperhoehe von vorher: 560 minus der damaligen Schulter von 32. */
+  --blase-koerper: min(528px, calc(100dvh - 2 * var(--blase-rand)));
+  --blase-hals-mittig: calc((100dvh - var(--blase-koerper)) / 2 - var(--blase-oben) - var(--blase-schulter));
+  --blase-hals-lang: 96px;
+  --blase-hals-wunsch: calc((var(--blase-hals-mittig) + var(--blase-hals-lang)) / 2);
+  /* clamp faengt die kurzen Fenster ab: unten darf der Koerper nicht hinauslaufen,
+     oben darf der Hals nicht negativ werden — ein negativer Hals zoege die Kehle
+     durch den Sitz, und der Pfad schluege Haken. */
+  --blase-hals: clamp(0px, var(--blase-hals-wunsch), max(0px, calc(100dvh - var(--blase-oben) - var(--blase-schulter) - var(--blase-koerper) - var(--space-5))));
+  --blase-hoehe: calc(var(--blase-schulter) + var(--blase-hals) + var(--blase-koerper));
+
   /* Derselbe Schatten wie --shadow-lg, nur in der Schreibweise, die einer Silhouette
      folgen kann statt einem Rechteck. Die Zahlen muessen mit --shadow-lg
      uebereinstimmen — onda-design-contract.test.mjs nagelt das fest. */
   --blase-schatten: drop-shadow(0 4px 8px rgba(28, 26, 23, 0.06)) drop-shadow(0 16px 32px rgba(28, 26, 23, 0.1));
 }
+
 
 [data-theme="dark"] #editorView {
   --blase-schatten: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.35)) drop-shadow(0 16px 32px rgba(0, 0, 0, 0.45));
@@ -2040,9 +2103,10 @@ body.zen #title:focus { opacity: 1; }
   border-color: transparent;
   box-shadow: none;
   animation: none;
-  /* Der Sitz belegt die oberen 44px der rechten Ecke (2 x 22px). Die Kopfzeile faengt
-     darunter an, damit der Schliessen-Knopf nicht in die Tastflaeche des Orbs ragt. */
-  padding-top: 44px;
+  /* Der Inhalt faengt erst im Koerper an. Schulter und Hals sind leere Strecke — in
+     ihnen steht nichts, und der Schliessen-Knopf kommt so auch nicht in die
+     Tastflaeche des Orbs. */
+  padding-top: calc(var(--blase-schulter) + var(--blase-hals) + var(--space-3));
 }
 
 /* Waehrend des Wachsens legt die wachsende Kante den Inhalt frei. Er steht von Bild 1
