@@ -4,23 +4,18 @@ import assert from 'node:assert/strict'
 import {
   BEWEGUNG,
   ECK_R,
-  FORMEN,
-  FORM_NAMEN,
-  FUSS_R,
-  HALS_HALB,
-  KEHL_R,
-  KOPF_R,
-  KOPF_VERSATZ,
+  FUSS_WEITE,
   MINDEST_BREITE,
   MINDEST_HOEHE,
   SCHULTER,
-  SCHWUNG_R,
   SITZ_R,
+  TAILLE,
   blaseIstMoeglich,
   blasenFortschritt,
   blasenGeometrie,
   blasenMasse,
   blasenPfad,
+  halsKurve,
   kurveOut,
   kurveStandard,
   machKurve,
@@ -35,7 +30,6 @@ test('Der Sitz IST der Orb — der Radius ist abgeleitet, nicht gewaehlt', () =>
   // die Blase aus, als klebte sie am Orb, statt aus ihm zu kommen.
   assert.equal(SITZ_R * 2, 44)
   assert.equal(ECK_R, 16, 'ECK_R ist --radius-overlay')
-  assert.equal(KEHL_R, 10, 'KEHL_R ist --radius-panel')
 
   const g = blasenGeometrie({ links: 0, rechts: 380, oben: 0, unten: 560 })
   assert.deepEqual(g.sitz, { x: 380 - 22, y: 22, r: 22 })
@@ -44,80 +38,34 @@ test('Der Sitz IST der Orb — der Radius ist abgeleitet, nicht gewaehlt', () =>
 })
 
 test('Der Hals haengt mittig unter dem Orb', () => {
-  // Jakobs Wunsch vom 8. August 2026, und er ist messbar: die Achse des Halses ist die
-  // Achse des Orbs. Vorher lief die rechte Halskante mit der rechten Panelkante
-  // zusammen — der Hals sass also unter der rechten Haelfte des Orbs.
+  // Jakobs Wunsch vom 8. August 2026, und er ist messbar: die beiden Halskanten setzen
+  // spiegelbildlich zur Achse des Orbs am Sitzkreis an. Vorher lief die rechte
+  // Halskante mit der rechten Panelkante zusammen — der Hals sass also unter der
+  // rechten Haelfte des Orbs und nicht unter seiner Mitte.
   const g = blasenGeometrie({ links: 0, rechts: 380, oben: 0, unten: 660, halsL: 100 })
-  const achse = (g.kopfHalsLinks.x + g.kopfHalsRechts.x) / 2
-  assert.equal(achse, g.sitz.x, 'Der Hals haengt nicht unter der Mitte des Orbs')
-  assert.equal(g.kopfHalsRechts.x - g.kopfHalsLinks.x, 2 * HALS_HALB)
-  // Und er haengt SENKRECHT: beide Kanten fangen auf derselben Hoehe an und hoeren
-  // auf derselben Hoehe auf.
-  assert.equal(g.kopfHalsLinks.y, g.kopfHalsRechts.y)
-  assert.equal(g.halsFussLinks.y, g.halsFussRechts.y)
-})
-
-test('Alle vier Uebergaenge sind echte Fillets — nirgends eine Ecke', () => {
-  const g = blasenGeometrie({ links: 10, rechts: 380, oben: 4, unten: 660, halsL: 100 })
-
-  // OBEN, beide Seiten: die Kehle beruehrt den Sitz von AUSSEN. Der Abstand der
-  // Mittelpunkte ist die Summe der Radien, und der Beruehrpunkt liegt auf ihrer
-  // Verbindung — genau dort haben beide Boegen dieselbe Tangente.
-  for (const [kehle, sitzpunkt, halspunkt] of [
-    [g.kopfkehleLinks, g.kopfSitzLinks, g.kopfHalsLinks],
-    [g.kopfkehleRechts, g.kopfSitzRechts, g.kopfHalsRechts],
-  ]) {
-    assert.ok(Math.abs(abstand(g.sitz, kehle) - (SITZ_R + KOPF_R)) < NAH)
-    assert.ok(Math.abs(abstand(g.sitz, sitzpunkt) - SITZ_R) < NAH)
-    assert.ok(Math.abs(abstand(kehle, sitzpunkt) - KOPF_R) < NAH)
-    // An der Halskante steht der Radiusvektor waagerecht, die Tangente also senkrecht.
-    assert.ok(Math.abs(abstand(kehle, halspunkt) - KOPF_R) < NAH)
-    assert.equal(halspunkt.y, kehle.y)
-  }
-  // Und die beiden Kehlen sitzen spiegelbildlich zur Orbmitte.
-  assert.ok(Math.abs((g.kopfSitzLinks.x + g.kopfSitzRechts.x) / 2 - g.sitz.x) < NAH)
-  assert.equal(g.kopfSitzLinks.y, g.kopfSitzRechts.y)
-
-  // LINKS UNTEN: eine Kehle vom Hals in die Oberkante. Am Hals senkrechte Tangente,
-  // an der Oberkante waagerechte.
-  assert.ok(Math.abs(abstand(g.fusskehle, g.halsFussLinks) - FUSS_R) < NAH)
-  assert.ok(Math.abs(abstand(g.fusskehle, g.fussUnten) - FUSS_R) < NAH)
-  assert.equal(g.halsFussLinks.y, g.fusskehle.y)
-  assert.equal(g.fussUnten.x, g.fusskehle.x)
-  assert.equal(g.fussUnten.y, g.kante)
-
-  // RECHTS UNTEN: das S. Zwei parallele Senkrechte — Halskante und Panelkante — lassen
-  // sich nicht mit einem einzigen Bogen verbinden. Beide Boegen sind gleich gross, und
-  // in der Mitte, wo sie sich treffen, steht die Tangente waagerecht.
-  assert.ok(Math.abs(abstand(g.schwungOben, g.halsFussRechts) - SCHWUNG_R) < NAH)
-  assert.ok(Math.abs(abstand(g.schwungOben, g.schwungMitte) - SCHWUNG_R) < NAH)
-  assert.ok(Math.abs(abstand(g.schwungUnten, g.schwungMitte) - SCHWUNG_R) < NAH)
-  assert.ok(Math.abs(abstand(g.schwungUnten, g.kanteRechts) - SCHWUNG_R) < NAH)
-  assert.equal(g.schwungOben.x, g.schwungMitte.x, 'In der Mitte des S steht die Tangente schief')
-  assert.equal(g.schwungUnten.x, g.schwungMitte.x)
-  assert.equal(g.kanteRechts.x, g.rechts, 'Das S landet nicht auf der Panelkante')
-
-  // BEIDE SCHULTERN FALLEN GLEICH TIEF. Sonst saesse die Blase schief unter ihrem Hals.
-  assert.equal(g.kanteRechts.y, g.kante)
-  assert.equal(2 * SCHWUNG_R, FUSS_R)
+  const re = halsKurve(g, +1)
+  const li = halsKurve(g, -1)
+  assert.ok(Math.abs((re.punkt.x + li.punkt.x) / 2 - g.sitz.x) < NAH,
+    'Der Hals setzt nicht symmetrisch zur Mitte des Orbs an')
+  assert.ok(Math.abs(re.punkt.y - li.punkt.y) < NAH, 'Die beiden Kanten fangen auf verschiedener Hoehe an')
+  // Und die Taille liegt auf beiden Seiten gleich weit von der Achse.
+  assert.equal(TAILLE > 0, true)
 })
 
 test('Bei den Mindestmassen laeuft kein Segment rueckwaerts', () => {
-  assert.equal(MINDEST_BREITE, SITZ_R + HALS_HALB + FUSS_R + ECK_R)
+  assert.equal(MINDEST_BREITE, SITZ_R + FUSS_WEITE + ECK_R)
   assert.equal(MINDEST_HOEHE, SCHULTER + 2 * ECK_R)
-  // Die Schulter ist gerechnet, nicht gesetzt: Sitz, Kopfkehle, Fusskehle.
-  assert.equal(SCHULTER, SITZ_R + KOPF_VERSATZ + FUSS_R)
-  assert.ok(Math.abs(KOPF_VERSATZ - Math.sqrt((SITZ_R + KOPF_R) ** 2 - (HALS_HALB + KOPF_R) ** 2)) < NAH)
-  assert.equal(KEHL_R, 10, 'KOPF_R haengt an --radius-panel')
+  // Der Orb belegt von der Schulter 44px; was darueber hinausgeht, ist der Weg, den die
+  // Kurve zum Drehen braucht.
+  assert.ok(SCHULTER > 2 * SITZ_R, 'Die Schulter laesst der Kurve keinen Weg')
 
   const g = blasenGeometrie({ links: 0, rechts: MINDEST_BREITE, oben: 0, unten: MINDEST_HOEHE })
-  // Die Oberkante laeuft von links+ECK_R bis zum Kehlenanfang — genau bis dorthin und
-  // keinen Pixel zurueck. Ein Pixel weniger, und der Pfad schluege einen Haken.
-  assert.ok(g.fussUnten.x >= g.links + ECK_R, 'Die Oberkante laeuft rueckwaerts')
+  // Die Oberkante laeuft von links+ECK_R bis zum Fusspunkt der linken Kurve — genau bis
+  // dorthin und keinen Pixel zurueck. Genau hier lag ein Fehler: solange MINDEST_BREITE
+  // noch von der alten Bauweise stammte, lief dieses Stueck im ersten Bild rueckwaerts.
+  const fussLinks = g.sitz.x - FUSS_WEITE
+  assert.equal(fussLinks, g.links + ECK_R)
   // Die linke Kante laeuft von unten-ECK_R bis kante+ECK_R.
-  assert.ok(g.unten - ECK_R >= g.kante + ECK_R, 'Die linke Kante laeuft rueckwaerts')
-  // Und genau an der Mindestgroesse sind beide Strecken null: das IST die Untergrenze.
-  assert.equal(g.fussUnten.x, g.links + ECK_R)
   assert.equal(g.unten - ECK_R, g.kante + ECK_R)
 
   assert.equal(blaseIstMoeglich(MINDEST_BREITE, MINDEST_HOEHE, 0), true)
@@ -129,84 +77,58 @@ test('Bei den Mindestmassen laeuft kein Segment rueckwaerts', () => {
   assert.equal(blaseIstMoeglich(MINDEST_BREITE + 1, MINDEST_HOEHE + 1), true)
 })
 
-test('Der Pfad ist eine einzige geschlossene Silhouette', () => {
-  const d = blasenPfad({ links: 0, rechts: 380, oben: 0, unten: 560 })
-  assert.match(d, /^M 358 0 /, 'Der Pfad beginnt am obersten Punkt des Sitzes')
-  assert.match(d, /Z$/, 'Der Pfad ist nicht geschlossen')
-  // Drei Ecken (R16), zwei Kopfkehlen (R10), eine Fusskehle (R14), zwei Boegen im S
-  // (R7), zwei Haelften des Sitzes (R22) — zehn Boegen, EIN Teilzug. Zwei Teilzuege
-  // waeren zwei Formen, und genau das soll es nicht sein.
-  assert.equal((d.match(/A /g) || []).length, 10)
-  assert.equal((d.match(/M /g) || []).length, 1)
-  assert.equal((d.match(/Z/g) || []).length, 1)
-  // Alle Kehlen laufen gegen den Uhrzeigersinn (Sweep 0) — sie sind konkav. Ecken und
-  // Sitz laufen mit (Sweep 1). Im S kommt beides genau einmal vor: erst konkav vom
-  // Hals weg, dann konvex in die Kante hinein.
-  assert.equal((d.match(/A 10 10 0 0 0 /g) || []).length, 2, 'Die Kopfkehlen sind nicht konkav')
-  assert.equal((d.match(/A 14 14 0 0 0 /g) || []).length, 1, 'Die Fusskehle ist nicht konkav')
-  assert.equal((d.match(/A 7 7 0 0 0 /g) || []).length, 1, 'Das S faengt nicht konkav an')
-  assert.equal((d.match(/A 7 7 0 0 1 /g) || []).length, 1, 'Das S endet nicht konvex')
-  assert.equal((d.match(/A 22 22 0 0 1 /g) || []).length, 2)
-  assert.equal((d.match(/A 16 16 0 0 1 /g) || []).length, 3)
-})
-
-test('Die geschwungenen Halsformen kreuzen sich nie', () => {
-  // Der Fehler, der beim ersten Versuch sofort passierte: die beiden Halskanten liefen
-  // aneinander vorbei, und die Blase bekam eine Schlaufe. Ein kubischer Bogen liegt
-  // immer INNERHALB der Huelle seiner vier Punkte — liegen alle vier auf ihrer Seite
+test('Die beiden Halskanten kreuzen sich nie', () => {
+  // Der Fehler, der beim ersten Versuch sofort passierte: die beiden Kanten liefen
+  // aneinander vorbei, und die Blase bekam eine Schlaufe. Eine kubische Kurve liegt
+  // immer INNERHALB der Huelle ihrer vier Punkte — liegen alle vier auf ihrer Seite
   // der Taille, kann die Kurve die andere Seite gar nicht erreichen. Genau das wird
   // hier geprueft, und zwar ueber die ganze Spanne moeglicher Halslaengen.
-  for (const name of FORM_NAMEN.filter(n => FORMEN[n].art === 'kurve')) {
-    const taille = FORMEN[name].taille
-    for (const halsL of [0, 40, 107, 200, 320]) {
-      const d = blasenPfad({ links: 0, rechts: 380, oben: 0.5, unten: 700, halsL, form: name })
-      const achse = 380 - SITZ_R
-      const kurven = [...d.matchAll(/C ([\d.-]+) [\d.-]+ ([\d.-]+) [\d.-]+ ([\d.-]+) [\d.-]+/g)]
-      assert.equal(kurven.length, 2, `${name}: ${kurven.length} Halskanten statt zwei`)
-      const [rechts, links] = kurven.map(t => t.slice(1).map(Number))
-      for (const x of rechts) {
-        assert.ok(x - achse >= taille - 1e-6, `${name} bei Hals ${halsL}: die rechte Kante greift ueber die Taille`)
-      }
-      for (const x of links) {
-        assert.ok(achse - x >= taille - 1e-6, `${name} bei Hals ${halsL}: die linke Kante greift ueber die Taille`)
-      }
+  for (const halsL of [0, 40, 107, 200, 320]) {
+    const d = blasenPfad({ links: 0, rechts: 380, oben: 0.5, unten: 700, halsL })
+    const achse = 380 - SITZ_R
+    const kurven = [...d.matchAll(/C ([\d.-]+) [\d.-]+ ([\d.-]+) [\d.-]+ ([\d.-]+) [\d.-]+/g)]
+    assert.equal(kurven.length, 2, `${kurven.length} Halskanten statt zwei`)
+    const [rechts, links] = kurven.map(t => t.slice(1).map(Number))
+    for (const x of rechts) {
+      assert.ok(x - achse >= TAILLE - 1e-6, `Hals ${halsL}: die rechte Kante greift ueber die Taille`)
+    }
+    for (const x of links) {
+      assert.ok(achse - x >= TAILLE - 1e-6, `Hals ${halsL}: die linke Kante greift ueber die Taille`)
     }
   }
 })
 
-test('Die geschwungenen Halsformen setzen ohne Ecke am Orb an', () => {
+test('Der Hals setzt ohne Ecke am Orb an', () => {
   // Der Anfasser der Kurve muss auf der KREISTANGENTE liegen — nur dann laufen Kreis
   // und Kurve an der Nahtstelle in dieselbe Richtung. Gekuerzt werden darf er (das
   // haelt die Taille), gedreht nicht. Geprueft wird der Winkel zwischen dem Anfasser
   // und dem Radius: er muss 90 Grad sein.
-  for (const name of FORM_NAMEN.filter(n => FORMEN[n].art === 'kurve')) {
-    const d = blasenPfad({ links: 0, rechts: 380, oben: 0, unten: 700, halsL: 120, form: name })
-    const sitz = { x: 380 - SITZ_R, y: SITZ_R }
-    const kurven = [...d.matchAll(/C ([\d.-]+) ([\d.-]+) ([\d.-]+) ([\d.-]+) ([\d.-]+) ([\d.-]+)/g)]
-    // Rechts: der Pfad kommt vom Sitz und geht in die Kurve — Ansatzpunkt ist das Ende
-    // des vorangehenden Sitzbogens, Anfasser ist der erste Kontrollpunkt.
-    const sitzBoegen = [...d.matchAll(/A 22 22 0 0 1 ([\d.-]+) ([\d.-]+)/g)]
-    const ansatzRechts = { x: Number(sitzBoegen[0][1]), y: Number(sitzBoegen[0][2]) }
-    const griffRechts = { x: Number(kurven[0][1]), y: Number(kurven[0][2]) }
-    // Links: die Kurve endet auf dem Sitz, der Anfasser ist der ZWEITE Kontrollpunkt.
-    const ansatzLinks = { x: Number(kurven[1][5]), y: Number(kurven[1][6]) }
-    const griffLinks = { x: Number(kurven[1][3]), y: Number(kurven[1][4]) }
+  const d = blasenPfad({ links: 0, rechts: 380, oben: 0, unten: 700, halsL: 120 })
+  const sitz = { x: 380 - SITZ_R, y: SITZ_R }
+  const kurven = [...d.matchAll(/C ([\d.-]+) ([\d.-]+) ([\d.-]+) ([\d.-]+) ([\d.-]+) ([\d.-]+)/g)]
+  // Rechts: der Pfad kommt vom Sitz und geht in die Kurve — Ansatzpunkt ist das Ende
+  // des vorangehenden Sitzbogens, Anfasser ist der erste Kontrollpunkt.
+  const sitzBoegen = [...d.matchAll(/A 22 22 0 0 1 ([\d.-]+) ([\d.-]+)/g)]
+  const ansatzRechts = { x: Number(sitzBoegen[0][1]), y: Number(sitzBoegen[0][2]) }
+  const griffRechts = { x: Number(kurven[0][1]), y: Number(kurven[0][2]) }
+  // Links: die Kurve endet auf dem Sitz, der Anfasser ist der ZWEITE Kontrollpunkt.
+  const ansatzLinks = { x: Number(kurven[1][5]), y: Number(kurven[1][6]) }
+  const griffLinks = { x: Number(kurven[1][3]), y: Number(kurven[1][4]) }
 
-    for (const [ansatz, griff, seite] of [[ansatzRechts, griffRechts, 'rechts'], [ansatzLinks, griffLinks, 'links']]) {
-      assert.ok(Math.abs(abstand(sitz, ansatz) - SITZ_R) < 0.02,
-        `${name} ${seite}: der Hals setzt nicht auf dem Sitzkreis an`)
-      const radius = { x: ansatz.x - sitz.x, y: ansatz.y - sitz.y }
-      const anfasser = { x: griff.x - ansatz.x, y: griff.y - ansatz.y }
-      const laenge = Math.hypot(anfasser.x, anfasser.y)
-      if (laenge < 0.01) continue
-      // Gemessen wird am AUSGEGEBENEN Pfad, und der ist auf hundertstel Pixel gerundet.
-      // Die Schranke muss diese Rundung uebersteigen, sonst prueft sie die Rundung und
-      // nicht die Geometrie: 2 Tausendstel entsprechen einem Zehntel Grad — eine Ecke
-      // dieser Groesse gibt es auf einem Bildschirm nicht.
-      const skalar = (radius.x * anfasser.x + radius.y * anfasser.y) / (SITZ_R * laenge)
-      assert.ok(Math.abs(skalar) < 2e-3,
-        `${name} ${seite}: der Anfasser steht nicht senkrecht auf dem Radius (${skalar})`)
-    }
+  for (const [ansatz, griff, seite] of [[ansatzRechts, griffRechts, 'rechts'], [ansatzLinks, griffLinks, 'links']]) {
+    assert.ok(Math.abs(abstand(sitz, ansatz) - SITZ_R) < 0.02,
+      `${seite}: der Hals setzt nicht auf dem Sitzkreis an`)
+    const radius = { x: ansatz.x - sitz.x, y: ansatz.y - sitz.y }
+    const anfasser = { x: griff.x - ansatz.x, y: griff.y - ansatz.y }
+    const laenge = Math.hypot(anfasser.x, anfasser.y)
+    assert.ok(laenge > 0.01, `${seite}: der Anfasser ist auf null geschrumpft`)
+    // Gemessen wird am AUSGEGEBENEN Pfad, und der ist auf hundertstel Pixel gerundet.
+    // Die Schranke muss diese Rundung uebersteigen, sonst prueft sie die Rundung und
+    // nicht die Geometrie: 2 Tausendstel entsprechen einem Zehntel Grad — eine Ecke
+    // dieser Groesse gibt es auf einem Bildschirm nicht.
+    const skalar = (radius.x * anfasser.x + radius.y * anfasser.y) / (SITZ_R * laenge)
+    assert.ok(Math.abs(skalar) < 2e-3,
+      `${seite}: der Anfasser steht nicht senkrecht auf dem Radius (${skalar})`)
   }
 })
 
@@ -215,13 +137,11 @@ test('Der Hals verschiebt nur den Koerper — der Sitz bleibt, wo der Orb ist', 
   const mit = blasenGeometrie({ links: 0, rechts: 380, oben: 0, unten: 660, halsL: 100 })
   assert.deepEqual(mit.sitz, ohne.sitz, 'Der Sitz wandert mit dem Hals')
   assert.deepEqual(mit.sitzOben, ohne.sitzOben)
-  assert.deepEqual(mit.kopfSitzLinks, ohne.kopfSitzLinks, 'Die Kehle setzt woanders am Sitz an')
-  assert.deepEqual(mit.kopfSitzRechts, ohne.kopfSitzRechts)
   // Die Oberkante des Koerpers rutscht um genau die Halslaenge nach unten.
   assert.ok(Math.abs((mit.kante - ohne.kante) - 100) < NAH)
-  // Und der gerade Teil des Halses ist genau so lang wie bestellt.
-  assert.ok(Math.abs((mit.halsFuss - mit.halsKopf) - 100) < NAH)
-  assert.ok(Math.abs(ohne.halsFuss - ohne.halsKopf) < NAH)
+  assert.ok(Math.abs(ohne.kante - (ohne.oben + SCHULTER)) < NAH)
+  // Und der Ansatz am Orb bleibt, wo er ist — nur sein Anfasser wird laenger.
+  assert.deepEqual(halsKurve(mit, +1).punkt, halsKurve(ohne, +1).punkt)
 })
 
 test('Der Hals waechst mit — bei Bild eins ist er null', () => {

@@ -507,7 +507,6 @@ function blaseMisstUndZeichnet(fenster, blase) {
   const hals = blaseHalsLaenge(fenster)
   if (!blaseIstMoeglich(kasten.width, kasten.height, undefined, hals)) return null
   if (!blaseKontur || blaseKontur.svg !== blase) blaseKontur = erzeugeKontur(blase)
-  blaseKontur?.setzeForm(document.documentElement.dataset.blaseForm || 'amphore')
   blaseKontur?.setzeMasse(kasten.width, kasten.height, hals)
   return blaseKontur
 }
@@ -613,100 +612,6 @@ function blaseFolgt(offen) {
       fenster.classList.remove('waechst')
     },
   })
-}
-
-// VORUEBERGEHEND, und das ist der Punkt. Drei Halslaengen zum Umschalten, damit die
-// Wahl am laufenden Programm faellt und nicht in einer Ueberlegung. Der Umschalter
-// erscheint nur, wenn localStorage 'ondaVarianten' auf '1' steht — im normalen
-// Programm ist er nicht da. Sobald Jakob gewaehlt hat, fliegt er raus und die
-// gewaehlte Laenge steht fest in style.css.
-const HALS_FASSUNGEN = [
-  ['gemischt', 'gemischt'],
-  ['mittig', 'mittig'],
-  ['lang', 'lang'],
-  ['kurz', 'kurz'],
-]
-
-// Die zwei, die uebrig sind. Sie unterscheiden sich nur in der Taille: 22px gegen
-// 16px. „Stiel" bleibt als Vergleichsmass daneben, bis eine von beiden feststeht.
-const HALS_FORMEN = [
-  ['amphore', 'Amphore'],
-  ['karaffe', 'Karaffe'],
-  ['stiel', 'Stiel'],
-]
-
-function variantenSchalterAn() {
-  try {
-    return window.localStorage?.getItem('ondaVarianten') === '1'
-  } catch {
-    return false
-  }
-}
-
-function variantenMerken(schluessel, name) {
-  try {
-    window.localStorage?.setItem(schluessel, name)
-  } catch {
-    // Ohne Speicher faellt nur das Erinnern weg, nicht das Umschalten.
-  }
-}
-
-function variantenLesen(schluessel, erlaubt, standard) {
-  let gemerkt = null
-  try {
-    gemerkt = window.localStorage?.getItem(schluessel)
-  } catch {
-    gemerkt = null
-  }
-  return erlaubt.some(([name]) => name === gemerkt) ? gemerkt : standard
-}
-
-// Die Voreinstellung braucht kein Attribut — so steht im HTML nichts, was nach der
-// Entscheidung wieder weggeraeumt werden muesste.
-function variantenSetzen(feld, name, standard) {
-  if (name === standard) delete document.documentElement.dataset[feld]
-  else document.documentElement.dataset[feld] = name
-}
-
-// Die Kontur haengt an Werten, die sich gerade geaendert haben. Der ResizeObserver
-// merkt die Groesse von selbst — aber erst im naechsten Bild, und die FORM merkt er
-// gar nicht, weil sie den Kasten nicht anfasst.
-function blaseNeuZeichnen() {
-  const ui = elements()
-  if (!blaseSteht || !ui.agentWidget || !ui.blase) return
-  blaseMisstUndZeichnet(ui.agentWidget, ui.blase)?.zeichne(1, 1)
-}
-
-function variantenReihe(wort, fassungen, feld, schluessel, standard) {
-  const gemerkt = variantenLesen(schluessel, fassungen, standard)
-  variantenSetzen(feld, gemerkt, standard)
-
-  const reihe = createNode('div', 'onda-varianten__reihe')
-  reihe.append(createNode('span', 'onda-varianten__wort', wort))
-  const knoepfe = fassungen.map(([name, beschriftung]) => {
-    const knopf = createNode('button', 'onda-varianten__knopf', beschriftung)
-    knopf.type = 'button'
-    knopf.dataset.fassung = name
-    knopf.setAttribute('aria-pressed', String(name === gemerkt))
-    knopf.addEventListener('click', () => {
-      variantenSetzen(feld, name, standard)
-      variantenMerken(schluessel, name)
-      knoepfe.forEach(anderer => anderer.setAttribute('aria-pressed', String(anderer === knopf)))
-      blaseNeuZeichnen()
-    })
-    reihe.append(knopf)
-    return knopf
-  })
-  return reihe
-}
-
-function renderHalsUmschalter() {
-  if (!variantenSchalterAn()) return () => {}
-  const leiste = createNode('div', 'onda-varianten')
-  leiste.append(variantenReihe('Form', HALS_FORMEN, 'blaseForm', 'ondaBlaseForm', 'amphore'))
-  leiste.append(variantenReihe('Länge', HALS_FASSUNGEN, 'blaseHals', 'ondaBlaseHals', 'gemischt'))
-  document.body.append(leiste)
-  return () => leiste.remove()
 }
 
 // Die Masse aendern sich auch ohne Zustandswechsel: 100dvh reagiert auf die
@@ -5647,7 +5552,6 @@ export function initWorkspace(context) {
   listenEditor('update', onEditorUpdate)
 
   cleanups.push(blaseBeobachten())
-  cleanups.push(renderHalsUmschalter())
 
   // Status-Abo: Statuszeile und Aura folgen dem echten Agenten-Zustand.
   cleanups.push(beiAgentStatus(() => {

@@ -13,19 +13,21 @@
 // Zwischenzustand an derselben Stelle im Pfad steht. Er IST der Orb — und deshalb kann
 // die Verbindung waehrend des Wachsens gar nicht abreissen.
 //
-// DER HALS HAENGT MITTIG UNTER DEM ORB. Jakob am 8. August 2026: "sie soll organisch
-// aus dem orb rausfliessen und in die sprechblase mit weichen uebergaengen und der
-// hals soll zentriert mittig in relation zum orb sein." Vorher lief die rechte
-// Halskante mit der rechten Panelkante zusammen; der Hals sass damit unter der rechten
-// Haelfte des Orbs und nicht unter seiner Mitte.
+// DER HALS HAENGT MITTIG UNTER DEM ORB und heisst „Amphore". Jakob am 8. August 2026:
+// "sie soll organisch aus dem orb rausfliessen und in die sprechblase mit weichen
+// uebergaengen und der hals soll zentriert mittig in relation zum orb sein", dann
+// "tendenziell eher wie säule aber so elegant wie taille", und schliesslich "amphore
+// nehmen wir".
 //
-// Alle vier Uebergaenge sind echte Fillets — an jeder Nahtstelle haben beide Boegen
-// dieselbe Tangente, nirgends sitzt eine Ecke:
-//   oben  zwei Kehlen, symmetrisch, die den Hals aus dem Orb herausfuehren
-//   links eine Kehle in die Oberkante des Koerpers
-//   rechts ein S aus zwei Boegen in die rechte Panelkante — dort stehen zwei
-//          PARALLELE Senkrechte gegeneinander, und die kann ein einzelner Bogen nicht
-//          verbinden. Beide Radien sind gleich gross, also ist das S symmetrisch.
+// Die Form ist an fuenf Fassungen entschieden worden, die auf einer Achse von breit
+// (Taille 34) bis schlank (Taille 10) lagen. Amphore ist der dritte Punkt darauf. Die
+// vier anderen sind fort, samt der aelteren Bauweise aus Geraden und Kehlen — was
+// entschieden ist, muss nicht als Angebot herumliegen.
+//
+// JE EINE KURVE PRO HALSKANTE, vom Orb bis an den Koerper. Sie setzt an beiden Enden
+// mit genau der Tangente an, die dort schon herrscht: am Orb die Kreistangente, am
+// Koerper die Kante. Deshalb ist sie so knickfrei wie ein Fillet, aber frei in der
+// Mitte — und nur dadurch gibt es ueberhaupt eine Taille.
 //
 // WARUM SVG UND NICHT border-radius ODER clip-path. Die Kehle zwischen Sitzkreis und
 // Panelkante ist konkav — einen negativen Radius gibt es in CSS nicht. Und ein Clip
@@ -39,48 +41,36 @@
 export const SITZ_R = 22
 // --radius-overlay: dieselbe Ecke wie jedes andere schwebende Fenster.
 export const ECK_R = 16
-// --radius-panel: die konkave Kehle, die den Sitz in die Panelkante fuehrt.
-export const KEHL_R = 10
 
-// DIE HALBE HALSBREITE. Der Hals ist 16px breit — etwa halb so breit wie der sichtbare
-// Farbkreis des Orbs (30px). Am laufenden Programm entschieden: ein Hals in Sitzbreite
-// (44px) ist bei 40px Laenge noch schoen, wird aber bei den 120px, die eine mittig
-// sitzende Blase braucht, zu einem Streifen ueber die halbe Fensterhoehe. Alles unter
-// 12px wiederum reisst optisch ab, sobald die Blase weit unten sitzt.
-export const HALS_HALB = 8
+// DIE FORM DES HALSES, in vier Zahlen. Sie sind an fuenf Fassungen entschieden, die auf
+// einer Achse lagen; das hier ist die dritte davon.
+//
+//   WINKEL   wo der Hals den Orb verlaesst, gemessen vom rechtesten Punkt aus nach
+//            unten. Gross heisst weit unten am Orb, also schmaler Ansatz.
+//   TAILLE   wie schmal der Hals hoechstens wird, als halbe Breite. 11 heisst: an der
+//            engsten Stelle ist er 22px breit.
+//   GRIFF_*  wie lange die Kurve die Richtung ihres jeweiligen Endes beibehaelt, als
+//            Anteil der Halslaenge. Am Orb laenger als am Koerper — deshalb sitzt die
+//            engste Stelle im unteren Drittel und nicht in der Mitte.
+//   FUSS_WEITE  wie weit links vom Orb die linke Kurve auf der Oberkante landet.
+export const WINKEL = 10
+export const TAILLE = 11
+export const GRIFF_ORB = 0.55
+export const GRIFF_KOERPER = 0.45
+export const FUSS_WEITE = 44
 
-// Die zwei Kehlen am Orb. --radius-panel, derselbe Radius wie ueberall im Haus.
-export const KOPF_R = KEHL_R
-
-// DIE RECHTE SCHULTER ist ein S aus zwei gleich grossen Boegen. Sie muss von der
-// rechten Halskante bis zur rechten Panelkante reichen — die Strecke ist gerechnet und
-// nicht gewaehlt: der Orb steht mit seiner Mitte SITZ_R von der Panelkante entfernt,
-// der Hals belegt davon HALS_HALB, der Rest gehoert dem S. Zwei gleiche Viertelboegen
-// legen zusammen genau ihren doppelten Radius zur Seite und ebenso weit nach unten.
-export const SCHWUNG_R = (SITZ_R - HALS_HALB) / 2
-
-// DIE LINKE KEHLE fuehrt den Hals in die Oberkante des Koerpers. Ihr Radius ist so
-// gewaehlt, dass sie genauso tief faellt wie das S auf der anderen Seite — sonst saesse
-// die Blase auf zwei verschieden hohen Schultern.
-export const FUSS_R = SITZ_R - HALS_HALB
-
-// Wie weit unter der Sitzmitte die Kopfkehle die Halskante erreicht. Gerechnet, nicht
-// gemessen: Kehle und Sitz beruehren sich von aussen, ihre Mittelpunkte haben also den
-// Abstand SITZ_R + KOPF_R, und der Kehlmittelpunkt liegt KOPF_R neben der Halskante.
-// Der Satz des Pythagoras auf dieses Dreieck, mehr ist es nicht.
-export const KOPF_VERSATZ = kopfVersatz(SITZ_R, KOPF_R, HALS_HALB)
-
-// Die Schulter: vom oberen Kastenrand bis zur Oberkante des Koerpers, wenn der gerade
-// Teil des Halses null lang ist. Sitz, Kopfkehle und Fusskehle brauchen diese Strecke
-// ohnehin. Steht auch in style.css als --blase-schulter — onda-design-contract.test.mjs
-// haelt beide Zahlen zusammen, damit die Mitte nicht auf zwei Rechnungen beruht.
-export const SCHULTER = SITZ_R + KOPF_VERSATZ + FUSS_R
+// Die Schulter: vom oberen Kastenrand bis zur Oberkante des Koerpers, wenn der Hals
+// null lang ist. Der Orb belegt davon 44px (2 x SITZ_R), der Rest ist der kuerzeste
+// Weg, auf dem die Kurve den Kreis noch verlassen und sich zur Kante drehen kann. Steht
+// auch in style.css als --blase-schulter — onda-design-contract.test.mjs haelt beide
+// Zahlen zusammen, damit die Lage der Blase nicht auf zwei Rechnungen beruht.
+export const SCHULTER = 62
 
 // Kleinste Groesse, bei der der Pfad noch aufgeht: darunter wuerden sich Eckbogen und
-// Kehle ueberschneiden und der Pfad schluege Haken. Beides gilt fuer den KOERPER der
-// Blase — der gerade Teil des Halses kommt oben drauf und hat keine Untergrenze.
-// In der Breite muss die Oberkante von der linken Ecke bis zur Fusskehle reichen.
-export const MINDEST_BREITE = SITZ_R + HALS_HALB + FUSS_R + ECK_R
+// Kurve ueberschneiden und der Pfad schluege Haken. Beides gilt fuer den KOERPER der
+// Blase — der Hals kommt oben drauf und hat keine Untergrenze. In der Breite muss die
+// Oberkante von der linken Ecke bis zum Fusspunkt der Kurve reichen.
+export const MINDEST_BREITE = SITZ_R + FUSS_WEITE + ECK_R
 export const MINDEST_HOEHE = SCHULTER + 2 * ECK_R
 
 // Die Bewegung. Beide Richtungen benutzen --ease-standard, in motion.css woertlich
@@ -106,157 +96,33 @@ function rund(wert) {
   return Math.round(wert * 100) / 100
 }
 
-// Alle Eckpunkte und Kreismittelpunkte der Silhouette, in Bildschirmkoordinaten des
+// Die wenigen Punkte, an denen die Silhouette haengt, in Bildschirmkoordinaten des
 // Blasenkastens (Ursprung oben links). Der Sitz haengt an `rechts` und `oben` — das
 // sind die Kanten des Orbs, und sie ruehren sich nie. `links` und `unten` wachsen.
-//
-// `halsL` ist die Laenge des GERADEN Stuecks im Hals. Die vier Kehlen kommen oben und
-// unten dazu; bei halsL = 0 sitzen sie unmittelbar aufeinander, und die Silhouette ist
-// die kleinste, die noch aufgeht.
 export function blasenGeometrie({
-  links, rechts, oben = 0, unten, halsL = 0,
-  sitzR = SITZ_R, eckR = ECK_R, halsHalb = HALS_HALB, kopfR = KOPF_R,
-  schwungR = (sitzR - halsHalb) / 2, fussR = sitzR - halsHalb,
+  links, rechts, oben = 0, unten, halsL = 0, sitzR = SITZ_R, eckR = ECK_R,
 }) {
-  // Die Mitte des Orbs — und damit die Achse des Halses. Er haengt symmetrisch daran.
-  const mitteX = rechts - sitzR
-  const linkeKante = mitteX - halsHalb
-  const rechteKante = mitteX + halsHalb
-  const versatz = kopfVersatz(sitzR, kopfR, halsHalb)
-  // Wo der gerade Teil des Halses anfaengt und aufhoert.
-  const halsKopf = oben + sitzR + versatz
-  const halsFuss = halsKopf + halsL
-  // Oberkante des Koerpers. Beide Schultern fallen gleich tief — links eine Kehle mit
-  // Radius fussR, rechts zwei Boegen mit je schwungR, und 2 x schwungR = fussR.
-  const kante = halsFuss + fussR
-  // Der Beruehrpunkt von Kopfkehle und Sitz liegt auf der Verbindung der beiden
-  // Mittelpunkte, im Abstand sitzR vom Sitzmittelpunkt. Genau dort haben beide Boegen
-  // dieselbe Tangente — also entsteht keine Ecke.
-  const spanne = sitzR + kopfR
-  const kopfAus = sitzR * (halsHalb + kopfR) / spanne
-  const kopfAb = oben + sitzR + sitzR * versatz / spanne
   return {
-    links, rechts, oben, unten, kante, halsL, halsKopf, halsFuss,
-    sitzR, eckR, kopfR, halsHalb, schwungR, fussR,
-    sitz: { x: mitteX, y: oben + sitzR, r: sitzR },
-    sitzOben: { x: mitteX, y: oben },
-    // Die zwei Kehlen, die den Hals aus dem Orb herausfuehren. Spiegelbildlich.
-    kopfkehleLinks: { x: linkeKante - kopfR, y: halsKopf, r: kopfR },
-    kopfkehleRechts: { x: rechteKante + kopfR, y: halsKopf, r: kopfR },
-    kopfSitzLinks: { x: mitteX - kopfAus, y: kopfAb },
-    kopfSitzRechts: { x: mitteX + kopfAus, y: kopfAb },
-    // Wo die Kopfkehlen die Halskanten erreichen — von hier laeuft der Hals gerade.
-    kopfHalsLinks: { x: linkeKante, y: halsKopf },
-    kopfHalsRechts: { x: rechteKante, y: halsKopf },
-    // Wo der gerade Hals in die Schultern laeuft.
-    halsFussLinks: { x: linkeKante, y: halsFuss },
-    halsFussRechts: { x: rechteKante, y: halsFuss },
-    // Links: eine Kehle in die Oberkante. Dort waagerecht, wie die Kante selbst.
-    fusskehle: { x: linkeKante - fussR, y: halsFuss, r: fussR },
-    fussUnten: { x: linkeKante - fussR, y: kante },
-    // Rechts: das S. Erst konkav vom Hals weg, dann konvex in die Panelkante hinein.
-    // In der Mitte, wo beide Boegen sich treffen, steht die Tangente waagerecht.
-    schwungOben: { x: rechteKante + schwungR, y: halsFuss, r: schwungR },
-    schwungMitte: { x: rechteKante + schwungR, y: halsFuss + schwungR },
-    schwungUnten: { x: rechteKante + schwungR, y: halsFuss + 2 * schwungR, r: schwungR },
-    kanteRechts: { x: rechts, y: kante },
+    links, rechts, oben, unten, halsL, sitzR, eckR,
+    // Die Mitte des Orbs — und damit die Achse des Halses, der symmetrisch daran haengt.
+    sitz: { x: rechts - sitzR, y: oben + sitzR, r: sitzR },
+    // Der oberste Punkt des Sitzes: dort faengt der Pfad an und dort hoert er auf.
+    sitzOben: { x: rechts - sitzR, y: oben },
+    // Die Oberkante des Koerpers. Der Hals verschiebt nur sie — der Sitz bleibt.
+    kante: oben + SCHULTER + halsL,
   }
 }
 
-// Aus der aeusseren Beruehrung zweier Kreise. Steht als KOPF_VERSATZ auch fuer die
-// Hausmasse bereit; als Funktion, damit die Geometrie auch mit anderen Massen aufgeht.
-function kopfVersatz(sitzR, kopfR, halsHalb) {
-  const kathete = halsHalb + kopfR
-  return Math.sqrt(Math.max(0, (sitzR + kopfR) ** 2 - kathete ** 2))
-}
-
-// Eine durchgehende Silhouette, im Uhrzeigersinn und in einem Zug. Sie faengt oben am
-// Orb an, laeuft um seine rechte Haelfte herum, ueber die rechte Kopfkehle in den Hals,
-// den Hals hinunter, ueber das S in die rechte Panelkante, um den Koerper herum, ueber
-// die Fusskehle zurueck in den Hals, hinauf, und ueber die linke Kopfkehle wieder auf
-// den Orb.
-export function blasenPfad(masse) {
-  const form = FORMEN[masse?.form]
-  if (form && form.art === 'kurve') return blasenPfadGeschwungen(masse, form)
-  const g = blasenGeometrie(masse)
-  const { links, rechts, oben, unten, kante, sitzR, eckR, kopfR, schwungR, fussR } = g
-  return [
-    `M ${rund(g.sitzOben.x)} ${rund(g.sitzOben.y)}`,
-    // Die rechte Haelfte des Orbs hinunter bis dorthin, wo die Kehle ansetzt.
-    `A ${sitzR} ${sitzR} 0 0 1 ${rund(g.kopfSitzRechts.x)} ${rund(g.kopfSitzRechts.y)}`,
-    `A ${kopfR} ${kopfR} 0 0 0 ${rund(g.kopfHalsRechts.x)} ${rund(g.kopfHalsRechts.y)}`,
-    // Die rechte Halskante. Bei einem geraden Hals von null Laenge ist sie null Pixel
-    // lang, und die Kehle geht unmittelbar in das S ueber.
-    `V ${rund(g.halsFussRechts.y)}`,
-    // Das S: konkav vom Hals weg, dann konvex in die Panelkante. Zwei parallele
-    // Senkrechte lassen sich nicht mit einem einzigen Bogen verbinden.
-    `A ${schwungR} ${schwungR} 0 0 0 ${rund(g.schwungMitte.x)} ${rund(g.schwungMitte.y)}`,
-    `A ${schwungR} ${schwungR} 0 0 1 ${rund(g.kanteRechts.x)} ${rund(g.kanteRechts.y)}`,
-    `V ${rund(unten - eckR)}`,
-    `A ${eckR} ${eckR} 0 0 1 ${rund(rechts - eckR)} ${rund(unten)}`,
-    `H ${rund(links + eckR)}`,
-    `A ${eckR} ${eckR} 0 0 1 ${rund(links)} ${rund(unten - eckR)}`,
-    `V ${rund(kante + eckR)}`,
-    `A ${eckR} ${eckR} 0 0 1 ${rund(links + eckR)} ${rund(kante)}`,
-    `H ${rund(g.fussUnten.x)}`,
-    `A ${fussR} ${fussR} 0 0 0 ${rund(g.halsFussLinks.x)} ${rund(g.halsFussLinks.y)}`,
-    `V ${rund(g.kopfHalsLinks.y)}`,
-    `A ${kopfR} ${kopfR} 0 0 0 ${rund(g.kopfSitzLinks.x)} ${rund(g.kopfSitzLinks.y)}`,
-    `A ${sitzR} ${sitzR} 0 0 1 ${rund(g.sitzOben.x)} ${rund(g.sitzOben.y)}`,
-    'Z',
-  ].join(' ')
-}
-
-// VIER HALSFORMEN ZUR WAHL. Jakob am 8. August 2026: "mir gefaellt das halsdesign
-// nicht kannst du bitte mir mehrere unterschiedliche varianten zeigen." Also nicht
-// eine geraten, sondern vier gebaut, die sich wirklich unterscheiden — umschaltbar am
-// laufenden Programm, und nach der Entscheidung fliegen drei davon raus.
+// DIE ANFASSER EINER HALSKANTE. `seite` ist +1 rechts und -1 links.
 //
-// „stiel" ist die Fassung mit geraden Kanten und Kehlen (Boegen, oben in dieser
-// Datei). Die drei anderen sind DURCHGEHEND GESCHWUNGEN: statt Gerade-plus-Kehle
-// laeuft je eine kubische Kurve vom Orb bis an den Koerper. Sie setzt an beiden Enden
-// mit genau der Tangente an, die dort schon herrscht — am Orb die Kreistangente, am
-// Koerper die Kante — und ist deshalb genauso knickfrei wie ein Fillet, nur freier in
-// der Mitte. Ein Bogen kann nur eine Taille, eine Kurve kann jede.
-//
-//   winkel        wo der Hals den Orb verlaesst, gemessen vom rechtesten Punkt.
-//                 Gross heisst weit unten am Orb, also schmaler Ansatz.
-//   taille        wie schmal der Hals hoechstens werden darf, als halbe Breite.
-//   griffOrb      wie lange die Kurve die Richtung des Orbs beibehaelt. Gross heisst
-//                 gerade am Orb und dafuer eine schaerfere Biegung weiter unten.
-//   griffKoerper  dasselbe am anderen Ende, an der Kante des Koerpers.
-//   fussWeite     wie weit links vom Orb die Kurve auf der Oberkante landet.
-// ZWEI, DIE UEBRIG SIND. Jakob am 8. August 2026, nach der Reihe von der Saeule zum
-// Tropfen: "amphore / karaffe finde ich gut." Die Achse ging ueber fuenf Punkte
-// (Taille 34, 28, 22, 16, 10); uebrig sind die beiden benachbarten in der Mitte.
-// Saeule, Kelch und Tropfen sind damit vom Tisch und stehen nicht mehr hier — was
-// entschieden ist, muss nicht als Angebot herumliegen.
-//
-// Was die zwei unterscheidet, ist einzig die TAILLE, die schmalste Stelle des Halses:
-// 22px gegen 16px. Alles andere folgt ihr — je enger die Taille, desto weiter wandert
-// der Ansatz um den Orb herum und desto schmaler wird der Fuss.
-export const FORMEN = {
-  // Voller Koerper, der Hals nimmt sich zusammen. Voreingestellt.
-  amphore: { art: 'kurve', winkel: 10, taille: 11, griffOrb: 0.55, griffKoerper: 0.45, fussWeite: 44 },
-  // Dasselbe, eine Stufe schlanker: der Schwung wird deutlicher.
-  karaffe: { art: 'kurve', winkel: 12, taille: 8, griffOrb: 0.58, griffKoerper: 0.38, fussWeite: 40 },
-  // Gerade Kanten und Kehlen statt Kurven. Bleibt als Vergleichsmass stehen, bis
-  // entschieden ist — es ist die Bauweise, von der die Reihe wegfuehrt.
-  stiel: { art: 'bogen' },
-}
-
-export const FORM_NAMEN = Object.keys(FORMEN)
-
-// Die Anfasser einer geschwungenen Halskante. `seite` ist +1 rechts und -1 links.
-//
-// DIE TAILLE IST EINE HARTE GRENZE, und sie muss es sein. Ein kubischer Bogen liegt
-// immer innerhalb der Huelle seiner vier Punkte — halte ich alle vier auf ihrer Seite
+// DIE TAILLE IST EINE HARTE GRENZE, und sie muss es sein. Eine kubische Kurve liegt
+// immer innerhalb der Huelle ihrer vier Punkte — halte ich alle vier auf ihrer Seite
 // der Taille, kann die Kurve die andere Seite gar nicht erreichen. Ohne diese Schranke
 // kreuzen sich die beiden Halskanten bei langen Haelsen, und die Blase bekommt eine
 // Schlaufe. Gekuerzt wird der Anfasser, nicht seine RICHTUNG gedreht: die Richtung ist
 // die Kreistangente, und nur weil sie stimmt, sitzt am Orb keine Ecke.
-function halsKurve(g, form, seite) {
-  const bogen = (seite > 0 ? form.winkel : 180 - form.winkel) * Math.PI / 180
+export function halsKurve(g, seite) {
+  const bogen = (seite > 0 ? WINKEL : 180 - WINKEL) * Math.PI / 180
   const punkt = {
     x: g.sitz.x + g.sitzR * Math.cos(bogen),
     y: g.sitz.y + g.sitzR * Math.sin(bogen),
@@ -265,40 +131,38 @@ function halsKurve(g, form, seite) {
   // Uhrzeigersinn). Genau sie muss die Kurve uebernehmen, sonst entsteht eine Ecke.
   const tangente = { x: -Math.sin(bogen), y: Math.cos(bogen) }
   const strecke = Math.max(1, g.kante - punkt.y)
-  const grenze = g.sitz.x + seite * form.taille
+  const grenze = g.sitz.x + seite * TAILLE
   // Rechts laeuft der Anfasser mit -sin(bogen) nach links, links laeuft er (weil die
   // Kurve dort rueckwaerts gebaut wird) mit +sin(bogen) nach rechts. Beide Male also
   // auf die Achse zu, und beide Male ist sin(bogen) das Tempo.
   const tempo = Math.abs(Math.sin(bogen))
   const platz = Math.max(0, (punkt.x - grenze) * seite)
   const amOrb = tempo > 1e-6
-    ? Math.min(strecke * form.griffOrb, platz / tempo)
-    : strecke * form.griffOrb
-  return { punkt, tangente, amOrb, amKoerper: strecke * form.griffKoerper }
+    ? Math.min(strecke * GRIFF_ORB, platz / tempo)
+    : strecke * GRIFF_ORB
+  return { punkt, tangente, amOrb, amKoerper: strecke * GRIFF_KOERPER }
 }
 
-// Dieselbe Silhouette wie oben, nur ist der Hals hier nicht aus Geraden und Kehlen
-// zusammengesetzt, sondern aus zwei Kurven. Alles ausserhalb des Halses ist gleich.
-function blasenPfadGeschwungen(masse, form) {
+// Eine durchgehende Silhouette, im Uhrzeigersinn und in einem Zug. Sie faengt oben am
+// Orb an, laeuft um seine rechte Haelfte herum, ueber die rechte Halskante hinunter in
+// die rechte Panelkante, um den Koerper herum, ueber die linke Halskante wieder hinauf
+// und ueber die linke Haelfte des Orbs zurueck zum Anfang.
+export function blasenPfad(masse) {
   const g = blasenGeometrie(masse)
   const { links, rechts, unten, kante, sitzR, eckR } = g
-  const rechteSeite = halsKurve(g, form, +1)
-  const linkeSeite = halsKurve(g, form, -1)
-  const fussLinks = g.sitz.x - form.fussWeite
+  const re = halsKurve(g, +1)
+  const li = halsKurve(g, -1)
+  const fussLinks = g.sitz.x - FUSS_WEITE
   // Auch der waagerechte Anfasser am Fuss darf die Taille nicht ueberlaufen.
-  const fussGriff = Math.min(linkeSeite.amKoerper, Math.max(0, g.sitz.x - form.taille - fussLinks))
-  const punkt = p => `${rund(p.x)} ${rund(p.y)}`
+  const fussGriff = Math.min(li.amKoerper, Math.max(0, g.sitz.x - TAILLE - fussLinks))
+  const p = q => `${rund(q.x)} ${rund(q.y)}`
   return [
-    `M ${punkt(g.sitzOben)}`,
-    // Um die rechte Haelfte des Orbs bis dorthin, wo der Hals ansetzt. Ueber 180 Grad
-    // waere der grosse Bogen noetig — bei jedem sinnvollen Winkel bleibt er darunter.
-    `A ${sitzR} ${sitzR} 0 0 1 ${punkt(rechteSeite.punkt)}`,
+    `M ${p(g.sitzOben)}`,
+    `A ${sitzR} ${sitzR} 0 0 1 ${p(re.punkt)}`,
     // Die rechte Halskante. Sie endet senkrecht auf der Panelkante, deshalb liegt der
     // zweite Anfasser genau ueber dem Landepunkt.
-    `C ${punkt({
-      x: rechteSeite.punkt.x + rechteSeite.tangente.x * rechteSeite.amOrb,
-      y: rechteSeite.punkt.y + rechteSeite.tangente.y * rechteSeite.amOrb,
-    })} ${punkt({ x: rechts, y: kante - rechteSeite.amKoerper })} ${punkt({ x: rechts, y: kante })}`,
+    `C ${p({ x: re.punkt.x + re.tangente.x * re.amOrb, y: re.punkt.y + re.tangente.y * re.amOrb })}`
+      + ` ${p({ x: rechts, y: kante - re.amKoerper })} ${p({ x: rechts, y: kante })}`,
     `V ${rund(unten - eckR)}`,
     `A ${eckR} ${eckR} 0 0 1 ${rund(rechts - eckR)} ${rund(unten)}`,
     `H ${rund(links + eckR)}`,
@@ -308,14 +172,14 @@ function blasenPfadGeschwungen(masse, form) {
     `H ${rund(fussLinks)}`,
     // Die linke Halskante, andersherum: sie faengt waagerecht auf der Oberkante an und
     // endet auf der Kreistangente des Orbs.
-    `C ${punkt({ x: fussLinks + fussGriff, y: kante })} ${punkt({
-      x: linkeSeite.punkt.x - linkeSeite.tangente.x * linkeSeite.amOrb,
-      y: linkeSeite.punkt.y - linkeSeite.tangente.y * linkeSeite.amOrb,
-    })} ${punkt(linkeSeite.punkt)}`,
-    `A ${sitzR} ${sitzR} 0 0 1 ${punkt(g.sitzOben)}`,
+    `C ${p({ x: fussLinks + fussGriff, y: kante })}`
+      + ` ${p({ x: li.punkt.x - li.tangente.x * li.amOrb, y: li.punkt.y - li.tangente.y * li.amOrb })}`
+      + ` ${p(li.punkt)}`,
+    `A ${sitzR} ${sitzR} 0 0 1 ${p(g.sitzOben)}`,
     'Z',
   ].join(' ')
 }
+
 
 // Unterhalb der Mindestmasse gibt es keine Silhouette, die aufgeht. Der Hals zaehlt
 // nicht mit: er ist Strecke, kein Koerper. Was uebrig bleibt, muss der Koerper sein.
@@ -416,13 +280,8 @@ export function erzeugeKontur(svg) {
   let breite = 0
   let hoehe = 0
   let hals = 0
-  let form = 'stiel'
   return {
     svg,
-    setzeForm(neueForm) {
-      form = FORMEN[neueForm] ? neueForm : 'amphore'
-    },
-    get form() { return form },
     setzeMasse(neueBreite, neueHoehe, neuerHals = 0) {
       breite = neueBreite
       hoehe = neueHoehe
@@ -435,7 +294,7 @@ export function erzeugeKontur(svg) {
     get hoehe() { return hoehe },
     get hals() { return hals },
     zeichne(pBreite, pHoehe) {
-      const d = blasenPfad({ ...blasenMasse({ breite, hoehe, pBreite, pHoehe, hals }), form })
+      const d = blasenPfad(blasenMasse({ breite, hoehe, pBreite, pHoehe, hals }))
       pfad.setAttribute('d', d)
       // Derselbe Pfad schneidet den Inhalt zu: was noch nicht gewachsen ist, ist auch
       // nicht zu sehen. Sonst haenge der Text unten aus der kleinen Blase heraus.

@@ -1855,26 +1855,23 @@ body.zen #title:focus { opacity: 1; }
 
   /* DER HALS. Vom Sitz bis zur Oberkante des Koerpers.
 
-     Voreingestellt ist „gemischt", und das ist Jakobs Ansage vom 8. August 2026:
-     "länge: mischung aus mittig und lang". Beide Enden der Mischung gibt es einzeln:
+     Die Laenge ist Jakobs Ansage vom 8. August 2026: "länge: mischung aus mittig und
+     lang". Sie steht als arithmetisches Mittel zweier Rechnungen da:
 
-       mittig  Der Koerper steht senkrecht in der Mitte. Die Laenge ist dann keine
-               Wahl mehr, sondern eine Folge — und laeuft bei hohen Fenstern weit
-               (320px bei 1300px Fensterhoehe).
-       lang    Fest 96px. Ruehrt sich nie, egal wie hoch das Fenster ist.
+       --blase-hals-mittig  stellt den Koerper senkrecht in die Mitte. Die Laenge ist
+                            dann keine Wahl mehr, sondern eine Folge — und laeuft bei
+                            hohen Fenstern weit (320px bei 1300px Fensterhoehe).
+       --blase-hals-lang    fest 96px. Ruehrt sich nie, egal wie hoch das Fenster ist.
 
-     Die Mischung ist das arithmetische Mittel aus beiden: die Blase wandert mit dem
-     Fenster zur Mitte hin, aber nur halb so schnell. Bei 900px Fensterhoehe sind das
-     107px, bei 1300px 207px.
-
-     Der Koerper behaelt in allen Fassungen dieselbe Groesse. Sonst veraenderte der
-     Umschalter zwei Dinge auf einmal, und die Wahl waere keine. */
+     Die Blase wandert also mit dem Fenster zur Mitte hin, aber nur halb so schnell.
+     Bei 900px Fensterhoehe sind das 107px, bei 1300px 207px. */
 
   /* Die Schulter: vom oberen Kastenrand bis zur Oberkante des Koerpers, wenn der
-     gerade Teil des Halses null lang ist. Sitz (22) + Kopfkehle (26,46) + Fusskehle
-     (14). Die 26,46 sind gerechnet und stehen in onda-blase.mjs als KOPF_VERSATZ;
-     onda-design-contract.test.mjs haelt die Zahl hier mit der dort zusammen. */
-  --blase-schulter: 62.46px;
+     Hals null lang ist. Der Orb belegt davon 44px, der Rest ist der kuerzeste Weg, auf
+     dem die Halskurve den Kreis noch verlassen und sich zur Kante drehen kann. Steht
+     auch in onda-blase.mjs als SCHULTER — onda-design-contract.test.mjs haelt beide
+     Zahlen zusammen. */
+  --blase-schulter: 62px;
   /* Der kleinste Rand ueber dem Koerper, und er ist abgeleitet: Orb und Schulter
      belegen die Strecke ohnehin, ein Fingerbreit Luft kommt dazu. Waere der Rand
      kleiner, klemmte der Hals bei niedrigen Fenstern auf null, und die Blase saesse
@@ -1897,62 +1894,6 @@ body.zen #title:focus { opacity: 1; }
   --blase-schatten: drop-shadow(0 4px 8px rgba(28, 26, 23, 0.06)) drop-shadow(0 16px 32px rgba(28, 26, 23, 0.1));
 }
 
-/* DIE DREI ANDEREN LAENGEN ZUM VERGLEICH. „mittig" haengt an der Fensterhoehe, „lang"
-   und „kurz" nicht — bei ihnen bleibt die Blase oben angeschlagen und der Hals ist
-   gesetzt. Nur damit am laufenden Programm zu sehen ist, was die Mischung gegen ihre
-   beiden Enden eintauscht. Umgeschaltet wird ueber den Varianten-Umschalter; er ist
-   keine Dauereinrichtung. */
-[data-blase-hals="mittig"] #editorView { --blase-hals-wunsch: var(--blase-hals-mittig); }
-[data-blase-hals="lang"] #editorView { --blase-hals-wunsch: var(--blase-hals-lang); }
-[data-blase-hals="kurz"] #editorView { --blase-hals-wunsch: 40px; }
-
-/* Der Umschalter selbst. Absichtlich schlicht: er ist ein Geruest, kein Bauteil, und
-   verschwindet mit der Entscheidung wieder. Er sitzt unten links, wo weder Text noch
-   Blase noch Seitenleisten-Fuss stehen. */
-.onda-varianten {
-  position: fixed;
-  z-index: 70;
-  left: 50%;
-  bottom: var(--space-4);
-  transform: translateX(-50%);
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: var(--space-1);
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-overlay);
-  background: var(--bg-surface);
-  box-shadow: var(--shadow-lg);
-  font: var(--type-caption);
-}
-
-.onda-varianten__reihe {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.onda-varianten__wort {
-  color: var(--text-tertiary);
-  min-width: 4ch;
-}
-
-.onda-varianten__knopf {
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  padding: 2px var(--space-2);
-  background: none;
-  color: var(--text-secondary);
-  font: inherit;
-  cursor: pointer;
-}
-
-.onda-varianten__knopf[aria-pressed="true"] {
-  border-color: var(--border-default);
-  color: var(--text-primary);
-  background: var(--bg-sunken);
-}
 
 [data-theme="dark"] #editorView {
   --blase-schatten: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.35)) drop-shadow(0 16px 32px rgba(0, 0, 0, 0.45));

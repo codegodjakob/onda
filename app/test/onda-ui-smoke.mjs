@@ -1004,19 +1004,19 @@ async function assertBlaseSitztMittigAmHals(page) {
       `Gezeichnete Oberkante ${lage.kante.toFixed(2)} gegen gerechnete ${(lage.schulter + lage.hals).toFixed(2)}`,
     )
 
-    // Und das eine Ende der Mischung hält sein Versprechen: auf „mittig" gestellt
-    // sitzt der Körper wirklich in der Mitte, oben und unten derselbe Rand.
-    await page.evaluate(() => { document.documentElement.dataset.blaseHals = 'mittig' })
-    await page.waitForTimeout(60)
-    const mittig = await messen()
-    const randOben = mittig.oben + mittig.kante
-    const randUnten = mittig.fensterhoehe - mittig.unten
+    // Und das eine Ende der Mischung hält sein Versprechen — nachgerechnet statt
+    // umgeschaltet, denn den Umschalter gibt es nicht mehr: WÄRE der Hals so lang wie
+    // --blase-hals-mittig, dann säße der Körper wirklich in der Mitte, oben und unten
+    // derselbe Rand. Ohne diese Probe wäre „gemischt" der Mittelwert aus einer Zahl,
+    // die niemand mehr prüft.
+    const koerper = (lage.unten - lage.oben) - lage.schulter - lage.hals
+    const randObenMittig = lage.oben + lage.schulter + lage.halsMittig
+    const randUntenMittig = lage.fensterhoehe - (randObenMittig + koerper)
     assert.ok(
-      Math.abs(randOben - randUnten) <= 1.5,
-      `„mittig" sitzt bei ${hoehe}px nicht mittig: ${randOben.toFixed(1)}px oben gegen ${randUnten.toFixed(1)}px unten`,
+      Math.abs(randObenMittig - randUntenMittig) <= 1.5,
+      `Bei ${hoehe}px stellt --blase-hals-mittig den Körper nicht mittig:`
+      + ` ${randObenMittig.toFixed(1)}px oben gegen ${randUntenMittig.toFixed(1)}px unten`,
     )
-    await page.evaluate(() => { delete document.documentElement.dataset.blaseHals })
-    await page.waitForTimeout(60)
   }
 
   await page.setViewportSize({ width: 1440, height: 1000 })
