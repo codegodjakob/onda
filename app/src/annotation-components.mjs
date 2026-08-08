@@ -53,21 +53,47 @@ function annotationSurface(finding, form, className) {
   return { surface, normalized, presentation }
 }
 
+// Die Kopfzeile aus Design System 2 (components/annotation/Annotation.jsx):
+// Symbol · Art · Nummer · Anzahl · Rangfolge — und ganz rechts der Geltungsbereich.
+// Die Reihenfolge ist die der Vorlage; sie liest sich von "was ist das" ueber
+// "wie oft" zu "wie wichtig".
 function annotationHeader(finding, presentation, iconName = 'message') {
   const header = element('header', 'aura-note__head')
   header.append(ondaIcon(iconName, { size: 16 }))
   header.append(element('span', 'aura-note__kind', presentation.label))
+  if (finding.n != null) header.append(element('span', 'aura-note__n', finding.n))
+  if (finding.count != null) header.append(element('span', 'aura-note__count', `${finding.count}×`))
   header.append(element('span', `aura-note__priority aura-note__priority--${presentation.priority}`, PRIORITY_LABELS[presentation.priority]))
   header.append(element('span', 'aura-note__scope', finding.scope || presentation.scope))
   return header
 }
 
+// "Warum?" ist in der Vorlage ein Knopf, der auf "Regel ausblenden" umschaltet —
+// kein <details> mit Dreieck. Der Unterschied ist nicht kosmetisch: das Dreieck
+// verspricht einen Abschnitt, hier kommt ein Satz.
 function explanation(finding) {
   if (!finding.why) return null
-  const details = element('details', 'aura-note__details')
-  details.append(element('summary', '', 'Warum?'))
-  details.append(element('p', 'aura-note__rule', finding.why))
-  return details
+  const huelle = element('div', 'aura-note__why-block')
+  const knopf = element('button', 'aura-note__why', 'Warum?')
+  knopf.type = 'button'
+  const regel = element('p', 'aura-note__rule', finding.why)
+  regel.hidden = true
+  knopf.addEventListener('click', event => {
+    event.preventDefault()
+    event.stopPropagation()
+    regel.hidden = !regel.hidden
+    knopf.textContent = regel.hidden ? 'Warum?' : 'Regel ausblenden'
+  })
+  huelle.append(knopf, regel)
+  return huelle
+}
+
+// Der Vergleichsblock der Vorlage: alt durchgestrichen, neu darunter.
+function suggestionBlock(from, to) {
+  const block = element('div', 'aura-note__block')
+  if (from) block.append(element('span', 'aura-note__from', from))
+  if (to) block.append(element('span', 'aura-note__to', to))
+  return block
 }
 
 function actionRow(finding, callbacks, acceptLabel = 'Übernehmen', dismissLabel = 'Verwerfen') {
@@ -98,70 +124,127 @@ export function renderAnnotationMark({ finding, text, active = false, index = nu
   return mark
 }
 
+// Korrektur — die kompakteste Form der Vorlage (components/annotation/Correction.jsx).
+// Was objektiv falsch ist, braucht keine Karte mit Kopfzeile und Rangfolge: eine
+// Zeile "alt → neu" und ein Klick genuegen. In der Vorlage ist das ein Popover
+// direkt unter der markierten Stelle, nicht eine Karte am Rand.
+//
+// Der Grund steht in annotation.card.html: "Was eindeutig falsch ist, wird am
+// Wort korrigiert." Eine Rechtschreibkorrektur, die so gross ist wie eine
+// Belegkarte, behauptet eine Wichtigkeit, die sie nicht hat.
 export function renderCorrection(finding, callbacks = {}) {
-  const { surface, normalized, presentation } = annotationSurface(finding, 'correction', 'aura-correction')
-  surface.append(annotationHeader(normalized, presentation, presentation.priority === 'fehler' ? 'edit' : 'sparkle'))
-  if (normalized.short) surface.append(element('p', 'aura-note__body', normalized.short))
-  const comparison = element('div', 'aura-correction__comparison')
-  comparison.append(element('span', 'aura-note__from', normalized.target))
-  comparison.append(ondaIcon('chevron-right', { size: 16 }))
-  comparison.append(element('span', 'aura-note__to', normalized.action || normalized.suggestion))
-  surface.append(comparison)
-  const why = explanation(normalized)
-  if (why) surface.append(why)
-  const actions = actionRow(normalized, callbacks)
-  if (actions) surface.append(actions)
+  const { surface, normalized } = annotationSurface(finding, 'correction', 'aura-corr__pop')
+  const ersatz = normalized.action || normalized.suggestion
+  if (ersatz) {
+    surface.append(element('span', 'aura-corr__from', normalized.target))
+    const pfeil = element('span', 'aura-corr__sep')
+    pfeil.append(ondaIcon('chevron-right', { size: 14 }))
+    surface.append(pfeil)
+    surface.append(element('span', 'aura-corr__to', ersatz))
+  }
+  if (normalized.short) surface.append(element('span', 'aura-corr__note', normalized.short))
+  if (callbacks.onAccept) {
+    const ok = element('button', 'aura-corr__ok', 'Übernehmen')
+    ok.type = 'button'
+    ok.addEventListener('click', stop(callbacks.onAccept, normalized))
+    surface.append(ok)
+  }
+  if (callbacks.onDismiss) {
+    const weg = element('button', 'aura-corr__x')
+    weg.type = 'button'
+    weg.setAttribute('aria-label', 'Verwerfen')
+    weg.append(ondaIcon('x', { size: 14 }))
+    weg.addEventListener('click', stop(callbacks.onDismiss, normalized))
+    surface.append(weg)
+  }
   return surface
 }
 
+// Umschreibung — Vorschlagskarte neben der markierten Stelle
+// (components/annotation/Rewrite.jsx). Neu gegenueber vorher: die Kopfzeile
+// traegt rechts ein `meta` — in der Vorlage steht dort der Beweis, warum die
+// neue Fassung besser ist: "24 → 12 Wörter", "4 → 1 Satz". Eine Behauptung
+// ohne Zahl waere nur Geschmack; mit Zahl ist sie nachpruefbar.
 export function renderRewrite(finding, callbacks = {}) {
   const { surface, normalized, presentation } = annotationSurface(finding, 'rewrite', 'aura-rewrite')
-  surface.append(annotationHeader(normalized, presentation, 'sparkle'))
-  if (normalized.short) surface.append(element('p', 'aura-note__body', normalized.short))
-  surface.append(element('p', 'aura-rewrite__text', normalized.action || normalized.suggestion))
+  const label = element('div', 'aura-rewrite__label')
+  label.append(element('span', '', normalized.label || presentation.label))
+  if (normalized.meta) label.append(element('span', 'aura-rewrite__meta', normalized.meta))
+  surface.append(label)
+  if (normalized.short) surface.append(element('p', 'aura-rewrite__note', normalized.short))
+  const ersatz = normalized.action || normalized.suggestion
+  if (ersatz) surface.append(element('p', 'aura-rewrite__text', ersatz))
   const why = explanation(normalized)
   if (why) surface.append(why)
-  const actions = actionRow(normalized, callbacks, normalized.acceptLabel || 'Fassung übernehmen', 'Original behalten')
+  const actions = actionRow(normalized, callbacks, normalized.acceptLabel || 'Übernehmen', 'Original behalten')
   if (actions) surface.append(actions)
   return surface
 }
 
+// Einfuegung — der Vorschlag liegt IM Textfluss und oeffnet eine Luecke an der
+// Einfuegestelle, statt etwas zu verdecken (components/annotation/Insertion.jsx).
+// Deshalb hat diese Form keine Kopfzeile mit Rangfolge: sie steht mitten im
+// Satz, und alles, was dort nicht der Vorschlag selbst ist, stoert beim Lesen.
 export function renderInsertion(finding, callbacks = {}) {
-  const { surface, normalized, presentation } = annotationSurface(finding, 'insertion', 'aura-insertion')
-  surface.append(annotationHeader(normalized, presentation, 'plus'))
-  if (normalized.short) surface.append(element('p', 'aura-note__body', normalized.short))
-  const flow = element('div', 'aura-insertion__flow')
-  flow.append(element('span', 'aura-insertion__caret'))
-  flow.append(element('p', 'aura-insertion__text', normalized.action || normalized.suggestion))
-  surface.append(flow)
-  const actions = actionRow(normalized, callbacks, 'Einfügen')
-  if (actions) surface.append(actions)
+  const { surface, normalized, presentation } = annotationSurface(finding, 'insertion', 'aura-ins__pop')
+  surface.append(element('span', 'aura-ins__label', normalized.label || presentation.label))
+  const ersatz = normalized.action || normalized.suggestion
+  if (ersatz) surface.append(element('span', 'aura-ins__ghost', ersatz))
+  if (normalized.short) surface.append(element('span', 'aura-ins__note', normalized.short))
+  const acts = element('span', 'aura-ins__acts')
+  if (callbacks.onAccept) {
+    const ok = element('button', 'aura-ins__ok', normalized.acceptLabel || 'Einfügen')
+    ok.type = 'button'
+    ok.addEventListener('click', stop(callbacks.onAccept, normalized))
+    acts.append(ok)
+  }
+  if (callbacks.onDismiss) {
+    const nein = element('button', 'aura-ins__no', 'Verwerfen')
+    nein.type = 'button'
+    nein.addEventListener('click', stop(callbacks.onDismiss, normalized))
+    acts.append(nein)
+  }
+  if (acts.children.length) surface.append(acts)
   return surface
 }
 
+// Zielplatz — ein gestrichelter Rahmen dort, wo etwas HIN soll
+// (components/annotation/Slot.jsx). Gestrichelt und ohne eigene Flaeche, weil
+// der Platz noch leer ist: eine gefuellte Karte wuerde behaupten, dort stehe
+// schon etwas.
 export function renderSlot(finding, callbacks = {}) {
   const { surface, normalized, presentation } = annotationSurface(finding, 'slot', 'aura-slot')
-  surface.append(annotationHeader(normalized, presentation, 'arrow-right'))
-  if (normalized.short) surface.append(element('p', 'aura-note__body', normalized.short))
-  const destination = normalized.move?.to || normalized.action || 'An die vorgeschlagene Stelle'
-  surface.append(element('p', 'aura-slot__text', destination))
-  const actions = actionRow(normalized, callbacks, presentation.operation === 'insert-heading' ? 'Gliedern' : 'Verschieben', 'Lassen')
+  const gliedern = presentation.operation === 'insert-heading'
+  surface.append(element('span', 'aura-slot__label', normalized.label || (gliedern ? 'Zwischentitel hier' : 'Hierher verschieben')))
+  const ziel = normalized.move?.to || normalized.action || normalized.target
+  if (ziel) surface.append(element('p', 'aura-slot__text', ziel))
+  if (normalized.short) surface.append(element('p', 'aura-slot__note', normalized.short))
+  const actions = actionRow(normalized, callbacks, gliedern ? 'Gliedern' : 'Verschieben', 'Lassen')
   if (actions) surface.append(actions)
   return surface
 }
 
+// Sammelkarte — eine Anmerkung, viele Stellen (Wiederholung, Ton & Register).
+// Die Stellen selbst sind im Text markiert und durchnummeriert; hier steht die
+// Zusammenfassung mit Anzahl und ein Vorschlag fuer alle auf einmal. In der
+// Vorlage ist das <Annotation count={3} suggestion={{from,to}}>.
 export function renderRegion(finding, callbacks = {}) {
-  const { surface, normalized, presentation } = annotationSurface(finding, 'region', 'aura-region')
-  surface.append(annotationHeader(normalized, presentation, 'sparkle'))
-  surface.append(element('p', 'aura-note__body', normalized.short))
-  const samples = element('div', 'aura-region__samples')
-  const targets = Array.isArray(normalized.targets) && normalized.targets.length
-    ? normalized.targets
-    : [{ text: normalized.target }]
-  targets.forEach(target => samples.append(element('span', 'aura-region__sample', target.text)))
-  surface.append(samples)
-  if (normalized.action) surface.append(element('p', 'aura-region__proposal', normalized.action))
-  const actions = actionRow(normalized, callbacks, 'Änderungen übernehmen')
+  const { surface, normalized, presentation } = annotationSurface(finding, 'region', 'aura-note')
+  const stellen = Array.isArray(normalized.targets) ? normalized.targets.length : null
+  surface.append(annotationHeader(
+    { ...normalized, count: normalized.count ?? stellen },
+    presentation,
+    'sparkle',
+  ))
+  if (normalized.short) surface.append(element('p', 'aura-note__body', normalized.short))
+  const von = normalized.suggestion?.from || (Array.isArray(normalized.targets)
+    ? normalized.targets.map(ziel => ziel.text).filter(Boolean).join(' · ')
+    : normalized.target)
+  const nach = normalized.suggestion?.to || normalized.action
+  if (von || nach) surface.append(suggestionBlock(von, nach))
+  const why = explanation(normalized)
+  if (why) surface.append(why)
+  const actions = actionRow(normalized, callbacks, normalized.acceptLabel || 'Alle ersetzen')
   if (actions) surface.append(actions)
   return surface
 }
@@ -214,13 +297,30 @@ function renderCompare(finding, callbacks = {}) {
   return surface
 }
 
+// Die gewoehnliche Karte. Sie zeigt alles, was die Vorlage kennt, aber nur,
+// wenn es da ist: Vorschlag, Verschiebeziel, Ausschlussvermerk.
 export function renderAnnotationCard(finding, callbacks = {}) {
   const form = resolveAnnotationPresentation(finding).form
   if (form === 'source') return renderSource(finding, callbacks)
   if (form === 'compare') return renderCompare(finding, callbacks)
   const { surface, normalized, presentation } = annotationSurface(finding, form, 'aura-note')
   surface.append(annotationHeader(normalized, presentation))
-  surface.append(element('p', 'aura-note__body', normalized.short))
+  if (normalized.short) surface.append(element('p', 'aura-note__body', normalized.short))
+  if (normalized.suggestion?.from || normalized.suggestion?.to) {
+    surface.append(suggestionBlock(normalized.suggestion.from, normalized.suggestion.to))
+  }
+  if (normalized.move?.to) {
+    const block = element('div', 'aura-note__block')
+    const zeile = element('span', 'aura-note__move')
+    zeile.append(ondaIcon('arrow-right', { size: 13 }))
+    zeile.append(element('span', '', normalized.move.to))
+    block.append(zeile)
+    surface.append(block)
+  }
+  // "Schliesst aus": zwei Vorschlaege koennen einander widersprechen. Wer den
+  // einen nimmt, kann den anderen nicht mehr nehmen — das gehoert dazugesagt,
+  // bevor geklickt wird, nicht danach.
+  if (normalized.conflict) surface.append(element('span', 'aura-note__conflict', `Schließt aus: ${normalized.conflict}`))
   const why = explanation(normalized)
   if (why) surface.append(why)
   const actions = actionRow(normalized, callbacks)
