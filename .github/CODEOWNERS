@@ -1,0 +1,30 @@
+# CODEOWNERS — wer ist zuständig, sichtbar am Pull Request.
+#
+# GitHub liest diese Datei bei jedem Pull Request und trägt die hier genannten Namen
+# automatisch als Prüfende ein. Das ist der ganze Zweck: Zuständigkeit steht nicht mehr in
+# irgendjemandes Kopf, sondern taucht von selbst dort auf, wo geprüft wird.
+#
+# Die Syntax ist die von .gitignore: ein Muster, dann die zuständigen Namen.
+# `*` heißt: gilt für alles. Die zuletzt passende Zeile gewinnt.
+
+# Onda hat heute genau einen Menschen, dem alles gehört. Also genau eine Zeile.
+* @codegodjakob
+
+# WARUM HIER KEINE LISTE DER SECHS ORDNER STEHT.
+#
+# Es wäre leicht, hier sechs Zeilen hinzuschreiben — betrieb/, app/, mac/, tools/,
+# design/, docs/ — und hinter jede denselben Namen. Nur wäre das eine zweite Fassung
+# dessen, was betrieb/REVIERE.md schon in Prosa sagt, und zwei Fassungen derselben
+# Auskunft laufen auseinander, sobald jemand nur eine davon anfasst. Solange alle sechs
+# Reviere zu derselben Person führen, sagen sechs Zeilen exakt so viel wie eine.
+#
+# Wo die Reviere WIRKLICH beschrieben sind: betrieb/REVIERE.md. Dort steht in Prosa,
+# welcher Ordner zu welcher Arbeit gehört und wo die Grenzen zwischen ihnen verlaufen.
+#
+# Wann diese Datei wächst: sobald es einen zweiten Namen gibt. Dann kommt eine Zeile je
+# Revier hinzu, das dieser zweite Name übernimmt — zum Beispiel
+#
+#     design/    @jemand-anders
+#
+# und ab dann trägt GitHub bei jedem Pull Request an der Gestaltung die richtige Person
+# von selbst ein. Bis dahin bleibt es bei der einen Zeile oben.
