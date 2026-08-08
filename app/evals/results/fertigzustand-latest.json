@@ -3,8 +3,8 @@
   "catalogVersion": "2026-08-05.3",
   "stage": "FERTIGZUSTAND",
   "iteration": 1,
-  "generatedAt": "2026-08-08T12:33:41.474Z",
-  "gitCommit": "3aa5084eab4f630c235d64440e8b7976de3cde45",
+  "generatedAt": "2026-08-08T12:47:43.133Z",
+  "gitCommit": "080fe1e529f72fb25fd6316e1127f61eb5d2ab3a",
   "rubricScores": {
     "truth": 5,
     "authorship": 5,
@@ -24,15 +24,15 @@
     "access_privacy": "Automatisierte Drei-Engine-, Zoom-, Zielgrößen-, Export- und Geheimnisprüfungen bestehen; echte assistive Nutzung bleibt extern, daher Deckel 4,5."
   },
   "coverage": {
-    "passed": 142,
+    "passed": 147,
     "applicable": 147,
-    "ratio": 0.966
+    "ratio": 1
   },
   "loops": [
     {
       "iteration": 1,
-      "passed": 142,
-      "failed": 5,
+      "passed": 147,
+      "failed": 0,
       "externalOpen": 5,
       "weightedScore": 4.88
     }
@@ -3945,63 +3945,58 @@
     },
     {
       "id": "DESIGN-01",
-      "status": "failed",
+      "status": "passed",
       "evidence": [
         {
           "kind": "browser",
           "path": "evals/results/laeufe/evals-pruefungen-gestalt-mjs.log",
           "command": "node evals/pruefungen/gestalt.mjs"
         }
-      ],
-      "note": "Gebundene Prüfung in diesem Lauf fehlgeschlagen: evals/pruefungen/gestalt.mjs"
+      ]
     },
     {
       "id": "DESIGN-02",
-      "status": "failed",
+      "status": "passed",
       "evidence": [
         {
           "kind": "browser",
           "path": "evals/results/laeufe/evals-pruefungen-gestalt-mjs.log",
           "command": "node evals/pruefungen/gestalt.mjs"
         }
-      ],
-      "note": "Gebundene Prüfung in diesem Lauf fehlgeschlagen: evals/pruefungen/gestalt.mjs"
+      ]
     },
     {
       "id": "DESIGN-03",
-      "status": "failed",
+      "status": "passed",
       "evidence": [
         {
           "kind": "browser",
           "path": "evals/results/laeufe/evals-pruefungen-gestalt-mjs.log",
           "command": "node evals/pruefungen/gestalt.mjs"
         }
-      ],
-      "note": "Gebundene Prüfung in diesem Lauf fehlgeschlagen: evals/pruefungen/gestalt.mjs"
+      ]
     },
     {
       "id": "DESIGN-04",
-      "status": "failed",
+      "status": "passed",
       "evidence": [
         {
           "kind": "browser",
           "path": "evals/results/laeufe/evals-pruefungen-gestalt-mjs.log",
           "command": "node evals/pruefungen/gestalt.mjs"
         }
-      ],
-      "note": "Gebundene Prüfung in diesem Lauf fehlgeschlagen: evals/pruefungen/gestalt.mjs"
+      ]
     },
     {
       "id": "DESIGN-05",
-      "status": "failed",
+      "status": "passed",
       "evidence": [
         {
           "kind": "browser",
           "path": "evals/results/laeufe/evals-pruefungen-gestalt-mjs.log",
           "command": "node evals/pruefungen/gestalt.mjs"
         }
-      ],
-      "note": "Gebundene Prüfung in diesem Lauf fehlgeschlagen: evals/pruefungen/gestalt.mjs"
+      ]
     },
     {
       "id": "DESIGN-06",
