@@ -132,13 +132,6 @@ export function applySettings() {
   const root = document.documentElement
   const dark = s.theme === 'dark' || (s.theme === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches)
   root.dataset.theme = dark ? 'dark' : 'light'
-  // Die gewaehlte Fassung der Anmerkungszeile ueberlebt den Neustart. Sie liegt
-  // bewusst NICHT in den Einstellungen: das hier ist ein Vergleichslauf, keine
-  // Produkteinstellung. Sobald die Fassung entschieden ist, faellt beides weg.
-  try {
-    const bilanz = localStorage.getItem('ondaBilanzVariante')
-    if (bilanz) root.dataset.bilanzVariante = bilanz
-  } catch { /* kein Speicher, dann eben der Standard */ }
   // Das Designsystem kennt genau einen Akzent. Alte gespeicherte Varianten
   // werden nicht mehr in die Oberflaeche projiziert.
   root.removeAttribute('data-accent')
