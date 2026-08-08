@@ -95,9 +95,9 @@ async function createPlan(page) {
   await page.locator('#researchPlanOpen').click()
   // Die URSACHE des Last-Flakes (deterministisch nachgewiesen auf Zweig
   // claude/cranky-cori-c122aa, dd5a3e1): das Formular fokussiert das Fragefeld
-  // verzögert per requestAnimationFrame, und fill() schickt den Text an das
-  // gerade fokussierte Element. Feuert der Frame unter Last verspätet mitten
-  // im Ausfüllen, zieht er den Fokus zurück aufs Fragefeld — der Aussagetext
+  // verzögert per requestAnimationFrame (research-ui.mjs), und fill() schickt den
+  // Text an das gerade fokussierte Element. Feuert der Frame unter Last verspätet
+  // mitten im Ausfüllen, zieht er den Fokus zurück aufs Fragefeld — der Aussagetext
   // landet im falschen Feld, das Pflichtfeld bleibt leer, das Speichern wird
   // stumm blockiert. Darum: erst tippen, wenn der Autofokus angekommen ist.
   await page.waitForFunction(() => document.activeElement?.id === 'researchQuestion')

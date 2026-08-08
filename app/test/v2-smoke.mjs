@@ -29,6 +29,10 @@ async function openExample(page, clear = true) {
   }
   await page.locator('#doclist .doc').filter({ hasText: 'Beispiel: Calm Technology' }).click()
   await page.locator('#doclist .doc').first().click()
+  // openDoc fokussiert den Editor ueber Tiptaps focus() — und das laeuft intern in einem
+  // requestAnimationFrame. Erst wenn dieser Fokus angekommen ist, kann der spaet feuernde
+  // rAF keine fokusabhaengige Aktion (fill, focus + Enter) mehr bestehlen.
+  await page.waitForFunction(() => window.AIWT.state.editor.view.hasFocus())
 }
 
 async function installiereTransportMock(page) {
@@ -1214,6 +1218,9 @@ async function runSystem8BudgetGate(browser) {
   await page.locator('#kiSettings').click()
   const dialog = page.locator('#kiModal[role="dialog"]')
   await expectVisible(dialog)
+  // openOndaDialog fokussiert per requestAnimationFrame das erste Element im Dialog. Erst wenn
+  // dieser Fokus angekommen ist, kann der spaet feuernde rAF das fill() nicht mehr bestehlen.
+  await page.waitForFunction(() => document.activeElement?.closest('#kiModal'))
 
   // Issue #13 (Task 4): der Ertrag-Abschnitt steht zwischen Verbrauch und Budget. Frisches
   // Projekt, noch keine einzige Entscheidung — hier MUSS der ehrliche "noch zu wenig"-Satz

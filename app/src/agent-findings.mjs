@@ -48,6 +48,9 @@ function einfacherHash(value) {
 
 // Dieselbe Textbasis für die Anfrage an das Modell UND für findeAnker —
 // nur so zeigen Anker-Indizes auf dieselben Stellen.
+// Die drei Stufen, die das Modell vergeben darf (agent-tasks.mjs, HINWEISE_SCHEMA).
+const GEWINN_STUFEN = new Set(['traegt', 'schaerft', 'glaettet'])
+
 export function baueDocText(blocks) {
   return (blocks || []).map(block => String(block.text || '')).join(TRENNER)
 }
@@ -123,6 +126,11 @@ export function hinweisZuFinding(hinweis, ankerErgebnis, blockId, docText, jetzt
     vorschlagsart: String(hinweis.vorschlagsart || (vorschlag ? 'formulierung' : 'keiner')),
     stilmittelId: hinweis.stilmittelId == null ? null : String(hinweis.stilmittelId),
     istGrundursache: hinweis.istGrundursache === true,
+    // Nur ein AUSDRUECKLICH gueltiger Wert zaehlt. Fehlt er (aeltere gespeicherte
+    // Antworten, Fixtures von vor dem 8.8.2026) oder steht dort etwas Unbekanntes,
+    // gilt die mittlere Stufe: nach hinten zu sortieren waere eine Strafe fuer alte
+    // Eintraege, nach vorn eine Einladung, das Feld einfach wegzulassen.
+    gewinn: GEWINN_STUFEN.has(hinweis.gewinn) ? hinweis.gewinn : 'schaerft',
     priority: hinweis.istGrundursache === true ? 'high' : 'normal',
     createdAt: jetzt,
     provenance: { actor: 'agent', action: 'hinweise', createdAt: jetzt },

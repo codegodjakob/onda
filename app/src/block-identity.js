@@ -80,9 +80,9 @@ export function ensureTopLevelBlockIds(editor) {
   return true
 }
 
-export function getEditorBlocks(editor) {
+export function getEditorBlocks(editor, rollen = null) {
   if (!editor) return []
-  const snapshots = collectBlockSnapshots(editor.getJSON())
+  const snapshots = collectBlockSnapshots(editor.getJSON(), rollen)
   const blocks = []
 
   editor.state.doc.forEach((node, pos, index) => {

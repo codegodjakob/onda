@@ -33,6 +33,14 @@ enum Store {
     static let maxBackupGenerationen = 5
     static var backupAbstandSekunden: TimeInterval = 60 // var: der Selbsttest setzt ihn auf 0
 
+    /// Die Uhr, aus der die NAMEN der Sicherungen ihren Zeitstempel ziehen. Eine
+    /// `var`, damit der Selbsttest sie anhalten kann: dann fallen mehrere Stufen in
+    /// dieselbe Millisekunde, und zwar bei jedem Lauf statt nach Tagesform des
+    /// Rechners. Eine Prüfung, die nur manchmal prüft, prüft nicht.
+    /// Das Fälligkeitsfenster in `sichereVorstufe` liest bewusst weiter die echte
+    /// Uhr: es beantwortet „ist genug Zeit vergangen?", nicht „wie heißt die Datei?".
+    static var stempelUhr: () -> Date = { Date() }
+
     enum SaveErgebnis: Equatable {
         case ok
         case ungueltig            // kein gültiges JSON — wird nie geschrieben
@@ -49,7 +57,8 @@ enum Store {
         return (try? JSONSerialization.jsonObject(with: d)) != nil
     }
 
-    private static func stamp(_ datum: Date = Date()) -> String {
+    private static func stamp(_ datum: Date? = nil) -> String {
+        let datum = datum ?? stempelUhr()
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_US_POSIX")
         f.timeZone = TimeZone.current
@@ -57,13 +66,40 @@ enum Store {
         return f.string(from: datum)
     }
 
-    /// Alle datierten Generationen, neueste zuerst (das Namensformat sortiert chronologisch).
+    /// Zeitstempel und Zähler aus einem Generationsnamen. Der Zähler fehlt beim
+    /// ersten Eintrag einer Millisekunde und zählt dann als 1.
+    private static func generationsSchluessel(_ name: String) -> (String, Int) {
+        let kern = String(name.dropFirst(backupPrefix.count).dropLast(".json".count))
+        let teile = kern.split(separator: "-")
+        guard teile.count >= 4, let zaehler = Int(teile[3]) else { return (kern, 1) }
+        return (teile[0..<3].joined(separator: "-"), zaehler)
+    }
+
+    /// Die Gegenrichtung zu `generationsSchluessel`: aus Zeitstempel und Zähler wird
+    /// wieder ein Name. Zähler 1 heißt kein Zusatz — so hießen die Generationen von
+    /// Anfang an, und genau so liest der Schlüssel sie zurück. Beide Hälften der
+    /// Regel stehen deshalb nebeneinander; wandert eine, fällt die andere auf.
+    private static func generationsURL(zeit: String, lauf: Int) -> URL {
+        lauf <= 1
+            ? dir.appendingPathComponent("\(backupPrefix)\(zeit).json")
+            : dir.appendingPathComponent("\(backupPrefix)\(zeit)-\(lauf).json")
+    }
+
+    /// Alle datierten Generationen, neueste zuerst.
+    ///
+    /// Sortiert wird nach Bedeutung — Zeitstempel, dann Zähler —, nicht nach rohem
+    /// Dateinamen. Der rohe Textvergleich stellte "…-500-2.json" HINTER
+    /// "…-500.json", weil "-" (0x2D) vor "." (0x2E) kommt: bei zwei Sicherungen in
+    /// derselben Millisekunde galt die jüngere als die ältere. Das traf zwei
+    /// Stellen, die beide echte Texte kosten können — `load()` fiel auf den
+    /// ÄLTEREN Stand zurück, und die Rotation unten löschte am falschen Ende, also
+    /// die jüngste Generation statt der ältesten.
     static func backupGenerationen() -> [URL] {
         let fm = FileManager.default
         let namen = (try? fm.contentsOfDirectory(atPath: dir.path)) ?? []
         return namen
             .filter { $0.hasPrefix(backupPrefix) && $0.hasSuffix(".json") }
-            .sorted(by: >)
+            .sorted { generationsSchluessel($0) > generationsSchluessel($1) }
             .map { dir.appendingPathComponent($0) }
     }
 
@@ -105,6 +141,11 @@ enum Store {
 
     /// Legt einen abgewiesenen Stand daneben, statt ihn zu verwerfen — falls die
     /// Abweisung falsch war, ist nichts verloren.
+    ///
+    /// Hier genügt der einfache Zusatzname bei gleicher Millisekunde: diese Dateien
+    /// werden nie sortiert, sondern nur gezählt und nach ihrem Änderungsdatum
+    /// abgeräumt. Bei den Generationen ist das anders — dort trägt der Name die
+    /// Reihenfolge, deshalb liest `generationsSchluessel` sie eigens aus.
     private static func legeBeiseite(_ s: String) {
         let fm = FileManager.default
         var ziel = dir.appendingPathComponent("data.abgelehnt-\(stamp()).json")
@@ -132,11 +173,41 @@ enum Store {
         let faellig = juengste.map { Date().timeIntervalSince($0) >= backupAbstandSekunden } ?? true
         guard erzwungen || faellig else { return }
 
-        var ziel = dir.appendingPathComponent("\(backupPrefix)\(stamp()).json")
-        var lauf = 2
-        while fm.fileExists(atPath: ziel.path) { // gleiche Millisekunde — Namen nie überschreiben
-            ziel = dir.appendingPathComponent("\(backupPrefix)\(stamp())-\(lauf).json")
+        // Der Zeitstempel wird EINMAL genommen und für den Zähler wiederverwendet.
+        // Rief die Schleife stamp() erneut auf, konnte die zweite Stufe unter einer
+        // späteren Millisekunde mit Zähler 2 landen — dann log der Schlüssel
+        // (Zeitstempel, Zähler) über die Reihenfolge, und eine später geschriebene
+        // Generation ohne Zähler galt als älter.
+        //
+        // Der Zähler zählt außerdem HINTER dem höchsten weiter, der schon vergeben
+        // ist. Finge er wieder bei 1 an, wäre der Schlüssel erneut gelogen: die
+        // Rotation räumt die kleinsten Zähler zuerst weg, und die frei gewordene
+        // Nummer machte aus der jüngsten Sicherung die vermeintlich älteste —
+        // derselbe Fehler durch die Hintertür. Sichtbar wird das erst, wenn eine
+        // ganze Rotationsrunde in eine Millisekunde fällt;
+        // `rotation-generationen-neueste-zuerst` prüft genau diesen Ausgang.
+        //
+        // Verglichen wird dabei der höchste SCHLÜSSEL, nicht nur der höchste Zähler
+        // dieser Millisekunde. Sonst reicht ein Rückwärtssprung der Systemuhr
+        // (Zeitabgleich), und die neue Stufe trägt einen früheren Zeitstempel mit
+        // Zähler 1 — zu dieser Millisekunde gibt es ja noch keinen —, reiht sich
+        // damit unter die älteren ein und wird als vermeintlich älteste weggeräumt.
+        // Springt die Uhr zurück, bleibt deshalb der höhere Zeitstempel stehen und
+        // bekommt die nächste Nummer. Der Name sagt dann nicht mehr genau, wann
+        // gesichert wurde; die Reihenfolge stimmt, und die entscheidet, welcher Text
+        // zurückkommt. `rueckwaerts-uhr-neueste-zuerst` prüft diesen Ausgang.
+        let zeit = stamp()
+        var stempel = zeit
+        var lauf = 1
+        if let hoechster = backupGenerationen().first.map({ generationsSchluessel($0.lastPathComponent) }),
+           hoechster >= (zeit, 1) {
+            stempel = hoechster.0
+            lauf = hoechster.1 + 1
+        }
+        var ziel = generationsURL(zeit: stempel, lauf: lauf)
+        while fm.fileExists(atPath: ziel.path) { // Namen nie überschreiben
             lauf += 1
+            ziel = generationsURL(zeit: stempel, lauf: lauf)
         }
         try? fm.copyItem(at: dataURL, to: ziel)
 
@@ -369,19 +440,109 @@ func runSelfTest() -> Never {
 
     // 10) Rotation: höchstens 5 datierte Generationen, und der Rückfall
     //     erreicht sie, wenn Datei UND unmittelbare Vorstufe kaputt sind.
+    //
+    //     Die neun Sicherungen laufen unter einer ANGEHALTENEN Uhr und fallen damit
+    //     alle in dieselbe Millisekunde — der härteste Fall, und zwar in JEDEM Lauf.
+    //     Vorher entschied die Geschwindigkeit des Rechners darüber, ob überhaupt
+    //     zwei Stufen zusammenfielen: auf einem flotten Rechner lagen die neun
+    //     Speichervorgänge je eine Millisekunde auseinander, und dieser Abschnitt
+    //     prüfte die Kollision gar nicht. Genau daran hing das Wackeln vom
+    //     8. August — mal rot, mal grün, und `mac/build.sh` brach zufällig ab.
+    //     Angehalten prüft der Abschnitt dieselbe Aussage, nur nicht mehr auf gut Glück.
     Store.backupAbstandSekunden = 0
+    let festeZeit = Date()
+    Store.stempelUhr = { festeZeit }
     var rotStaende: [String] = []
     for i in 0..<9 {
         let s = "{\"docs\":[{\"id\":\"g\",\"title\":\"rot\(i)\",\"body\":\"<p>Generation \(i)</p>\",\"updated\":\(i)}],\"active\":\"g\"}"
         rotStaende.append(s)
         if Store.save(s) != .ok { ok = false }
     }
+    Store.stempelUhr = { Date() }
     check("rotation-speichert", ok)
     check("rotation-max-generationen", Store.backupGenerationen().count == Store.maxBackupGenerationen)
+    // Die Anzahl allein sagt nichts: sie bleibt auch dann fünf, wenn die Rotation die
+    // FALSCHEN fünf behält. Neun Speichervorgänge müssen neun unterscheidbare
+    // Generationen ergeben haben, von denen die fünf jüngsten übrig sind — in der
+    // Reihenfolge, die `backupGenerationen()` verspricht: neueste zuerst. Genau das
+    // bricht, wenn zwei Sicherungen sich einen Zeitstempel teilen und die Sortierung
+    // sie verdreht (siehe `generationsSchluessel`).
+    let erwarteteGenerationen = [7, 6, 5, 4, 3].map { rotStaende[$0] }
+    let gefundeneGenerationen = Store.backupGenerationen()
+        .compactMap { try? String(contentsOf: $0, encoding: .utf8) }
+    check("rotation-generationen-neueste-zuerst", gefundeneGenerationen == erwarteteGenerationen)
     try? "{kaputt!!".data(using: .utf8)!.write(to: Store.dataURL)
     try? "{kaputt!!".data(using: .utf8)!.write(to: Store.backupURL)
     check("rueckfall-auf-generation", Store.load() == rotStaende[7])
     Store.backupAbstandSekunden = 60
+
+    // 10a) Und jetzt laeuft die Uhr RUECKWAERTS. Das kommt nicht aus dem Programm,
+    //      sondern von aussen: ein Zeitabgleich kann die Systemuhr zurueckstellen.
+    //      Traegt die naechste Sicherung dann einen frueheren Zeitstempel, sortiert
+    //      sie sich unter die aelteren ein — der Rueckfall liefert einen ueberholten
+    //      Stand, und die Rotation raeumt am falschen Ende ab. Das ist derselbe
+    //      Schaden wie bei der Millisekunden-Kollision, nur mit einem anderen
+    //      Ausloeser, und der Zaehler allein faengt ihn nicht: er zaehlt hinter dem
+    //      hoechsten Zaehler DIESER Millisekunde weiter, und bei einem
+    //      Rueckwaertssprung gibt es zu dieser Millisekunde noch gar keinen.
+    //      Die Reihenfolge darf nicht davon abhaengen, dass die Uhr sich benimmt.
+    let rueckVorher = Store.dir
+    Store.dir = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("aiwt-selftest-rueckwaerts-\(UUID().uuidString)", isDirectory: true)
+    Store.ensureDir()
+    Store.backupAbstandSekunden = 0
+    var rueckUhr = Date()
+    Store.stempelUhr = { rueckUhr }
+    var rueckStaende: [String] = []
+    var rueckOk = true
+    for i in 0..<6 {
+        let s = "{\"docs\":[{\"id\":\"z\",\"title\":\"zurueck\(i)\",\"body\":\"<p>Zurueck \(i)</p>\",\"updated\":\(i)}],\"active\":\"z\"}"
+        rueckStaende.append(s)
+        if Store.save(s) != .ok { rueckOk = false }
+        rueckUhr = rueckUhr.addingTimeInterval(-1) // die Uhr geht zurueck
+    }
+    Store.stempelUhr = { Date() }
+    check("rueckwaerts-uhr-speichert", rueckOk)
+    check("rueckwaerts-uhr-max-generationen",
+          Store.backupGenerationen().count == Store.maxBackupGenerationen)
+    // Auch hier sagt die Anzahl nichts: es kommt darauf an, WELCHE fuenf liegen
+    // blieben und in welcher Reihenfolge sie stehen.
+    check("rueckwaerts-uhr-neueste-zuerst",
+          Store.backupGenerationen().compactMap { try? String(contentsOf: $0, encoding: .utf8) }
+          == [4, 3, 2, 1, 0].map { rueckStaende[$0] })
+    try? "{kaputt!!".data(using: .utf8)!.write(to: Store.dataURL)
+    try? "{kaputt!!".data(using: .utf8)!.write(to: Store.backupURL)
+    check("rueckwaerts-uhr-rueckfall-nimmt-juengste", Store.load() == rueckStaende[4])
+    try? FileManager.default.removeItem(at: Store.dir)
+    Store.dir = rueckVorher
+    Store.backupAbstandSekunden = 60
+
+    // 10b) Zwei Sicherungen in DERSELBEN Millisekunde. sichereVorstufe haengt dann
+    //      ein "-2" an, damit keine Stufe ueberschrieben wird. Die Reihenfolge muss
+    //      trotzdem stimmen: die zweite ist die juengere und gehoert nach vorn.
+    //      Roh als Text sortiert dreht sich das um, weil "-" (0x2D) vor "." (0x2E)
+    //      kommt — "…-500.json" gilt dann als juenger als "…-500-2.json". Zwei
+    //      Folgen, beide treffen echte Texte: der Rueckfall liefert den AELTEREN
+    //      Stand, und die Rotation loescht am falschen Ende, also die juengste
+    //      Generation statt der aeltesten. Genau das hat am 8. August einen Bau an
+    //      Pflicht-Tor 2 abgebrochen — sichtbar nur, wenn zwei Speichervorgaenge
+    //      wirklich in dieselbe Millisekunde fielen, also je nach Last mal so, mal so.
+    let msFM = FileManager.default
+    for datei in (try? msFM.contentsOfDirectory(atPath: Store.dir.path)) ?? []
+    where datei.hasPrefix(Store.backupPrefix) {
+        try? msFM.removeItem(at: Store.dir.appendingPathComponent(datei))
+    }
+    let msAlt = "{\"docs\":[{\"id\":\"k\",\"title\":\"kollision-alt\",\"body\":\"<p>alt</p>\",\"updated\":1}],\"active\":\"k\"}"
+    let msNeu = "{\"docs\":[{\"id\":\"k\",\"title\":\"kollision-neu\",\"body\":\"<p>neu</p>\",\"updated\":2}],\"active\":\"k\"}"
+    let msErste = "\(Store.backupPrefix)20260808-120000-500.json"
+    let msZweite = "\(Store.backupPrefix)20260808-120000-500-2.json"
+    try? msAlt.data(using: .utf8)!.write(to: Store.dir.appendingPathComponent(msErste))
+    try? msNeu.data(using: .utf8)!.write(to: Store.dir.appendingPathComponent(msZweite))
+    check("gleiche-millisekunde-juengste-zuerst",
+          Store.backupGenerationen().first?.lastPathComponent == msZweite)
+    try? "{kaputt!!".data(using: .utf8)!.write(to: Store.dataURL)
+    try? "{kaputt!!".data(using: .utf8)!.write(to: Store.backupURL)
+    check("gleiche-millisekunde-rueckfall-nimmt-juengste", Store.load() == msNeu)
 
     // 11) Wartung: Beiseitegelegtes älter als 30 Tage wird abgeräumt, Junges bleibt.
     let fm = FileManager.default
@@ -411,7 +572,17 @@ func runSelfTest() -> Never {
     check("fehlertyp-0-unbekannt", AppDelegate.fehlerTyp(fuerStatus: 0) == "unbekannt")
 
     // 13) Schlüsselbund-Helfer (eigener Selbsttest-Eintrag — der echte bleibt unberührt)
-    let tService = "Onda-Selbsttest"
+    //
+    // Der Name traegt eine Zufallskennung, so wie der Datenordner oben auch. Vorher
+    // hiess der Eintrag bei JEDEM Lauf gleich ("Onda-Selbsttest"). Der Schluesselbund
+    // ist aber, anders als der Datenordner, allen Laeufen gemeinsam: bauen mehrere
+    // Arbeitskopien gleichzeitig — hier der Normalfall —, dann legt der eine Lauf den
+    // Eintrag an, waehrend der andere gerade geprueft hat, dass keiner da ist. Beide
+    // Laeufe pruefen dann nicht mehr ihre eigene Arbeit. Gemessen am 8. August, 300
+    // Laeufe neben zwei fremden Bauten: 14 rot, alle fuenf Schluesselbund-Pruefungen
+    // betroffen — ein Pflicht-Tor, das aus einem Grund sperrt, der nichts mit dem
+    // Code zu tun hat. Mit Zufallskennung 0 von 300.
+    let tService = "Onda-Selbsttest-\(UUID().uuidString)"
     _ = Keychain.loeschen(service: tService)
     check("keychain-anfangs-leer", Keychain.vorhanden(service: tService) == false)
     check("keychain-setzen", Keychain.setzen("test-schluessel-123", service: tService))

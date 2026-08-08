@@ -9,6 +9,8 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 
+import { markierungsGestalt } from '../src/annotation-contract.mjs'
+
 const indexUrl = new URL('../index.html', import.meta.url)
 const styleUrl = new URL('../src/style.css', import.meta.url)
 const shellUrl = new URL('../src/onda-shell.css', import.meta.url)
@@ -38,16 +40,31 @@ test('Ein Absatz wird nur angedeutet, wenn die Anmerkung ihm als Ganzem gilt', a
   // „blocks sollen nur angedeutet werden […] wenn ich feedback zu einem ganzen block
   // paragraphen bekomme."
   assert.match(css, /\.hat-absatzweite-anmerkung/, 'Die Andeutung für absatzweite Anmerkungen fehlt')
-  assert.match(workspace, /ABSATZWEITE_REICHWEITEN = new Set\(\['Absatz', 'Abschnitt'\]\)/)
   assert.match(workspace, /function istAbsatzweit\(/)
 
-  // Angedeutet heißt angedeutet: aus dem Punkt im Rand wird eine Linie — dieselbe
-  // Stelle, dieselbe Farbe, andere Gestalt. Keine Fläche auf dem Absatz.
+  // Welche Reichweiten den ganzen Absatz meinen, stand bis zum 8.8.2026 als eigene
+  // Menge in workspace.js. Sie ist entfallen: die Zuordnung Reichweite → Geste steht
+  // jetzt an EINER Stelle im Vertrag (markierungsGestalt), wo auch die Reichweite
+  // selbst herkommt. Geprüft wird deshalb dort — und am Verhalten, nicht am Wortlaut
+  // einer Konstante.
+  assert.equal(markierungsGestalt('absatzstil'), 'absatz', 'Ein Absatz-Hinweis deutet den Absatz nicht mehr an')
+  assert.equal(markierungsGestalt('ton'), 'absatz', 'Ein Abschnitts-Hinweis deutet den Absatz nicht mehr an')
+  assert.equal(markierungsGestalt('wortwahl'), 'wort', 'Ein Wort-Hinweis deutet fälschlich den ganzen Absatz an')
+  assert.equal(markierungsGestalt('satzstil'), 'satz', 'Ein Satz-Hinweis deutet fälschlich den ganzen Absatz an')
+
+  // Angedeutet heißt angedeutet. Seit dem 8.8.2026 ist die Andeutung eine KLAMMER
+  // statt einer Linie: die beiden Haken sagen „von hier bis hier". Was sich dabei
+  // nicht ändern darf, ist der Grund, aus dem diese Prüfung existiert — sie steht im
+  // Rand und malt keine Fläche auf den Absatz.
   const andeutung = css.match(/\.has-local-finding\.hat-absatzweite-anmerkung::before \{([^}]*)\}/)?.[1] || ''
   assert.ok(andeutung.trim(), 'Die Randmarke für absatzweite Anmerkungen fehlt')
-  assert.match(andeutung, /width:\s*2px/, 'Die Andeutung ist keine Linie')
-  assert.match(andeutung, /height:\s*auto/, 'Die Linie läuft nicht über den ganzen Absatz')
-  assert.doesNotMatch(andeutung, /background:/, 'Die Andeutung malt eine Fläche')
+  assert.match(andeutung, /height:\s*auto/, 'Die Andeutung läuft nicht über den ganzen Absatz')
+  assert.match(andeutung, /left:\s*-\d+px/, 'Die Andeutung steht nicht im Rand, sondern im Text')
+  assert.match(andeutung, /border-right:\s*0/, 'Die Andeutung ist keine Klammer, sondern ein Kasten')
+  // „Keine Fläche" heißt: gar keine, oder ausdrücklich durchsichtig. Ein gefüllter
+  // Wert an dieser Stelle wäre genau die Platte, gegen die diese Prüfung geschrieben wurde.
+  const flaeche = andeutung.match(/background:\s*([^;]+);/)?.[1]?.trim()
+  assert.ok(flaeche === undefined || flaeche === 'transparent', `Die Andeutung malt eine Fläche: ${flaeche}`)
 
   // Und sie darf NICHT als Schatten am Absatz selbst versucht werden: .has-local-finding
   // räumt direkt darüber `box-shadow: none` ab und gewinnt bei gleicher Spezifität,
@@ -205,4 +222,79 @@ test('Der Weg zurück trägt den ganzen Projektnamen', async () => {
   assert.match(zurueck, /align-items:\s*flex-start/, 'Bei einem langen Namen schwebt der Pfeil zwischen den Zeilen')
   assert.doesNotMatch(zurueck, /white-space:\s*nowrap/, 'Der Projektname darf umbrechen')
   assert.match(css, /\.onda-side-back-chevron \{[^}]*flex:\s*none/, 'Der Pfeil selbst muss immer sichtbar bleiben')
+})
+
+// Task 7: EINE Stelle, an der Blöcke entstehen. Vorher holte workspace.js die Blöcke an gut
+// zwanzig Stellen direkt aus dem Editor — eine davon zu vergessen hieße, dort still ohne
+// Rollen zu arbeiten, ohne dass ein Test anschlägt. Genau so ist die Lücke entstanden, die
+// dieser Umbau schließt, also hält ein Wächter sie zu.
+//
+// Der reguläre Ausdruck darf hier nirgends im Klartext danebenstehen: Ein Kommentar, der den
+// gesuchten Aufruf beim Namen nennt, ließe den Wächter sich selbst finden statt den Code.
+test('Blöcke entstehen in workspace.js an genau einer Stelle', async () => {
+  const workspace = await readFile(new URL('../src/workspace.js', import.meta.url), 'utf8')
+  assert.match(workspace, /function aktuelleBloecke\(/, 'die eine Blockquelle fehlt')
+  assert.match(workspace, /function bausteinBestand\(/, 'die Ablage wird nirgends gelesen')
+  assert.doesNotMatch(
+    workspace,
+    /getEditorBlocks\(ctx/,
+    'workspace.js holt Blöcke wieder direkt aus dem Editor — dort fehlen dann die Rollen',
+  )
+})
+
+// Task 9 (Issue #36, Kriterium 2): „Freier Absatz" war ein Etikett ohne Aussage — es sah aus
+// wie eine Angabe und war keine. Ein Absatz, den die Erkennung noch nicht gelesen hat und den
+// niemand bewusst als etwas angelegt hat, trägt jetzt gar nichts.
+//
+// Die Auswahl im Menü behält ihr Wort: Dort heißt „Freier Absatz" „lege einen gewöhnlichen
+// Absatz an", und das ist eine Aussage. Deshalb prüft der Wächter die BESCHRIFTUNG der Karten
+// (ROLE_LABELS), nicht die Menü-Auswahl (BLOCK_TYPES).
+test('keine Struktur-Karte trägt mehr „Freier Absatz"', async () => {
+  const workspace = await readFile(new URL('../src/workspace.js', import.meta.url), 'utf8')
+  assert.doesNotMatch(
+    workspace,
+    /\|\| 'Freier Absatz'/,
+    'eine Karte fällt noch auf „Freier Absatz" zurück',
+  )
+  assert.match(workspace, /bausteinNamen\(/, 'die Karten lesen die erkannten Namen nicht')
+  assert.match(workspace, /'Überschrift'/, 'die Überschrift hat ihr Wort verloren')
+  // Die Beschriftungstabelle darf den gewöhnlichen Absatz nicht mehr kennen — sonst käme das
+  // Etikett über ROLE_LABELS.get() zurück, nur ohne den Rückfall daneben.
+  const tabelle = workspace.match(/const ROLE_LABELS = new Map\(\[([\s\S]*?)\]\)/)?.[1] || ''
+  assert.doesNotMatch(tabelle, /paragraph/, 'ROLE_LABELS beschriftet den gewöhnlichen Absatz noch')
+})
+
+// Task 8: Der Bausteinlauf hat einen eigenen Takt — Hinweise gehören zu jeder Schreibpause,
+// die Art eines Absatzes ändert sich viel seltener. Er hat aber KEINE eigene Sperre mehr:
+// die hält das Lauf-Tor (#12), wie bei jedem anderen bezahlten Kanal. Eine sechste
+// Kopiervorlage neben dem Tor wäre genau der Rückwachs, den das Tor beenden sollte.
+test('der Bausteinlauf läuft durchs Tor und hat einen eigenen Zeitgeber', async () => {
+  const workspace = await readFile(new URL('../src/workspace.js', import.meta.url), 'utf8')
+  assert.match(workspace, /function fuehreBausteinlaufAus\(/, 'der Lauf wird nirgends ausgeführt')
+  assert.match(workspace, /function planeBausteinlauf\(/, 'der Lauf wird nirgends geplant')
+  assert.match(workspace, /planeBausteinlauf\(\)/, 'planeBausteinlauf hat keinen Aufrufer')
+  assert.match(workspace, /kanal: 'bausteine'/, 'der Lauf geht am Lauf-Tor vorbei')
+  // Kein eigener Sperr-Zustand: Das Tor hält die Kanalsperre (kanalGesperrt/fuehreLaufAus).
+  assert.doesNotMatch(workspace, /let bausteinlaufAktiv/, 'eine sechste eigene Lauf-Sperre ist zurück')
+})
+
+// Entscheidung 2 (Issue #36): Die von Hand gesetzte Textsorte muss den Lauf erreichen,
+// sonst denkt sich das Modell eine zweite aus.
+test('der Bausteinlauf bekommt das Projektwissen mit', async () => {
+  const workspace = await readFile(new URL('../src/workspace.js', import.meta.url), 'utf8')
+  const rumpf = workspace.match(/async function fuehreBausteinlaufAus\([\s\S]*?\n\}/)?.[0] || ''
+  assert.ok(rumpf, 'fuehreBausteinlaufAus nicht gefunden')
+  assert.match(rumpf, /onda/, 'der Lauf reicht kein Projektwissen weiter — die Textsorte wird geraten')
+})
+
+// Die Budgetpause merkt sich, WELCHER Lauf angehalten wurde. Die ausdrückliche Freigabe muss
+// genau den wieder aufnehmen — sonst gibt jemand einen Lauf frei und bezahlt einen anderen.
+// Vor dem Bausteinlauf fiel alles außer 'verstaendnis' auf den Hinweislauf zurück; mit einem
+// sechsten Kanal ist dieser Rückfall eine falsche Auskunft.
+test('die Budget-Freigabe nimmt den pausierten Lauf wieder auf, nicht irgendeinen', async () => {
+  const workspace = await readFile(new URL('../src/workspace.js', import.meta.url), 'utf8')
+  const rumpf = workspace.match(/function starteBewusstFreigegebenenAutomatiklauf\([\s\S]*?\n\}/)?.[0] || ''
+  assert.ok(rumpf, 'starteBewusstFreigegebenenAutomatiklauf nicht gefunden')
+  assert.match(rumpf, /'bausteine'/, 'ein freigegebener Bausteinlauf startet den Hinweislauf statt sich selbst')
+  assert.match(rumpf, /fuehreBausteinlaufAus\(/, 'der freigegebene Bausteinlauf wird nirgends ausgeführt')
 })

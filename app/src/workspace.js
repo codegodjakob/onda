@@ -9,7 +9,7 @@ import {
   replaceAnchoredTexts,
   replaceFindingTarget,
 } from './block-identity.js'
-import { decideFinding, ensureProjectUnderstanding, ensureReasoningModel, getFindingQueue, isIntegrityCategory, istInterviewOffen, loeseSchutz, markiereEntwurfVersucht, markiereGeschuetzt, mergeVerstaendnis } from './reasoning-model.mjs'
+import { decideFinding, ensureProjectUnderstanding, ensureReasoningModel, getFindingQueue, isIntegrityCategory, istInterviewOffen, istRisikoAnnahme, loeseSchutz, markiereEntwurfVersucht, markiereGeschuetzt, mergeVerstaendnis } from './reasoning-model.mjs'
 import {
   appendThreadMessage,
   completeEditingFinding,
@@ -24,6 +24,14 @@ import {
   shouldOpenAgentWidget,
   structureHintMap,
 } from './workspace-model.mjs'
+import {
+  bausteinNamen,
+  bausteinRollen,
+  bestandAusAltenRollen,
+  pruefeBausteinBedarf,
+  strukturSignatur,
+  versucheBausteinlauf,
+} from './bausteinlauf-model.mjs'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import { applySettings } from './ui.js'
@@ -126,13 +134,11 @@ import { createLanguageUi } from './language-ui.mjs'
 import { analyzeArgumentImpact } from './argument-graph.mjs'
 import { createAuditUi } from './audit-ui.mjs'
 import {
-  annotationSignature,
   annotationSummary,
   createAnnotationController,
-  createSuppressionStore,
 } from './annotation-controller.mjs'
 import { renderAnnotation } from './annotation-components.mjs'
-import { ANNOTATION_DEFINITIONS, resolveAnnotationPresentation } from './annotation-contract.mjs'
+import { gestaltFuerFinding, resolveAnnotationPresentation } from './annotation-contract.mjs'
 import {
   invertAnnotationOperation,
   planAnnotationOperation,
@@ -159,8 +165,15 @@ const BLOCK_TYPES = [
   ['question', 'Offene Frage'],
 ]
 
+// Die Beschriftung einer Karte — bewusst OHNE den gewoehnlichen Absatz. "Freier Absatz" war
+// ein Etikett ohne Aussage: Es sah aus wie eine Angabe und war keine. Wer nichts weiss, sagt
+// hier nichts.
+//
+// Im MENUE behaelt das Wort seinen Sinn (BLOCK_TYPES, unveraendert): Dort heisst es "lege
+// einen gewoehnlichen Absatz an" -- das ist eine Aussage. Beschriften und Auswaehlen sind
+// zwei verschiedene Zwecke, darum ab hier zwei verschiedene Tabellen.
 const ROLE_LABELS = new Map([
-  ...BLOCK_TYPES,
+  ...BLOCK_TYPES.filter(([rolle]) => rolle !== 'paragraph'),
   ['heading', 'Überschrift'],
 ])
 
@@ -172,8 +185,6 @@ let renderedDocId = null
 let decoratedDocId = null
 let decoratedBlockId = null
 let insertMenu = null
-let typingTimer = null
-let isTyping = false
 let isComposing = false
 let structureNavState = null
 let localDecoratedDocId = null
@@ -181,6 +192,8 @@ let localDecoratedFindingId = null
 let localDecoratedBlockId = null
 let localDecoratedSpacing = 0
 let localDecoratedAbsatzweit = false
+let localDecoratedGestalt = 'keine'
+let localDecoratedZiel = ''
 let localFeedbackError = null
 let localPositionFrame = null
 let localSummaryFocusRequest = null
@@ -198,6 +211,11 @@ let agentInitiativeTimer = null
 // noch hinweislaufTimer, der Zeitgeber-Griff fuer den Pausen-Ausloeser (planeHinweislauf/
 // clearHinweislaufTimer, H-3).
 let hinweislaufTimer = null
+// Sechster Kanal (Bausteinarten, Issue #36): NUR ein Zeitgeber, keine eigene Sperre — die
+// haelt das Lauf-Tor (kanalGesperrt('bausteine')). Ein eigener Zeitgeber ist trotzdem noetig,
+// weil dieser Kanal in einem anderen Takt laeuft als der Hinweislauf: Hinweise gehoeren zu
+// jeder Schreibpause, die Art eines Absatzes aendert sich viel seltener.
+let bausteinlaufTimer = null
 // Zweiter Kanal (Erweiterungen): eigene Sperre, damit ein Erweiterungslauf und ein
 // Hinweislauf einander nicht ausschliessen -- es sind zwei verschiedene Fragen an
 // denselben Text, und der Cache-Praefix ist derselbe, also kostet der zweite wenig.
@@ -224,6 +242,9 @@ let momentTimer = null
 // Seitenleiste ("N Hinweise warten aufs Aufschauen — jetzt zeigen"); die zaehlte
 // Anmerkungen und ist mit der Flaeche gefallen.
 let momentVonHand = false
+// Wann zuletzt ueber einen Hinweis entschieden wurde. Steuert, ab wann die Ruhe fuer
+// den naechsten Moment zaehlt (momente-model.mjs, aktuellerMoment).
+let letzteEntscheidungAt = null
 // Was einmal auf dem Schirm stand, bleibt stehen. Der Moment entscheidet ueber das
 // ERSTE Erscheinen, nicht ueber das Bleiben — sonst verschwindet eine Karte, die man
 // gerade liest, sobald man wieder tippt. Wird mit dem Dokument zurueckgesetzt.
@@ -240,8 +261,27 @@ function merkeGezeigt(docId, findingId, { art, moment } = {}) {
   if (istErstesMal) merkeKarteGezeigt({ findingId, art, moment })
 }
 
+// Was WIRKLICH auf dem Schirm stand — getrennt von gezeigteHinweise darueber.
+//
+// Der Unterschied ist der Grund fuer diese zweite Menge. gezeigteHinweise sammelt jeden
+// Hinweis, der gerade erscheinen DUERFTE, und speist damit das Journal (welche Karten
+// waren dran). Auf dem Schirm steht aber immer nur einer (currentPassageFinding). Wer
+// beides in einen Topf wirft, erklaert alle uebrigen fuer gezeigt, ohne dass sie je
+// jemand gesehen haette — und weil „was einmal stand, bleibt stehen" die Moment-Regel
+// aushebelt, wurde daraus „was einmal durfte, darf immer". Genau daran lief die Kette
+// weiter, die nach jedem Wegklicken sofort den naechsten Hinweis brachte.
+//
+// Das Journal bleibt unangetastet: es misst weiter, was dran war. Die Anzeige-Wahrheit
+// steht hier.
+let sichtbareHinweise = { docId: null, ids: new Set() }
+
+function merkeSichtbar(docId, findingId) {
+  if (sichtbareHinweise.docId !== docId) sichtbareHinweise = { docId, ids: new Set() }
+  if (findingId) sichtbareHinweise.ids.add(findingId)
+}
+
 function schonGezeigt(docId, findingId) {
-  return gezeigteHinweise.docId === docId && gezeigteHinweise.ids.has(findingId)
+  return sichtbareHinweise.docId === docId && sichtbareHinweise.ids.has(findingId)
 }
 let agentLiveFrame = null
 let agentPresenceFocusRequest = false
@@ -328,6 +368,23 @@ function localFindingPlugin() {
               ? 'has-local-finding hat-absatzweite-anmerkung'
               : 'has-local-finding'
             local.push(Decoration.node(offset, offset + node.nodeSize, { class: klassen }))
+
+            // Die Geste an den WOERTERN. Bis zum 8.8.2026 gab es sie nicht: der Absatz
+            // trug einen Punkt im Rand, die Stelle selbst blieb unberuehrt — man musste
+            // die Anmerkung lesen, um zu wissen, worauf sie zeigt.
+            //
+            // Fail-closed: Findet sich der Wortlaut nicht mehr (der Text wurde seit dem
+            // Lauf geaendert), entsteht KEINE Markierung. Lieber kein Strich als einer
+            // unter den falschen Woertern — der Punkt im Rand sagt weiterhin, dass hier
+            // etwas offen ist, und die Anmerkung selbst nennt den Wortlaut.
+            if (findingState.gestalt === 'wort' || findingState.gestalt === 'satz') {
+              const stelle = stelleImBaustein(node, offset, findingState.ziel)
+              if (stelle) {
+                local.push(Decoration.inline(stelle.von, stelle.bis, {
+                  class: `onda-stelle onda-stelle--${findingState.gestalt}`,
+                }))
+              }
+            }
             if (findingState.spacing > 0) {
               local.push(Decoration.widget(offset + node.nodeSize, () => {
                 const spacer = document.createElement('div')
@@ -353,36 +410,82 @@ function localFindingPlugin() {
   })
 }
 
-// Welche Anmerkungsarten gelten dem ganzen Absatz? Die Antwort steht schon im Vertrag:
-// ANNOTATION_DEFINITIONS gibt jeder Art einen scope — Wort, Satz, Absatz, Abschnitt.
-// Nur die letzten beiden meinen den Absatz als Ganzes und duerfen ihn andeuten.
-const ABSATZWEITE_REICHWEITEN = new Set(['Absatz', 'Abschnitt'])
-
+// Welche Gestalt traegt die Markierung im Text? Die Antwort steht seit jeher im
+// Vertrag (annotation-contract.mjs, markierungsGestalt): jede Art hat einen scope,
+// und aus ihm folgt die Geste — Kontur ums Wort, Strich unter den Satz, Klammer am
+// Absatz. 'keine' heisst: es gibt keine einzelne Stelle (der ganze Text, der Titel,
+// eine Notiz), dann bleibt es beim Punkt im Rand.
 function istAbsatzweit(finding) {
-  if (!finding) return false
-  const art = ANNOTATION_DEFINITIONS[finding.anmerkungsart]
-  return ABSATZWEITE_REICHWEITEN.has(art?.scope)
+  return gestaltFuerFinding(finding) === 'absatz'
 }
 
-// Die Reichweite gehoert zur gerade gezeigten Anmerkung, nicht zum Aufruf. Sie hier zu
-// merken statt sie durch vier Aufrufstellen zu reichen, haelt die Aufrufe schlank —
-// und keine von ihnen kennt die Anmerkung ueberhaupt.
+// Die Gestalt und die Stelle gehoeren zur gerade gezeigten Anmerkung, nicht zum
+// Aufruf. Sie hier zu merken statt sie durch vier Aufrufstellen zu reichen, haelt die
+// Aufrufe schlank — und keine von ihnen kennt die Anmerkung ueberhaupt.
 let aktuelleAnmerkungIstAbsatzweit = false
+let aktuelleAnmerkungGestalt = 'keine'
+let aktuelleAnmerkungZiel = ''
+
+// Wo genau im Baustein steht die Stelle? Gesucht wird im ZUSAMMENGESETZTEN Text und
+// dann zurueckgerechnet — nicht mit textContent.indexOf auf dem Absatz.
+//
+// Der Unterschied ist kein Feinschliff: textContent klebt den Text ueber
+// Knotengrenzen hinweg zusammen, waehrend jede dieser Grenzen im Dokument eine
+// Position kostet. Bei einem Zitat oder einer Liste liegt die Stelle deshalb um
+// jede durchquerte Grenze zu weit links — die Markierung saesse auf den falschen
+// Zeichen, und zwar nur dort, wo der Text verschachtelt ist.
+function stelleImBaustein(node, bausteinStart, ziel) {
+  const gesucht = String(ziel || '')
+  if (!gesucht) return null
+
+  const stuecke = []
+  let volltext = ''
+  node.descendants((kind, pos) => {
+    if (!kind.isText) return true
+    // pos ist relativ zum Inhalt des Bausteins; +1 ueberspringt seine oeffnende Marke.
+    stuecke.push({ ab: volltext.length, position: bausteinStart + 1 + pos, laenge: kind.text.length })
+    volltext += kind.text
+    return false
+  })
+
+  const treffer = volltext.indexOf(gesucht)
+  if (treffer < 0) return null
+
+  const position = zeichen => {
+    for (const stueck of stuecke) {
+      if (zeichen >= stueck.ab && zeichen <= stueck.ab + stueck.laenge) {
+        return stueck.position + (zeichen - stueck.ab)
+      }
+    }
+    return null
+  }
+  const von = position(treffer)
+  const bis = position(treffer + gesucht.length)
+  return von != null && bis != null && bis > von ? { von, bis } : null
+}
 
 function setLocalFindingDecoration(blockId, spacing = 0, force = false) {
   const absatzweit = Boolean(blockId) && aktuelleAnmerkungIstAbsatzweit
+  const gestalt = blockId ? aktuelleAnmerkungGestalt : 'keine'
+  const ziel = blockId ? aktuelleAnmerkungZiel : ''
   const nextSpacing = blockId ? Math.max(0, Math.ceil(spacing)) : 0
   if (!force
     && localDecoratedBlockId === blockId
     && localDecoratedSpacing === nextSpacing
-    && localDecoratedAbsatzweit === absatzweit) return false
+    && localDecoratedAbsatzweit === absatzweit
+    && localDecoratedGestalt === gestalt
+    && localDecoratedZiel === ziel) return false
   localDecoratedBlockId = blockId
   localDecoratedSpacing = nextSpacing
   localDecoratedAbsatzweit = absatzweit
+  localDecoratedGestalt = gestalt
+  localDecoratedZiel = ziel
   ctx.editor.view.dispatch(ctx.editor.state.tr.setMeta(localFindingKey, {
     blockId,
     spacing: nextSpacing,
     absatzweit,
+    gestalt,
+    ziel,
   }))
   return true
 }
@@ -450,16 +553,28 @@ function activeWorkspace() {
   return doc ? ensureWorkspaceState(doc) : null
 }
 
-function suppressionStoreFor(doc = ctx?.activeDoc(), workspace = activeWorkspace()) {
-  if (!ctx?.state || !doc || !workspace) return createSuppressionStore()
-  if (!ctx.state.memoryStore || typeof ctx.state.memoryStore !== 'object') ctx.state.memoryStore = {}
-  if (!Array.isArray(ctx.state.memoryStore.annotationSuppressions)) {
-    ctx.state.memoryStore.annotationSuppressions = []
-  }
-  return createSuppressionStore({
-    documentRecords: workspace.annotationSuppressions,
-    personalRecords: ctx.state.memoryStore.annotationSuppressions,
-  })
+// EINE Stelle, an der Bloecke entstehen. Vorher holte dieses Modul die Bloecke an gut zwanzig
+// Stellen einzeln aus dem Editor -- eine davon zu vergessen hiesse, dort still ohne Rollen zu
+// arbeiten, ohne dass ein Test anschlaegt. Genau so ist die Luecke entstanden, die dieser
+// Umbau schliesst. Ein Waechter in schreibansicht-ruhe.test.mjs haelt sie zu.
+function bausteinBestand(workspace = activeWorkspace()) {
+  return workspace?.bausteinarten || null
+}
+
+function aktuelleBloecke(editor = ctx?.editor) {
+  return getEditorBlocks(editor, bausteinRollen(bausteinBestand()))
+}
+
+// Wie ein Baustein beschriftet wird — an EINER Stelle, weil es drei Anzeigen gibt
+// (Struktur-Spalte, Blaetter-Liste, Blaetter-Tiefe) und drei Fassungen derselben Regel
+// unweigerlich auseinanderlaufen.
+//
+// Rangfolge, und sie ist die Entscheidung (Issue #36):
+//   1. Der erkannte Name — was dieser Absatz in DIESEM Text tut ("Befund", "Einwand").
+//   2. Das beim Erzeugen von Hand gewaehlte Wort ("Kernbehauptung", "Beleg").
+//   3. Nichts. Ein Etikett, das nichts aussagt, ist schlechter als keines.
+function bausteinName(block, namen) {
+  return namen?.get(block.id) || ROLE_LABELS.get(block.role) || ''
 }
 
 // Das offene Dokument bestimmt sein Projekt — nicht ctx.activeProjectObj().
@@ -699,7 +814,7 @@ function enforceExclusiveLayers(workspace) {
 }
 
 function syncActiveBlock(workspace) {
-  const blocks = getEditorBlocks(ctx.editor)
+  const blocks = aktuelleBloecke()
   const currentId = getActiveBlockId(ctx.editor)
 
   if (renderedDocId !== ctx.activeDoc()?.id) {
@@ -743,7 +858,7 @@ function selectBlock(block) {
 }
 
 function focusBlock(blockId) {
-  const block = getEditorBlocks(ctx.editor).find(candidate => candidate.id === blockId)
+  const block = aktuelleBloecke().find(candidate => candidate.id === blockId)
   if (!block) return
   selectBlock(block)
   const workspace = activeWorkspace()
@@ -791,7 +906,7 @@ function insertBlock(afterBlockId, role) {
   const workspace = activeWorkspace()
   if (workspace) workspace.activeBlockId = insertedId
   closeInsertMenu({ restoreFocus: false })
-  const block = getEditorBlocks(ctx.editor).find(candidate => candidate.id === insertedId)
+  const block = aktuelleBloecke().find(candidate => candidate.id === insertedId)
   if (block) ctx.editor.commands.setTextSelection(block.pos + 1)
   refreshWorkspace()
   // Der Oeffner des Menues steht in der Struktur-Ansicht. Ohne diese Zeile bliebe das
@@ -947,8 +1062,11 @@ function createNavBlockNode(block) {
 // die Funktion eines Absatzes — ihr Text wiederholt nur den Fliesstext.
 const NAV_ROLLEN_MIT_EIGENEM_TEXT = new Set(['heading'])
 
-function updateNavBlockNode(nodes, block, activeBlockId, hintKind) {
-  const roleLabel = ROLE_LABELS.get(block.role) || 'Freier Absatz'
+// bausteinName ist der von der KI fuer DIESEN Text erkannte Name ("Befund", "Einwand").
+// Er gewinnt ueber die allgemeine Beschriftung: Er sagt, was der Absatz HIER tut, nicht,
+// welcher Schublade er allgemein angehoert. Fehlt beides, bleibt die Karte still.
+function updateNavBlockNode(nodes, block, activeBlockId, hintKind, namen = null) {
+  const roleLabel = bausteinName(block, namen)
   const excerpt = block.excerpt || 'Noch leer'
   const hintLabel = hintKind === 'evidence'
     ? ' — Beleg offen'
@@ -961,8 +1079,9 @@ function updateNavBlockNode(nodes, block, activeBlockId, hintKind) {
   const zeigeAuszug = istKarteOffen(block)
 
   // Vorlesegeraete bekommen weiterhin den vollen Wortlaut — die Kuerzung ist
-  // eine Frage der Augen, nicht der Zugaenglichkeit.
-  nodes.preview.setAttribute('aria-label', `${roleLabel}: ${excerpt}${hintLabel}`)
+  // eine Frage der Augen, nicht der Zugaenglichkeit. Ohne Namen entsteht auch kein
+  // leerer Doppelpunkt davor.
+  nodes.preview.setAttribute('aria-label', roleLabel ? `${roleLabel}: ${excerpt}${hintLabel}` : `${excerpt}${hintLabel}`)
   nodes.preview.setAttribute('aria-expanded', zeigeAuszug ? 'true' : 'false')
   if (istAktiv) nodes.preview.setAttribute('aria-current', 'true')
   else nodes.preview.removeAttribute('aria-current')
@@ -973,6 +1092,7 @@ function updateNavBlockNode(nodes, block, activeBlockId, hintKind) {
   nodes.preview.classList.toggle('is-offen', zeigeAuszug)
 
   nodes.role.textContent = roleLabel
+  nodes.role.hidden = !roleLabel
   nodes.preview.classList.toggle('has-hint', Boolean(hintKind))
   nodes.hint.dataset.hint = hintKind || ''
 }
@@ -1000,7 +1120,7 @@ function renderStructureNav() {
   let list = nav.querySelector('.structure-nav-list')
   if (!list) { list = createNode('div', 'structure-nav-list'); list.id = 'structureNavList'; nav.append(list) }
 
-  const blocks = getEditorBlocks(ctx.editor).filter(block => block.id)
+  const blocks = aktuelleBloecke().filter(block => block.id)
   const ids = blocks.map(block => block.id)
   const orderChanged = structureNavState?.docId !== doc.id
     || structureNavState.ids.length !== ids.length
@@ -1008,9 +1128,16 @@ function renderStructureNav() {
   if (orderChanged) rebuildStructureNav(list, doc, blocks)
 
   const hints = structureHintMap(doc, blocks)
+  // Der Anzeigename geht bewusst NICHT ueber block.role: Dort steht die Funktion im Argument
+  // (claim, evidence, ...), hier der Name, den die KI fuer diesen Text gefunden hat. Zwei
+  // Zwecke, zwei Wege — so bleibt block.role genau das, was es ist, und die Anzeige haengt
+  // nicht an der Rechenlogik.
+  const namen = bausteinNamen(bausteinBestand(workspace))
   blocks.forEach(block => {
     const nodes = structureNavState.blockNodes.get(block.id)
-    if (nodes) updateNavBlockNode(nodes, block, workspace.activeBlockId, hints.get(block.id) || null)
+    if (nodes) {
+      updateNavBlockNode(nodes, block, workspace.activeBlockId, hints.get(block.id) || null, namen)
+    }
   })
 }
 
@@ -1042,7 +1169,7 @@ function blockAnriss(text) {
 // bei einem Zitat oder einer Liste steckt der Text eine Ebene tiefer, und ihn dort
 // flach zu ueberschreiben, machte aus dem Zitat einen Absatz.
 function schreibeBlockText(blockId, text) {
-  const block = getEditorBlocks(ctx?.editor).find(kandidat => kandidat.id === blockId)
+  const block = aktuelleBloecke().find(kandidat => kandidat.id === blockId)
   if (!block || !block.isTextblock) return false
   const node = ctx.editor.state.doc.nodeAt(block.pos)
   if (!node) return false
@@ -1064,14 +1191,15 @@ function openStrukturModal(opener) {
     title: 'Struktur',
     opener,
     eintraege: (liste, { gewaehlt, waehle, eintrag }) => {
-      const blocks = getEditorBlocks(ctx.editor).filter(block => block.id)
+      const blocks = aktuelleBloecke().filter(block => block.id)
       if (!blocks.length) {
         liste.append(createNode('p', 'onda-blaetter__tiefe-hinweis', 'Noch keine Textabschnitte.'))
         return
       }
       const offen = blocks.some(block => block.id === gewaehlt) ? gewaehlt : blocks[0].id
+      const namen = bausteinNamen(bausteinBestand())
       blocks.forEach(block => {
-        liste.append(eintrag(block.id, ROLE_LABELS.get(block.role) || 'Freier Absatz', {
+        liste.append(eintrag(block.id, bausteinName(block, namen), {
           anriss: blockAnriss(block.excerpt || block.text),
           gewaehlt: offen === block.id,
           onWaehle: () => waehle(block.id),
@@ -1079,7 +1207,7 @@ function openStrukturModal(opener) {
       })
     },
     fuss: (flaeche, { gewaehlt }) => {
-      const blocks = getEditorBlocks(ctx.editor).filter(block => block.id)
+      const blocks = aktuelleBloecke().filter(block => block.id)
       const nach = blocks.some(block => block.id === gewaehlt) ? gewaehlt : blocks[blocks.length - 1]?.id
       const knopf = createNode('button', 'onda-blaetter__eintrag', 'Baustein hinzufügen')
       knopf.id = 'strukturBausteinNeu'
@@ -1090,13 +1218,14 @@ function openStrukturModal(opener) {
       flaeche.append(knopf)
     },
     tiefe: (tief, gewaehlt) => {
-      const blocks = getEditorBlocks(ctx.editor).filter(block => block.id)
+      const blocks = aktuelleBloecke().filter(block => block.id)
       const block = blocks.find(kandidat => kandidat.id === gewaehlt) || blocks[0]
       if (!block) {
         tief.append(createNode('p', 'onda-blaetter__tiefe-hinweis', 'Noch keine Textabschnitte.'))
         return
       }
-      tief.append(createNode('h3', 'onda-blaetter__tiefe-titel', ROLE_LABELS.get(block.role) || 'Freier Absatz'))
+      const tiefeName = bausteinName(block, bausteinNamen(bausteinBestand()))
+      if (tiefeName) tief.append(createNode('h3', 'onda-blaetter__tiefe-titel', tiefeName))
       if (block.isTextblock) {
         bearbeitbaresFeld(tief, 'Text dieses Bausteins', block.text || '', wert => {
           schreibeBlockText(block.id, wert)
@@ -1574,7 +1703,9 @@ function blattEintrag(schluessel, name, { anriss = '', gewaehlt = false, onWaehl
   knopf.type = 'button'
   knopf.dataset.blattId = schluessel
   if (gewaehlt) knopf.setAttribute('aria-current', 'true')
-  knopf.append(createNode('span', 'onda-blaetter__eintrag-name', name))
+  // Auch der Name ist bedingt, nicht nur der Anriss: Ein Baustein ohne erkannten und ohne
+  // von Hand gewaehlten Namen traegt keinen — dann soll dort auch keine leere Zeile stehen.
+  if (name) knopf.append(createNode('span', 'onda-blaetter__eintrag-name', name))
   if (anriss) knopf.append(createNode('span', 'onda-blaetter__eintrag-anriss', anriss))
   if (onWaehle) knopf.addEventListener('click', onWaehle)
   return knopf
@@ -2276,6 +2407,13 @@ function starteBewusstFreigegebenenAutomatiklauf() {
     starteVerstaendnisEntwurf(pausiert.projectId, pausiert.docId)
     return
   }
+  // Der Bausteinlauf ist ein eigener bezahlter Kanal (Issue #36). Ohne diesen Zweig fiele
+  // seine Freigabe auf den Hinweislauf zurueck: Jemand gibt einen Lauf frei und bezahlt
+  // einen anderen — und der freigegebene liefe nie.
+  if (pausiert?.typ === 'bausteine') {
+    fuehreBausteinlaufAus({ grund: 'freigabe' })
+    return
+  }
   if (!pausiert && istInterviewAktiv()) {
     interviewPruefKey = null
     pruefeVerstaendnisInterview()
@@ -2499,8 +2637,9 @@ let pvBlaetter = null
 // feld  = was in das Textfeld darunter gehoert.
 // Beides muss verschieden sein: bis zum 7.8.2026 stand hier zweimal derselbe Wortlaut
 // untereinander — Ueberschrift "Aufgabe", sechs Pixel darunter noch einmal "Aufgabe".
-// Die Struktur-Ansicht macht es seit jeher richtig vor ("Freier Absatz" / "Text dieses
-// Bausteins"): die Ueberschrift sagt, WO man ist, der Feldname sagt, WAS man schreibt.
+// Die Struktur-Ansicht macht es vor ("Einwand" / "Text dieses Bausteins"): die Ueberschrift
+// sagt, WO man ist, der Feldname sagt, WAS man schreibt. Dort steht seit dem 8.8.2026 der
+// erkannte Name — und wo keiner erkannt ist, gar nichts.
 const PV_FELDER = [
   { schluessel: 'task', label: 'Aufgabe', feld: 'Was dieser Text leisten soll', lese: u => u.task, schreibe: (u, wert) => { u.task = wert } },
   { schluessel: 'audience', label: 'Zielgruppe', feld: 'Für wen er geschrieben ist', lese: u => u.audience.join(', '), schreibe: (u, wert) => { u.audience = splitList(wert, false) } },
@@ -2535,13 +2674,13 @@ function openProjectUnderstandingModal(opener) {
     context: ctx,
     createNode,
     openDialog: openOndaDialog,
-    getBlocks: () => getEditorBlocks(ctx.editor),
+    getBlocks: () => aktuelleBloecke(),
   })
   const languageUi = createLanguageUi({
     context: ctx,
     createNode,
     openDialog: openOndaDialog,
-    getBlocks: () => getEditorBlocks(ctx.editor),
+    getBlocks: () => aktuelleBloecke(),
     applyCorrections: corrections => replaceAnchoredTexts(ctx.editor, corrections),
   })
 
@@ -2656,7 +2795,7 @@ function zeigeBudgetPause(workspace) {
 }
 
 function docPlainText() {
-  return getEditorBlocks(ctx.editor)
+  return aktuelleBloecke()
     .map(block => String(block.text || '').trim())
     .filter(Boolean)
     .join('\n\n')
@@ -2955,15 +3094,11 @@ async function sendeInterviewAntwort(message, text) {
 // Das Menue selbst (openInsertMenu/insertBlock) BLEIBT. Es bekommt seinen Platz dort,
 // wo Bausteine hingehoeren: in der Struktur-Ansicht, wo Jakob "auch neue Bausteine
 // hinzufuegen" koennen will. Nur der schwebende Knopf ist fort.
-
-function markTyping() {
-  isTyping = true
-  clearTimeout(typingTimer)
-  if (isComposing) return
-  typingTimer = setTimeout(() => {
-    isTyping = false
-  }, 520)
-}
+//
+// Mit dem Knopf faellt auch der Tipp-Zustand fort (markTyping, isTyping, typingTimer).
+// Er hatte genau eine Aufgabe: dem Plus beim Tippen die Klasse is-typing zu geben, mit
+// der es verblasste. Wann zuletzt getippt wurde, fuehrt ohnehin initiativeInputState —
+// eine Wahrheit darueber genuegt.
 
 function initiativeInputState(docId = ctx?.activeDoc()?.id) {
   if (!controller || !docId) return null
@@ -3122,21 +3257,18 @@ function handleBeforeInput(event) {
     && istSatzende(event.data)
   pendingParagraphBoundaryDocId = null
   recordRealEditorInput({ paragraphBoundary, satzende })
-  markTyping()
 }
 
 function startComposition() {
   isComposing = true
   pendingParagraphBoundaryDocId = null
   recordRealEditorInput()
-  markTyping()
 }
 
 function endComposition() {
   isComposing = false
   recordRealEditorInput()
   completeRealEditorUpdate()
-  markTyping()
 }
 
 // Welcher Moment ist gerade erreicht (momente-model.mjs)? Liest nur die ohnehin
@@ -3157,6 +3289,7 @@ function momentJetzt(docId = ctx?.activeDoc()?.id) {
     anGrenze,
     editorSichtbar: editorViewIsVisibleFor(docId),
     vonHand: momentVonHand,
+    letzteEntscheidungAt,
   })
 }
 
@@ -3173,8 +3306,13 @@ function planeMomentwechsel() {
   if (!docId || !inputState || !Number.isFinite(inputState.lastInputAt)) return
   if (!editorViewIsVisibleFor(docId)) return
 
-  const ruhe = Date.now() - inputState.lastInputAt
-  const anGrenze = inputState.boundaryGeneration === inputState.generation
+  // Ab derselben Regung rechnen wie aktuellerMoment, sonst plant der Zeitgeber die
+  // Neuzeichnung auf einen Moment, der noch gar nicht erreicht ist — und der naechste
+  // Hinweis bliebe liegen, bis zufaellig etwas anderes neu zeichnet.
+  const entschieden = Number.isFinite(letzteEntscheidungAt) && letzteEntscheidungAt > inputState.lastInputAt
+  const ruhe = Date.now() - (entschieden ? letzteEntscheidungAt : inputState.lastInputAt)
+  const anGrenze = !entschieden
+    && inputState.boundaryGeneration === inputState.generation
     && Number.isFinite(inputState.boundaryAt)
   const schwellen = [anGrenze ? INNEHALTEN_AN_GRENZE_MS : INNEHALTEN_MS, AUFSCHAUEN_MS]
   const naechste = schwellen.find(schwelle => schwelle > ruhe)
@@ -3211,7 +3349,6 @@ function visiblePassageFindingRecords(doc, blocks) {
   // Anmerkungen als "schon gezeigt" vermerken, die niemand gesehen hat.
   if (workspace?.quietAnnotations) return []
 
-  const suppressionStore = suppressionStoreFor(doc, workspace)
   const records = []
   for (const finding of doc.findings.filter(candidate => candidate?.status === 'open')) {
     // Hier stand ein Filter nach Arbeitsmodus: im Modus "Text" blieben die fuenf
@@ -3223,7 +3360,12 @@ function visiblePassageFindingRecords(doc, blocks) {
     // Es passt auch zum Grundsatz. Wer neben dir schreibt, fuehrt keine zwei getrennten
     // Listen; ihm faellt auf, was ihm auffaellt. Ob es eine Rechtschreibung ist oder
     // eine Nachfrage, entscheidet nicht, OB du es siehst.
-    if (suppressionStore.suppresses(annotationSignature(finding), doc.id)) continue
+    // Hier stand ein zweiter Filter: ein Unterdrueckungsspeicher hielt Hinweise
+    // zurueck, die man einmal "in diesem Text nicht mehr" oder "als persoenliche
+    // Praeferenz" verworfen hatte. Beides ist fort (Issue #38) — eine Anmerkung gilt
+    // einmal und wird nie zur Regel. Damit hatte der Speicher keinen Erzeuger mehr und
+    // filterte fuer immer gegen eine leere Liste.
+    //
     // Der Rhythmus folgt der Art, nicht dem Kanal (momente-model.mjs): eine
     // Formulierung darf sofort erscheinen, eine Strukturfrage erst beim Aufschauen.
     // Zurueckgehalten heisst nur zurueckgehalten -- der Hinweis bleibt bestehen und
@@ -3247,6 +3389,10 @@ function currentPassageFinding(doc, blocks) {
   const records = visiblePassageFindingRecords(doc, blocks)
   const chosen = annotationController?.current(momentJetzt(doc?.id)) || records[0]?.finding || null
   const record = records.find(candidate => candidate.finding.id === chosen?.id)
+  // Erst hier steht fest, welcher Hinweis wirklich auf den Schirm kommt — und nur der
+  // darf als gezeigt gelten. Der Vermerk sorgt dafuer, dass eine Karte, die man gerade
+  // liest, nicht verschwindet, sobald man wieder tippt (siehe darfErscheinen).
+  if (record?.finding?.id) merkeSichtbar(doc?.id, record.finding.id)
   return record || { finding: null, block: null, placementKind: null, migrated: records.some(item => item.migrated) }
 }
 
@@ -3427,7 +3573,7 @@ function reconcilePersistedEditingFinding() {
     return { kind: 'stale', editingFinding: stale }
   }
 
-  const result = reconcileEditingFinding(editing, getEditorBlocks(ctx.editor))
+  const result = reconcileEditingFinding(editing, aktuelleBloecke())
   const nextEditing = result.editingFinding
   const changed = editing.status !== nextEditing.status || editing.staleReason !== nextEditing.staleReason
   workspace.editingFinding = nextEditing
@@ -3498,11 +3644,13 @@ function targetDocumentRange(blockId, target) {
 function decideAndAdvance(finding, decision, { refresh = true, restoreFocus = true } = {}) {
   const doc = ctx.activeDoc()
   const workspace = activeWorkspace()
-  // Ueber einen Hinweis zu entscheiden IST ein Aufschauen. Wer gerade Rueckmeldung
-  // durcharbeitet, schreibt nicht — der naechste Hinweis darf sofort folgen, statt
-  // 45 Sekunden Ruhe abzuwarten. Gilt bis zum naechsten Tastendruck; sobald wieder
-  // getippt wird, setzt recordRealEditorInput es zurueck.
-  momentVonHand = true
+  // Ueber einen Hinweis zu entscheiden ist eine Regung wie ein Tastendruck — und
+  // beginnt die Wartezeit von vorn. Bis zum 8.8.2026 stand hier `momentVonHand =
+  // true`, was den Moment sofort auf 'aufschauen' hob: jedes Wegklicken gab damit
+  // den naechsten Hinweis frei, und es entstand eine Kette, die lief, solange offene
+  // Hinweise da waren. Ein Zuruecksetzen ist nicht noetig — sobald wieder getippt
+  // wird, ist lastInputAt juenger und der Zeitpunkt hier ohne Wirkung.
+  letzteEntscheidungAt = Date.now()
   // Angenommen heisst: das hat gestimmt. Dann traegt auch das Prinzip dahinter.
   // Verworfenes wandert NICHT in den Speicher -- ein zurueckgewiesener Hinweis ist
   // keine Erkenntnis, und ihn trotzdem zu behalten waere das Gegenteil von
@@ -3547,68 +3695,56 @@ function decideAndAdvance(finding, decision, { refresh = true, restoreFocus = tr
   return recorded
 }
 
+// Eine Anmerkung gilt fuer eine Stelle in einem Text, EINMAL (Jakob, 8.8.2026;
+// Issue #38). Hier stand bis dahin die Frage "Was soll Onda daraus lernen?" mit drei
+// Knoepfen, von denen zwei aus einer einzelnen Anmerkung eine Dauerregel machten
+// ("in diesem Text nicht mehr", "als persoenliche Praeferenz"). Das war ein
+// Kategorienfehler — und gefaehrlich obendrein: wer einmal stumm schaltete, bekam
+// spaeter einen echten Belegmangel nicht mehr zu sehen.
+//
+// Was sich je nach Anmerkung unterscheidet, ist nicht die REICHWEITE, sondern die
+// BEDEUTUNG des Verwerfens. Einen fehlenden Beleg zu verwerfen heisst, ein
+// wissenschaftliches Risiko anzunehmen — das wird benannt (Risiko-Tafel). Einen
+// Stilvorschlag zu verwerfen heisst: nein danke — das geschieht wortlos.
 function handleSuggestionReject(finding) {
   const workspace = activeWorkspace()
-  workspace.pendingRejectionFindingId = finding.id
-  ctx.scheduleSave()
-  refreshWorkspace()
+  if (!workspace) return
+  if (istRisikoAnnahme(finding)) {
+    workspace.riskConfirmationFindingId = finding.id
+    workspace.riskReason = ''
+    riskConfirmationFocusRequest = true
+    ctx.scheduleSave()
+    refreshWorkspace()
+    return
+  }
+  commitAnnotationRejection(finding)
 }
 
-function commitAnnotationRejection(finding, scope) {
+// Der eine Weg, auf dem eine Verwerfung festgeschrieben wird — aus der Anmerkung
+// heraus (wortlos) wie von der Risiko-Tafel (mit Begruendung).
+function commitAnnotationRejection(finding, reason = '') {
   const doc = ctx.activeDoc()
   const workspace = activeWorkspace()
   if (!doc || !workspace || finding.status !== 'open') return
-  const record = suppressionStoreFor(doc, workspace).reject({
-    findingId: finding.id,
-    signature: annotationSignature(finding),
-    documentId: doc.id,
-    scope,
-    at: Date.now(),
-  })
-  workspace.pendingRejectionFindingId = null
-  const decision = decideAndAdvance(finding, { kind: 'reject', rejectionScope: scope }, { refresh: false, restoreFocus: false })
+  const decision = decideAndAdvance(
+    finding,
+    { kind: 'reject', reason },
+    { refresh: false, restoreFocus: false },
+  )
   workspace.lastAnnotationRejection = {
-    recordId: record.id,
     findingId: finding.id,
     decisionId: decision?.id || null,
-    scope,
   }
   // Auch das Verwerfen ist eine Entscheidung ueber eine Anmerkung. Befehl+Z nimmt sie
   // zurueck, solange nichts anderes dazwischenkam — frueher lag dafuer ein Link
   // "Entscheidung zuruecknehmen" in der Anmerkungsleiste.
   letzteAenderungWarAnmerkung = true
   refreshWorkspace()
-  announceAgentStatus(scope === 'once'
-    ? 'Diese Anmerkung wurde verworfen. Ähnliche Hinweise dürfen später wieder erscheinen.'
-    : scope === 'document'
-      ? 'Diese Art Hinweis wird in diesem Text nicht erneut vorgeschlagen.'
-      : 'Diese Entscheidung gilt als persönliche Präferenz, bis du sie zurücknimmst.')
-}
-
-function renderRejectionScope(finding) {
-  const workspace = activeWorkspace()
-  if (workspace?.pendingRejectionFindingId !== finding.id) return null
-  const panel = createNode('section', 'aura-rejection')
-  panel.setAttribute('aria-label', 'Folge des Verwerfens wählen')
-  panel.append(
-    createNode('h3', 'aura-rejection__title', 'Was soll Onda daraus lernen?'),
-    createNode('p', 'aura-rejection__intro', 'Wähle, ob nur diese einzelne Anmerkung verschwindet oder ob Onda ähnliche Hinweise künftig zurückhalten soll.'),
-  )
-  const choices = createNode('div', 'aura-rejection__choices')
-  const options = [
-    ['once', 'Nur diese Anmerkung', 'Der aktuelle Hinweis verschwindet. Ein ähnlicher Hinweis darf später wieder erscheinen.'],
-    ['document', 'In diesem Text nicht mehr', 'Onda hält denselben Hinweis in diesem Dokument künftig zurück. Andere Texte bleiben unberührt.'],
-    ['personal', 'Als persönliche Präferenz merken', 'Onda hält denselben Hinweis auch in anderen Projekten zurück, bis du diese Entscheidung widerrufst.'],
-  ]
-  options.forEach(([scope, title, description]) => {
-    const button = createNode('button', 'aura-rejection__choice')
-    button.type = 'button'
-    button.append(createNode('strong', '', title), createNode('span', '', description))
-    button.addEventListener('click', () => commitAnnotationRejection(finding, scope))
-    choices.append(button)
-  })
-  panel.append(choices)
-  return panel
+  // Die Ansage folgt der Bedeutung, nicht der Reichweite: ein angenommenes Risiko
+  // wird als solches benannt, alles andere bleibt eine schlichte Ablage.
+  announceAgentStatus(decision?.outcome === 'risk-accepted'
+    ? 'Das wissenschaftliche Risiko ist bewusst angenommen und mit deiner Begründung vermerkt.'
+    : 'Diese Anmerkung wurde verworfen. Ein ähnlicher Hinweis darf später wieder erscheinen.')
 }
 
 function undoLatestRejection() {
@@ -3616,7 +3752,6 @@ function undoLatestRejection() {
   const workspace = activeWorkspace()
   const latest = workspace?.lastAnnotationRejection
   if (!doc || !workspace || !latest) return false
-  suppressionStoreFor(doc, workspace).revoke(latest.recordId)
   const finding = doc.findings.find(candidate => candidate.id === latest.findingId)
   if (finding) {
     finding.status = 'open'
@@ -3633,7 +3768,7 @@ function undoLatestRejection() {
 
 function authorizedFindingBlock(finding) {
   if (!finding?.blockId) return null
-  return resolveFindingBlock(finding, getEditorBlocks(ctx.editor))
+  return resolveFindingBlock(finding, aktuelleBloecke())
 }
 
 function handleSuggestionOwnVersion(finding) {
@@ -3677,7 +3812,7 @@ function completeOwnVersion(expectedFindingId) {
 
   const finding = doc.findings.find(candidate => candidate.id === editing.findingId)
   if (!finding || finding.status !== 'open') return
-  const completion = completeEditingFinding(editing, getEditorBlocks(ctx.editor))
+  const completion = completeEditingFinding(editing, aktuelleBloecke())
   if (completion.kind !== 'accept') return
 
   workspace.editingFinding = null
@@ -3738,15 +3873,18 @@ function renderIntegrityRiskConfirmation(finding) {
     createNode('strong', 'integrity-risk-title', 'Wissenschaftliches Risiko bewusst annehmen'),
     createNode('p', 'integrity-risk-consequence', findingConsequence(finding)),
   )
-  const label = createNode('label', 'integrity-risk-reason-label', 'Begründung (optional)')
+  // Die Begruendung ist PFLICHT (Jakob, 8.8.2026; Issue #38). Ein Pflichtfeld ist sonst
+  // ein schlechtes Mittel — es erzeugt "xxx". Hier traegt es, weil es einen freien
+  // Ausweg gibt: Abbrechen bleibt immer bedienbar und kostet nichts. Die Wahl lautet
+  // damit nicht "tippe irgendwas oder komm nicht weiter", sondern "benenne den Grund —
+  // oder nimm das Risiko eben nicht an". Ein wissenschaftliches Risiko anzunehmen, ohne
+  // sagen zu koennen warum, SOLL unbequem sein.
+  const label = createNode('label', 'integrity-risk-reason-label', 'Begründung')
   const reason = createNode('textarea', 'integrity-risk-reason')
   reason.rows = 2
   reason.value = workspace.riskReason || ''
+  reason.required = true
   reason.setAttribute('aria-label', 'Begründung für die bewusste Risikoannahme')
-  reason.addEventListener('input', () => {
-    workspace.riskReason = reason.value
-    persistWorkspace()
-  })
   label.append(reason)
 
   const actions = createNode('div', 'integrity-risk-actions')
@@ -3762,10 +3900,41 @@ function renderIntegrityRiskConfirmation(finding) {
   const confirm = createNode('button', 'integrity-risk-confirm', 'Wissenschaftliches Risiko bewusst annehmen')
   confirm.type = 'button'
   confirm.addEventListener('click', () => {
-    decideAndAdvance(finding, { kind: 'reject', reason: workspace.riskReason.trim() })
+    // Doppelt gesichert: der Knopf ist ohnehin gesperrt, aber ein Klick per Tastatur
+    // oder aus einem Vorlesegeraet darf keine leere Begruendung durchlassen.
+    const begruendung = String(workspace.riskReason || '').trim()
+    if (!begruendung) return
+    workspace.riskConfirmationFindingId = null
+    workspace.riskReason = ''
+    commitAnnotationRejection(finding, begruendung)
   })
+
+  // Leerzeichen sind keine Begruendung — sonst waere die Pflicht mit der Leertaste
+  // umgangen. Der Zustand wird bei jedem Tastendruck neu gesetzt, ohne Neuzeichnen:
+  // ein Rerender waere hier ein Fokusraub mitten im Satz.
+  const pflegeSperre = () => {
+    confirm.disabled = !String(workspace.riskReason || '').trim()
+  }
+  reason.addEventListener('input', () => {
+    workspace.riskReason = reason.value
+    pflegeSperre()
+    persistWorkspace()
+  })
+  pflegeSperre()
+
   actions.append(cancel, confirm)
-  confirmation.append(label, actions)
+  // Der Ausweg muss zu SEHEN sein, nicht bloss vorhanden. Wer nicht begruenden kann,
+  // soll erkennen, dass Abbrechen der vorgesehene Weg ist — sonst fuehlt sich das
+  // Pflichtfeld wie eine Sackgasse an, und genau daraus entsteht das "xxx".
+  confirmation.append(
+    label,
+    createNode(
+      'p',
+      'integrity-risk-hint',
+      'Ohne Begründung lässt sich das Risiko nicht annehmen. Brich ab, dann bleibt die Anmerkung offen.',
+    ),
+    actions,
+  )
 
   if (riskConfirmationFocusRequest) {
     riskConfirmationFocusRequest = false
@@ -3808,7 +3977,7 @@ function renderSuggestion(finding, blockId) {
 
 function annotationDocumentSnapshot(doc = ctx?.activeDoc()) {
   const title = document.getElementById('title')?.value ?? doc?.title ?? ''
-  const blocks = getEditorBlocks(ctx?.editor).map(block => ({
+  const blocks = aktuelleBloecke().map(block => ({
     id: block.id,
     type: block.type,
     role: block.role,
@@ -4059,10 +4228,44 @@ function positionLocalSurface(blockId) {
     : Math.min(sideWidth, availableRight - 42)
 
   local.classList.toggle('is-below', below)
-  local.style.width = `${localWidth}px`
+  // Korrektur und Einfuegung sind in der Vorlage KEINE Karten: die eine ist eine
+  // Zeile, die andere waechst mit ihrem Vorschlag. Presst man sie auf
+  // Kartenbreite, bricht "alt → neu" auf drei Zeilen um und sieht wieder aus wie
+  // das, was sie nicht sein soll. Sie bekommen deshalb nur eine Obergrenze.
+  const kompakt = local.classList.contains('aura-corr__pop') || local.classList.contains('aura-ins__pop')
+  if (kompakt) {
+    local.style.width = ''
+    local.style.maxWidth = `${Math.max(localWidth, below ? localWidth : sideWidth + 120)}px`
+  } else {
+    local.style.maxWidth = ''
+    local.style.width = `${localWidth}px`
+  }
   local.style.left = `${below ? Math.max(gutter, blockRect.left - layerRect.left) : blockRect.right - layerRect.left + 34}px`
   local.style.top = `${below ? blockRect.bottom - layerRect.top + 14 : blockRect.top - layerRect.top}px`
   local.hidden = Boolean(scrollRect && (blockRect.bottom < scrollRect.top || blockRect.top > scrollRect.bottom))
+
+  // Danebenstehen heisst am Absatz ausgerichtet -- aber nie ueber den Bildrand hinaus.
+  // Eine hohe Anmerkung reichte sonst unten heraus, und weil die Flaeche nicht rollt, war
+  // ihr letzter Knopf unerreichbar. Bei der Risiko-Tafel (#38) ist das der Abbrechen-Knopf
+  // — also genau der Ausweg, der ihr Pflichtfeld ueberhaupt vertretbar macht. Gemessen am
+  // 08.08.2026 auf 640px Fensterhoehe: Abbrechen lag bei 644–676, die Tafel selbst ist nur
+  // 550px hoch. Sie haette also gepasst; sie wurde nur zu tief angesetzt.
+  //
+  // Nur schieben, nicht schrumpfen: Passt die Flaeche ins Sichtfeld, rutscht sie so weit
+  // hoch wie noetig. Passt sie nicht, bleibt sie am Absatz — dann ist Hochschieben keine
+  // Rettung, sondern nur eine andere Art, oben abzuschneiden.
+  if (!below) {
+    const sichtOben = scrollRect ? Math.max(0, scrollRect.top) : 0
+    const sichtUnten = scrollRect ? Math.min(window.innerHeight, scrollRect.bottom) : window.innerHeight
+    const hoehe = local.getBoundingClientRect().height
+    const rand = 12
+    if (hoehe > 0 && hoehe + rand * 2 <= sichtUnten - sichtOben) {
+      const gewuenscht = Math.min(Math.max(blockRect.top, sichtOben + rand), sichtUnten - rand - hoehe)
+      if (Math.abs(gewuenscht - blockRect.top) > 0.5) {
+        local.style.top = `${gewuenscht - layerRect.top}px`
+      }
+    }
+  }
 
   const localRect = local.getBoundingClientRect()
   const feedbackBottom = below ? localRect.bottom : blockRect.bottom
@@ -4086,21 +4289,19 @@ function renderLocalFinding() {
   const previousFindingId = previous?.dataset.findingId || previous?.dataset.annotationKind || null
   const inputState = captureInputState(ui.localLayer, '.aura-dialogue__input')
 
-  const blocks = getEditorBlocks(ctx.editor)
+  const blocks = aktuelleBloecke()
   const resolution = currentPassageFinding(doc, blocks)
   const finding = resolution.finding
   const blockId = resolution.block?.id || null
   const isStale = resolution.placementKind === 'stale'
   if (resolution.migrated) ctx.scheduleSave()
 
-  if (workspace.pendingRejectionFindingId && workspace.pendingRejectionFindingId !== finding?.id) {
-    workspace.pendingRejectionFindingId = null
-  }
-
   if (localFeedbackError && localFeedbackError.findingId !== finding?.id) localFeedbackError = null
 
   // Vor jeder Entscheidung ueber die Verzierung: gilt die Anmerkung dem ganzen Absatz?
-  aktuelleAnmerkungIstAbsatzweit = istAbsatzweit(finding)
+  aktuelleAnmerkungGestalt = finding ? gestaltFuerFinding(finding) : 'keine'
+  aktuelleAnmerkungIstAbsatzweit = aktuelleAnmerkungGestalt === 'absatz'
+  aktuelleAnmerkungZiel = String(finding?.target || '')
 
   if (
     localDecoratedDocId !== doc.id
@@ -4109,7 +4310,7 @@ function renderLocalFinding() {
   ) {
     localDecoratedDocId = doc.id
     localDecoratedFindingId = finding?.id || null
-    setLocalFindingDecoration(blockId, 0, true)
+    setLocalFindingDecoration(blockId, 0, true, finding || null)
   }
 
   ui.localLayer.replaceChildren()
@@ -4133,8 +4334,6 @@ function renderLocalFinding() {
   if (ownVersion) surface.append(ownVersion)
   const riskConfirmation = renderIntegrityRiskConfirmation(finding)
   if (riskConfirmation) surface.append(riskConfirmation)
-  const rejectionScope = renderRejectionScope(finding)
-  if (rejectionScope) surface.append(rejectionScope)
   if (localFeedbackError?.findingId === finding.id) {
     const error = createNode('p', 'local-finding-error', localFeedbackError.message)
     error.setAttribute('role', 'status')
@@ -4234,7 +4433,7 @@ function closeAgentWidget({ dismiss = true, restoreFocus = true } = {}) {
 function renderUnplacedFindingList() {
   const doc = ctx?.activeDoc()
   if (!doc) return null
-  const items = unplacedPassageFindings(doc, getEditorBlocks(ctx.editor))
+  const items = unplacedPassageFindings(doc, aktuelleBloecke())
   if (!items.length) return null
 
   const section = createNode('section', 'unplaced-findings')
@@ -4597,7 +4796,7 @@ function erweiterungsGesten(message) {
       if (typeof ctx?.ops?.openDoc !== 'function') return
       ctx.ops.openDoc(stelle.docId)
       requestAnimationFrame(() => {
-        const treffer = getEditorBlocks(ctx.editor)
+        const treffer = aktuelleBloecke()
           .filter(block => String(block.text || '').includes(String(stelle.text || '')))
         if (treffer.length === 1 && treffer[0].id) focusBlock(treffer[0].id)
       })
@@ -4644,7 +4843,6 @@ function renderAgentWidget() {
     }
     return
   }
-
   const message = activeAgentMessage(workspace)
   const header = createNode('header', 'agent-widget-header')
   header.append(
@@ -4686,13 +4884,16 @@ function renderAgentWidget() {
   const gesten = erweiterungsGesten(message)
   if (gesten) messages.append(gesten)
 
+  // Composer nach dem Design System: EIN Rahmen um Feld und Knopf, nicht zwei
+  // Formen nebeneinander (components/conversation/Composer.jsx).
   const form = createNode('form', 'agent-chat-form agent-widget-form')
+  const composer = createNode('div', 'onda-composer')
   const input = createNode('input', 'agent-chat-input')
   input.type = 'text'
-  input.placeholder = 'Antworten …'
+  input.placeholder = 'Schreib eine Anweisung …'
   input.setAttribute('aria-label', 'Dem Agenten antworten')
   const send = createNode('button', 'agent-chat-send')
-  send.append(ondaIcon('arrow-right', { size: 18 }))
+  send.append(ondaIcon('arrow-right', { size: 15 }))
   send.type = 'submit'
   send.title = 'Senden'
   send.setAttribute('aria-label', 'Nachricht senden')
@@ -5027,7 +5228,7 @@ function ergaenzeEchteInitiative(workspace, finding, jetzt) {
 async function fuehreHinweislaufAus({ grund = 'pause' } = {}) {
   const doc = ctx?.activeDoc()
   const workspace = activeWorkspace()
-  const blocks = doc ? getEditorBlocks(ctx.editor) : []
+  const blocks = doc ? aktuelleBloecke() : []
   const docText = doc ? baueDocText(blocks) : ''
   const protokoll = workspace ? hinweislaufProtokoll(workspace) : null
   const signatur = seedBodySignature(docText)
@@ -5156,7 +5357,7 @@ async function fuehreErweiterungslaufAus({ vonHand = false } = {}) {
   const doc = ctx?.activeDoc()
   const workspace = activeWorkspace()
   if (doc) ensureErweiterungen(doc)
-  const blocks = doc ? getEditorBlocks(ctx.editor) : []
+  const blocks = doc ? aktuelleBloecke() : []
   const docText = doc ? baueDocText(blocks) : ''
   const docId = doc?.id ?? null
   const project = dokumentProjekt(doc)
@@ -5264,7 +5465,7 @@ function planeErweiterungslauf() {
     const aktuell = initiativeInputState(docId)
     if (!aktuell || aktuell.generation !== generation) return
     if (!editorViewIsVisibleFor(docId) || isComposing) return
-    const signatur = erweiterungsSignatur(docId, baueDocText(getEditorBlocks(ctx.editor)))
+    const signatur = erweiterungsSignatur(docId, baueDocText(aktuelleBloecke()))
     // Gegen letzteBezahlteSignatur aus dem JOURNAL, nicht mehr gegen eine fluechtige
     // Modul-Variable: das Tor schreibt den Journal-Eintrag in schliesseLauf VOR dem
     // Rueckkehren aus fuehreLaufAus (lauf-tor.mjs), darum sieht dieser Check nach einem
@@ -5454,7 +5655,7 @@ function planeHinweislauf() {
     lastInputAt: inputState?.lastInputAt,
     editorSichtbar: editorViewIsVisibleFor(docId),
     isComposing,
-    leseSignatur: () => seedBodySignature(baueDocText(getEditorBlocks(ctx.editor))),
+    leseSignatur: () => seedBodySignature(baueDocText(aktuelleBloecke())),
     letzteSignatur: workspace ? hinweislaufProtokoll(workspace).signatur : null,
     idleMs: AGENT_IDLE_MS,
   })
@@ -5470,11 +5671,116 @@ function planeHinweislauf() {
   }, entscheidung.verzoegerungMs)
 }
 
+// Ein Dokument aus der Sechser-Zeit verliert seine Rollen nicht: Sie werden EINMALIG zum
+// Anfangsbestand, bevor der erste Lauf sie ersetzt. Das nimmt das ROHE Tiptap-JSON, nicht
+// aktuelleBloecke() — dort gewinnt die Ablage, und gesucht ist gerade das alte Wort
+// (bestandAusAltenRollen).
+//
+// Zusammenspiel mit dem Bedarf, bitte nicht wegoptimieren: planeBausteinlauf sieht beim
+// ersten Mal noch keine Ablage und haelt einen Lauf fuer noetig. Hier wird zuerst uebernommen
+// und der Bedarf DANACH in versucheBausteinlauf erneut geprueft. Trug das Dokument durchgehend
+// alte Rollen, ist der Bedarf damit gedeckt und es entsteht KEINE Anfrage — die Uebernahme
+// kostet nichts.
+function uebernimmAlteRollenEinmalig(workspace) {
+  if (!workspace || workspace.bausteinarten) return
+  const altbestand = bestandAusAltenRollen(ctx.editor.getJSON(), Date.now())
+  if (!altbestand) return
+  workspace.bausteinarten = altbestand
+  ctx?.scheduleSave()
+}
+
+async function fuehreBausteinlaufAus({ grund = 'pause' } = {}) {
+  const doc = ctx?.activeDoc()
+  const workspace = activeWorkspace()
+  if (!doc || !workspace) return { gestartet: false, grund: 'kein-dokument' }
+
+  uebernimmAlteRollenEinmalig(workspace)
+
+  // Alles SYNCHRON vor dem Aufruf einsammeln — wie beim Hinweislauf, aus demselben Grund:
+  // Nach dem ersten await kann das offene Dokument ein anderes sein.
+  const blocks = aktuelleBloecke()
+  const docText = baueDocText(blocks)
+  const docId = doc.id
+  const project = dokumentProjekt(doc)
+  // Das Projektwissen — darin steht die von Hand gesetzte Textsorte, aus der die Arten
+  // abzuleiten sind (Issue #36, Entscheidung 2). Anders als beim Hinweislauf reist es hier
+  // als eigener Parameter mit: baueBausteinKontext nimmt onda selbst entgegen, es braucht
+  // also keine Klammer um runTask.
+  const ondaWissen = ondaQuellen(doc, project)
+
+  const ergebnis = await fuehreLaufAus(
+    { kanal: 'bausteine', ausloeser: grund, signatur: `${docId}:${strukturSignatur(blocks)}` },
+    ({ runTask: torRunTask }) => versucheBausteinlauf({
+      hatDokument: true,
+      istBeispielprojekt: istBeispielDokument(doc),
+      laeuftBereits: false, // die Kanal-Sperre prueft und haelt das Tor (fuehreLaufAus)
+      sperreSetzen: () => {}, // das Modell behaelt seine Parameter fuer die Modell-Tests
+      blocks,
+      bestand: bausteinBestand(workspace),
+      docText,
+      verstaendnis: project ? ensureProjectUnderstanding(project) : null,
+      onda: ondaWissen,
+      hatSchluessel,
+      istNochDasselbeDokument: () => ctx.activeDoc()?.id === docId,
+      beansprucheKostenfreigabe: () => beansprucheAutomatikKosten('bausteine', { docId, grund }),
+      runTask: torRunTask,
+      setzeAgentStatus,
+    }),
+  )
+
+  if (!ergebnis.gestartet) {
+    if (ergebnis.grund === 'monatsbudget-erreicht') {
+      zeigeBudgetPause(workspace)
+      persistWorkspace()
+      refreshWorkspace()
+    }
+    return ergebnis
+  }
+  if (!ergebnis.erfolg) return ergebnis
+
+  // Nach dem await: nur schreiben, wenn immer noch dasselbe Dokument offen ist. Sonst
+  // landeten die Bausteinarten des einen Textes in der Ablage des anderen.
+  if (ctx.activeDoc()?.id !== docId) return { gestartet: true, erfolg: false, fehler: 'dokument-gewechselt' }
+
+  workspace.bausteinarten = ergebnis.bestand
+  ctx?.scheduleSave()
+  refreshWorkspace()
+  return ergebnis
+}
+
+// Derselbe Pausen-Ausloeser wie beim Hinweislauf (AGENT_IDLE_MS), aber mit eigenem Zeitgeber
+// und eigener Bedarfspruefung: Die meisten Pausen fuehren hier zu nichts, weil sich am
+// Absatzbestand nichts geaendert hat. Genau das ist der Sinn des eigenen Takts.
+function planeBausteinlauf() {
+  clearTimeout(bausteinlaufTimer)
+  bausteinlaufTimer = null
+  const doc = ctx?.activeDoc()
+  const workspace = activeWorkspace()
+  if (!doc || !workspace) return
+  if (kanalGesperrt('bausteine')) return
+  if (istBeispielDokument(doc)) return
+  const docId = doc.id
+  const inputState = initiativeInputState(docId)
+  if (!inputState || !Number.isFinite(inputState.lastInputAt)) return
+  if (!editorViewIsVisibleFor(docId) || isComposing) return
+  if (!pruefeBausteinBedarf({ blocks: aktuelleBloecke(), bestand: bausteinBestand(workspace) }).noetig) return
+
+  const scheduledGeneration = inputState.generation
+  bausteinlaufTimer = setTimeout(() => {
+    bausteinlaufTimer = null
+    const currentInputState = initiativeInputState(docId)
+    if (!currentInputState || currentInputState.generation !== scheduledGeneration) return
+    if (!editorViewIsVisibleFor(docId) || isComposing) return
+    fuehreBausteinlaufAus({ grund: 'pause' })
+  }, Math.max(24, AGENT_IDLE_MS - (Date.now() - inputState.lastInputAt)))
+}
+
 function scheduleAgentInitiative() {
   clearAgentInitiativeTimer()
   const docId = ctx?.activeDoc()?.id || null
   activateInitiativeDocument(docId)
   planeHinweislauf()
+  planeBausteinlauf()
   const workspace = activeWorkspace()
   const message = workspace ? nextAgentInitiative(workspace) : null
   const inputState = initiativeInputState(docId)
@@ -5603,7 +5909,7 @@ export function initWorkspace(context) {
   annotationController = createAnnotationController({
     getFindings: () => {
       const doc = ctx?.activeDoc()
-      return doc ? visiblePassageFindingRecords(doc, getEditorBlocks(ctx.editor)).map(record => record.finding) : []
+      return doc ? visiblePassageFindingRecords(doc, aktuelleBloecke()).map(record => record.finding) : []
     },
     getWorkspace: () => activeWorkspace(),
     persist: () => persistWorkspace(),
@@ -5850,7 +6156,6 @@ export function initWorkspace(context) {
     closeOndaDialog({ restoreFocus: false })
     cleanups.splice(0).reverse().forEach(cleanup => cleanup())
 
-    clearTimeout(typingTimer)
     if (chatStream?.flushTimer) clearTimeout(chatStream.flushTimer)
     chatStream = null
     if (localPositionFrame) cancelAnimationFrame(localPositionFrame)
@@ -5878,8 +6183,6 @@ export function initWorkspace(context) {
     renderedDocId = null
     decoratedDocId = null
     decoratedBlockId = null
-    typingTimer = null
-    isTyping = false
     isComposing = false
     structureNavState = null
     localDecoratedDocId = null

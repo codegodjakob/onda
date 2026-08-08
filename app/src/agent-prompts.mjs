@@ -150,7 +150,8 @@ function anmerkungsregeln(arten, regeln) {
 const GEMEINSAME_HINWEISREGELN = `- Gib höchstens drei neue Hinweise pro Durchgang. Weniger ist besser als viele.
 - Nenne die Grundursache zuerst: Wenn mehrere Beobachtungen dieselbe Wurzel haben, benenne die Wurzel als einen Hinweis (istGrundursache: true), statt jedes Symptom einzeln aufzuzählen.
 - Wiederhole nichts, was in der Entscheidungsliste steht: weder erledigte noch verworfene noch als Risiko akzeptierte Punkte — auch nicht in neuer Verkleidung.
-- Jeder Hinweis füllt alle Felder: kategorie, anmerkungsart, anker (wörtliches Minimal-Zitat), beobachtung (was dir auffällt), relevanz (warum es für Ziel und Publikum zählt), folge (was passiert, wenn es bleibt), muster, vorschlagsart, stilmittelId, vorschlag, istGrundursache, integritaet.
+- gewinn sagt, was der TEXT gewinnt, wenn dieser Hinweis umgesetzt wird — nicht, wie schwer er wiegt und nicht, wie sicher du bist. Drei Stufen: "traegt", wenn der Text danach sagt, was er vorher nur behauptet hat; "schaerft", wenn die Aussage genauer wird; "glaettet", wenn es sich besser liest. Im Zweifel "schaerft". Höchstens EIN Hinweis je Durchgang darf "traegt" beanspruchen, und nur, wenn die folge das trägt — beanspruchen es mehrere, wird das bei allen bis auf einen zurückgestuft. Nach dieser Stufe entscheidet sich, was die Autorin oder der Autor zuerst zu sehen bekommt; sie großzügig zu vergeben, macht sie wertlos.
+- Jeder Hinweis füllt alle Felder: kategorie, anmerkungsart, anker (wörtliches Minimal-Zitat), beobachtung (was dir auffällt), relevanz (warum es für Ziel und Publikum zählt), folge (was passiert, wenn es bleibt), muster, vorschlagsart, stilmittelId, vorschlag, istGrundursache, integritaet, gewinn.
 - muster nennt das übertragbare Prinzip hinter dem Hinweis: den Satz, der beim nächsten Text von allein wieder anwendbar ist, auch bei einem ganz anderen Thema. Es ist nicht die Beobachtung noch einmal. Nicht "dieser Satz nennt keine Quelle", sondern: "Eine Zahl, die das Argument trägt, braucht ihre Herkunft im Satz daneben." Ein Muster, das nur auf genau diese Stelle passt, ist keines — dann formuliere allgemeiner.
 - Ein Vorschlag (bisher/neu) ist freiwillig; mache ihn nur, wenn du eine konkrete bessere Fassung hast, und "bisher" muss wörtlich im Text vorkommen. Bei einer gewöhnlichen besseren Fassung setzt du vorschlagsart: "formulierung" und stilmittelId: null. Ohne Vorschlag setzt du vorschlagsart: "keiner", stilmittelId: null und vorschlag: null.
 - Findest du nichts Wesentliches, gib eine leere Liste zurück. Erfinde keine Hinweise, um eine Zahl zu füllen.`
@@ -163,7 +164,8 @@ ${anmerkungsregeln(TEXT_ANNOTATION_KINDS, TEXT_ANMERKUNGSREGELN)}
 - Gib höchstens drei neue Hinweise pro Durchgang. Weniger ist besser als viele.
 - Nenne die Grundursache zuerst: Wenn mehrere Beobachtungen dieselbe Wurzel haben, benenne die Wurzel als einen Hinweis (istGrundursache: true), statt jedes Symptom einzeln aufzuzählen.
 - Wiederhole nichts, was in der Entscheidungsliste steht: weder erledigte noch verworfene noch als Risiko akzeptierte Punkte — auch nicht in neuer Verkleidung.
-- Jeder Hinweis füllt alle Felder: kategorie, anmerkungsart, anker (wörtliches Minimal-Zitat), beobachtung (was dir auffällt), relevanz (warum es für Ziel und Publikum zählt), folge (was passiert, wenn es bleibt), muster, vorschlagsart, stilmittelId, vorschlag, istGrundursache, integritaet.
+- gewinn sagt, was der TEXT gewinnt, wenn dieser Hinweis umgesetzt wird — nicht, wie schwer er wiegt und nicht, wie sicher du bist. Drei Stufen: "traegt", wenn der Text danach sagt, was er vorher nur behauptet hat; "schaerft", wenn die Aussage genauer wird; "glaettet", wenn es sich besser liest. Im Zweifel "schaerft". Höchstens EIN Hinweis je Durchgang darf "traegt" beanspruchen, und nur, wenn die folge das trägt — beanspruchen es mehrere, wird das bei allen bis auf einen zurückgestuft. Nach dieser Stufe entscheidet sich, was die Autorin oder der Autor zuerst zu sehen bekommt; sie großzügig zu vergeben, macht sie wertlos.
+- Jeder Hinweis füllt alle Felder: kategorie, anmerkungsart, anker (wörtliches Minimal-Zitat), beobachtung (was dir auffällt), relevanz (warum es für Ziel und Publikum zählt), folge (was passiert, wenn es bleibt), muster, vorschlagsart, stilmittelId, vorschlag, istGrundursache, integritaet, gewinn.
 - muster nennt das übertragbare Prinzip hinter dem Hinweis: den Satz, der beim nächsten Text von allein wieder anwendbar ist, auch bei einem ganz anderen Thema. Es ist nicht die Beobachtung noch einmal. Nicht "dieser Satz nennt keine Quelle", sondern: "Eine Zahl, die das Argument trägt, braucht ihre Herkunft im Satz daneben." Ein Muster, das nur auf genau diese Stelle passt, ist keines — dann formuliere allgemeiner.
 - Bei der Art sprache: Geht es um ein Stilmittel, nenne es beim Namen, sage welcher Mechanismus arbeitet und was er an dieser Stelle leistet, und schließe mit der Prüffrage. Das Etikett allein ist kein Hinweis. Schlage nie ein Mittel vor, das bei dieser Textart aufgesetzt wirkt oder in der Zuordnung gar nicht steht. Setze vorschlagsart:"stilmittel" und die exakte stilmittelId nur zusammen mit einem konkreten vorschlag aus bisher/neu; bei einer bloßen Diagnose setzt du vorschlagsart:"keiner", stilmittelId:null und vorschlag:null.
 - Ein Vorschlag (bisher/neu) ist freiwillig; mache ihn nur, wenn du eine konkrete bessere Fassung hast, und "bisher" muss wörtlich im Text vorkommen. Bei einer gewöhnlichen besseren Fassung setzt du vorschlagsart: "formulierung" und stilmittelId: null. Ohne Vorschlag setzt du vorschlagsart: "keiner", stilmittelId: null und vorschlag: null.
@@ -233,3 +235,33 @@ Was du nicht tust:
 - Vom Menschen gesetzte Namen übernimmst du wörtlich, Zeichen für Zeichen. Ihn zu verbessern hieße, eine Entscheidung zu widerrufen.
 
 Findest du keine tragende Gemeinsamkeit, gib eine leere Liste zurück. Das ist ein gültiges Ergebnis.`
+
+// Der Auftrag für den Bausteinlauf. Zwei Dinge in einem Zug: erst erkennen, was für ein
+// Text das ist, DANN daraus die Arten ableiten. Die Reihenfolge steht ausdrücklich im
+// Auftrag, weil sie den ganzen Unterschied macht: Wer zuerst Absätze sortiert, greift zu
+// allgemeinen Schubladen; wer zuerst die Textsorte benennt, findet die Wörter dieses Textes.
+export const BAUSTEINARTEN_ANWEISUNG = [
+  'AUFGABE: Benenne, was die einzelnen Absätze in DIESEM Text tun.',
+  '',
+  'Schritt 1 — Textsorte: Bestimme zuerst knapp, was für ein Text das ist',
+  '(z. B. "Wissenschaftliche Arbeit", "Essay", "Produkttext", "Blogbeitrag").',
+  '',
+  'Schritt 2 — Arten: Leite daraus die Bausteinarten ab, die GENAU DIESER Text hat.',
+  'Nicht aus einer allgemeinen Liste, sondern aus dieser Textsorte. Eine',
+  'wissenschaftliche Arbeit hat andere Arten (Methode, Befund, Einschränkung) als ein',
+  'Essay (Anekdote, Wendung, Einwand, Pointe). Benenne sie so, wie eine erfahrene',
+  'Lektorin sie im Gespräch nennen würde: ein bis zwei Wörter, im Deutschen, ohne',
+  'Fachjargon. Höchstens acht Arten — mehr heißt, dass zu fein unterschieden wurde.',
+  'Jede Art bekommt einen Satz, wozu sie dient.',
+  '',
+  'Schritt 3 — Funktion: Gib zu jeder Art an, ob sie einer dieser Rollen im Argument',
+  'entspricht: claim (die tragende Behauptung), evidence (stützt eine Behauptung),',
+  'counterpoint (spricht dagegen), transition (führt von einem Gedanken zum nächsten),',
+  'question (lässt offen). Passt keine, dann null. Rate nicht: null ist die richtige',
+  'Antwort, wenn die Art nichts davon ist. Höchstens EINE Art trägt claim.',
+  '',
+  'Schritt 4 — Zuordnung: Ordne jeden genannten Absatz genau einer der Arten zu, über',
+  'seine blockId. Nenne die Art bei ihrem Namen aus Schritt 2. Überschriften bekommen',
+  'keine Art. Bist du dir bei einem Absatz nicht sicher, lass ihn weg — ein fehlender',
+  'Name ist besser als ein falscher.',
+].join('\n')

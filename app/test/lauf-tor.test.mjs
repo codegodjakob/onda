@@ -76,8 +76,29 @@ const erfolgLaufFn = async ({ runTask }) => {
 // abgeschrieben hatte. Die Liste ist festgenagelt, damit ein sechster Kanal nicht
 // stillschweigend dazukommt: wer einen baut, aendert diesen Test bewusst mit.
 test('KANAELE listet genau die Kanaele, die durchs Tor laufen', () => {
-  assert.deepEqual(KANAELE, ['interview', 'chat', 'hinweis', 'erweiterung', 'quellen'])
+  assert.deepEqual(KANAELE, ['interview', 'chat', 'hinweis', 'erweiterung', 'quellen', 'bausteine'])
   assert.throws(() => KANAELE.push('neu'))
+})
+
+// Der Bausteinlauf ist ein bezahlter Lauf wie jeder andere und muss durchs Tor. Ohne
+// Eintrag in KANAELE wirft fuehreLaufAus — der Kanal waere gar nicht lauffaehig.
+test('der Bausteinlauf kommt durchs Tor, wird gebucht und gibt die Sperre wieder frei', async () => {
+  const t = fakeTransport([
+    (a, h) => h.onFertig({ text: 'ok', usage: { ...USAGE }, stopReason: 'end_turn' }),
+  ])
+  baueWelt()
+  setzeTransportFuerTests(t)
+
+  const ergebnis = await fuehreLaufAus({ kanal: 'bausteine', ausloeser: 'pause' }, erfolgLaufFn)
+
+  assert.equal(ergebnis.gestartet, true, 'der Bausteinlauf kam nicht durchs Tor')
+  assert.equal(t.aufrufe.length, 1, 'der Lauf hat das Gateway nicht erreicht')
+  assert.equal(kanalGesperrt('bausteine'), false, 'die Sperre bleibt nach dem Lauf haengen')
+  assert.ok(
+    torJournal().eintraege.some(eintrag => eintrag.kanal === 'bausteine'),
+    'der Lauf steht nicht im Journal — dann ist er nicht buchhalterisch erfasst',
+  )
+  setzeTransportFuerTests(null)
 })
 
 test('zwei gleichzeitige Ausloeser desselben Kanals bezahlen genau einen Lauf', async () => {

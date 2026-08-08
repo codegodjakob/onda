@@ -2,13 +2,17 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   MODELLE, TASK_TABLE, PREISE, HINWEISE_SCHEMA, VERSTAENDNIS_SCHEMA, ERWEITERUNGEN_SCHEMA,
-  QUELLENTHEMEN_SCHEMA,
+  QUELLENTHEMEN_SCHEMA, BAUSTEINARTEN_SCHEMA,
   API_URL, baueAnfrage, schaetzeKostenCents,
 } from '../src/agent-tasks.mjs'
 import { SYSTEM_COACH } from '../src/agent-prompts.mjs'
+import { FUNKTIONEN } from '../src/bausteinarten-vertrag.mjs'
 
 test('TASK_TABLE ist vollstaendig und zeigt auf gueltige Modelle', () => {
-  const tasks = ['verstaendnis', 'hinweise', 'erweiterungen', 'quellenthemen', 'chat', 'titel', 'zusammenfassung']
+  const tasks = [
+    'verstaendnis', 'hinweise', 'erweiterungen', 'quellenthemen', 'bausteinarten',
+    'chat', 'titel', 'zusammenfassung',
+  ]
   assert.deepEqual(Object.keys(TASK_TABLE).sort(), tasks.slice().sort())
   for (const name of tasks) {
     const eintrag = TASK_TABLE[name]
@@ -21,6 +25,7 @@ test('TASK_TABLE ist vollstaendig und zeigt auf gueltige Modelle', () => {
   assert.equal(TASK_TABLE.hinweise.schema, HINWEISE_SCHEMA)
   assert.equal(TASK_TABLE.erweiterungen.schema, ERWEITERUNGEN_SCHEMA)
   assert.equal(TASK_TABLE.quellenthemen.schema, QUELLENTHEMEN_SCHEMA)
+  assert.equal(TASK_TABLE.bausteinarten.schema, BAUSTEINARTEN_SCHEMA)
   assert.equal(TASK_TABLE.titel.maxTokens, 256)
   assert.equal(TASK_TABLE.zusammenfassung.maxTokens, 2000)
   assert.equal(MODELLE.stark, 'claude-opus-5')
@@ -49,7 +54,10 @@ test('Schemata verbieten Zusatzfelder und verlangen Pflichtfelder', () => {
   assert.deepEqual(hinweis.properties.kategorie.enum,
     ['fakt', 'quelle', 'methode', 'logik', 'struktur', 'wirkung', 'erklaerung', 'sprache'])
   assert.deepEqual(hinweis.required,
-    ['kategorie', 'anmerkungsart', 'anker', 'beobachtung', 'relevanz', 'folge', 'muster', 'vorschlagsart', 'stilmittelId', 'vorschlag', 'istGrundursache', 'integritaet'])
+    ['kategorie', 'anmerkungsart', 'anker', 'beobachtung', 'relevanz', 'folge', 'muster', 'vorschlagsart', 'stilmittelId', 'vorschlag', 'istGrundursache', 'integritaet', 'gewinn'])
+  // gewinn ist seit dem 8.8.2026 Pflicht. Ohne Pflichtfeld KANN das Modell es nicht
+  // einmal freiwillig nachreichen — die Feldliste ist geschlossen.
+  assert.deepEqual(hinweis.properties.gewinn.enum, ['traegt', 'schaerft', 'glaettet'])
   assert.deepEqual(hinweis.properties.vorschlagsart.enum, ['keiner', 'formulierung', 'stilmittel'])
   assert.ok(hinweis.properties.stilmittelId.anyOf[0].enum.includes('alliteration'))
   assert.deepEqual(hinweis.properties.stilmittelId.anyOf[1], { type: 'null' })
@@ -223,4 +231,42 @@ test('ERWEITERUNGEN_SCHEMA kennt genau die drei Arten und verlangt alle vier Fel
   // anker ist eine LISTE: die Zahl der Stellen gehoert zur Art. Ein einzelnes Feld wuerde
   // das Modell einladen, fuer 'feld' eine Stelle zu erfinden.
   assert.equal(eintrag.properties.anker.type, 'array')
+})
+
+test('der Task bausteinarten laeuft auf dem starken Modell, ohne Strom', () => {
+  const eintrag = TASK_TABLE.bausteinarten
+  assert.equal(eintrag.modell, 'stark')
+  assert.equal(eintrag.stream, false)
+  assert.equal(eintrag.schema, BAUSTEINARTEN_SCHEMA)
+})
+
+test('das Schema laesst genau die Funktionen zu, die die Rechenlogik kennt — und null', () => {
+  const funktion = BAUSTEINARTEN_SCHEMA.properties.arten.items.properties.funktion
+  const erlaubt = funktion.anyOf.find(zweig => Array.isArray(zweig.enum))
+  assert.deepEqual(erlaubt.enum, [...FUNKTIONEN])
+  assert.ok(funktion.anyOf.some(zweig => zweig.type === 'null'))
+})
+
+test('das Schema ist geschlossen: keine erfundenen Felder, alle Felder Pflicht', () => {
+  assert.equal(BAUSTEINARTEN_SCHEMA.additionalProperties, false)
+  assert.deepEqual(BAUSTEINARTEN_SCHEMA.required, ['textsorte', 'arten', 'zuordnung'])
+  const art = BAUSTEINARTEN_SCHEMA.properties.arten.items
+  assert.equal(art.additionalProperties, false)
+  assert.deepEqual(art.required, ['name', 'beschreibung', 'funktion'])
+  const zu = BAUSTEINARTEN_SCHEMA.properties.zuordnung.items
+  assert.equal(zu.additionalProperties, false)
+  assert.deepEqual(zu.required, ['blockId', 'art'])
+})
+
+test('die Anfrage traegt das Schema und den gecachten Praefix', () => {
+  const anfrage = baueAnfrage('bausteinarten', {
+    verstaendnis: { thema: 'Calm Technology' },
+    docText: 'Ein Absatz.',
+    volatiles: ['Auftrag'],
+  })
+  assert.equal(anfrage.body.output_config.format.schema, BAUSTEINARTEN_SCHEMA)
+  assert.equal(anfrage.body.model, 'claude-opus-5')
+  assert.equal(anfrage.body.stream, undefined)
+  const gecacht = anfrage.body.messages[0].content.filter(block => block.cache_control)
+  assert.equal(gecacht.length, 2)
 })

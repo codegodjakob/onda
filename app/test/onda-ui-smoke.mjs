@@ -94,6 +94,16 @@ async function runEditor(browser) {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } })
   await openExample(page)
   const seeded = await page.evaluate(() => {
+    // Der Beispieltext bringt seit dem 07.08.2026 alle 29 Anmerkungsarten mit,
+    // damit Jakob jeden Anwendungsfall durchklicken kann. Einige davon zaehlen
+    // zur Integritaet und stehen deshalb VOR jeder eingesetzten Anmerkung —
+    // createdAt: -1 genuegt dann nicht mehr, um vorne zu stehen.
+    // Diese Pruefung gilt der Umschreibungs-Form, nicht der Reihenfolge der
+    // Warteschlange: sie raeumt die mitgelieferten Anmerkungen deshalb weg und
+    // arbeitet mit genau einer eigenen.
+    const doc = window.AIWT.state.docs.find(candidate => candidate.id === window.AIWT.state.active)
+    doc.findings = []
+    doc.lane = []
     const block = window.AIWT.__blockIdentityTestBridge.getBlocks().find(candidate => candidate.text.length > 24)
     if (!block) return null
     const target = block.text.slice(0, Math.min(32, block.text.length))
@@ -118,7 +128,13 @@ async function runEditor(browser) {
   assert.equal((await zeichen.textContent()).trim(), '', 'Das Zeichen zeigt eine Zahl — es soll nur ein Stift sein')
   assert.match(await zeichen.getAttribute('aria-label'), /Empfehlung/)
 
-  await page.getByRole('button', { name: /Fassung übernehmen/ }).click()
+  // Der Knopf hiess "Fassung übernehmen" und heisst seit dem 07.08.2026
+  // "Übernehmen" — so steht er im Design System (components/annotation/
+  // Rewrite.jsx: acceptLabel='Übernehmen'). Der Knopf wird ueber die Form
+  // gesucht, nicht ueber den ganzen Bildschirm: eine Beschriftung, die
+  // anderswo nochmal vorkommt, wuerde sonst den falschen treffen.
+  await page.locator('[data-annotation-form="rewrite"]')
+    .getByRole('button', { name: 'Übernehmen' }).click()
   assert.equal(await page.locator('#editor .ProseMirror').textContent().then(text => text.includes(seeded.action)), true)
   assert.equal(await page.evaluate(() => window.AIWT.state.docs.find(doc => doc.id === window.AIWT.state.active).findings.find(item => item.id === 'onda-editor-smoke').status), 'resolved')
 
@@ -135,14 +151,16 @@ async function runEditor(browser) {
   // zurück.
   assert.equal(await page.evaluate(() => window.AIWT.__workspaceTestBridge.gehoertRueckgaengigDerAnmerkung()), false)
 
+  // Ein Stilvorschlag verschwindet beim Verwerfen WORTLOS. Hier stand bis zum
+  // 8.8.2026 die Frage „Was soll Onda daraus lernen?" mit drei Knöpfen, von denen
+  // zwei aus dieser einen Anmerkung eine Dauerregel machten. Eine Anmerkung gilt für
+  // eine Stelle in einem Text, einmal (Issue #38) — es gibt nichts zu wählen.
   await page.getByRole('button', { name: 'Original behalten' }).click()
-  const consequence = page.getByRole('region', { name: 'Folge des Verwerfens wählen' })
-  await consequence.waitFor({ state: 'visible' })
-  assert.match(await consequence.textContent(), /ähnlicher Hinweis darf später wieder erscheinen/)
-  assert.match(await consequence.textContent(), /Andere Texte bleiben unberührt/)
-  assert.match(await consequence.textContent(), /anderen Projekten zurück/)
-  await consequence.getByRole('button', { name: /In diesem Text nicht mehr/ }).click()
   assert.equal(await page.evaluate(() => window.AIWT.state.docs.find(doc => doc.id === window.AIWT.state.active).findings.find(item => item.id === 'onda-editor-smoke').status), 'dismissed')
+  assert.equal(await page.getByRole('region', { name: 'Folge des Verwerfens wählen' }).count(), 0, 'Die Frage nach dem Verwerfungsumfang ist zurück')
+  // Und keine Tafel: ein Satzstil-Vorschlag ist keine Integritätsfrage, ihn zu
+  // verwerfen ist keine Risikoannahme.
+  assert.equal(await page.locator('.integrity-risk-confirmation').count(), 0, 'Die Risiko-Tafel erscheint bei einem Stilvorschlag')
   // Auch das Verwerfen ist eine Entscheidung über eine Anmerkung — dieselbe Taste holt
   // sie zurück. Früher lag dafür ein Link "Entscheidung zurücknehmen" in der Leiste.
   await page.locator('#editor .ProseMirror').click()
@@ -172,30 +190,21 @@ async function runEditor(browser) {
 // Begründung, die als Entscheidung stehenbleibt — statt dass eine Integritätsfrage
 // still abgelegt wird.
 //
-// WARUM diese Prüfung den Zustand von Hand setzt, statt „Verwerfen" zu klicken:
-// Bis zum 5. August 2026 öffnete „Verwerfen" bei einer Integritätsfrage genau diese
-// Tafel — handleSuggestionReject setzte riskConfirmationFindingId. Commit 92190c1
-// ("Notizmodus und Verwerfungsumfang vollenden") hat diese Zeile entfernt; derselbe
-// Knopf setzt heute pendingRejectionFindingId und fragt nach dem Verwerfungsumfang.
-// Im ganzen src/ wird riskConfirmationFindingId seither NUR NOCH auf null gesetzt.
+// Der Weg dorthin ist seit dem 8.8.2026 (Issue #38) der normale Knopf: Wer eine
+// Integritätsfrage verwirft, bekommt die Tafel. Wer einen Stilvorschlag verwirft,
+// bekommt sie nicht — das prüft runEditor weiter oben.
 //
-// Die Tafel selbst ist geblieben und wird bei jedem Zeichnen abgefragt
-// (workspace.js:3174). Sie erscheint also weiterhin — aber nur für ein GESPEICHERTES
-// Dokument, dessen Arbeitszustand den Verweis von damals noch trägt. Genau diese Lage
-// wird hier gestellt. Ohne sie hätte der Zustand, der die Tafel überhaupt erscheinen
-// lässt, überhaupt keinen Beleg: weder im Browser noch am Modell.
+// Bis dahin musste diese Prüfung den Zustand riskConfirmationFindingId von Hand
+// stellen, weil Commit 92190c1 der Tafel ihren Auslöser genommen hatte. Dass sie
+// jetzt klicken kann, IST der Beweis, dass der Auslöser zurück ist.
 async function runRisikoTafel(browser) {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } })
   await openExample(page)
 
-  // Der Zustand wird VOR injectFinding gesetzt: injectFinding zeichnet neu, und erst
-  // beim Zeichnen fragt renderIntegrityRiskConfirmation danach. Umgekehrt bliebe die
-  // Tafel bis zum nächsten Anlass unsichtbar.
-  const stelleTafel = (findingId, createdAt) => page.evaluate(({ id, at }) => {
+  // Setzt eine Integritätsfrage an den Text — mehr nicht. Die Tafel holt sich die
+  // Prüfung danach selbst, über den Knopf.
+  const setzeIntegritaetsfrage = (findingId, createdAt) => page.evaluate(({ id, at }) => {
     const block = window.AIWT.__blockIdentityTestBridge.getBlocks().find(kandidat => kandidat.text.length > 24)
-    const doc = window.AIWT.state.docs.find(kandidat => kandidat.id === window.AIWT.state.active)
-    doc.workspace.riskConfirmationFindingId = id
-    doc.workspace.riskReason = ''
     window.AIWT.__workspaceTestBridge.injectFinding({
       id, status: 'open', placement: 'passage', blockId: block.id, target: block.text.slice(0, 28),
       // 'source' ohne Textart IST eine Integritätsfrage: eine fehlende Textart bedeutet
@@ -220,7 +229,7 @@ async function runRisikoTafel(browser) {
     }
   }, findingId)
 
-  await stelleTafel('onda-risiko-annehmen', -20)
+  await setzeIntegritaetsfrage('onda-risiko-annehmen', -20)
   const anmerkung = page.locator('#localAgentLayer [data-finding-id="onda-risiko-annehmen"]')
   await anmerkung.waitFor({ state: 'visible' })
   // Die Tafel hängt IN der heutigen Anmerkung — dem .onda-annotation aus renderAnnotation.
@@ -229,6 +238,9 @@ async function runRisikoTafel(browser) {
   // sind sie gescheitert.
   assert.equal(await anmerkung.evaluate(node => node.classList.contains('onda-annotation')), true)
   assert.equal(await anmerkung.getAttribute('data-annotation-form'), 'source')
+
+  // Der Auslöser: der ganz normale Verwerfen-Knopf der Anmerkung.
+  await anmerkung.getByRole('button', { name: 'Verwerfen', exact: true }).click()
   const tafel = anmerkung.locator('.integrity-risk-confirmation')
   await tafel.waitFor({ state: 'visible' })
   assert.equal(await tafel.getAttribute('aria-label'), 'Wissenschaftliches Risiko bewusst annehmen')
@@ -236,8 +248,23 @@ async function runRisikoTafel(browser) {
   assert.match(await tafel.textContent(), /unbelegte Behauptung/)
   assert.equal(await tafel.locator('textarea').getAttribute('aria-label'), 'Begründung für die bewusste Risikoannahme')
 
+  // Die Begründung ist PFLICHT. Ohne sie ist der Bestätigungsknopf gesperrt — und der
+  // Ausweg ist es nie, sonst wäre die Pflicht eine Sackgasse.
+  const annehmen = tafel.getByRole('button', { name: 'Wissenschaftliches Risiko bewusst annehmen', exact: true })
+  const abbrechen = tafel.getByRole('button', { name: 'Abbrechen', exact: true })
+  assert.equal(await annehmen.isDisabled(), true, 'Ohne Begründung lässt sich das Risiko annehmen')
+  assert.equal(await abbrechen.isDisabled(), false, 'Abbrechen ist gesperrt — die Pflicht wird zur Sackgasse')
+  assert.equal(await tafel.locator('.integrity-risk-reason-label').textContent(), 'Begründung')
+  // Der Ausweg steht zu lesen, nicht bloß im Knopf.
+  assert.match(await tafel.textContent(), /Brich ab, dann bleibt die Anmerkung offen/)
+
+  // Leerzeichen sind keine Begründung — sonst wäre die Pflicht mit der Leertaste umgangen.
+  await tafel.locator('textarea').fill('    ')
+  assert.equal(await annehmen.isDisabled(), true, 'Leerzeichen zählen als Begründung')
+
   await tafel.locator('textarea').fill('Die Quelle bleibt für diese Fassung bewusst offen.')
-  await tafel.getByRole('button', { name: 'Wissenschaftliches Risiko bewusst annehmen', exact: true }).click()
+  assert.equal(await annehmen.isDisabled(), false, 'Der Knopf bleibt trotz Begründung gesperrt')
+  await annehmen.click()
   await anmerkung.waitFor({ state: 'detached' })
   // Der Kern: nicht 'dismissed', sondern 'risk-accepted' — und die getippte Begründung
   // steht in der Entscheidung, nicht bloß im Feld.
@@ -252,8 +279,11 @@ async function runRisikoTafel(browser) {
   // Und der andere Weg: Abbrechen nimmt kein Risiko an. Die Anmerkung bleibt offen, es
   // wird nichts festgeschrieben, und die halb getippte Begründung wird nicht heimlich
   // aufbewahrt.
-  await stelleTafel('onda-risiko-abbrechen', -19)
-  const zweite = page.locator('#localAgentLayer [data-finding-id="onda-risiko-abbrechen"] .integrity-risk-confirmation')
+  await setzeIntegritaetsfrage('onda-risiko-abbrechen', -19)
+  const zweiteAnmerkung = page.locator('#localAgentLayer [data-finding-id="onda-risiko-abbrechen"]')
+  await zweiteAnmerkung.waitFor({ state: 'visible' })
+  await zweiteAnmerkung.getByRole('button', { name: 'Verwerfen', exact: true }).click()
+  const zweite = zweiteAnmerkung.locator('.integrity-risk-confirmation')
   await zweite.waitFor({ state: 'visible' })
   await zweite.locator('textarea').fill('Doch nicht — ich suche den Beleg.')
   await zweite.getByRole('button', { name: 'Abbrechen', exact: true }).click()
@@ -266,6 +296,45 @@ async function runRisikoTafel(browser) {
     feldinhalt: '',
   })
   await page.close()
+
+  // Der Ausweg muss auch auf einem FLACHEN Bildschirm sichtbar sein. „Sichtbar, nicht
+  // bloß vorhanden" ist keine Formulierung, sondern eine Messung: Die Tafel ist hoch
+  // (Folge, Feld, Hinweiszeile, zwei Knöpfe), und die Anmerkung richtete sich am Absatz
+  // aus, ohne den Fensterrand zu kennen. Auf 640px Fensterhöhe lag „Abbrechen" dadurch
+  // bei 644–676 — außerhalb des Bildes, und die Fläche rollt nicht. Dabei ist die Tafel
+  // nur rund 550px hoch, hätte also gepasst. Ein Pflichtfeld, dessen Ausweg man nicht
+  // erreicht, ist eine Sackgasse; genau der Ausweg macht die Pflicht vertretbar (#38).
+  const flach = await browser.newPage({ viewport: { width: 1440, height: 640 } })
+  await openExample(flach)
+  await flach.evaluate(() => {
+    const block = window.AIWT.__blockIdentityTestBridge.getBlocks().find(kandidat => kandidat.text.length > 24)
+    const doc = window.AIWT.state.docs.find(kandidat => kandidat.id === window.AIWT.state.active)
+    doc.findings = []
+    doc.lane = []
+    doc.coach = []
+    doc.decisions = []
+    window.AIWT.__workspaceTestBridge.injectFinding({
+      id: 'onda-risiko-flach', status: 'open', placement: 'passage', blockId: block.id,
+      target: block.text.slice(0, 28), category: 'source', anmerkungsart: 'beleg',
+      priority: 'critical', createdAt: -17,
+      short: 'Für diese Aussage fehlt ein belastbarer Beleg.',
+      why: 'Ohne Beleg bleibt die Aussage wissenschaftlich nicht abgesichert.',
+      consequence: 'Die Arbeit kann an dieser Stelle eine unbelegte Behauptung enthalten.',
+    })
+  })
+  const flacheAnmerkung = flach.locator('#localAgentLayer [data-finding-id="onda-risiko-flach"]')
+  await flacheAnmerkung.waitFor({ state: 'visible' })
+  await flacheAnmerkung.getByRole('button', { name: 'Verwerfen', exact: true }).click()
+  await flach.locator('.integrity-risk-confirmation').waitFor({ state: 'visible' })
+  const lage = await flach.evaluate(() => {
+    const kasten = document.querySelector('.integrity-risk-cancel').getBoundingClientRect()
+    return { oben: kasten.top, unten: kasten.bottom, fenster: window.innerHeight }
+  })
+  assert.ok(
+    lage.unten <= lage.fenster && lage.oben >= 0,
+    `„Abbrechen" liegt außerhalb des Bildes: ${Math.round(lage.oben)}–${Math.round(lage.unten)} bei ${lage.fenster}px Fensterhöhe`,
+  )
+  await flach.close()
 }
 
 // „Hinweise ohne sichere Textstelle" (workspace.js unplacedPassageFindings /
@@ -426,6 +495,9 @@ async function runShell(browser) {
   await assertTastwegFolgtDemBlick(page)
   await assertBausteinHinzufuegen(page)
   await assertQuellenFensterEineHandschrift(page)
+  await assertGesteZeigtAufDieStelle(page)
+  await assertEntscheidungOeffnetKeineKette(page)
+  await assertWichtigstesZuerst(page)
   await assertRuhigeLage(page)
 
   await page.setViewportSize({ width: 320, height: 760 })
@@ -597,6 +669,253 @@ async function assertZweiGesten(page) {
   assert.equal(await page.locator('#materialTree').isVisible(), true)
   assert.equal(await page.locator('#materialModal').count(), 0, 'Der Pfeil hat ein Fenster geöffnet')
   await page.locator('#materialTreeToggle').click()
+}
+
+// „Was ist die Anmerkung, die die höchste hat zum Gelingen des Textes?" (Jakob, 8.8.2026)
+//
+// Die Rangfolge selbst ist rein und in hinweis-rangfolge.test.mjs Fall für Fall
+// geprüft. Hier geht es um etwas anderes: dass sie auch WIRKLICH auf den Schirm kommt.
+// Bis zum 8.8.2026 sortierte die Oberfläche nach einer eigenen, abweichenden Regel —
+// eine Änderung am Modell hätte die Anzeige gar nicht erreicht.
+async function assertWichtigstesZuerst(page) {
+  await page.setViewportSize({ width: 1440, height: 900 })
+
+  const gezeigt = await page.evaluate(async () => {
+    const doc = window.AIWT.state.docs.find(kandidat => kandidat.id === window.AIWT.state.active)
+    const vorrat = { findings: doc.findings, decisions: doc.decisions, coach: doc.coach, lane: doc.lane }
+    doc.findings = []; doc.decisions = []; doc.coach = []; doc.lane = []
+
+    const bausteine = window.AIWT.__blockIdentityTestBridge.getBlocks().filter(k => k.text.length > 40)
+    // Der Kommafehler ist ÄLTER und ein Fehler; die Gliederung ist jünger und nur eine
+    // Empfehlung. Nach der alten Regel hätte der Kommafehler gewonnen — zweimal.
+    doc.findings.push(
+      {
+        id: 'rang-komma', status: 'open', placement: 'passage', blockId: bausteine[0].id,
+        target: bausteine[0].text.slice(0, 20), action: `${bausteine[0].text.slice(0, 20)}.`,
+        short: 'Beleg.', why: 'Beleg.', folge: 'Beleg.',
+        anmerkungsart: 'zeichensetzung', kiKategorie: 'sprache', priority: 'normal', createdAt: 1,
+      },
+      {
+        id: 'rang-gliederung', status: 'open', placement: 'passage', blockId: bausteine[1].id,
+        target: bausteine[1].text.slice(0, 20), action: `${bausteine[1].text.slice(0, 20)} — anders`,
+        short: 'Beleg.', why: 'Beleg.', folge: 'Beleg.',
+        anmerkungsart: 'gliederung', kiKategorie: 'struktur', priority: 'normal', createdAt: 999,
+      },
+    )
+    window.AIWT.flushSave()
+    window.AIWT.__workspaceTestBridge.reinitialize()
+    await new Promise(fertig => setTimeout(fertig, 500))
+
+    const welche = document.querySelector('#localAgentLayer .onda-annotation')?.dataset.findingId || null
+
+    doc.findings = vorrat.findings
+    doc.decisions = vorrat.decisions
+    doc.coach = vorrat.coach
+    doc.lane = vorrat.lane
+    window.AIWT.flushSave()
+    window.AIWT.__workspaceTestBridge.reinitialize()
+    return welche
+  })
+  await page.waitForTimeout(200)
+
+  assert.equal(
+    gezeigt,
+    'rang-gliederung',
+    'Auf dem Schirm steht der Kommafehler statt der Gliederung — die Oberfläche sortiert wieder nach eigener Regel',
+  )
+}
+
+// „Wenn ich eins wegklick, dann kommt direkt das Nächste. Das soll nicht so sein. […]
+// auch wenn die AI mehrere Sachen hat, sollen die eben nach und nach erst kommen."
+// (Jakob, 8.8.2026)
+//
+// Bis dahin loeste das Entscheiden selbst den Moment 'Aufschauen' aus — jedes
+// Wegklicken gab damit den naechsten Hinweis frei, und die Kette lief, solange offene
+// Hinweise da waren. Die Regel dazu steht in momente-model.mjs und ist dort auch
+// einzeln geprueft; hier geht es um den ganzen Weg im Browser.
+async function assertEntscheidungOeffnetKeineKette(page) {
+  await page.setViewportSize({ width: 1440, height: 900 })
+
+  const vorbereitet = await page.evaluate(async () => {
+    const doc = window.AIWT.state.docs.find(kandidat => kandidat.id === window.AIWT.state.active)
+    // Leeren UND sichern. Zwei Stolperstellen dabei, beide im Beispielprojekt:
+    // die Hinweise stehen nicht nur in findings, sondern werden aus den Altbestaenden
+    // coach und lane neu erzeugt (editor.js, ensureDocShape → ensureReasoningModel).
+    // Wer nur findings leert, hat sie beim naechsten Zeichnen alle wieder.
+    //
+    // Vorher WEGLEGEN, nicht wegwerfen: der Beispieltext traegt 35 Hinweise, und die
+    // Pruefungen danach in diesem Lauf rechnen mit ihnen. Ohne das Zuruecklegen fiel
+    // spaeter die mobile Zeichen-Pruefung mit „nur 0px breit" — an einer Stelle, die
+    // mit dem Takt nichts zu tun hat.
+    window.__taktVorrat = {
+      findings: doc.findings, decisions: doc.decisions, coach: doc.coach, lane: doc.lane,
+    }
+    doc.findings = []
+    doc.decisions = []
+    doc.coach = []
+    doc.lane = []
+    window.AIWT.flushSave()
+    const bausteine = window.AIWT.__blockIdentityTestBridge.getBlocks().filter(kandidat => kandidat.text.length > 40)
+    if (bausteine.length < 2) return { fehler: 'zu wenige Bausteine im Beispieltext' }
+
+    // Zwei Hinweise, beide mit Moment 'aufschauen' (Kategorie struktur). Waeren sie
+    // 'sofort', sagte die Pruefung nichts ueber den Takt.
+    //
+    // Beide auf EINMAL in den Text legen, nicht nacheinander ueber injectFinding.
+    // Der Unterschied ist der Kern der Pruefung: injectFinding zeichnet jedes Mal neu,
+    // also stuende zwischendurch der erste Hinweis kurz auf dem Schirm und gaelte
+    // danach als „schon gezeigt" — und was einmal stand, darf zu Recht immer wieder
+    // stehen (darfErscheinen). Die Pruefung haette sich ihre eigene Ausnahme gebaut.
+    // So kommt es auch im Betrieb: EIN Lauf liefert mehrere Hinweise zugleich.
+    const bauen = (nummer, baustein) => ({
+      id: `takt-${nummer}`, status: 'open', placement: 'passage', blockId: baustein.id,
+      target: baustein.text.slice(0, 24), action: `${baustein.text.slice(0, 24)} — anders`,
+      short: 'Beleg.', why: 'Beleg.', folge: 'Beleg.',
+      anmerkungsart: 'gliederung', kiKategorie: 'struktur', createdAt: nummer,
+    })
+    doc.findings.push(bauen(1, bausteine[0]), bauen(2, bausteine[1]))
+    window.AIWT.flushSave()
+    window.AIWT.__workspaceTestBridge.reinitialize()
+    await new Promise(fertig => setTimeout(fertig, 400))
+    return { offen: doc.findings.filter(f => f.status === 'open').length }
+  })
+  assert.equal(vorbereitet.fehler, undefined, vorbereitet.fehler)
+  assert.equal(vorbereitet.offen, 2, 'Der Prüfstand hat nicht zwei offene Hinweise')
+
+  // Schreiben setzt „ich schaue ausdrücklich hin" zurück — sonst stünde der Moment
+  // dauerhaft auf 'aufschauen' und die Prüfung liefe ins Leere.
+  await page.locator('#editor .ProseMirror').click()
+  await page.keyboard.type(' ')
+  await page.waitForTimeout(120)
+
+  const sichtbar = () => page.locator('#localAgentLayer .onda-annotation').count()
+  assert.equal(await sichtbar(), 1, 'Vor der Entscheidung steht nicht genau eine Anmerkung')
+
+  // Und jetzt der eigentliche Fall: entscheiden und sofort nachsehen.
+  //
+  // Die Beschriftung haengt an der Anmerkungsart — bei 'gliederung' heisst das Paar
+  // „Gliedern" und „Lassen". Gesucht wird deshalb der zweite Weg ueber seine Rolle in
+  // der Karte statt ueber ein geratenes Wort.
+  //
+  // Das Weglegen war bis zum 8.8.2026 zweistufig — der Knopf oeffnete erst eine
+  // Rueckfrage nach dem Grund. Auf main ist sie entfallen: „Lassen" entscheidet direkt.
+  // Geprueft wird deshalb ueber den ZUSTAND (unten), nicht ueber die Zahl der Klicks;
+  // eine Pruefung, die eine bestimmte Klickfolge festhaelt, ist beim naechsten Umbau
+  // wieder rot, ohne dass etwas kaputt ist.
+  const wege = page.locator('#localAgentLayer .onda-annotation .aura-note__acts button')
+  assert.ok(await wege.count() >= 2, 'Die Anmerkung bietet keine Entscheidung an')
+  await wege.nth(1).click()
+  await page.waitForTimeout(600)
+
+  assert.equal(
+    await sichtbar(),
+    0,
+    'Nach dem Wegklicken steht sofort die nächste Anmerkung da — die Kette läuft weiter',
+  )
+
+  // Der zweite Hinweis ist nicht verloren, nur zurückgehalten: er steht weiter offen.
+  const zustaende = await page.evaluate(() => {
+    const doc = window.AIWT.state.docs.find(kandidat => kandidat.id === window.AIWT.state.active)
+    return doc.findings.map(f => f.status)
+  })
+  assert.equal(zustaende.filter(z => z === 'open').length, 1, 'Der zurückgehaltene Hinweis ist verschwunden statt zu warten')
+  assert.ok(zustaende.some(z => z !== 'open'), 'Es wurde gar nichts entschieden — die Prüfung misst nichts')
+
+  // Und den Beispieltext zuruecklegen, wie er war.
+  await page.evaluate(() => {
+    const doc = window.AIWT.state.docs.find(kandidat => kandidat.id === window.AIWT.state.active)
+    const vorrat = window.__taktVorrat
+    if (vorrat) {
+      doc.findings = vorrat.findings
+      doc.decisions = vorrat.decisions
+      doc.coach = vorrat.coach
+      doc.lane = vorrat.lane
+      delete window.__taktVorrat
+    }
+    window.AIWT.flushSave()
+    window.AIWT.__workspaceTestBridge.reinitialize()
+  })
+  await page.waitForTimeout(200)
+}
+
+// „Ich erkenn dann gar nicht direkt, um was es geht. Ich muss dann lesen, ich muss erst
+// mal das richtig zuordnen zum Text." (Jakob, 8.8.2026)
+//
+// Bis dahin trug der Absatz nur einen Punkt im Rand — an den Woertern stand nichts.
+// Jetzt traegt die Stelle selbst eine Geste, und ihre FORM sagt den Umfang: Kontur ums
+// Wort, Strich unter den Satz, Klammer am Absatz.
+//
+// Geprueft wird das, woran alles haengt: Steht die Markierung auf GENAU den Zeichen,
+// die die Anmerkung nennt? Ein Strich unter den falschen Woertern waere schlimmer als
+// gar keiner — er behauptete eine Stelle.
+async function assertGesteZeigtAufDieStelle(page) {
+  await page.setViewportSize({ width: 1440, height: 900 })
+
+  const faelle = [
+    ['wortwahl', 'wort', 'Peripherie'],
+    ['satzstil', 'satz', 'Calm Technology beschreibt Technik'],
+    ['absatzstil', 'absatz', 'Calm Technology beschreibt Technik'],
+  ]
+
+  for (const [art, gestalt, wortlaut] of faelle) {
+    const gesehen = await page.evaluate(async ({ art, wortlaut }) => {
+      const doc = window.AIWT.state.docs.find(kandidat => kandidat.id === window.AIWT.state.active)
+      doc.findings = []
+      const block = window.AIWT.__blockIdentityTestBridge.getBlocks().find(kandidat => kandidat.text.includes(wortlaut))
+      if (!block) return { fehler: `kein Baustein mit „${wortlaut}"` }
+      window.AIWT.__workspaceTestBridge.injectFinding({
+        id: `geste-${art}`, status: 'open', placement: 'passage', blockId: block.id,
+        target: wortlaut, action: `${wortlaut} — anders`, short: 'Beleg.', why: 'Beleg.', folge: 'Beleg.',
+        anmerkungsart: art, createdAt: -1,
+      })
+      await new Promise(fertig => setTimeout(fertig, 420))
+      const stelle = document.querySelector('#editor .onda-stelle')
+      const absatz = document.querySelector('#editor [data-block-id].has-local-finding')
+      return {
+        markiert: stelle ? stelle.textContent : null,
+        klassen: stelle ? stelle.className : '',
+        absatzweit: Boolean(absatz && absatz.classList.contains('hat-absatzweite-anmerkung')),
+      }
+    }, { art, wortlaut })
+
+    assert.equal(gesehen.fehler, undefined, gesehen.fehler)
+
+    if (gestalt === 'absatz') {
+      assert.equal(gesehen.absatzweit, true, 'Der Absatz-Hinweis klammert den Absatz nicht')
+      assert.equal(gesehen.markiert, null, 'Der Absatz-Hinweis markiert zusätzlich eine einzelne Stelle')
+      continue
+    }
+
+    assert.ok(
+      gesehen.klassen.includes(`onda-stelle--${gestalt}`),
+      `${art} trägt die Geste „${gestalt}" nicht (${gesehen.klassen})`,
+    )
+    // Der Kern: auf den Zeichen, nicht daneben.
+    assert.equal(gesehen.markiert, wortlaut, `Die Markierung sitzt auf „${gesehen.markiert}" statt auf „${wortlaut}"`)
+    assert.equal(gesehen.absatzweit, false, `${art} klammert fälschlich den ganzen Absatz`)
+  }
+
+  // Fail-closed: Wurde der Text seit dem Lauf geändert, entsteht KEINE Markierung.
+  // Lieber kein Strich als einer unter den falschen Wörtern.
+  const veraltet = await page.evaluate(async () => {
+    const doc = window.AIWT.state.docs.find(kandidat => kandidat.id === window.AIWT.state.active)
+    doc.findings = []
+    const block = window.AIWT.__blockIdentityTestBridge.getBlocks()[0]
+    window.AIWT.__workspaceTestBridge.injectFinding({
+      id: 'geste-weg', status: 'open', placement: 'passage', blockId: block.id,
+      target: 'diesen Wortlaut gibt es im Text nicht', action: 'x', short: 'Beleg.', why: 'Beleg.', folge: 'Beleg.',
+      anmerkungsart: 'satzstil', createdAt: -1,
+    })
+    await new Promise(fertig => setTimeout(fertig, 420))
+    return document.querySelectorAll('#editor .onda-stelle').length
+  })
+  assert.equal(veraltet, 0, 'Ein verschwundener Wortlaut erzeugt trotzdem eine Markierung')
+
+  await page.evaluate(() => {
+    const doc = window.AIWT.state.docs.find(kandidat => kandidat.id === window.AIWT.state.active)
+    doc.findings = []
+    window.AIWT.__workspaceTestBridge.reinitialize()
+  })
 }
 
 // Der Tastweg folgt dem Blick: was oben steht, kommt zuerst. Und wer ein Fenster mit

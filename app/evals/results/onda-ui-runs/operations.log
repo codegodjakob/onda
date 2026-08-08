@@ -2,118 +2,112 @@ TAP version 13
 # Subtest: Zusammenfassung zählt Fehler, Empfehlungen und Geschmack getrennt
 ok 1 - Zusammenfassung zählt Fehler, Empfehlungen und Geschmack getrennt
   ---
-  duration_ms: 2.107167
+  duration_ms: 1.453084
   type: 'test'
   ...
 # Subtest: Reihenfolge folgt Fehler, Empfehlung, Geschmack und bleibt stabil
 ok 2 - Reihenfolge folgt Fehler, Empfehlung, Geschmack und bleibt stabil
   ---
-  duration_ms: 0.354208
+  duration_ms: 0.346417
   type: 'test'
   ...
 # Subtest: stiller Modus behält die Zähler, liefert aber keine aktive Oberfläche
 ok 3 - stiller Modus behält die Zähler, liefert aber keine aktive Oberfläche
   ---
-  duration_ms: 0.37525
+  duration_ms: 0.359375
   type: 'test'
   ...
 # Subtest: aktive Auswahl, Weiter und Zurück verwenden eine einzige ID
 ok 4 - aktive Auswahl, Weiter und Zurück verwenden eine einzige ID
   ---
-  duration_ms: 0.185167
+  duration_ms: 0.320875
   type: 'test'
   ...
 # Subtest: Modus und Ruhe werden normalisiert und persistiert
 ok 5 - Modus und Ruhe werden normalisiert und persistiert
   ---
-  duration_ms: 0.370041
+  duration_ms: 0.243542
   type: 'test'
   ...
 # Subtest: Undo-Stack ist auf 20 Einträge begrenzt und wird zuletzt zuerst abgearbeitet
 ok 6 - Undo-Stack ist auf 20 Einträge begrenzt und wird zuletzt zuerst abgearbeitet
   ---
-  duration_ms: 0.253625
+  duration_ms: 0.246833
   type: 'test'
   ...
 # Subtest: Sammelannahme erfasst nur sichere Korrekturen, keine Quellen- oder Geschmacksfälle
 ok 7 - Sammelannahme erfasst nur sichere Korrekturen, keine Quellen- oder Geschmacksfälle
   ---
-  duration_ms: 0.295417
+  duration_ms: 0.289541
   type: 'test'
   ...
 # Subtest: kaputte Adapter oder leere Warteschlange bleiben ruhig und deterministisch
 ok 8 - kaputte Adapter oder leere Warteschlange bleiben ruhig und deterministisch
   ---
-  duration_ms: 0.218458
+  duration_ms: 0.209375
   type: 'test'
   ...
 # Subtest: Notizmodus lässt nur Notizarten, Textmodus nur Textarten zu
 ok 9 - Notizmodus lässt nur Notizarten, Textmodus nur Textarten zu
   ---
-  duration_ms: 0.412292
+  duration_ms: 0.973625
   type: 'test'
   ...
-# Subtest: Verwerfungsumfänge bleiben getrennt und widerrufbar
-ok 10 - Verwerfungsumfänge bleiben getrennt und widerrufbar
+# Subtest: der Arbeitszustand legt keine Unterdrückungsfelder mehr an
+ok 10 - der Arbeitszustand legt keine Unterdrückungsfelder mehr an
   ---
-  duration_ms: 0.676125
-  type: 'test'
-  ...
-# Subtest: einmalige Verwerfung unterdrückt keinen künftigen ähnlichen Fund
-ok 11 - einmalige Verwerfung unterdrückt keinen künftigen ähnlichen Fund
-  ---
-  duration_ms: 0.304666
+  duration_ms: 0.460125
   type: 'test'
   ...
 # Subtest: replace-range plant nur einen eindeutigen exakten Treffer
-ok 12 - replace-range plant nur einen eindeutigen exakten Treffer
+ok 11 - replace-range plant nur einen eindeutigen exakten Treffer
   ---
-  duration_ms: 1.584833
+  duration_ms: 1.385
   type: 'test'
   ...
 # Subtest: replace-range scheitert bei demselben Ziel in mehreren Blöcken geschlossen
-ok 13 - replace-range scheitert bei demselben Ziel in mehreren Blöcken geschlossen
+ok 12 - replace-range scheitert bei demselben Ziel in mehreren Blöcken geschlossen
   ---
-  duration_ms: 0.705208
+  duration_ms: 0.493291
   type: 'test'
   ...
 # Subtest: insert-at ersetzt die verifizierte Ankerfassung durch die vollständige neue Fassung
-ok 14 - insert-at ersetzt die verifizierte Ankerfassung durch die vollständige neue Fassung
+ok 13 - insert-at ersetzt die verifizierte Ankerfassung durch die vollständige neue Fassung
   ---
-  duration_ms: 0.323458
+  duration_ms: 0.240791
   type: 'test'
   ...
 # Subtest: replace-title, move-block und insert-heading liefern umkehrbare Pläne
-ok 15 - replace-title, move-block und insert-heading liefern umkehrbare Pläne
+ok 14 - replace-title, move-block und insert-heading liefern umkehrbare Pläne
   ---
-  duration_ms: 0.609667
+  duration_ms: 0.45125
   type: 'test'
   ...
 # Subtest: replace-many ist atomar und attach-source erhält Herkunftsdaten
-ok 16 - replace-many ist atomar und attach-source erhält Herkunftsdaten
+ok 15 - replace-many ist atomar und attach-source erhält Herkunftsdaten
   ---
-  duration_ms: 0.454041
+  duration_ms: 0.330209
   type: 'test'
   ...
 # Subtest: Planvalidierung erkennt Drift und verändert weder Plan noch Snapshot
-ok 17 - Planvalidierung erkennt Drift und verändert weder Plan noch Snapshot
+ok 16 - Planvalidierung erkennt Drift und verändert weder Plan noch Snapshot
   ---
-  duration_ms: 0.215625
+  duration_ms: 0.159333
   type: 'test'
   ...
 # Subtest: fehlende Operation, Aktion, Quelle oder Zielstelle scheitern ohne Raten
-ok 18 - fehlende Operation, Aktion, Quelle oder Zielstelle scheitern ohne Raten
+ok 17 - fehlende Operation, Aktion, Quelle oder Zielstelle scheitern ohne Raten
   ---
-  duration_ms: 0.254541
+  duration_ms: 0.183542
   type: 'test'
   ...
-1..18
-# tests 18
+1..17
+# tests 17
 # suites 0
-# pass 18
+# pass 17
 # fail 0
 # cancelled 0
 # skipped 0
 # todo 0
-# duration_ms 64.945791
+# duration_ms 88.76575
 

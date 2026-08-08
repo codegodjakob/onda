@@ -1331,7 +1331,10 @@ body.zen #title:focus { opacity: 1; }
   width: 6px;
   height: 6px;
   border-radius: var(--radius-full);
-  background: var(--accent);
+  /* Tinte, nicht Akzent (Jakob, 8.8.2026: „keine farben bitte"). Der Punkt bleibt
+     genau dort, wo eine einzelne Stelle gemeint ist — bei 'Text', 'Titel' und den
+     Notizarten, die auf keine Wortfolge im Fliesstext zeigen. */
+  background: var(--text-primary);
   /* Der Stift setzt auf. Kein Aufblitzen, kein Sprung: der Punkt wird sichtbar, wie
      Tinte sichtbar wird (docs/PHILOSOPHIE.md §1). */
   animation: onda-ankunft-punkt var(--dur-ankunft) var(--ease-out) both;
@@ -1344,16 +1347,83 @@ body.zen #title:focus { opacity: 1; }
    Bewusst hier und nicht als box-shadow am Absatz selbst: .has-local-finding raeumt
    direkt darueber `box-shadow: none` ab, und bei gleicher Spezifitaet gewinnt die
    spaetere Regel. Ein Schatten am Absatz waere still verschluckt worden. */
+/* ABSATZ — aus dem Punkt wird eine Klammer. Nicht bloss eine laengere Linie: die
+   beiden Haken oben und unten sagen „von hier bis hier" und unterscheiden sich damit
+   auf einen Blick vom Punkt, der auf eine einzelne Stelle zeigt. */
 #editorView #editor .ProseMirror > [data-block-id].has-local-finding.hat-absatzweite-anmerkung::before {
   top: 0.35em;
   bottom: 0.35em;
-  width: 2px;
+  left: -18px;
+  width: 7px;
   height: auto;
+  border: 2px solid var(--text-primary);
+  border-right: 0;
+  border-radius: 3px 0 0 3px;
+  background: transparent;
+  transform-origin: 50% 0;
+  animation: onda-ankunft-klammer var(--dur-ankunft) var(--ease-out) both;
 }
 
 @keyframes onda-ankunft-punkt {
   from { opacity: 0; transform: scale(.3); }
 }
+
+@keyframes onda-ankunft-klammer {
+  from { opacity: 0; transform: scaleY(0); }
+}
+
+/* ===========================================================================
+   DIE GESTE AN DEN WOERTERN (seit 8.8.2026)
+
+   Bis dahin stand am Absatz ein Punkt im Rand und sonst nichts — an der Stelle
+   selbst war keine Spur. Jakob: „ich erkenn dann gar nicht direkt, um was es geht.
+   Ich muss dann lesen, ich muss erst mal das richtig zuordnen zum Text."
+
+   Die Form sagt jetzt den Umfang, bevor ein Wort gelesen ist. Sie unterscheiden
+   sich AUSDRUECKLICH NICHT durch Farbe (Jakob, 8.8.2026: „keine farben bitte") —
+   wenn die Form allein traegt, bleibt Farbe fuer spaeter frei.
+
+   box-decoration-break: clone ist beide Male noetig, sonst bekommt eine ueber zwei
+   Zeilen laufende Stelle ihre Kontur bzw. ihren Strich nur einmal.
+   =========================================================================== */
+
+/* WORT — eine geschlossene Kontur. Sie umfasst genau die Wendung, um die es geht. */
+#editorView #editor .ProseMirror .onda-stelle--wort {
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 0 3px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  animation: onda-stelle-auf var(--dur-normal) var(--ease-out) both;
+}
+
+/* SATZ — ein Strich darunter, der der Satzlaenge folgt. Als Hintergrundbild und
+   nicht als text-decoration: so laesst er sich ziehen (background-size waechst von
+   0 auf 100 %), und der Stift schreibt sichtbar, statt fertig dazustehen. */
+#editorView #editor .ProseMirror .onda-stelle--satz {
+  background-image: linear-gradient(var(--text-primary), var(--text-primary));
+  background-repeat: no-repeat;
+  background-position: 0 100%;
+  padding-bottom: 2px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  animation: onda-stelle-strich var(--dur-ankunft) var(--ease-out) both;
+}
+
+@keyframes onda-stelle-auf { from { opacity: .35; } }
+@keyframes onda-stelle-strich {
+  from { background-size: 0% 2px; }
+  to { background-size: 100% 2px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #editorView #editor .ProseMirror > [data-block-id].has-local-finding.hat-absatzweite-anmerkung::before,
+  #editorView #editor .ProseMirror .onda-stelle--wort { animation: none; }
+  /* Der Strich braucht seinen Endzustand auch ohne Bewegung — ohne ihn bliebe die
+     background-size auf ihrem Anfangswert 0 und der Satz waere unmarkiert. */
+  #editorView #editor .ProseMirror .onda-stelle--satz { animation: none; background-size: 100% 2px; }
+}
+
 
 /* Hier bekam der Absatz mit Anmerkung dieselbe dunkle Platte, sobald die Schreibmarke
    darin stand. Sie faellt aus demselben Grund weg: der Punkt am Rand sagt schon, dass
@@ -1711,6 +1781,7 @@ body.zen #title:focus { opacity: 1; }
 
 .own-version-message,
 .integrity-risk-consequence,
+.integrity-risk-hint,
 .unplaced-finding-text {
   margin: 0;
   color: var(--text-secondary);
@@ -1773,6 +1844,16 @@ body.zen #title:focus { opacity: 1; }
 .integrity-risk-confirm {
   background: var(--text-primary);
   color: var(--surface);
+}
+
+/* Gesperrt, solange keine Begruendung dasteht (Issue #38). Sichtbar gedaempft, nicht
+   versteckt: der Knopf soll zeigen, dass er da ist und worauf er wartet. Abbrechen
+   daneben bleibt unberuehrt — der Ausweg ist nie gesperrt. */
+.integrity-risk-confirm:disabled {
+  background: var(--surface);
+  color: var(--text-secondary);
+  cursor: not-allowed;
+  opacity: 0.7;
 }
 
 .local-finding-error {
@@ -1867,6 +1948,58 @@ body.zen #title:focus { opacity: 1; }
   min-height: 280px;
   display: flex;
   flex-direction: column;
+  overflow: visible;
+  animation: ondaBlaseIn var(--dur-normal) var(--ease-out);
+}
+
+/* Die Kontur liegt unter dem Inhalt und faengt keine Klicks ab. */
+.onda-blase__kontur {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 0;
+  pointer-events: none;
+  filter: drop-shadow(0 1px 5px rgba(28, 26, 23, .07));
+}
+
+.onda-blase__kontur path {
+  fill: var(--bg-surface);
+  stroke: var(--border-subtle);
+  stroke-width: 1;
+}
+
+[data-theme="dark"] .onda-blase__kontur {
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, .4));
+}
+
+/* Traegt die Blase ihre Kontur, gibt sie Kasten, Rahmen und Schatten ab. */
+#agentWidget.is-kontur {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+/* Alles ausser der Kontur liegt darueber. */
+#agentWidget > *:not(.onda-blase__kontur) {
+  position: relative;
+  z-index: 1;
+}
+
+/* Die Nase des Sitzes ragt 34px ueber den Panelkoerper (24 Sitz + 10 Fillet).
+   Genau so viel Luft braucht die Kopfzeile, sonst laege sie in der Nase.
+   Die Zahl kommt aus nasenTiefe() in onda-blase.mjs — sie steht hier nur,
+   weil CSS nicht rechnen kann, was JavaScript schon weiss. */
+#agentWidget.is-kontur .agent-widget-header {
+  padding-top: 38px;
+  padding-right: 56px;
+}
+
+@keyframes ondaBlaseIn {
+  from { opacity: 0; transform: translateY(-6px) scale(.985); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #agentWidget { animation: none; }
 }
 
 /* Die Kontur liegt UNTER dem Fenster (45) und UEBER dem Blatt, der Orb darueber (46).
@@ -2326,16 +2459,41 @@ body.zen #title:focus { opacity: 1; }
    Das Agentenfenster schwebt ohnehin (position: fixed), es BRAUCHT den Platz nicht.
    Der Rand ist nur eine Hoeflichkeit, damit es nichts verdeckt.
 
-   Die Schwelle ist gerechnet, nicht geraten:
-     Seitenleiste 264 + Lesespalte 680 + Seitenpolster 48 + Anmerkungsrand 300
-     + Agentenfenster 420 = 1712px.
-   Darunter schwebt das Fenster ueber dem Anmerkungsrand. Anmerkungen sind
-   nachrangig gegenueber dem Text — das ist die Rangfolge, nicht ein Zufall. */
-@media (min-width: 1712px) {
-  #editorView.is-agent-open .onda-editor-col,
-  #editorView.is-evidence-open .onda-editor-col {
-    padding-right: 420px;
-  }
+   Danach stand hier eine gerechnete Schwelle von 1712px. Sie war mit einem
+   Anmerkungsrand von 300px gerechnet — der tatsaechliche steht in
+   onda-shell.css und betraegt 388px. Bei genau 1712px schrumpfte der Titel
+   deshalb von 680 auf 592. Gefunden hat das test/blase-schwebt.test.mjs, nicht
+   das Auge: eine Zahl, die man von Hand nachrechnet, wird irgendwann falsch,
+   wenn eine der Zutaten sich woanders aendert.
+
+   Deshalb steht hier jetzt keine Schwelle mehr, sondern eine Rechnung. Der Rand
+   ist, was UEBRIG ist — nie das, was fehlt:
+     brauchen  = Lesespalte 680 + Anmerkungsrand 388 + Seitenpolster 2x24
+     uebrig    = Fensterbreite - Seitenleiste - brauchen
+     Rand      = zwischen 0 und 420, so viel wie uebrig ist
+   Reicht es nicht, wird der Rand kleiner und irgendwann 0 — die Blase schwebt
+   dann ueber dem Anmerkungsrand. Anmerkungen sind nachrangig gegenueber dem
+   Text; das ist die Rangfolge, nicht ein Zufall.
+
+   Prozente in `padding` beziehen sich auf die Breite des Elternelements
+   (#editorView, also das Fenster) — nicht auf die Spalte selbst. Ohne das
+   waere die Rechnung zirkulaer. */
+#editorView {
+  /* --onda-anmerkungsrand-breit kommt aus onda-shell.css und ist DIE Quelle
+     fuer den Anmerkungsrand. Steht sie nicht (Testkulissen ohne die Shell),
+     faellt die Rechnung auf 388px zurueck — denselben Wert. */
+  --onda-spalte-braucht: calc(
+    var(--container-reading) + var(--onda-anmerkungsrand-breit, 388px) + 2 * var(--space-6)
+  );
+}
+
+#editorView.is-agent-open .onda-editor-col,
+#editorView.is-evidence-open .onda-editor-col {
+  padding-right: clamp(
+    0px,
+    calc(100% - var(--sidebar-width) - var(--onda-spalte-braucht)),
+    420px
+  );
 }
 
 @media (max-width: 760px) {
@@ -2859,8 +3017,15 @@ button.onda-aura:focus-visible {
   border-radius: var(--radius-full);
   background: transparent;
 }
-.block-preview.has-hint .block-preview-hint[data-hint="style"] { background: var(--accent); }
-.block-preview.has-hint .block-preview-hint[data-hint="evidence"] { background: var(--warning); }
+/* Die beiden Punkte unterschied bis zum 8.8.2026 die Farbe: Sky fuer Formulierung,
+   Warnfarbe fuer Belege. Ohne Farbe muss die FORM den Unterschied tragen — der volle
+   Punkt wiegt schwerer als der offene Ring, und das ist genau die richtige Rangfolge:
+   eine Belegfrage ist verbindlicher als eine Frage des Geschmacks. */
+.block-preview.has-hint .block-preview-hint[data-hint="style"] {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--text-secondary);
+}
+.block-preview.has-hint .block-preview-hint[data-hint="evidence"] { background: var(--text-primary); }
 /* Punkt braucht Platz neben dem Rollen-Label */
 .block-preview.has-hint .block-preview-role { padding-right: var(--space-4); }
 

@@ -1,24 +1,72 @@
+/* ============================================================
+   Die Marke im Text — 1:1 aus Design System 2,
+   components/annotation/Mark.jsx.
+
+   Vier Kategorien, vier Prinzipien, OHNE Farbcode. Das ist keine Laune:
+   Farbe waere die naheliegende Loesung und die falsche, weil vier Farben im
+   Lesetext den Text zerhacken. Stattdessen unterscheiden sich die Kategorien
+   in der Art der Auszeichnung:
+     korrektur — Rahmen              (etwas ist falsch: es wird eingekreist)
+     stil      — Flaeche             (etwas koennte anders sein: leicht getoent)
+     struktur  — angehobener Block   (etwas gehoert woandershin: es schwebt)
+     inhalt    — Akzentflaeche       (etwas fehlt oder stimmt nicht: staerker)
+   Die Notiz-Betriebsart teilt sich das Prinzip mit inhalt.
+
+   Die Masse stehen so in der Vorlage und werden von
+   test/annotation-marken-css.test.mjs dagegen gehalten.
+   ============================================================ */
 .aura-mark {
   border: 0;
-  border-radius: .34em;
+  border-radius: .18em;
   background: transparent;
   color: inherit;
   cursor: pointer;
   font: inherit;
   transition: background-color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
 }
-.aura-mark--korrektur { border: 1px solid var(--border-strong); padding: 0 var(--space-1); }
-.aura-mark--stil { background: var(--bg-sunken); padding: 1px var(--space-1); }
+.aura-mark--korrektur { border: 1px solid var(--border-strong); padding: 0 4px; }
+.aura-mark--stil { background: var(--bg-sunken); padding: 1px 4px; }
 .aura-mark--struktur { background: var(--bg-surface); box-shadow: var(--shadow-md); padding: 1px 5px; }
-.aura-mark--inhalt, .aura-mark--notiz { background: var(--accent-tint); padding: 1px var(--space-1); }
-.aura-mark:hover, .aura-mark--active { background: var(--accent-tint); border-color: var(--accent); }
+/* HIER BLEIBT DIE FARBE, und das ist kein Versehen. Die vier Markenarten oben
+   unterscheiden sich in der ART der Auszeichnung; „inhalt" ist die staerkste und
+   braucht dafuer eine Flaeche, die sich von „stil" (bg-sunken) abhebt. Nimmt man ihr
+   den Akzent, sind beide dieselbe graue Flaeche und die Unterscheidung faellt weg —
+   test/annotation-vorlage.test.mjs haelt genau das fest.
+   Beim Entfaerben am 8.8.2026 wurde diese Zeile zunaechst mitgenommen und dann
+   zurueckgestellt. Die zwei Markensysteme — diese vier Arten und die drei Gesten nach
+   Reichweite (style.css, .onda-stelle) — gehoeren zusammengefuehrt; das ist ein
+   eigener Schritt und keine Nebenwirkung einer Zusammenfuehrung. */
+.aura-mark--inhalt, .aura-mark--notiz { background: var(--accent-tint); padding: 1px 4px; }
+[data-theme="dark"] .aura-mark--korrektur { border-color: var(--ink-500); }
+.aura-mark:hover { background: var(--bg-sunken); }
+.aura-mark--active { background: var(--bg-sunken); border-color: var(--text-primary); }
+
+/* Die Nummer haengt an der Marke, wenn dieselbe Anmerkung mehrere Stellen
+   betrifft (Wiederholung, Terminologie). Sie wird aus data-marke-nummer
+   erzeugt, weil eine Inline-Dekoration im Editor keine Kindknoten setzen kann,
+   ohne den Text selbst anzufassen — und der Text gehoert dem Autor. */
+.aura-mark[data-marke-nummer]:not([data-marke-nummer=""])::after {
+  content: attr(data-marke-nummer);
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 16px; height: 16px; padding: 0 4px; margin-left: 5px;
+  border-radius: var(--radius-full); background: var(--bg-sunken); color: var(--text-tertiary);
+  font-size: var(--text-xs); font-weight: var(--fw-medium);
+  font-variant-numeric: tabular-nums; vertical-align: 2px; line-height: 1;
+}
+.aura-mark--active[data-marke-nummer]:not([data-marke-nummer=""])::after {
+  background: var(--text-primary); color: var(--bg-app);
+}
+
+/* Die gleiche Nummer als echtes Element — dort, wo eine Marke ausserhalb des
+   Editors gebaut wird (Anmerkungslabor, Karten). */
 .aura-mark__n {
   display: inline-flex; align-items: center; justify-content: center;
-  min-width: 20px; height: 20px; padding: 0 var(--space-1); margin-left: var(--space-1);
+  min-width: 16px; height: 16px; padding: 0 4px; margin-left: 5px;
   border-radius: var(--radius-full); background: var(--bg-sunken); color: var(--text-tertiary);
-  font: var(--type-caption); font-variant-numeric: tabular-nums; vertical-align: 2px;
+  font-size: var(--text-xs); font-weight: var(--fw-medium);
+  font-variant-numeric: tabular-nums; vertical-align: 2px; line-height: 1;
 }
-.aura-mark--active .aura-mark__n { background: var(--accent); color: var(--on-accent); }
+.aura-mark--active .aura-mark__n { background: var(--text-primary); color: var(--bg-app); }
 
 /* Hier stand bis zum 7. August 2026 die Anmerkungsleiste: eine Zeile ueber dem Text mit
    Bilanz, Modus, Ruhig, vor/zurueck, Rueckgaengig und Sammeluebernahme. Sie ist ersatzlos
@@ -27,10 +75,25 @@
 
 #localAgentLayer > .onda-annotation { position: absolute; z-index: 2; width: 340px; pointer-events: auto; }
 #localAgentLayer > .onda-annotation.is-below { width: auto; }
+/* Die kompakten Formen bekommen ihre Breite vom Inhalt, nicht vom Layer.
+   positionLocalSurface setzt fuer sie nur eine Obergrenze. */
+#localAgentLayer > .onda-annotation.aura-corr__pop,
+#localAgentLayer > .onda-annotation.aura-ins__pop { width: auto; }
 
 .onda-annotation {
   display: flex; flex-direction: column; gap: var(--space-3); width: 100%;
-  padding: var(--space-4) var(--space-5); overflow-wrap: anywhere;
+  padding: var(--space-4) var(--space-5);
+  /* Wie ein zu langes Wort umbricht. Bis zum 8.8.2026 stand hier `overflow-wrap: anywhere`
+     — eine Erlaubnis, JEDES Wort an JEDER Stelle zu zerschneiden. Solange die Anmerkung
+     breit genug war, hat sie niemand eingelöst; sobald es eng wurde, stand in der
+     Korrektur „Konzentati / on".
+     Deutsch trennt nach Silben und setzt einen Strich: aus „Benachrichtigungsunterbrechungen"
+     wird „Benachrichtigungsunterbre-chungen", nicht „…unterbrec / hungen". Das Wort bleibt
+     lesbar, weil der Strich ansagt, dass es weitergeht. Möglich ist das nur, weil
+     index.html `lang="de"` trägt — ohne Sprache kennt der Browser keine Silben.
+     break-word bleibt als Notbremse darunter: greift erst, wenn es keine Trennstelle gibt,
+     und verhindert dann, dass Text seitlich aus der Karte läuft. */
+  hyphens: auto; -webkit-hyphens: auto; overflow-wrap: break-word;
   border: 1px solid var(--border-subtle); border-radius: var(--radius-overlay);
   background: var(--bg-surface); box-shadow: var(--shadow-md); color: var(--text-primary);
   font-family: var(--font-sans); text-align: left;
@@ -60,32 +123,125 @@
   transition: var(--transition-colors), transform var(--dur-fast) var(--ease-out);
 }
 .aura-action:active { transform: scale(.98); }
-.aura-action--primary { background: var(--accent); color: var(--on-accent); }
-.aura-action--primary:hover { background: var(--accent-hover); }
+/* Die tragende Geste ist Tinte, nicht Akzent (Jakob, 8.8.2026: „keine farben
+   bitte"). Beide Marken kippen im Dunkelmodus von selbst mit — deshalb keine festen
+   Werte, sondern dieselben Marken, die auch Text und Papier tragen. */
+.aura-action--primary { background: var(--text-primary); color: var(--bg-app); }
+.aura-action--primary:hover { background: var(--text-secondary); }
 .aura-action--ghost { background: transparent; color: var(--text-secondary); }
 .aura-action--ghost:hover { background: var(--bg-hover); color: var(--text-primary); }
-.aura-note__details { color: var(--text-link); font: var(--type-caption); }
-.aura-note__details summary { width: fit-content; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
-.aura-note__rule { margin: var(--space-2) 0 0; padding: var(--space-3) var(--space-4); border-radius: var(--radius-panel); background: var(--bg-sunken); color: var(--text-secondary); font: var(--type-caption); }
-
-.aura-correction__comparison {
-  display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); align-items: center; gap: var(--space-3);
-  padding: var(--space-3) var(--space-4); border-radius: var(--radius-panel); background: var(--bg-sunken); font: var(--type-body);
+/* "Warum?" ist ein Knopf, der umschaltet — kein <details> mit Dreieck.
+   Das Dreieck verspricht einen Abschnitt; hier kommt ein Satz. */
+.aura-note__why-block { display: flex; flex-direction: column; gap: var(--space-2); }
+.aura-note__why {
+  align-self: flex-start; padding: 0; border: 0; background: transparent;
+  font: var(--type-caption); color: var(--text-link); cursor: pointer;
+  text-decoration: underline; text-underline-offset: 2px;
 }
-.aura-correction__comparison > svg { color: var(--text-tertiary); }
-.aura-rewrite__text, .aura-slot__text, .aura-region__proposal {
+.aura-note__rule {
+  margin: 0; padding: 11px 13px; border-radius: var(--radius-panel);
+  background: var(--bg-sunken); color: var(--text-secondary);
+  font: var(--type-caption); line-height: var(--leading-normal);
+}
+.aura-note__rule[hidden] { display: none; }
+
+/* --- Korrektur: die kompakteste Form ------------------------------------
+   1:1 aus components/annotation/Correction.jsx. Eine Zeile, waagerecht,
+   ohne Kopf und ohne Rangfolge: alt → neu, uebernehmen oder wegklicken.
+   Sie ist bewusst KEINE Karte — was eindeutig falsch ist, braucht keine. */
+.onda-annotation.aura-corr__pop {
+  flex-direction: row; align-items: center; gap: var(--space-3); width: auto; max-width: 100%;
+  padding: 9px 10px 9px 16px; border: 0; border-radius: var(--radius-panel);
+  box-shadow: var(--shadow-md); font: var(--type-body); letter-spacing: var(--tracking-normal);
+  /* Eine Zeile, solange sie eine sein kann. Die sechs Stücke — alt, Pfeil, neu, Hinweis,
+     Übernehmen, Verwerfen — brauchen nebeneinander 527px; am rechten Rand stehen bei
+     1280px Fensterbreite 277px zur Verfügung. Ohne Umbruch teilen Flex-Elemente den
+     Mangel unter sich auf: „Konzentation" wurde von 87px auf 32px gestaucht und stand
+     auf VIER Zeilen, drei Stücke ragten aus der Form heraus (gemessen 8.8.2026).
+     Mit Umbruch wandert stattdessen ganz, was nicht mehr hinpasst: „alt → neu" bleibt
+     zusammen auf der ersten Zeile — darum geht es in dieser Form —, der Hinweis geht auf
+     die zweite, die Knöpfe auf die dritte. Die Form wird dabei nicht größer, sondern
+     kleiner: 221px hoch vorher, 119px nachher. */
+  flex-wrap: wrap;
+}
+.aura-corr__from { color: var(--text-tertiary); text-decoration: line-through; text-decoration-thickness: 1px; }
+.aura-corr__sep { display: inline-flex; flex: none; color: var(--text-tertiary); }
+.aura-corr__to { font-weight: var(--fw-medium); }
+.aura-corr__note { color: var(--text-secondary); }
+.aura-corr__ok {
+  flex: none; height: 32px; padding: 0 16px; border: 0; border-radius: var(--radius-control);
+  background: var(--text-primary); color: var(--bg-app); font: var(--type-label); cursor: pointer;
+  transition: var(--transition-colors);
+}
+.aura-corr__ok:hover { background: var(--text-secondary); }
+.aura-corr__x {
+  flex: none; width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center;
+  border: 0; border-radius: var(--radius-control); background: transparent; color: var(--text-tertiary);
+  cursor: pointer; transition: var(--transition-colors);
+}
+.aura-corr__x:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+/* --- Einfuegung: der Vorschlag liegt im Fluss ---------------------------
+   1:1 aus components/annotation/Insertion.jsx. Kein Kopf, keine Rangfolge:
+   die Form sitzt mitten im Satz, und alles, was dort nicht der Vorschlag
+   selbst ist, stoert beim Lesen. */
+.onda-annotation.aura-ins__pop {
+  gap: 0; width: fit-content; max-width: 100%; padding: 14px 16px;
+  border: 0; border-radius: var(--radius-panel); box-shadow: var(--shadow-xs);
+}
+.aura-ins__label { display: block; font: var(--type-label); color: var(--text-tertiary); }
+.aura-ins__ghost {
+  display: block; margin-top: 7px; font: var(--type-body); line-height: var(--leading-relaxed);
+  color: var(--text-primary); text-wrap: pretty;
+}
+.aura-ins__note { display: block; margin-top: 7px; font: var(--type-caption); color: var(--text-secondary); }
+.aura-ins__acts { display: flex; align-items: center; gap: var(--space-2); margin-top: 11px; }
+.aura-ins__ok {
+  height: 32px; padding: 0 16px; border: 0; border-radius: var(--radius-control);
+  background: var(--text-primary); color: var(--bg-app); font: var(--type-label); cursor: pointer; white-space: nowrap;
+}
+.aura-ins__ok:hover { background: var(--text-secondary); }
+.aura-ins__no {
+  height: 32px; padding: 0 14px; border: 0; border-radius: var(--radius-control);
+  background: transparent; color: var(--text-secondary); font: var(--type-label); cursor: pointer; white-space: nowrap;
+}
+.aura-ins__no:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+/* --- Umschreibung ------------------------------------------------------- */
+.aura-rewrite__label { display: flex; align-items: baseline; gap: var(--space-2); font: var(--type-label); color: var(--text-primary); }
+.aura-rewrite__meta { margin-left: auto; font: var(--type-body); color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+.aura-rewrite__note { margin: 0; font: var(--type-body); color: var(--text-secondary); text-wrap: pretty; }
+.aura-rewrite__text, .aura-slot__text {
   margin: 0; padding: var(--space-3) var(--space-4); border-radius: var(--radius-panel);
   background: var(--bg-sunken); color: var(--text-primary); font: var(--type-body); line-height: var(--leading-relaxed);
 }
-.aura-insertion__flow { display: grid; grid-template-columns: 2px minmax(0,1fr); gap: var(--space-3); align-items: stretch; }
-.aura-insertion__caret { border-radius: var(--radius-full); background: var(--accent); }
-.aura-insertion__text { margin: 0; color: var(--text-primary); font: var(--type-body); line-height: var(--leading-relaxed); }
-.aura-slot { border-style: dashed; border-color: var(--border-strong); box-shadow: none; }
-.aura-region { background: var(--bg-sunken); }
-.aura-region__samples { display: flex; flex-wrap: wrap; gap: var(--space-2); }
-.aura-region__sample { padding: var(--space-2) var(--space-3); border-radius: var(--radius-control); background: var(--bg-surface); color: var(--text-secondary); font: var(--type-caption); box-shadow: var(--shadow-xs); }
+
+/* --- Zielplatz: gestrichelt, ohne eigene Flaeche ------------------------ */
+.aura-slot { border-style: dashed; border-color: var(--border-strong); background: transparent; box-shadow: none; }
+.aura-slot__label { font: var(--type-label); color: var(--text-tertiary); }
+.aura-slot__note { margin: 0; font: var(--type-caption); color: var(--text-secondary); }
+
+/* --- Vergleichsblock, Verschiebeziel, Ausschluss ------------------------ */
+.aura-note__block {
+  display: flex; flex-direction: column; gap: 7px;
+  padding: var(--space-3) var(--space-4); border-radius: var(--radius-panel); background: var(--bg-sunken);
+}
+.aura-note__move { display: flex; align-items: center; gap: var(--space-2); font: var(--type-body); color: var(--text-secondary); }
+.aura-note__conflict { font: var(--type-caption); color: var(--text-tertiary); }
+.aura-note__n {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 20px; height: 20px; padding: 0 6px; border-radius: var(--radius-full);
+  background: var(--bg-sunken); color: var(--text-secondary);
+  font: var(--type-caption); font-variant-numeric: tabular-nums;
+}
+.onda-annotation[data-state="active"] .aura-note__n { background: var(--text-primary); color: var(--bg-app); }
+.aura-note__count { font: var(--type-caption); color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
 .aura-note__source, .aura-note__compare { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-4); border-radius: var(--radius-panel); background: var(--bg-sunken); }
-.aura-note__srclink { display: inline-flex; align-items: center; gap: var(--space-2); color: var(--text-link); font: var(--type-label); text-decoration: none; }
+/* Hier — und nur hier — ist „an jeder Stelle brechen" richtig. Fehlt einer Quelle der
+   Titel, steht ihre nackte Web-Adresse in der Zeile (annotation-components.mjs), und die
+   hat weder Leerzeichen noch Silben: sie liefe sonst quer aus der Karte. Ein Trennstrich
+   wäre dort sogar schädlich, weil er wie ein Teil der Adresse aussähe. */
+.aura-note__srclink { display: inline-flex; align-items: center; gap: var(--space-2); color: var(--text-link); font: var(--type-label); text-decoration: none; overflow-wrap: anywhere; hyphens: none; -webkit-hyphens: none; }
 .aura-note__srclink:hover { text-decoration: underline; text-underline-offset: 2px; }
 .aura-note__excerpt { margin: 0; padding-left: var(--space-3); border-left: 2px solid var(--border-default); color: var(--text-secondary); font: var(--type-body); line-height: var(--leading-relaxed); }
 .aura-note__srcmeta, .aura-note__cmpref { color: var(--text-tertiary); font: var(--type-caption); }
@@ -93,21 +249,17 @@
 .aura-note__cmptext { color: var(--text-primary); font: var(--type-body); }
 .aura-dialogue__bubble, .aura-dialogue__reply { max-width: 92%; margin: 0; padding: var(--space-3) var(--space-4); border-radius: var(--radius-panel); font: var(--type-body); }
 .aura-dialogue__bubble { background: var(--bg-sunken); color: var(--text-primary); }
-.aura-dialogue__reply { align-self: flex-end; background: var(--accent-tint); }
+.aura-dialogue__reply { align-self: flex-end; background: var(--bg-sunken); border: 1px solid var(--border-default); }
 .aura-dialogue__composer { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-1); border: 1px solid var(--border-default); border-radius: var(--radius-pill); background: var(--bg-surface); }
 .aura-dialogue__input { min-width: 0; flex: 1; height: 42px; padding: 0 var(--space-3); border: 0; outline: 0; background: transparent; color: var(--text-primary); font: var(--type-body); }
 .aura-dialogue__composer .aura-action { min-height: 40px; }
 .aura-title-correction__field { display: flex; flex-direction: column; gap: var(--space-2); }
 .aura-title-correction__label { color: var(--text-tertiary); font: var(--type-caption); }
 .aura-title-correction__input { width: 100%; min-height: 48px; padding: 0 var(--space-4); border: 1px solid var(--border-default); border-radius: var(--radius-control); background: var(--bg-sunken); color: var(--text-primary); font: var(--type-title); }
-.aura-rejection { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-4); border-radius: var(--radius-panel); background: var(--bg-sunken); }
-.aura-rejection__title { margin: 0; font: var(--type-label); color: var(--text-primary); }
-.aura-rejection__intro { margin: 0; font: var(--type-body); color: var(--text-secondary); }
-.aura-rejection__choices { display: grid; gap: var(--space-2); }
-.aura-rejection__choice { display: grid; gap: var(--space-1); min-height: 60px; padding: var(--space-3) var(--space-4); border: 1px solid var(--border-default); border-radius: var(--radius-panel); background: var(--bg-surface); color: var(--text-primary); text-align: left; cursor: pointer; }
-.aura-rejection__choice:hover { border-color: var(--accent); }
-.aura-rejection__choice strong { font: var(--type-label); }
-.aura-rejection__choice span { color: var(--text-secondary); font: var(--type-caption); }
+/* Hier lagen die Regeln fuer .aura-rejection — das Fenster "Was soll Onda daraus
+   lernen?". Es ist fort (Issue #38): eine Anmerkung gilt einmal und wird nie zur
+   Regel. Was beim Verwerfen einer Integritaetsfrage erscheint, ist die Risiko-Tafel;
+   ihre Regeln stehen in style.css bei .integrity-risk-*. */
 
 /* Vier Pixel, nicht sechs, und ueber die doppelte Zeit: der Weg soll zu langsam sein,
    um als Sprung gelesen zu werden. */
@@ -119,8 +271,11 @@
   .onda-annotation { padding: var(--space-4); }
   .aura-note__head { flex-wrap: wrap; }
   .aura-note__scope { width: 100%; margin-left: 24px; }
-  .aura-correction__comparison { grid-template-columns: 1fr; }
-  .aura-correction__comparison > svg { transform: rotate(90deg); }
+  /* Die Korrektur stand hier bis zum 8.8.2026 noch einmal eigens auf eine Spalte
+     umgestellt. Das ist entfallen: Sie bricht jetzt von allein um, wenn ihre Stücke nicht
+     nebeneinander passen — und zwar bei JEDER Breite, nicht erst unter 480px. Genau da
+     lag der Fehler: die Anmerkung war bei 1280px Fensterbreite schon zu schmal, das
+     Fenster aber weit über der Schwelle, also griff die Regel nie. */
   .aura-action { flex: 1 1 auto; }
 }
 @media (prefers-reduced-motion: reduce) {
