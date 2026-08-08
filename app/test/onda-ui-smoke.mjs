@@ -599,6 +599,126 @@ async function assertZweiGesten(page) {
   await page.locator('#materialTreeToggle').click()
 }
 
+// Der Tastweg folgt dem Blick: was oben steht, kommt zuerst. Und wer ein Fenster mit
+// der Tastatur öffnet, bekommt den Fokus zurück, wo er ihn gelassen hat — sonst steht
+// man nach dem Schließen am Seitenanfang und muss sich neu zurechtfinden.
+async function assertTastwegFolgtDemBlick(page) {
+  await page.setViewportSize({ width: 1280, height: 900 })
+  await ensureProjectSidebarOpen(page)
+
+  const reihenfolge = await page.evaluate(() => {
+    const gesucht = ['pvCard', 'structureOpen', 'structureTree', 'materialSources', 'materialTreeToggle']
+    // Nach der Lage im Dokument sortiert — genau das ist die Reihenfolge, in der die
+    // Tabulatortaste läuft, solange niemand tabindex verbiegt.
+    return gesucht
+      .map(id => ({ id, knopf: document.getElementById(id) }))
+      .filter(e => e.knopf)
+      .sort((a, b) => (a.knopf.compareDocumentPosition(b.knopf) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1))
+      .map(e => e.id)
+  })
+  assert.deepEqual(
+    reihenfolge,
+    ['pvCard', 'structureOpen', 'structureTree', 'materialSources', 'materialTreeToggle'],
+    'Der Tastweg läuft nicht in der Reihenfolge, in der die Abschnitte dastehen',
+  )
+
+  const verbogen = await page.evaluate(() => [...document.querySelectorAll('#ondaSidebar [tabindex]')]
+    .map(n => n.getAttribute('tabindex'))
+    .filter(v => Number(v) > 0))
+  assert.deepEqual(verbogen, [], 'Ein tabindex > 0 in der Seitenleiste bricht die natürliche Reihenfolge')
+
+  // Fokusrückgabe: mit der Tastatur öffnen, mit der Tastatur schließen, und der Fokus
+  // steht wieder auf dem Namen, der das Fenster geöffnet hat.
+  await page.locator('#structureOpen').focus()
+  await page.keyboard.press('Enter')
+  await page.locator('#strukturModal').waitFor({ state: 'visible' })
+  // Der Dialog setzt den Fokus in einem requestAnimationFrame — direkt nach dem
+  // Sichtbarwerden zu messen prüft nur, wie schnell der Testrechner ist. Also warten,
+  // bis es wirklich geschehen ist, mit klarer Fehlermeldung, wenn es ausbleibt.
+  await page.waitForFunction(
+    () => Boolean(document.getElementById('strukturModal')?.contains(document.activeElement)),
+    null,
+    { timeout: 3000 },
+  ).catch(() => {
+    assert.fail('Das Fenster nimmt den Fokus beim Öffnen nicht mit')
+  })
+  await page.keyboard.press('Escape')
+  assert.equal(await page.locator('#strukturModal').count(), 0)
+  assert.equal(await page.evaluate(() => document.activeElement?.id), 'structureOpen',
+    'Nach dem Schließen steht der Fokus nicht mehr auf dem Namen, der geöffnet hat')
+}
+
+// Bausteine hinzufügen hat einen neuen Platz: die Struktur-Ansicht. Das schwebende Plus
+// am Absatz ist fort (docs/PHILOSOPHIE.md §1) — das Menü dahinter lebt weiter, und hier
+// gehört es hin. Geprüft wird nicht nur, DASS der Knopf da ist, sondern dass er wirklich
+// einen Baustein einfügt.
+async function assertBausteinHinzufuegen(page) {
+  await page.setViewportSize({ width: 1280, height: 900 })
+  await ensureProjectSidebarOpen(page)
+
+  // Am Absatz darf es kein Plus mehr geben — sonst hätte es zwei Orte für dieselbe Sache.
+  assert.equal(await page.locator('#blockInsertTrigger').count(), 0, 'Das Plus am Absatz ist zurück')
+
+  const vorher = await page.locator('#editor .ProseMirror > [data-block-id]').count()
+  await page.locator('#structureOpen').click()
+  await page.locator('#strukturModal').waitFor({ state: 'visible' })
+  await page.locator('#strukturBausteinNeu').click()
+
+  const menue = page.locator('.semantic-insert-menu')
+  await menue.waitFor({ state: 'visible' })
+  const auswahl = await menue.getByRole('menuitem').allTextContents()
+  assert.ok(auswahl.includes('Freier Absatz'), `Das Einfügemenü kennt keinen freien Absatz: ${auswahl.join(', ')}`)
+
+  await menue.getByRole('menuitem', { name: 'Freier Absatz', exact: true }).click()
+  await page.waitForFunction(anzahl => (
+    document.querySelectorAll('#editor .ProseMirror > [data-block-id]').length === anzahl + 1
+  ), vorher)
+
+  if (await page.locator('#strukturModal').count()) await page.keyboard.press('Escape')
+}
+
+// Ein Fenster, drei Inhalte: Struktur und Quellen müssen aus derselben Hand kommen.
+// Jakob: „das sieht eins zu eins aus wie das bei der Struktur auch das Overlay Fenster,
+// da kann man sich eben ein visuelles Template bauen. Das ist alles kohärent aussieht."
+async function assertQuellenFensterEineHandschrift(page) {
+  await page.setViewportSize({ width: 1280, height: 900 })
+  await ensureProjectSidebarOpen(page)
+
+  const gestalt = async (oeffner, fensterId) => {
+    await page.locator(oeffner).click()
+    await page.locator(fensterId).waitFor({ state: 'visible' })
+    const gemessen = await page.locator(fensterId).evaluate(fenster => {
+      const koerper = fenster.querySelector('.onda-blaetter')
+      const liste = fenster.querySelector('.onda-blaetter__liste')
+      const tiefe = fenster.querySelector('.onda-blaetter__tiefe')
+      const stil = koerper && getComputedStyle(koerper)
+      const fensterStil = getComputedStyle(fenster)
+      return {
+        hatKoerper: Boolean(koerper),
+        // Links die Liste, rechts der vertiefende Text — nicht andersherum.
+        listeVorTiefe: Boolean(liste && tiefe
+          && liste.getBoundingClientRect().left < tiefe.getBoundingClientRect().left),
+        spalten: stil?.gridTemplateColumns ? stil.gridTemplateColumns.split(' ').length : 0,
+        ecken: fensterStil.borderRadius,
+        breite: Math.round(fenster.getBoundingClientRect().width),
+      }
+    })
+    await page.keyboard.press('Escape')
+    return gemessen
+  }
+
+  const struktur = await gestalt('#structureOpen', '#strukturModal')
+  const quellen = await gestalt('#materialSources', '#materialModal')
+
+  assert.equal(struktur.hatKoerper, true, 'Das Struktur-Fenster nutzt das gemeinsame Template nicht')
+  assert.equal(quellen.hatKoerper, true, 'Das Quellen-Fenster nutzt das gemeinsame Template nicht')
+  assert.equal(struktur.listeVorTiefe, true, 'Im Struktur-Fenster steht die Liste nicht links')
+  assert.equal(quellen.listeVorTiefe, true, 'Im Quellen-Fenster steht die Liste nicht links')
+  assert.equal(quellen.spalten, struktur.spalten, 'Die beiden Fenster teilen die Fläche verschieden auf')
+  assert.equal(quellen.ecken, struktur.ecken, 'Die beiden Fenster haben verschiedene Ecken')
+  assert.equal(quellen.breite, struktur.breite, 'Die beiden Fenster sind verschieden breit')
+}
+
 // „Links und rechts eingeklappt = ganz ruhig." Der Stift aus, die Leiste zu: dann
 // steht nur noch der Text — und zwar in der Mitte, nicht 230px daneben.
 async function assertRuhigeLage(page) {

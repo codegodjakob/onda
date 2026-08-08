@@ -235,11 +235,15 @@ async function runDesktop(browser) {
   // Seitenleiste einklappen/ausklappen persistiert in settings.sidebarCollapsed
   await collapseProjectSidebar(page)
   assert.equal(await page.locator('#editorView').evaluate(n => n.classList.contains('is-sidebar-collapsed')), true)
-  assert.equal(await page.locator('#sidebarReopen').isVisible(), true)
+  // Seit dem 8. August 2026 gibt es EINE Klinke statt zweier. #sidebarCollapse und
+  // #sidebarReopen hingen in verschiedenen Kaesten und konnten deshalb nie an derselben
+  // Stelle stehen — das war die Ursache des springenden Pfeils, den Jakob gemeldet hat.
+  // Der Zustand steht jetzt am aria-expanded der einen Klinke.
+  assert.equal(await page.locator('#sidebarToggle').getAttribute('aria-expanded'), 'false')
   assert.equal(await page.evaluate(() => AIWT.state.settings.sidebarCollapsed), true)
   await ensureProjectSidebarOpen(page)
   assert.equal(await page.locator('#editorView').evaluate(n => n.classList.contains('is-sidebar-collapsed')), false)
-  assert.equal(await page.locator('#sidebarReopen').isHidden(), true)
+  assert.equal(await page.locator('#sidebarToggle').getAttribute('aria-expanded'), 'true')
   assert.equal(await page.evaluate(() => AIWT.state.settings.sidebarCollapsed), false)
 
   // Seit 04.08.2026 klappen Struktur-Karten nur auf Klick auf; von allein steht nur
@@ -689,7 +693,12 @@ async function runBlockIdentityRegressions(browser) {
       commands: Object.keys(window.AIWT.state.editor.commands),
     }
   })
-  assert.doesNotMatch(schemaContract.html, /<(?:strong|em|u|s|code|img)\b|style=/)
+  // Kursiv ist seit dem 7. August 2026 die EINZIGE Auszeichnung, die zurueckkommt
+  // (editor.js: StarterKit mit bold/strike/code aus). Ein wissenschaftlicher deutscher
+  // Text braucht sie fuer Werktitel und fremdsprachige Ausdruecke. Fett, durchgestrichen
+  // und Inline-Code sind Betonung — die gehoert in den Satzbau, nicht in eine Leiste.
+  assert.doesNotMatch(schemaContract.html, /<(?:strong|u|s|code|img)\b|style=/)
+  assert.match(schemaContract.html, /<em\b/, 'Kursiv wird verschluckt — es ist die eine erlaubte Auszeichnung')
   assert.match(schemaContract.html, /<a\b[^>]*href="https:\/\/example\.com"/)
   assert.deepEqual(
     schemaContract.commands.filter(name => [
@@ -2071,11 +2080,11 @@ async function assertTask7MobileHitboxes(page, name) {
   const required = {
     base: ['#sidebarBack', '#ondaAura'],
     shelf: ['#sidebarBack', '#ondaAura', '#structureNav .block-preview'],
-    finding: ['#sidebarReopen', '#ondaAura'],
-    suggestion: ['#sidebarReopen', '#ondaAura', '.suggestion-action'],
-    'local-dialogue': ['#sidebarReopen', '#ondaAura', '.local-dialogue .agent-chat-send'],
-    agent: ['#sidebarReopen', '#ondaAura', '#agentWidget .surface-close', '#agentWidget .agent-chat-send'],
-    evidence: ['#sidebarReopen', '#ondaAura', '#evidenceWindow .surface-close'],
+    finding: ['#sidebarToggle', '#ondaAura'],
+    suggestion: ['#sidebarToggle', '#ondaAura', '.suggestion-action'],
+    'local-dialogue': ['#sidebarToggle', '#ondaAura', '.local-dialogue .agent-chat-send'],
+    agent: ['#sidebarToggle', '#ondaAura', '#agentWidget .surface-close', '#agentWidget .agent-chat-send'],
+    evidence: ['#sidebarToggle', '#ondaAura', '#evidenceWindow .surface-close'],
   }[name] || []
 
   for (const selector of required) {
@@ -2571,7 +2580,17 @@ async function runFinalStateLearningAndCrossDocument(browser) {
     return { sourceId: source.id, targetId: target.id, targetBlockId, prinzip }
   })
 
-  const erkanntes = page.locator('#erkanntes')
+  // „Erkanntes" stand bis zum 8. August 2026 als eigener Abschnitt in der Seitenleiste.
+  // Die Leiste hat jetzt genau drei Abschnitte (Jakob: Erkanntes und Erweiterungen sind
+  // "sachen die der agent im chat oder als anmerkung kommuniziert"). Erkanntes ist aber
+  // KEIN proaktives Angebot, sondern ein Blick zurueck auf den Personenspeicher —
+  // deshalb liegt es jetzt im Projektverstaendnis-Fenster, wo auch das Projektgedaechtnis
+  // liegt. Der Inhalt ist derselbe geblieben, nur der Weg dorthin ist ein anderer.
+  await ensureProjectSidebarOpen(page)
+  await page.locator('#pvCard').click()
+  await page.locator('#pvModal').waitFor({ state: 'visible' })
+  await page.locator('#pvModal').getByRole('button', { name: 'Erkanntes', exact: true }).click()
+  const erkanntes = page.locator('#pvModal .onda-erk-flaeche')
   await erkanntes.getByRole('button', { name: 'Als Stimme prüfen', exact: true }).waitFor()
   assert.match(await erkanntes.textContent(), /Sprache/)
   assert.match(await erkanntes.textContent(), /2×/)
@@ -2600,15 +2619,33 @@ async function runFinalStateLearningAndCrossDocument(browser) {
   await rueckkopplung.getByRole('button', { name: 'Nicht mehr berücksichtigen', exact: true }).click()
   assert.equal(await page.evaluate(() => window.AIWT.state.rueckkopplung?.status), 'rejected')
 
-  const erweiterungen = page.locator('#erweiterungen')
-  await erweiterungen.locator('.onda-erw-kopf').click()
-  await erweiterungen.getByRole('button', { name: /Zweite Stelle.*Instandhaltung/ }).click()
-  await page.waitForFunction(targetId => window.AIWT.state.active === targetId, fixture.targetId)
-  await page.waitForFunction(targetBlockId => (
-    window.AIWT.__blockIdentityTestBridge.getActiveBlockId() === targetBlockId
-  ), fixture.targetBlockId)
+  // Erweiterungen haben seit dem 8. August 2026 keine eigene Spalte mehr. Jakob:
+  // "erweiterungsanmerkungen sind sachen die der agent im chat oder als anmerkung
+  // kommuniziert". Der Kanal spricht jetzt im Chat — eine Erweiterung ist etwas, das
+  // jemand SAGT, kein Posten in einem Regal.
+  await page.waitForFunction(() => {
+    const doc = window.AIWT.state.docs.find(d => d.id === window.AIWT.state.active)
+    return (doc?.workspace?.agent?.messages || []).some(m => String(m.id).startsWith('erweiterung-'))
+  }, null, { timeout: 10000 }).catch(() => {
+    assert.fail('Keine Erweiterung ist im Chat angekommen')
+  })
+  const erweiterungImChat = await page.evaluate(() => {
+    const doc = window.AIWT.state.docs.find(d => d.id === window.AIWT.state.active)
+    return (doc?.workspace?.agent?.messages || [])
+      .filter(m => String(m.id).startsWith('erweiterung-'))
+      .map(m => m.text)
+  })
+  assert.ok(
+    erweiterungImChat.some(text => /Verbindung|Weiterführung|Feld/.test(text)),
+    `Die Erweiterung nennt ihre Art nicht: ${erweiterungImChat.join(' | ')}`,
+  )
 
-  assert.equal(await page.evaluate(() => window.AIWT.state.active), fixture.targetId)
+  // OFFENE LÜCKE, absichtlich hier festgehalten statt still übergangen: die alte Spalte
+  // hatte für eine "Verbindung" einen Knopf zur ZWEITEN Stelle — auch über
+  // Dokumentgrenzen hinweg. Chat-Nachrichten tragen heute nur Text und keine Handlung,
+  // also gibt es diesen Sprung nicht mehr. Eine Verbindung, die man nicht aufsuchen
+  // kann, ist eine halbe Verbindung. Wer das behebt, ersetzt diesen Kommentar durch die
+  // Prüfung, die den Sprung wieder belegt.
   assert.deepEqual(errors, [])
   await page.close()
 }
