@@ -857,6 +857,13 @@ body.zen #title:focus { opacity: 1; }
   width: 100%;
   min-height: 44px;
   min-width: 0;
+  /* Die Karte ist selbst ein Flex-Element der Strukturliste, und Flex-Elemente schrumpfen
+     von Haus aus. Bei 25 Bausteinen in einer Spalte, die nicht so hoch ist, wurde jede
+     Karte auf ihre min-height von 44px zusammengedrueckt — auch die gerade aufgeklappte.
+     Gemessen: 44 -> 44 -> 44px, das Aufklappen war unsichtbar (DESIGN-03, Issue #31).
+     Die Liste rollt ohnehin (overflow-y: auto in onda-shell.css); die Karten duerfen
+     also ihre natuerliche Hoehe behalten, statt sie sich zu teilen. */
+  flex: none;
   flex-direction: column;
   gap: var(--space-1);
   padding: var(--space-3) var(--space-4);
