@@ -1,4 +1,9 @@
-node_modules/
+# Ohne Schraegstrich, mit Absicht: `node_modules/` passt nur auf einen ORDNER.
+# In einem Nebenarbeitsordner ist node_modules aber ein Verweis auf den Hauptordner
+# (sonst laeuft dort kein Bau und keine Browser-Pruefung). Der Verweis galt damit als
+# unbekannte Datei, der Baum als unsauber — und build.sh haengte dem Baustempel ein
+# „+" an, das „aus ungesichertem Stand gebaut" bedeutet. Es stimmte nicht.
+node_modules
 app/dist/
 Onda.app/
 releases/
