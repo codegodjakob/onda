@@ -176,33 +176,14 @@ async function runSeedMigrationRegression(browser) {
   await page.close()
 }
 
-async function waitForLocalFeedbackLayout(page, blockId, expectSuggestion = false) {
-  await page.waitForFunction(({ blockId: id, expectSuggestion: withSuggestion }) => {
-    const note = document.querySelector(`#localAgentLayer .local-finding[data-block-id="${id}"]`)
-    const block = document.querySelector(`#editor .ProseMirror > [data-block-id="${id}"]`)
-    if (!note || !block || note.hidden || note.getBoundingClientRect().width <= 0) return false
-
-    const noteRect = note.getBoundingClientRect()
-    const blockRect = block.getBoundingClientRect()
-    if (note.classList.contains('is-below') && noteRect.top < blockRect.bottom - 1) return false
-    if (!withSuggestion) return true
-
-    const suggestion = document.querySelector(`#localAgentLayer .local-suggestion[data-block-id="${id}"]`)
-    const spacer = block.nextElementSibling
-    const nextBlock = spacer?.classList.contains('local-feedback-spacer')
-      ? spacer.nextElementSibling
-      : spacer
-    if (!suggestion || !spacer?.classList.contains('local-feedback-spacer')) return false
-
-    const suggestionRect = suggestion.getBoundingClientRect()
-    const nextBlockTop = nextBlock?.getBoundingClientRect().top || Number.POSITIVE_INFINITY
-    const agentOverlap = Math.min(suggestionRect.bottom, noteRect.bottom) - Math.max(suggestionRect.top, noteRect.top)
-    const surfacesClear = note.classList.contains('is-below')
-      ? agentOverlap <= 1 && Math.max(suggestionRect.bottom, noteRect.bottom) <= nextBlockTop + 1
-      : suggestionRect.bottom <= nextBlockTop + 1
-    return spacer.getBoundingClientRect().height > 0 && surfacesClear
-  }, { blockId, expectSuggestion })
-}
+// ENTFERNT (08.08.2026): waitForLocalFeedbackLayout. Der Helfer wartete, bis Anmerkung
+// und Vorschlagskarte der zweistufigen Rückmeldung ihre endgültige Lage gefunden
+// hatten: Notiz am oder unter dem Absatz, Vorschlag darunter, dazwischen ein
+// Abstandhalter, der den Folgeabsatz freihält, und keine Überdeckung zwischen den
+// beiden. Diesen Aufbau gibt es seit dem 05.08.2026 (e4392ce) nicht mehr -- heute
+// erscheint eine einzige Anmerkungsfläche ohne zweite Karte. Gebraucht wurde der
+// Helfer allein von den drei Task-5-Prüfungen, die mit derselben Oberfläche entfallen
+// sind.
 
 async function runDesktop(browser) {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } })
@@ -901,873 +882,126 @@ async function runTask4InteractionRegressions(browser) {
   await page.close()
 }
 
-async function runTask5PassageFeedback(browser) {
-  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } })
-  await openExample(page)
+// ENTFERNT (08.08.2026): runTask5PassageFeedback. Geprüft wurde die zweistufige
+// Rückmeldung am Absatz: eine Kurzzeile mit Verbindungsstrich zum Absatz, die sich per
+// Eingabetaste zu den drei Feldern Beobachtung, Relevanz und Folge öffnete und beim
+// zweiten Druck die Vorschlagskarte mit Wortlaut-Vergleich (bisher gegen neu)
+// nachschob. Dazu die Aufklapp-Zusagen für Vorleseprogramme (aria-expanded,
+// aria-controls), die Escape-Leiter wieder zurück, die Lage von Karte und
+// Abstandhalter zum Folgeabsatz, dass ein Rückgängig im Text die Karten nicht wegriss,
+// dass die Ansicht danach zur Ruhe kommt, und schließlich das Übernehmen: Zielwortlaut
+// ersetzt, Entscheidung festgehalten, nächster Hinweis im Fokus, alles über einen
+// Neustart hinweg gespeichert.
+//
+// DIESE OBERFLÄCHE GIBT ES SEIT DEM 05.08.2026 NICHT MEHR (e4392ce, „semantische
+// Onda-Anmerkungen integrieren"). An ihre Stelle trat eine einzige Fläche
+// (`.onda-annotation`), die ohne Aufklappstufen erscheint und ihre Knöpfe sofort
+// zeigt. Die alten Erzeuger renderSuggestion, renderLocalDialogue und appendDetailRow
+// stehen zwar noch in src/workspace.js, werden dort aber von niemandem mehr aufgerufen.
+// Derselbe Commit hat auch den Aufruf dieser Funktion entfernt -- seither war sie
+// definiert, lief aber nie. Gemessen am 07.08.2026: rot schon in der dritten Zeile,
+// weil die Anmerkungsebene keine Kurzzeile mehr hergibt.
+//
+// WEITER GEPRÜFT: alle 29 Anmerkungsarten in ihren drei Formen (Markierung, Blase,
+// Absatz) in test/beispieltext-anmerkungsarten.test.mjs und test/onda-ui-smoke.mjs;
+// die Übernahme als Textänderung und Entscheidung am Modell in
+// test/annotation-operations.test.mjs und test/decision-log-smoke.mjs.
+// NICHT MEHR GEPRÜFT im Browser: dass ein Rückgängig im Text die offene Anmerkung
+// stehen lässt, und dass die Anmerkungsebene nach dem Zeichnen zur Ruhe kommt (die
+// alte Zusage: keine endlosen Nachzeichnungen).
 
-  const localLayer = page.locator('#localAgentLayer')
-  const local = localLayer.locator('[data-finding-id]')
-  assert.equal(await local.count(), 1)
-  assert.equal(await page.locator('#editor .anno-mark, #editor .anno-dot').count(), 0)
+// ENTFERNT (08.08.2026): runTask5OwnershipAndAmbiguity. Geprüft wurde, wem der Text
+// gehört, wenn man einen Vorschlag nicht einfach übernimmt: „Eigene Fassung schreiben"
+// wählt die Zielstelle aus, hält den Zwischenstand als `editingFinding` über einen
+// Neustart hinweg, schreibt dabei aber noch keine Entscheidung fest -- erst
+// „Eigene Fassung abschliessen" macht daraus eine Entscheidung mit dem selbst
+// getippten Wortlaut. Dazu die Abbruchmöglichkeit ohne Spuren, das Verwerfen als
+// eigene Entscheidungsart, und drei Sicherungen gegen Raten: ein blockübergreifend
+// mehrdeutiges Ziel bekommt keinen Anker, ein veralteter Anker wird nicht umgehängt,
+// und weder Übernehmen noch eigene Fassung dürfen etwas am Text ändern, wenn die
+// Stelle nicht eindeutig ist -- stattdessen erscheint eine Fehlermeldung.
+//
+// Angesteuert wurde all das über die zweistufige Kurzzeile, die es seit dem 05.08.2026
+// (e4392ce) nicht mehr gibt (siehe die Erklärung bei runTask5PassageFeedback). Auch
+// die Beschriftung stimmt nicht mehr: der Knopf heißt heute „Eigene Fassung", nicht
+// „Eigene Fassung schreiben". Gemessen am 07.08.2026: rot an der Kurzzeile.
+//
+// WEITER GEPRÜFT: `editingFinding` in test/workspace-model.test.mjs; dass ein
+// mehrdeutiges oder fehlendes Ziel keine Änderung plant, in
+// test/annotation-operations.test.mjs; die Entscheidungsarten in
+// test/decision-log-smoke.mjs.
+// NICHT MEHR GEPRÜFT im Browser: der Weg „eigene Fassung schreiben -> Neustart ->
+// abschliessen" von Anfang bis Ende.
 
-  const blockId = await local.getAttribute('data-block-id')
-  assert.ok(blockId)
-  const block = page.locator(`#editor .ProseMirror > [data-block-id="${blockId}"]`)
-  assert.equal(await block.evaluate(node => node.classList.contains('has-local-finding')), true)
-  assert.equal(await local.locator('.local-finding-connector').count(), 1)
+// ENTFERNT (08.08.2026): runFinalFindingRegressions. Geprüft wurden drei Fälle, in
+// denen ein Hinweis nicht einfach angewendet werden darf: (1) ein Anker, dessen
+// Passage inzwischen umgeschrieben wurde -- die Anmerkung meldet „Textstelle
+// verändert" und bietet keinen Vorschlag mehr an; (2) Hinweise ohne sichere Textstelle
+// (mehrdeutig oder Block gelöscht) -- sie verschwinden nicht, sondern sammeln sich im
+// Agentenfeld unter „Hinweise ohne sichere Textstelle"; (3) das Verwerfen einer
+// Integritätsfrage -- statt einer stillen Ablage erscheint die Tafel
+// „Wissenschaftliches Risiko bewusst annehmen", verlangt eine Begründung und schreibt
+// den Status `risk-accepted` mit dieser Begründung fest.
+//
+// Fall 2 und 3 wurden über die zweistufige Kurzzeile angesteuert, die es seit dem
+// 05.08.2026 (e4392ce) nicht mehr gibt; zum Schließen des Agentenfelds diente
+// `[data-close-agent]`, das im Quellcode ebenfalls nicht mehr vorkommt. Gemessen am
+// 07.08.2026: rot an der Kurzzeile.
+//
+// WEITER GEPRÜFT: der Status `risk-accepted` samt Begründung am Modell in
+// test/agent-findings.test.mjs, test/anchor-verify.test.mjs und
+// test/decision-log-smoke.mjs; dass ein mehrdeutiges Ziel keine Änderung plant, in
+// test/annotation-operations.test.mjs („replace-range scheitert bei demselben Ziel in
+// mehreren Blöcken geschlossen").
+// NICHT MEHR GEPRÜFT im Browser: dass die Risiko-Tafel überhaupt erscheint, wenn man
+// eine Integritätsfrage verwirft (`.integrity-risk-confirmation`,
+// `riskConfirmationFindingId`), und dass unplatzierbare Hinweise im Agentenfeld
+// auftauchen. Für beides gibt es derzeit nirgends sonst einen Beleg.
 
-  const summary = local.locator('.local-finding-summary')
-  const editorHtmlBefore = await page.evaluate(() => window.AIWT.state.editor.getHTML())
-  const blockIdsBeforeUndo = await page.locator('#editor .ProseMirror > [data-block-id]').evaluateAll(nodes => nodes.map(node => node.dataset.blockId))
-  await page.evaluate(id => {
-    const editor = window.AIWT.state.editor
-    const targetBlock = window.AIWT.__blockIdentityTestBridge.getBlocks().find(candidate => candidate.id === id)
-    editor.commands.setTextSelection(targetBlock.pos + targetBlock.nodeSize - 1)
-    editor.view.focus()
-    window.__task5MetaDispatches = 0
-    window.__task5OriginalDispatch = editor.view.dispatch.bind(editor.view)
-    editor.view.dispatch = transaction => {
-      if (!transaction.docChanged) window.__task5MetaDispatches += 1
-      return window.__task5OriginalDispatch(transaction)
-    }
-  }, blockId)
-  await page.keyboard.type('Z')
-  assert.notEqual(await page.evaluate(() => window.AIWT.state.editor.getHTML()), editorHtmlBefore)
+// ENTFERNT (08.08.2026): runTask5MobileFeedback. Geprüft wurde die zweistufige
+// Rückmeldung auf dem Tastgerät (390 Punkt): dass Anmerkung und Vorschlagskarte im
+// Bild bleiben, einander nicht überdecken, unterhalb des Absatzes sitzen, den
+// Folgeabsatz über einen Abstandhalter freihalten, und dass sie nach Rollen und
+// Größenänderung wieder richtig sitzen. Zuletzt (07.08.2026, c0a8f21) waren hier schon
+// die Prüfungen zum entfallenen Einfügeknopf herausgenommen worden -- an einer
+// Funktion, die zu diesem Zeitpunkt längst niemand mehr aufrief.
+//
+// Die Oberfläche gibt es seit dem 05.08.2026 (e4392ce) nicht mehr (siehe die Erklärung
+// bei runTask5PassageFeedback). Gemessen am 07.08.2026: rot, weil schon der Aufbau
+// aus Notiz, Vorschlag und Abstandhalter nie zustande kommt.
+//
+// WEITER GEPRÜFT: dass die Anmerkungsfläche auf schmalem Bild nicht überläuft, prüft
+// test/onda-ui-smoke.mjs. GERETTET wurde aus dieser Funktion nichts: dass das
+// Einfügemenü den Vorschlag beiseiteräumt, hing an genau der Vorschlagskarte, die weg
+// ist; das Menü selbst prüft runTask4InteractionRegressions weiter.
 
-  await summary.focus()
-  const disclosureIds = await summary.evaluate(node => ({
-    summaryId: node.id,
-    controls: node.getAttribute('aria-controls')?.split(/\s+/).filter(Boolean) || [],
-  }))
-  assert.ok(disclosureIds.summaryId)
-  assert.equal(disclosureIds.controls.length, 0)
-  await page.keyboard.press('Enter')
-  await expectVisible(local.locator('.local-finding-detail'))
-  assert.equal(await summary.evaluate(node => document.activeElement === node), true)
-  assert.equal(await summary.getAttribute('aria-expanded'), 'true')
-  const detailId = await local.locator('.local-finding-detail').getAttribute('id')
-  assert.deepEqual(await summary.getAttribute('aria-controls'), detailId)
-  assert.equal(await local.getByText('Beobachtung', { exact: true }).count(), 1)
-  assert.equal(await local.getByText('Relevanz', { exact: true }).count(), 1)
-  assert.equal(await local.getByText('Folge', { exact: true }).count(), 1)
-  assert.equal(await local.getByText('Vorschlag', { exact: true }).count(), 0)
-  assert.equal(await local.getByText('Belege', { exact: true }).count(), 0)
-  assert.equal(await local.getByText('Besprechen', { exact: true }).count(), 0)
-
-  await summary.focus()
-  await page.keyboard.press('Enter')
-  const suggestion = localLayer.locator('.local-suggestion')
-  await expectVisible(suggestion)
-  assert.deepEqual(
-    (await summary.getAttribute('aria-controls')).split(/\s+/),
-    [detailId, await suggestion.getAttribute('id')],
-  )
-  assert.equal(await summary.evaluate(node => document.activeElement === node), true)
-  await waitForLocalFeedbackLayout(page, blockId, true)
-  const spacerHeightBeforeUndo = await block.evaluate(node => (
-    node.nextElementSibling?.classList.contains('local-feedback-spacer')
-      ? node.nextElementSibling.getBoundingClientRect().height
-      : 0
-  ))
-  assert.ok(spacerHeightBeforeUndo > 0)
-  assert.equal(await page.evaluate(() => window.AIWT.state.editor.commands.undo()), true)
-  assert.equal(await page.evaluate(() => window.AIWT.state.editor.getHTML()), editorHtmlBefore)
-  await expectVisible(suggestion)
-  await expectVisible(local.locator('.local-finding-detail'))
-  assert.deepEqual(
-    await page.locator('#editor .ProseMirror > [data-block-id]').evaluateAll(nodes => nodes.map(node => node.dataset.blockId)),
-    blockIdsBeforeUndo,
-  )
-  await waitForLocalFeedbackLayout(page, blockId, true)
-
-  await summary.focus()
-  await page.keyboard.press('Enter')
-  assert.equal(await suggestion.count(), 0)
-  await expectVisible(local.locator('.local-finding-detail'))
-  assert.equal(await summary.evaluate(node => document.activeElement === node), true)
-  await page.keyboard.press('Enter')
-  await expectVisible(suggestion)
-  await page.keyboard.press('Escape')
-  assert.equal(await suggestion.count(), 0)
-  await expectVisible(local.locator('.local-finding-detail'))
-  assert.equal(await summary.getAttribute('aria-expanded'), 'true')
-  assert.equal(await summary.evaluate(node => document.activeElement === node), true)
-  await page.keyboard.press('Escape')
-  assert.equal(await local.locator('.local-finding-detail').count(), 0)
-  assert.equal(await summary.getAttribute('aria-expanded'), 'false')
-  assert.equal(await summary.evaluate(node => document.activeElement === node), true)
-
-  await page.keyboard.press('Enter')
-  await page.keyboard.press('Enter')
-  await expectVisible(suggestion)
-  await waitForLocalFeedbackLayout(page, blockId, true)
-  assert.equal(await page.evaluate(() => window.AIWT.state.editor.getHTML()), editorHtmlBefore)
-  assert.equal(await suggestion.locator('.suggestion-old-change').count(), 1)
-  assert.equal(await suggestion.locator('.suggestion-new-change').count(), 1)
-  assert.ok((await suggestion.locator('.suggestion-unchanged').count()) >= 1)
-
-  for (const label of ['Verwerfen', 'Eigene Fassung schreiben', 'Übernehmen']) {
-    const action = suggestion.getByRole('button', { name: label, exact: true })
-    assert.equal(await action.count(), 1)
-    assert.equal(await action.getAttribute('title'), label)
-    assert.equal((await action.textContent()).trim().split(/\s+/).length <= 1, true)
-  }
-
-  const geometry = await page.evaluate(id => {
-    const blockNode = document.querySelector(`#editor .ProseMirror > [data-block-id="${id}"]`)
-    const blockRect = blockNode.getBoundingClientRect()
-    const suggestionRect = document.querySelector('.local-suggestion').getBoundingClientRect()
-    const spacerNode = blockNode.nextElementSibling
-    const nextBlockNode = spacerNode?.classList.contains('local-feedback-spacer')
-      ? spacerNode.nextElementSibling
-      : spacerNode
-    return {
-      blockBottom: blockRect.bottom,
-      suggestionTop: suggestionRect.top,
-      suggestionBottom: suggestionRect.bottom,
-      spacerHeight: spacerNode?.classList.contains('local-feedback-spacer')
-        ? spacerNode.getBoundingClientRect().height
-        : 0,
-      nextBlockTop: nextBlockNode?.getBoundingClientRect().top || Number.POSITIVE_INFINITY,
-    }
-  }, blockId)
-  assert.ok(geometry.suggestionTop >= geometry.blockBottom)
-  assert.ok(geometry.spacerHeight > 0)
-  assert.ok(geometry.suggestionBottom <= geometry.nextBlockTop)
-  await page.waitForTimeout(350)
-  const stableDispatchCount = await page.evaluate(() => window.__task5MetaDispatches)
-  await page.waitForTimeout(350)
-  assert.equal(await page.evaluate(() => window.__task5MetaDispatches), stableDispatchCount)
-  await page.screenshot({ path: `${screenshotDir}/aiwt-v2-task5-desktop.png`, fullPage: true })
-
-  const acceptedFindingId = await local.getAttribute('data-finding-id')
-  const expectedNextFindingId = await page.evaluate(id => {
-    const doc = window.AIWT.state.docs.find(candidate => candidate.id === window.AIWT.state.active)
-    return doc.findings
-      .filter(finding => finding.id !== id && finding.status === 'open' && finding.placement === 'passage' && finding.target)
-      .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0) || String(a.id).localeCompare(String(b.id), 'de'))[0]?.id || null
-  }, acceptedFindingId)
-  const target = await page.evaluate(id => {
-    const doc = window.AIWT.state.docs.find(candidate => candidate.id === window.AIWT.state.active)
-    return doc.findings.find(finding => finding.id === id).target
-  }, acceptedFindingId)
-  const action = await page.evaluate(id => {
-    const doc = window.AIWT.state.docs.find(candidate => candidate.id === window.AIWT.state.active)
-    return doc.findings.find(finding => finding.id === id).action
-  }, acceptedFindingId)
-  assert.equal((await block.textContent()).includes(target), true)
-
-  await suggestion.getByRole('button', { name: 'Übernehmen', exact: true }).click()
-  assert.equal((await block.textContent()).includes(target), false)
-  assert.equal((await block.textContent()).includes(action), true)
-  const acceptedState = await page.evaluate(id => {
-    const doc = window.AIWT.state.docs.find(candidate => candidate.id === window.AIWT.state.active)
-    const finding = doc.findings.find(candidate => candidate.id === id)
-    const decision = doc.decisions.find(candidate => candidate.findingId === id)
-    return { status: finding.status, kind: decision?.kind, appliedText: decision?.appliedText }
-  }, acceptedFindingId)
-  assert.deepEqual(acceptedState, { status: 'resolved', kind: 'accept', appliedText: action })
-  assert.equal(await localLayer.locator('[data-finding-id]').getAttribute('data-finding-id'), expectedNextFindingId)
-  await page.waitForFunction(id => {
-    const summary = document.querySelector(`#localAgentLayer [data-finding-id="${id}"] .local-finding-summary`)
-    return summary && document.activeElement === summary
-  }, expectedNextFindingId)
-
-  await page.evaluate(() => window.AIWT.flushSave())
-  await page.reload({ waitUntil: 'networkidle' })
-  await openExample(page, false)
-  const persistedAcceptance = await page.evaluate(id => {
-    const stored = JSON.parse(localStorage.getItem('aiwt.v2'))
-    const doc = stored.docs.find(candidate => candidate.id === window.AIWT.state.active)
-    return {
-      body: doc.body,
-      findingStatus: doc.findings.find(candidate => candidate.id === id)?.status,
-      decisionKind: doc.decisions.find(candidate => candidate.findingId === id)?.kind,
-    }
-  }, acceptedFindingId)
-  assert.equal(persistedAcceptance.body.includes(action), true)
-  assert.equal(persistedAcceptance.body.includes(target), false)
-  assert.deepEqual(
-    { findingStatus: persistedAcceptance.findingStatus, decisionKind: persistedAcceptance.decisionKind },
-    { findingStatus: 'resolved', decisionKind: 'accept' },
-  )
-  assert.notEqual(await localLayer.locator('[data-finding-id]').getAttribute('data-finding-id'), acceptedFindingId)
-
-  await page.close()
-}
-
-async function runTask5OwnershipAndAmbiguity(browser) {
-  const page = await browser.newPage({ viewport: { width: 1120, height: 860 } })
-  await openExample(page)
-
-  let local = page.locator('#localAgentLayer [data-finding-id]')
-  let findingId = await local.getAttribute('data-finding-id')
-  await local.locator('.local-finding-summary').click()
-  await local.locator('.local-finding-summary').click()
-  await page.getByRole('button', { name: 'Eigene Fassung schreiben', exact: true }).click()
-  assert.equal(await page.locator('.local-suggestion').count(), 0)
-  await page.waitForFunction(() => {
-    const editor = window.AIWT.state.editor
-    return editor.state.selection.from !== editor.state.selection.to
-  })
-  const ownVersionState = await page.evaluate(id => {
-    const doc = window.AIWT.state.docs.find(candidate => candidate.id === window.AIWT.state.active)
-    return {
-      decision: doc.decisions.find(candidate => candidate.findingId === id) || null,
-      editingFinding: doc.workspace.editingFinding,
-      selectedText: window.AIWT.state.editor.state.doc.textBetween(
-        window.AIWT.state.editor.state.selection.from,
-        window.AIWT.state.editor.state.selection.to,
-      ),
-      target: doc.findings.find(candidate => candidate.id === id).target,
-    }
-  }, findingId)
-  assert.equal(ownVersionState.decision, null)
-  assert.equal(ownVersionState.selectedText, ownVersionState.target)
-  assert.equal(ownVersionState.editingFinding.findingId, findingId)
-  assert.equal(ownVersionState.editingFinding.blockId, await local.getAttribute('data-block-id'))
-  assert.ok(ownVersionState.editingFinding.beforeText.includes(ownVersionState.target))
-  await expectVisible(page.getByText('Eigene Fassung in Arbeit', { exact: true }))
-  assert.equal(await page.getByRole('button', { name: 'Eigene Fassung abschliessen', exact: true }).isDisabled(), true)
-  await page.getByRole('button', { name: 'Eigene Fassung abbrechen', exact: true }).click()
-  assert.equal(await page.evaluate(() => {
-    const doc = window.AIWT.state.docs.find(candidate => candidate.id === window.AIWT.state.active)
-    return doc.workspace.editingFinding
-  }), null)
-  assert.equal(await page.evaluate(id => {
-    const doc = window.AIWT.state.docs.find(candidate => candidate.id === window.AIWT.state.active)
-    return doc.decisions.some(candidate => candidate.findingId === id)
-  }, findingId), false)
-
-  local = page.locator(`#localAgentLayer [data-finding-id="${findingId}"]`)
-  await local.locator('.local-finding-summary').click()
-  await page.getByRole('button', { name: 'Eigene Fassung schreiben', exact: true }).click()
-  await page.waitForTimeout(1200)
-  assert.equal(await page.evaluate(id => {
-    const doc = window.AIWT.state.docs.find(candidate => candidate.id === window.AIWT.state.active)
-    return doc.decisions.some(candidate => candidate.findingId === id)
-  }, findingId), false)
-
-  const expectedAfterOwnVersion = await page.evaluate(id => {
-    const doc = window.AIWT.state.docs.find(candidate => candidate.id === window.AIWT.state.active)
-    return doc.findings
-      .filter(finding => finding.id !== id && finding.status === 'open' && finding.placement === 'passage' && finding.target)
-      .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0) || String(a.id).localeCompare(String(b.id), 'de'))[0]?.id || null
-  }, findingId)
-  await page.evaluate(() => window.AIWT.flushSave())
-  await page.reload({ waitUntil: 'networkidle' })
-  await openExample(page, false)
-  const reloadedEditing = await page.evaluate(() => {
-    const doc = window.AIWT.state.docs.find(candidate => candidate.id === window.AIWT.state.active)
-    return doc.workspace.editingFinding
-  })
-  assert.equal(reloadedEditing.findingId, findingId)
-  assert.equal(reloadedEditing.blockId, ownVersionState.editingFinding.blockId)
-
-  await page.evaluate(() => {
-    const editor = window.AIWT.state.editor
-    const doc = window.AIWT.state.docs.find(candidate => candidate.id === window.AIWT.state.active)
-    const editing = doc.workspace.editingFinding
-    const block = window.AIWT.__blockIdentityTestBridge.getBlocks().find(candidate => candidate.id === editing.blockId)
-    const from = block.pos + 1 + editing.prefix.length
-    const oldLength = editing.beforeText.length - editing.prefix.length - editing.suffix.length
-    editor.commands.setTextSelection({ from, to: from + oldLength })
-    editor.view.focus()
-  })
-  await page.keyboard.type('meine eigene')
-  await page.waitForTimeout(1200)
-  assert.equal(await page.evaluate(id => {
-    const doc = window.AIWT.state.docs.find(candidate => candidate.id === window.AIWT.state.active)
-    return doc.decisions.some(candidate => candidate.findingId === id)
-  }, findingId), false)
-  assert.equal(await page.getByText('Eigene Fassung in Arbeit', { exact: true }).count(), 1)
-  await page.keyboard.type(' klare Fassung')
-  const ownAppliedText = 'meine eigene klare Fassung'
-  await page.waitForTimeout(1200)
-  const savedBeforeFastReload = await page.evaluate(({ id, appliedText }) => {
-    const stored = JSON.parse(localStorage.getItem('aiwt.v2'))
-    const doc = stored.docs.find(candidate => candidate.id === stored.active)
-    return {
-      bodyContainsOwnText: doc.body.includes(appliedText),
-      editingFinding: doc.workspace.editingFinding,
-      decision: doc.decisions.find(candidate => candidate.findingId === id) || null,
-    }
-  }, { id: findingId, appliedText: ownAppliedText })
-  assert.equal(savedBeforeFastReload.bodyContainsOwnText, true)
-  assert.equal(savedBeforeFastReload.editingFinding.findingId, findingId)
-  assert.equal(savedBeforeFastReload.decision, null)
-
-  await page.reload({ waitUntil: 'networkidle' })
-  await openExample(page, false)
-  assert.equal(await page.evaluate(id => {
-    const doc = window.AIWT.state.docs.find(candidate => candidate.id === window.AIWT.state.active)
-    return doc.workspace.editingFinding?.findingId === id
-      && !doc.decisions.some(candidate => candidate.findingId === id)
-  }, findingId), true)
-  await expectVisible(page.getByText('Eigene Fassung in Arbeit', { exact: true }))
-  assert.equal(await page.getByRole('button', { name: 'Eigene Fassung abschliessen', exact: true }).isEnabled(), true)
-  await page.getByRole('button', { name: 'Eigene Fassung abschliessen', exact: true }).click()
-  const decidedOwnVersion = await page.evaluate(id => {
-    const doc = window.AIWT.state.docs.find(candidate => candidate.id === window.AIWT.state.active)
-    const decision = doc.decisions.find(candidate => candidate.findingId === id)
-    return {
-      status: doc.findings.find(candidate => candidate.id === id)?.status,
-      kind: decision?.kind,
-      appliedText: decision?.appliedText,
-      editingFinding: doc.workspace.editingFinding,
-    }
-  }, findingId)
-  assert.deepEqual(decidedOwnVersion, {
-    status: 'resolved',
-    kind: 'accept',
-    appliedText: ownAppliedText,
-    editingFinding: null,
-  })
-  assert.equal(await page.locator('#localAgentLayer [data-finding-id]').getAttribute('data-finding-id'), expectedAfterOwnVersion)
-  await page.evaluate(() => window.AIWT.flushSave())
-  const persistedOwnVersion = await page.evaluate(id => {
-    const stored = JSON.parse(localStorage.getItem('aiwt.v2'))
-    const doc = stored.docs.find(candidate => candidate.id === stored.active)
-    return {
-      appliedText: doc.decisions.find(candidate => candidate.findingId === id)?.appliedText,
-      findingStatus: doc.findings.find(candidate => candidate.id === id)?.status,
-      editingFinding: doc.workspace.editingFinding,
-      bodyContainsOwnText: doc.body.includes('meine eigene klare Fassung'),
-    }
-  }, findingId)
-  assert.deepEqual(persistedOwnVersion, {
-    appliedText: ownAppliedText,
-    findingStatus: 'resolved',
-    editingFinding: null,
-    bodyContainsOwnText: true,
-  })
-
-  local = page.locator('#localAgentLayer [data-finding-id]')
-  await local.locator('.local-finding-summary').click()
-  await local.locator('.local-finding-summary').click()
-  findingId = await local.getAttribute('data-finding-id')
-  const expectedAfterReject = await page.evaluate(id => {
-    const doc = window.AIWT.state.docs.find(candidate => candidate.id === window.AIWT.state.active)
-    return doc.findings
-      .filter(finding => finding.id !== id && finding.status === 'open' && finding.placement === 'passage' && finding.target)
-      .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0) || String(a.id).localeCompare(String(b.id), 'de'))[0]?.id || null
-  }, findingId)
-  await page.getByRole('button', { name: 'Verwerfen', exact: true }).click()
-  const rejectedState = await page.evaluate(id => {
-    const doc = window.AIWT.state.docs.find(candidate => candidate.id === window.AIWT.state.active)
-    return {
-      findingStatus: doc.findings.find(candidate => candidate.id === id)?.status,
-      decisionKind: doc.decisions.find(candidate => candidate.findingId === id)?.kind,
-    }
-  }, findingId)
-  assert.deepEqual(rejectedState, { findingStatus: 'dismissed', decisionKind: 'reject' })
-  assert.equal(await page.locator('#localAgentLayer [data-finding-id]').getAttribute('data-finding-id'), expectedAfterReject)
-  await page.evaluate(() => window.AIWT.flushSave())
-  await page.reload({ waitUntil: 'networkidle' })
-  await openExample(page, false)
-  const persistedReject = await page.evaluate(id => {
-    const stored = JSON.parse(localStorage.getItem('aiwt.v2'))
-    const doc = stored.docs.find(candidate => candidate.id === window.AIWT.state.active)
-    return {
-      findingStatus: doc.findings.find(candidate => candidate.id === id)?.status,
-      decisionKind: doc.decisions.find(candidate => candidate.findingId === id)?.kind,
-    }
-  }, findingId)
-  assert.deepEqual(persistedReject, rejectedState)
-
-  await page.evaluate(() => {
-    const bridge = window.AIWT.__blockIdentityTestBridge
-    bridge.setContent({
-      type: 'doc',
-      content: [
-        { type: 'paragraph', content: [{ type: 'text', text: 'Gleiche Phrase im ersten Block.' }] },
-        { type: 'paragraph', content: [{ type: 'text', text: 'Gleiche Phrase im zweiten Block.' }] },
-        { type: 'paragraph', content: [{ type: 'text', text: 'Eindeutiges Ziel im dritten Block.' }] },
-      ],
-    })
-    const doc = window.AIWT.state.docs.find(candidate => candidate.id === window.AIWT.state.active)
-    doc.findings = [
-      {
-        id: 'task-5-ambiguous', placement: 'passage', status: 'open', category: 'wording',
-        priority: 'critical', createdAt: 0, target: 'Gleiche Phrase',
-        short: 'Dieses Ziel ist blockübergreifend mehrdeutig.', why: 'Hier darf nichts geraten werden.', action: 'Einmalig',
-      },
-      {
-        id: 'task-5-stale', placement: 'passage', status: 'open', category: 'wording',
-        priority: 'critical', createdAt: 1, blockId: 'geloeschter-block', target: 'Eindeutiges Ziel',
-        short: 'Dieser Anker ist gelöscht.', why: 'Ein stale Anker darf nicht umgehängt werden.', action: 'Falsch umgehängt',
-      },
-      {
-        id: 'task-5-visible', placement: 'passage', status: 'open', category: 'wording',
-        priority: 'critical', createdAt: 2, target: 'Eindeutiges Ziel',
-        short: 'Dieser spätere Hinweis bleibt sichtbar.', why: 'Nicht auflösbare Hinweise blockieren die Queue nicht.', action: 'Klares Ziel',
-      },
-    ]
-    doc.coach = []
-    doc.lane = []
-    doc.decisions = []
-    doc.workspace.editingFinding = null
-    doc.workspace.expandedFindingId = null
-    doc.workspace.suggestionFindingId = null
-    document.getElementById('title').dispatchEvent(new Event('input'))
-  })
-  local = page.locator('#localAgentLayer [data-finding-id="task-5-visible"]')
-  await expectVisible(local)
-  const anchorState = await page.evaluate(() => {
-    const doc = window.AIWT.state.docs.find(candidate => candidate.id === window.AIWT.state.active)
-    return {
-      ambiguousBlockId: doc.findings.find(finding => finding.id === 'task-5-ambiguous').blockId || null,
-      staleBlockId: doc.findings.find(finding => finding.id === 'task-5-stale').blockId,
-      visibleBlockId: doc.findings.find(finding => finding.id === 'task-5-visible').blockId,
-    }
-  })
-  assert.equal(anchorState.ambiguousBlockId, null)
-  assert.equal(anchorState.staleBlockId, 'geloeschter-block')
-  assert.ok(anchorState.visibleBlockId)
-  await local.locator('.local-finding-summary').click()
-  await local.locator('.local-finding-summary').click()
-  const beforeUnauthorizedOwn = await page.evaluate(() => window.AIWT.state.editor.getHTML())
-  await page.evaluate(() => {
-    const doc = window.AIWT.state.docs.find(candidate => candidate.id === window.AIWT.state.active)
-    doc.findings.find(finding => finding.id === 'task-5-visible').blockId = 'geloeschter-block'
-  })
-  await page.getByRole('button', { name: 'Eigene Fassung schreiben', exact: true }).click()
-  assert.equal(await page.evaluate(() => window.AIWT.state.editor.getHTML()), beforeUnauthorizedOwn)
-  assert.equal(await page.evaluate(() => {
-    const doc = window.AIWT.state.docs.find(candidate => candidate.id === window.AIWT.state.active)
-    return doc.workspace.editingFinding
-  }), null)
-  await expectVisible(page.locator('.local-finding-error'))
-  assert.match(await page.locator('.local-finding-error').textContent(), /nicht eindeutig|nicht sicher/i)
-
-  await page.evaluate(blockId => {
-    const doc = window.AIWT.state.docs.find(candidate => candidate.id === window.AIWT.state.active)
-    doc.findings.find(finding => finding.id === 'task-5-visible').blockId = blockId
-    document.getElementById('title').dispatchEvent(new Event('input'))
-  }, anchorState.visibleBlockId)
-  local = page.locator('#localAgentLayer [data-finding-id="task-5-visible"]')
-  await local.locator('.local-finding-summary').click()
-  await local.locator('.local-finding-summary').click()
-  const beforeUnauthorizedAccept = await page.evaluate(() => window.AIWT.state.editor.getHTML())
-  await page.evaluate(() => {
-    const doc = window.AIWT.state.docs.find(candidate => candidate.id === window.AIWT.state.active)
-    doc.findings.find(finding => finding.id === 'task-5-visible').blockId = 'geloeschter-block'
-  })
-  await page.getByRole('button', { name: 'Übernehmen', exact: true }).click()
-  assert.equal(await page.evaluate(() => window.AIWT.state.editor.getHTML()), beforeUnauthorizedAccept)
-  const ambiguousState = await page.evaluate(() => {
-    const doc = window.AIWT.state.docs.find(candidate => candidate.id === window.AIWT.state.active)
-    return {
-      statuses: doc.findings.map(finding => [finding.id, finding.status]),
-      decisions: doc.decisions.length,
-      texts: window.AIWT.__blockIdentityTestBridge.getBlocks().map(block => block.text),
-    }
-  })
-  assert.deepEqual(ambiguousState.statuses, [
-    ['task-5-ambiguous', 'open'],
-    ['task-5-stale', 'open'],
-    ['task-5-visible', 'open'],
-  ])
-  assert.equal(ambiguousState.decisions, 0)
-  assert.deepEqual(ambiguousState.texts, [
-    'Gleiche Phrase im ersten Block.',
-    'Gleiche Phrase im zweiten Block.',
-    'Eindeutiges Ziel im dritten Block.',
-  ])
-
-  await page.close()
-}
-
-async function runFinalFindingRegressions(browser) {
-  const page = await browser.newPage({ viewport: { width: 1120, height: 860 } })
-  await openExample(page)
-
-  const setup = await page.evaluate(() => {
-    const bridge = window.AIWT.__blockIdentityTestBridge
-    bridge.setContent({
-      type: 'doc',
-      content: [
-        { type: 'paragraph', content: [{ type: 'text', text: 'Diese bekannte Passage wurde vollständig neu formuliert.' }] },
-        { type: 'paragraph', content: [{ type: 'text', text: 'Eine doppelte Phrase steht hier.' }] },
-        { type: 'paragraph', content: [{ type: 'text', text: 'Auch hier steht eine doppelte Phrase.' }] },
-      ],
-    })
-    const knownBlockId = bridge.getBlocks()[0].id
-    const doc = window.AIWT.state.docs.find(candidate => candidate.id === window.AIWT.state.active)
-    doc.findings = [
-      {
-        id: 'final-stale-known', placement: 'passage', status: 'open', category: 'wording', priority: 'critical', createdAt: 0,
-        blockId: knownBlockId, target: 'Alter Wortlaut', short: 'Alter Hinweistext', why: 'Die Passage hat sich verändert.', action: 'Nicht anwenden',
-      },
-      {
-        id: 'final-ambiguous', placement: 'passage', status: 'open', category: 'wording', priority: 'high', createdAt: 1,
-        target: 'doppelte Phrase', short: 'Mehrdeutiger Hinweis', why: 'Keine sichere Textstelle.', action: 'Nicht anwenden',
-      },
-      {
-        id: 'final-unplaced', placement: 'passage', status: 'open', category: 'source', priority: 'high', createdAt: 2,
-        blockId: 'b-missing-final', target: 'Nicht vorhandener Wortlaut', short: 'Nicht platzierbarer Hinweis', why: 'Der Block fehlt.', action: 'Nicht anwenden',
-      },
-    ]
-    doc.coach = []
-    doc.lane = []
-    doc.decisions = []
-    Object.assign(doc.workspace, {
-      expandedFindingId: null,
-      suggestionFindingId: null,
-      localThreadFindingId: null,
-      evidenceFindingId: null,
-      editingFinding: null,
-      riskConfirmationFindingId: null,
-      riskReason: '',
-    })
-    document.getElementById('title').dispatchEvent(new Event('input', { bubbles: true }))
-    return { knownBlockId }
-  })
-
-  let local = page.locator('#localAgentLayer [data-finding-id="final-stale-known"]')
-  await expectVisible(local)
-  assert.equal(await local.getAttribute('data-block-id'), setup.knownBlockId)
-  assert.equal(await local.getByText('Textstelle verändert', { exact: true }).count(), 1)
-  await local.locator('.local-finding-summary').click()
-  await local.locator('.local-finding-summary').click()
-  assert.equal(await page.locator('.local-suggestion').count(), 0)
-  assert.equal(await page.evaluate(() => {
-    const doc = window.AIWT.state.docs.find(candidate => candidate.id === window.AIWT.state.active)
-    return doc.findings.find(finding => finding.id === 'final-stale-known').status
-  }), 'open')
-
-  await page.locator('#ondaAura').click()
-  const agent = page.locator('#agentWidget')
-  await expectVisible(agent)
-  assert.equal(await agent.getByText('Hinweise ohne sichere Textstelle', { exact: true }).count(), 1)
-  assert.equal(await agent.getByText('Mehrdeutiger Hinweis', { exact: true }).count(), 1)
-  assert.equal(await agent.getByText('Nicht platzierbarer Hinweis', { exact: true }).count(), 1)
-  await agent.locator('[data-close-agent]').click()
-
-  await page.evaluate(() => {
-    const bridge = window.AIWT.__blockIdentityTestBridge
-    bridge.setContent({
-      type: 'doc',
-      content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Diese wissenschaftliche Aussage braucht einen Beleg.' }] }],
-    })
-    const doc = window.AIWT.state.docs.find(candidate => candidate.id === window.AIWT.state.active)
-    doc.findings = [{
-      id: 'final-integrity-risk', placement: 'passage', status: 'open', category: 'source', priority: 'critical', createdAt: 0,
-      blockId: bridge.getBlocks()[0].id, target: 'wissenschaftliche Aussage', short: 'Für diese Aussage fehlt ein belastbarer Beleg.',
-      why: 'Ohne Beleg bleibt die Aussage wissenschaftlich nicht abgesichert.',
-      consequence: 'Die Hausarbeit kann an dieser Stelle eine unbelegte Behauptung enthalten.',
-      action: 'wissenschaftlich belegte Aussage',
-    }]
-    doc.decisions = []
-    Object.assign(doc.workspace, {
-      expandedFindingId: null,
-      suggestionFindingId: null,
-      localThreadFindingId: null,
-      evidenceFindingId: null,
-      editingFinding: null,
-      riskConfirmationFindingId: null,
-      riskReason: '',
-      agent: { ...doc.workspace.agent, open: false },
-    })
-    document.getElementById('title').dispatchEvent(new Event('input', { bubbles: true }))
-  })
-  local = page.locator('#localAgentLayer [data-finding-id="final-integrity-risk"]')
-  await local.locator('.local-finding-summary').click()
-  await local.locator('.local-finding-summary').click()
-  await page.getByRole('button', { name: 'Verwerfen', exact: true }).click()
-  const afterFirstReject = await page.evaluate(() => {
-    const doc = window.AIWT.state.docs.find(candidate => candidate.id === window.AIWT.state.active)
-    return {
-      status: doc.findings[0].status,
-      decisions: doc.decisions.length,
-      confirmation: doc.workspace.riskConfirmationFindingId,
-    }
-  })
-  assert.deepEqual(afterFirstReject, { status: 'open', decisions: 0, confirmation: 'final-integrity-risk' })
-  const confirmation = page.locator('.integrity-risk-confirmation')
-  await expectVisible(confirmation)
-  assert.equal(await confirmation.locator('.integrity-risk-title').getByText('Wissenschaftliches Risiko bewusst annehmen', { exact: true }).count(), 1)
-  assert.match(await confirmation.textContent(), /unbelegte Behauptung/i)
-  await confirmation.locator('textarea').fill('Quelle ist für diese Fassung bewusst noch offen.')
-  await confirmation.getByRole('button', { name: 'Wissenschaftliches Risiko bewusst annehmen', exact: true }).click()
-  await page.waitForFunction(() => window.AIWT.state.editor.view.dom.contains(document.activeElement))
-  const confirmed = await page.evaluate(() => {
-    const doc = window.AIWT.state.docs.find(candidate => candidate.id === window.AIWT.state.active)
-    return {
-      status: doc.findings[0].status,
-      outcome: doc.decisions[0]?.outcome,
-      reason: doc.decisions[0]?.reason,
-      editing: doc.workspace.riskConfirmationFindingId,
-      editorFocused: window.AIWT.state.editor.view.dom.contains(document.activeElement),
-    }
-  })
-  assert.deepEqual(confirmed, {
-    status: 'risk-accepted',
-    outcome: 'risk-accepted',
-    reason: 'Quelle ist für diese Fassung bewusst noch offen.',
-    editing: null,
-    editorFocused: true,
-  })
-
-  await page.close()
-}
-
-async function runTask5MobileFeedback(browser) {
-  const context = await browser.newContext({
-    viewport: { width: 390, height: 844 },
-    hasTouch: true,
-    isMobile: true,
-  })
-  const page = await context.newPage()
-  await openExample(page)
-  await collapseProjectSidebar(page, { touch: true })
-
-  const local = page.locator('#localAgentLayer [data-finding-id]')
-  await expectVisible(local)
-  const blockId = await local.getAttribute('data-block-id')
-  await waitForLocalFeedbackLayout(page, blockId)
-  const layout = await page.evaluate(id => {
-    const note = document.querySelector('#localAgentLayer [data-finding-id]').getBoundingClientRect()
-    const block = document.querySelector(`#editor .ProseMirror > [data-block-id="${id}"]`).getBoundingClientRect()
-    return {
-      noteLeft: note.left,
-      noteRight: note.right,
-      noteTop: note.top,
-      blockBottom: block.bottom,
-      viewportWidth: document.documentElement.clientWidth,
-      overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
-    }
-  }, blockId)
-  assert.ok(layout.noteLeft >= 0)
-  assert.ok(layout.noteRight <= layout.viewportWidth)
-  assert.ok(layout.noteTop >= layout.blockBottom)
-  assert.ok(layout.overflow <= 1)
-
-  await local.locator('.local-finding-summary').click()
-  await local.locator('.local-finding-summary').click()
-  await waitForLocalFeedbackLayout(page, blockId, true)
-  const overlap = await page.evaluate(() => {
-    const suggestion = document.querySelector('.local-suggestion').getBoundingClientRect()
-    const note = document.querySelector('#localAgentLayer [data-finding-id]').getBoundingClientRect()
-    const block = document.querySelector('.has-local-finding')
-    const spacer = block.nextElementSibling
-    const nextBlock = spacer?.classList.contains('local-feedback-spacer')
-      ? spacer.nextElementSibling
-      : spacer
-    const nextBlockTop = nextBlock?.getBoundingClientRect().top || Number.POSITIVE_INFINITY
-    return {
-      agentOverlap: Math.min(suggestion.bottom, note.bottom) - Math.max(suggestion.top, note.top),
-      agentBottom: Math.max(suggestion.bottom, note.bottom),
-      spacerHeight: spacer?.classList.contains('local-feedback-spacer')
-        ? spacer.getBoundingClientRect().height
-        : 0,
-      nextBlockTop,
-    }
-  })
-  assert.ok(overlap.agentOverlap <= 0)
-  assert.ok(overlap.spacerHeight > 0)
-  assert.ok(overlap.agentBottom <= overlap.nextBlockTop)
-  // ENTFERNT: dass der Einfügeknopf auf dem Tastgerät sichtbar und anfassbar bleibt
-  // (Deckkraft über null, pointer-events auto) und dass er unterhalb von Absatz,
-  // Anmerkung und Vorschlag sitzt, ohne eines davon oder den Folgeabsatz zu berühren.
-  // Den Knopf gibt es seit dem 07.08.2026 nicht mehr (c0a8f21); Bausteine hinzufügen
-  // zieht in die Struktur-Ansicht.
-  //
-  // GERETTET: dass das Öffnen des Einfügemenüs den Vorschlag beiseiteräumt und Escape
-  // es wieder schließt -- das hing nie am Knopf, sondern am Menü.
-  const activeBlock = page.locator(`#editor .ProseMirror > [data-block-id="${blockId}"]`)
-  await activeBlock.tap()
-  await page.waitForFunction(id => {
-    const doc = window.AIWT.state.docs.find(candidate => candidate.id === window.AIWT.state.active)
-    return doc.workspace.activeBlockId === id
-  }, blockId)
-  await page.waitForTimeout(220)
-  await oeffneEinfuegeMenue(page, { afterBlockId: blockId })
-  assert.equal(await page.locator('.local-suggestion').count(), 0)
-  await page.keyboard.press('Escape')
-  assert.equal(await page.locator('.semantic-insert-menu').count(), 0)
-  await local.locator('.local-finding-summary').tap()
-  await local.locator('.local-finding-summary').tap()
-  await waitForLocalFeedbackLayout(page, blockId, true)
-
-  // Der Abstandhalter unter dem Absatz bleibt geprüft: die Rückmeldung darf den
-  // Folgeabsatz nicht überdecken. Das steht bereits oben in `overlap`.
-  await page.screenshot({ path: `${screenshotDir}/aiwt-v2-task5-mobile.png`, fullPage: true })
-
-  await page.locator('#scroll').evaluate(node => {
-    node.scrollTop += 80
-    node.dispatchEvent(new Event('scroll'))
-  })
-  await page.evaluate(() => window.dispatchEvent(new Event('resize')))
-  await waitForLocalFeedbackLayout(page, blockId, true)
-  const afterReposition = await local.boundingBox()
-  assert.ok(afterReposition)
-  assert.ok(afterReposition.x >= 0)
-  assert.ok(afterReposition.x + afterReposition.width <= 390)
-
-  await context.close()
-}
-
-async function injectTask6PassageFinding(page, withSources = false) {
-  return page.evaluate(({ withSources: includeSources }) => {
-    const doc = window.AIWT.state.docs.find(candidate => candidate.id === window.AIWT.state.active)
-    const block = window.AIWT.__blockIdentityTestBridge.getBlocks()
-      .find(candidate => candidate.text.includes('Calm Technology beschreibt Technik'))
-    const existing = doc.findings.find(finding => finding.id === 'task-6-local-dialogue')
-    const finding = existing || {
-      id: 'task-6-local-dialogue',
-      placement: 'passage',
-      category: 'content',
-      priority: 'critical',
-      status: 'open',
-      createdAt: -100,
-      blockId: block.id,
-      target: 'Calm Technology beschreibt Technik',
-      claim: 'Calm Technology kann Aufmerksamkeit schonen, indem Technik zwischen Zentrum und Peripherie wechselt.',
-      short: 'Ist Aufmerksamkeit hier Fähigkeit oder gestaltete Bedingung?',
-      why: 'Die Entscheidung verändert, wem der Text Verantwortung zuschreibt.',
-      consequence: 'Als gestaltete Bedingung rückt die Verantwortung stärker zum Werkzeug.',
-      sources: [],
-    }
-    if (!existing) doc.findings.unshift(finding)
-    finding.action = null
-    finding.sources = includeSources
-      ? [
-        {
-          label: 'Weiser & Brown (1996): The Coming Age of Calm Technology',
-          type: 'Primärquelle',
-          url: 'https://calmtech.com/papers',
-          contentType: 'original-excerpt',
-          content: 'The most potentially interesting, challenging, and profound change implied by the ubiquitous computing era is a focus on calm.',
-          citation: 'Weiser, M., & Brown, J. S. (1996). The Coming Age of Calm Technology.',
-          verificationStatus: 'demo',
-          locator: 'Demo-Fundstelle, Absatz 1',
-          context: 'Der Satz formuliert den historischen Ausgangspunkt des Calm-Technology-Ansatzes.',
-          limits: 'Der Aufsatz belegt das Gestaltungsprinzip, nicht automatisch seine Wirkung in jeder Schreibsoftware.',
-        },
-        {
-          label: 'Redaktionelle Einordnung',
-          type: 'Arbeitsnotiz',
-          url: 'https://calmtech.com/papers',
-          contentType: 'summary',
-          content: 'Der Aufsatz verbindet ruhige Technik mit einem Wechsel zwischen zentraler und peripherer Aufmerksamkeit.',
-          citation: 'Eigene Zusammenfassung nach Weiser & Brown (1996).',
-          verificationStatus: 'unverified',
-          locator: 'Arbeitsnotiz ohne live geprüfte Fundstelle',
-        },
-      ]
-      : []
-    doc.workspace.expandedFindingId = null
-    doc.workspace.suggestionFindingId = null
-    doc.workspace.localThreadFindingId = null
-    doc.workspace.evidenceFindingId = null
-    doc.workspace.agent.open = false
-    document.getElementById('title').dispatchEvent(new Event('input'))
-    return { findingId: finding.id, blockId: block.id, target: finding.target }
-  }, { withSources })
-}
+// ENTFERNT (08.08.2026): injectTask6PassageFinding. Der Helfer setzte dem Beispieltext
+// eine Anmerkung an die Stelle „Calm Technology beschreibt Technik" -- wahlweise mit
+// zwei Belegen (geprüfte Primärquelle und ungeprüfte Arbeitsnotiz), um das Belegfenster
+// zu füllen. Gebraucht wurde er nur von runTask6Mobile, prepareTask7Scenario und
+// runTask7KeyboardAndMotion; alle drei sind mit der zweistufigen Oberfläche entfallen.
+// Die Belege selbst prüft heute test/evidence-bundle.test.mjs am Modell.
 
 // ENTFERNT (07.08.2026): runTask6DialogueAndEvidence. Die Funktion war seit dem
 // Umbau der Rückmeldungs-Oberfläche definiert, aber von niemandem mehr aufgerufen --
 // sie lief also nie und prüfte nichts. Was sie beschrieb (Gespräch am Absatz,
 // Belegfenster), prüft der semantische Onda-Smoke über alle Formen hinweg.
 
-async function runTask6Mobile(browser) {
-  const context = await browser.newContext({
-    viewport: { width: 390, height: 844 },
-    hasTouch: true,
-    isMobile: true,
-  })
-  const page = await context.newPage()
-  await openExample(page)
-
-  await page.locator('#ondaAura').tap()
-  const widget = page.locator('#agentWidget')
-  await expectVisible(widget)
-  const widgetLayout = await widget.evaluate(node => {
-    const rect = node.getBoundingClientRect()
-    const input = node.querySelector('input').getBoundingClientRect()
-    return {
-      left: rect.left,
-      right: rect.right,
-      bottom: rect.bottom,
-      inputBottom: input.bottom,
-      viewportWidth: innerWidth,
-      viewportHeight: innerHeight,
-      overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
-    }
-  })
-  assert.ok(widgetLayout.left >= 8)
-  assert.ok(widgetLayout.right <= widgetLayout.viewportWidth - 8)
-  assert.ok(widgetLayout.bottom <= widgetLayout.viewportHeight - 8)
-  assert.ok(widgetLayout.inputBottom <= widgetLayout.viewportHeight - 12)
-  assert.ok(widgetLayout.overflow <= 1)
-  await page.waitForTimeout(260)
-  await page.screenshot({ path: `${screenshotDir}/aiwt-v2-task6-mobile-widget.png`, fullPage: true })
-  await widget.locator('[data-close-agent]').tap()
-  await collapseProjectSidebar(page, { touch: true })
-
-  const fixture = await injectTask6PassageFinding(page, false)
-  const local = page.locator(`#localAgentLayer [data-finding-id="${fixture.findingId}"]`)
-  await local.locator('.local-finding-summary').tap()
-  await local.locator('.local-finding-summary').tap()
-  await expectVisible(local.locator('.local-dialogue'))
-  await local.locator('input').scrollIntoViewIfNeeded()
-  const localLayout = await local.evaluate(node => {
-    const rect = node.getBoundingClientRect()
-    const input = node.querySelector('.local-dialogue input').getBoundingClientRect()
-    return {
-      left: rect.left,
-      right: rect.right,
-      inputTop: input.top,
-      inputBottom: input.bottom,
-      viewportWidth: innerWidth,
-      viewportHeight: innerHeight,
-      overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
-    }
-  })
-  assert.ok(localLayout.left >= 0)
-  assert.ok(localLayout.right <= localLayout.viewportWidth)
-  assert.ok(localLayout.inputTop >= 0)
-  assert.ok(localLayout.inputBottom <= localLayout.viewportHeight)
-  assert.ok(localLayout.overflow <= 1)
-  await local.locator('input').fill('Als Bedingung.')
-  await local.locator('form').press('Enter')
-  for (let turn = 2; turn <= 8; turn += 1) {
-    const input = local.locator('input')
-    await input.fill(`Mobile Antwort ${turn}.`)
-    await input.press('Enter')
-  }
-  await local.locator('input').scrollIntoViewIfNeeded()
-  const multiTurnLayout = await local.evaluate(node => {
-    const messages = node.querySelector('.local-dialogue-messages')
-    const input = node.querySelector('.local-dialogue input')
-    const spacer = document.querySelector('.local-feedback-spacer')
-    const inputRect = input.getBoundingClientRect()
-    return {
-      inputTop: inputRect.top,
-      inputBottom: inputRect.bottom,
-      viewportHeight: innerHeight,
-      messageClientHeight: messages.clientHeight,
-      messageScrollHeight: messages.scrollHeight,
-      messageScrollTop: messages.scrollTop,
-      spacerHeight: spacer?.getBoundingClientRect().height || 0,
-      focused: document.activeElement === input,
-    }
-  })
-  assert.ok(multiTurnLayout.inputTop >= 0, JSON.stringify(multiTurnLayout))
-  assert.ok(multiTurnLayout.inputBottom <= multiTurnLayout.viewportHeight + 1, JSON.stringify(multiTurnLayout))
-  assert.ok(multiTurnLayout.messageScrollHeight > multiTurnLayout.messageClientHeight)
-  assert.ok(multiTurnLayout.messageScrollTop > 0)
-  assert.ok(multiTurnLayout.spacerHeight > 0 && multiTurnLayout.spacerHeight <= 460)
-  assert.equal(multiTurnLayout.focused, true)
-  await local.locator('input').tap()
-  assert.equal(await local.locator('input').evaluate(node => document.activeElement === node), true)
-  await page.waitForTimeout(260)
-  await page.screenshot({ path: `${screenshotDir}/aiwt-v2-task6-mobile-dialogue.png`, fullPage: true })
-
-  await context.close()
-}
+// ENTFERNT (08.08.2026): runTask6Mobile. Geprüft wurde die Rückmeldung auf dem
+// Tastgerät (390 Punkt): dass das Agentenfeld mit seinem Eingabefeld vollständig im
+// Bild bleibt, dass das Gespräch am Absatz nach acht Antworten nicht aus dem Bild
+// wächst, dass die Nachrichtenliste dabei selbst rollt statt die Karte zu strecken,
+// der Abstandhalter unter dem Absatz höchstens 460 Punkt misst und das Eingabefeld
+// den Fokus behält.
+//
+// Der Weg dorthin führte über die zweistufige Kurzzeile und die Gesprächskarte
+// `.local-dialogue`; beide gibt es seit dem 05.08.2026 (e4392ce) nicht mehr -- der
+// Erzeuger renderLocalDialogue steht noch in src/workspace.js, ruft aber niemand mehr
+// auf. Auch `[data-close-agent]`, mit dem die Funktion das Agentenfeld schloss, kommt
+// im Quellcode nicht mehr vor. Gemessen am 07.08.2026: rot an der Kurzzeile.
+//
+// NICHT MEHR GEPRÜFT: dass ein langes Gespräch am Absatz auf schmalem Bild nicht
+// überläuft. Das Gespräch lebt heute in der Anmerkungsfläche (`.aura-dialogue`).
 
 async function runTask6InitiativeAndLifecycle(browser) {
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 } })
@@ -1904,518 +1138,43 @@ async function runTask6InitiativeAndLifecycle(browser) {
   await page.close()
 }
 
-const TASK7_SCENARIOS = ['base', 'shelf', 'finding', 'suggestion', 'local-dialogue', 'agent', 'evidence']
-
-async function parkPassageFindings(page) {
-  await page.evaluate(() => {
-    const doc = window.AIWT.state.docs.find(candidate => candidate.id === window.AIWT.state.active)
-    doc.findings.forEach(finding => {
-      if (finding.placement === 'passage') finding.status = 'parked'
-    })
-    doc.workspace.currentFindingId = null
-    doc.workspace.expandedFindingId = null
-    doc.workspace.suggestionFindingId = null
-    doc.workspace.localThreadFindingId = null
-    doc.workspace.evidenceFindingId = null
-    doc.workspace.agent.open = false
-    document.getElementById('title').dispatchEvent(new Event('input', { bubbles: true }))
-  })
-}
-
-async function captureTask7PassageState(page) {
-  await page.evaluate(() => {
-    const doc = window.AIWT.state.docs.find(candidate => candidate.id === window.AIWT.state.active)
-    const findingId = document.querySelector('#localAgentLayer .local-finding')?.dataset.findingId || null
-    const finding = doc.findings.find(candidate => candidate.id === findingId)
-    window.__task7PassageState = { findingId, status: finding?.status || null }
-  })
-}
-
-async function prepareTask7Scenario(page, name) {
-  if (name === 'base') await parkPassageFindings(page)
-
-  if (name === 'shelf') {
-    await expectVisible(page.locator('#localAgentLayer [data-finding-id]'))
-    await captureTask7PassageState(page)
-  } else if (name === 'local-dialogue') {
-    const fixture = await injectTask6PassageFinding(page, false)
-    const local = page.locator(`#localAgentLayer [data-finding-id="${fixture.findingId}"]`)
-    await local.locator('.local-finding-summary').click()
-    await local.locator('.local-finding-summary').click()
-    await expectVisible(local.locator('.local-dialogue'))
-  } else if (name === 'suggestion') {
-    const local = page.locator('#localAgentLayer [data-finding-id]').first()
-    await expectVisible(local)
-    await local.locator('.local-finding-summary').click()
-    await local.locator('.local-finding-summary').click()
-    await expectVisible(page.locator('#localAgentLayer .local-suggestion'))
-  } else if (name === 'agent') {
-    await expectVisible(page.locator('#localAgentLayer [data-finding-id]'))
-    await captureTask7PassageState(page)
-    await page.locator('#ondaAura').click()
-  } else if (name === 'evidence') {
-    const fixture = await injectTask6PassageFinding(page, true)
-    const local = page.locator(`#localAgentLayer [data-finding-id="${fixture.findingId}"]`)
-    await captureTask7PassageState(page)
-    await local.locator('.local-finding-summary').click()
-    await local.locator('.local-finding-summary').click()
-    await expectVisible(page.locator('#evidenceWindow'))
-  } else if (name === 'finding') {
-    await expectVisible(page.locator('#localAgentLayer [data-finding-id]'))
-  }
-  await page.waitForTimeout(280)
-}
-
-async function assertTask7IconControls(page, label) {
-  // ENTFERNT: '.block-insert-trigger' -- das schwebende Plus am Absatz gibt es seit
-  // dem 07.08.2026 nicht mehr (c0a8f21). Alle übrigen Symbolknöpfe werden weiter auf
-  // zugänglichen Namen und sichtbaren Fokus geprüft.
-  const selectors = [
-    '.icon-button',
-    '.surface-close',
-    '.agent-chat-send',
-    '.suggestion-action',
-    '#newBtn',
-    '#sortBtn',
-    '.tico',
-  ].join(',')
-  const controls = page.locator(selectors)
-  const report = []
-  for (let index = 0; index < await controls.count(); index += 1) {
-    const control = controls.nth(index)
-    const visible = await control.evaluate(node => {
-      const style = getComputedStyle(node)
-      const rect = node.getBoundingClientRect()
-      return style.display !== 'none'
-        && style.visibility !== 'hidden'
-        && Number.parseFloat(style.opacity) > 0.01
-        && rect.width > 0
-        && rect.height > 0
-    })
-    if (!visible) continue
-    const item = await control.evaluate((node, itemIndex) => {
-      const labelledBy = (node.getAttribute('aria-labelledby') || '')
-        .split(/\s+/)
-        .filter(Boolean)
-        .map(id => document.getElementById(id)?.textContent?.trim() || '')
-        .join(' ')
-        .trim()
-      const name = (
-        node.getAttribute('aria-label')
-        || labelledBy
-        || node.getAttribute('title')
-        || ''
-      ).trim()
-      return {
-        index: itemIndex,
-        className: node.className,
-        name,
-      }
-    }, index)
-    await control.focus()
-    await page.keyboard.press('Tab')
-    await page.keyboard.press('Shift+Tab')
-    const focus = await control.evaluate(node => {
-      const style = getComputedStyle(node)
-      return {
-        active: document.activeElement === node,
-        outlineStyle: style.outlineStyle,
-        outlineWidth: style.outlineWidth,
-      }
-    })
-    report.push({ ...item, ...focus })
-  }
-  const unnamed = report.filter(item => !item.name)
-  assert.deepEqual(unnamed, [], `${label}: Symbolbuttons ohne zugänglichen Namen`)
-  const invisibleFocus = report.filter(item => (
-    !item.active || item.outlineStyle === 'none' || Number.parseFloat(item.outlineWidth) <= 0
-  ))
-  assert.deepEqual(invisibleFocus, [], `${label}: Symbolbuttons ohne sichtbaren Fokus`)
-}
-
-async function assertVisibleTabSequence(page, startSelector, steps, label) {
-  await page.locator(startSelector).focus()
-  const sequence = []
-  for (let index = 0; index < steps; index += 1) {
-    await page.keyboard.press('Tab')
-    sequence.push(await page.evaluate(() => {
-      const node = document.activeElement
-      if (!(node instanceof HTMLElement)) return { visible: false, name: '' }
-      let current = node
-      let visible = true
-      while (current) {
-        const style = getComputedStyle(current)
-        if (
-          style.display === 'none'
-          || style.visibility === 'hidden'
-          || Number.parseFloat(style.opacity) <= .01
-        ) {
-          visible = false
-          break
-        }
-        current = current.parentElement
-      }
-      const rect = node.getBoundingClientRect()
-      visible = visible && rect.width > 0 && rect.height > 0
-      return {
-        visible,
-        name: node.getAttribute('aria-label') || node.getAttribute('title') || node.textContent?.trim() || node.id,
-        className: node.className,
-      }
-    }))
-  }
-  assert.equal(sequence.length, steps)
-  assert.deepEqual(sequence.filter(item => !item.visible), [], `${label}: unsichtbare Ziele in der Tabfolge`)
-  assert.deepEqual(
-    sequence.filter(item => /\bbb(?:-|\b)|bubble/.test(String(item.className))),
-    [],
-    `${label}: alte Formatierungsaktionen in der Tabfolge`,
-  )
-}
-
-async function assertTask7MobileHitboxes(page, name) {
-  // ENTFERNT: '#blockInsertTrigger' aus den Lagen 'base' und 'finding'. Der Einfügeknopf
-  // ist fort (c0a8f21, 07.08.2026); seine Trefferfläche kann niemand mehr messen.
-  // Alle übrigen Knöpfe der jeweiligen Lage werden weiter auf 44 Punkt geprüft.
-  const required = {
-    base: ['#sidebarBack', '#ondaAura'],
-    shelf: ['#sidebarBack', '#ondaAura', '#structureNav .block-preview'],
-    finding: ['#sidebarToggle', '#ondaAura'],
-    suggestion: ['#sidebarToggle', '#ondaAura', '.suggestion-action'],
-    'local-dialogue': ['#sidebarToggle', '#ondaAura', '.local-dialogue .agent-chat-send'],
-    agent: ['#sidebarToggle', '#ondaAura', '#agentWidget .surface-close', '#agentWidget .agent-chat-send'],
-    evidence: ['#sidebarToggle', '#ondaAura', '#evidenceWindow .surface-close'],
-  }[name] || []
-
-  for (const selector of required) {
-    const controls = page.locator(selector)
-    assert.ok(await controls.count(), `mobile ${name}: ${selector} fehlt`)
-    for (let index = 0; index < await controls.count(); index += 1) {
-      const box = await controls.nth(index).boundingBox()
-      assert.ok(box, `mobile ${name}: ${selector} hat keine Trefferfläche`)
-      assert.ok(box.width >= 43.5, `mobile ${name}: ${selector} ist nur ${box.width}px breit`)
-      assert.ok(box.height >= 43.5, `mobile ${name}: ${selector} ist nur ${box.height}px hoch`)
-    }
-  }
-
-  // ENTFERNT: die Kontrastmessung des Plus gegen seinen Untergrund (mindestens 3:1).
-  // Sie galt ausschließlich diesem einen Knopf, den es nicht mehr gibt. Ein Ersatz
-  // gehört dorthin, wo das Angebot künftig steht: in die Struktur-Ansicht.
-}
-
-async function assertTask7CommonLayout(page, name, mobile) {
-  const layout = await page.evaluate(() => {
-    const visibleRects = [...document.querySelectorAll(
-      '#structureNav, #agentWidget, #evidenceWindow, #localAgentLayer .local-finding, #localAgentLayer .local-suggestion',
-    )]
-      .filter(node => {
-        const style = getComputedStyle(node)
-        if (
-          node.closest('#ondaSidebar')
-          && document.getElementById('editorView')?.classList.contains('is-sidebar-collapsed')
-        ) return false
-        return !node.hidden && style.display !== 'none' && style.visibility !== 'hidden'
-      })
-      .map(node => ({
-        selector: node.id || node.className,
-        left: node.getBoundingClientRect().left,
-        right: node.getBoundingClientRect().right,
-      }))
-    return {
-      overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
-      viewportWidth: document.documentElement.clientWidth,
-      visibleRects,
-      // Struktur ist dauerhaft in der Seitenleiste; nur Agent/Belege sind konkurrierende Overlays
-      openMajorLayers: [...document.querySelectorAll('#agentWidget, #evidenceWindow')]
-        .filter(node => !node.hidden && getComputedStyle(node).display !== 'none').length,
-    }
-  })
-  assert.ok(layout.overflow <= 1, `${mobile ? 'mobile' : 'desktop'} ${name}: horizontales Overflow ${layout.overflow}px`)
-  layout.visibleRects.forEach(rect => {
-    assert.ok(rect.left >= -1, `${name}: ${rect.selector} ragt links heraus`)
-    assert.ok(rect.right <= layout.viewportWidth + 1, `${name}: ${rect.selector} ragt rechts heraus`)
-  })
-  assert.ok(layout.openMajorLayers <= 1, `${name}: konkurrierende Hauptflächen sind gleichzeitig offen`)
-
-  if (['agent', 'evidence'].includes(name)) {
-    const localPause = await page.evaluate(() => {
-      const doc = window.AIWT.state.docs.find(candidate => candidate.id === window.AIWT.state.active)
-      const layer = document.getElementById('localAgentLayer')
-      const local = layer.querySelector('.local-finding')
-      const before = window.__task7PassageState
-      const current = doc.findings.find(finding => finding.id === before?.findingId)
-      const style = local ? getComputedStyle(local) : null
-      return {
-        paused: layer.classList.contains('is-paused'),
-        ariaHidden: layer.getAttribute('aria-hidden'),
-        findingId: local?.dataset.findingId || null,
-        beforeFindingId: before?.findingId || null,
-        beforeStatus: before?.status || null,
-        currentStatus: current?.status || null,
-        localVisibility: style?.visibility || null,
-      }
-    })
-    assert.equal(localPause.paused, true, `${name}: lokaler Hinweis ist nicht visuell pausiert`)
-    assert.equal(localPause.ariaHidden, 'true')
-    assert.equal(localPause.findingId, localPause.beforeFindingId)
-    assert.equal(localPause.currentStatus, localPause.beforeStatus)
-    assert.equal(localPause.currentStatus, 'open')
-    assert.equal(localPause.localVisibility, 'hidden')
-  }
-
-  if (!mobile && ['agent', 'evidence'].includes(name)) {
-    const panelClearance = await page.evaluate(panelName => {
-      const panelId = panelName === 'agent' ? 'agentWidget' : 'evidenceWindow'
-      const openClass = panelName === 'agent' ? 'is-agent-open' : 'is-evidence-open'
-      const widget = document.getElementById(panelId).getBoundingClientRect()
-      const blocks = [...document.querySelectorAll('#editor .ProseMirror > [data-block-id]')]
-        .map(node => node.getBoundingClientRect())
-      const local = document.querySelector('#localAgentLayer .local-finding')
-      const localRect = local?.getBoundingClientRect() || null
-      const localVisible = Boolean(local && getComputedStyle(local).visibility !== 'hidden')
-      const localOverlap = localVisible && localRect
-        ? Math.max(0, Math.min(localRect.right, widget.right) - Math.max(localRect.left, widget.left))
-          * Math.max(0, Math.min(localRect.bottom, widget.bottom) - Math.max(localRect.top, widget.top))
-        : 0
-      return {
-        bodyClass: document.getElementById('editorView').classList.contains(openClass),
-        widgetLeft: widget.left,
-        textRight: Math.max(...blocks.map(rect => rect.right)),
-        localOverlap,
-      }
-    }, name)
-    assert.equal(panelClearance.bodyClass, true)
-    assert.ok(panelClearance.textRight <= panelClearance.widgetLeft - 8, `${name} schneidet Text um ${panelClearance.textRight - panelClearance.widgetLeft}px`)
-    assert.equal(panelClearance.localOverlap, 0)
-  }
-
-  if (name === 'shelf') {
-    // Struktur lebt dauerhaft in der Seitenleiste — als Karten, ohne modales Backdrop
-    const shelfLayout = await page.evaluate(() => ({
-      previews: document.querySelectorAll('#structureNav .block-preview').length,
-      backdropCount: document.querySelectorAll('.workspace-backdrop, [data-workspace-backdrop]').length,
-    }))
-    assert.ok(shelfLayout.previews > 0)
-    assert.equal(shelfLayout.backdropCount, 0)
-  }
-
-  if (mobile && ['finding', 'local-dialogue'].includes(name)) {
-    const localLayout = await page.evaluate(() => {
-      const note = document.querySelector('#localAgentLayer .local-finding')
-      const block = note && document.querySelector(`#editor .ProseMirror > [data-block-id="${note.dataset.blockId}"]`)
-      if (!note || !block) return null
-      const noteRect = note.getBoundingClientRect()
-      const blockRect = block.getBoundingClientRect()
-      return {
-        belowClass: note.classList.contains('is-below'),
-        noteTop: noteRect.top,
-        blockBottom: blockRect.bottom,
-      }
-    })
-    assert.ok(localLayout)
-    assert.equal(localLayout.belowClass, true)
-    assert.ok(localLayout.noteTop >= localLayout.blockBottom - 1)
-  }
-
-  if (mobile && ['agent', 'evidence'].includes(name)) {
-    const selector = name === 'agent' ? '#agentWidget' : '#evidenceWindow'
-    const widget = await page.locator(selector).evaluate(node => {
-      const rect = node.getBoundingClientRect()
-      const style = getComputedStyle(node)
-      return {
-        left: rect.left,
-        rightInset: innerWidth - rect.right,
-        height: rect.height,
-        maxHeight: Number.parseFloat(style.maxHeight),
-        viewportHeight: innerHeight,
-      }
-    })
-    assert.ok(widget.left >= 11.5, `${name}: linker Abstand ${widget.left}px`)
-    assert.ok(widget.rightInset >= 11.5, `${name}: rechter Abstand ${widget.rightInset}px`)
-    assert.ok(widget.maxHeight <= widget.viewportHeight * .7 + 1, `${name}: max-height ${widget.maxHeight}px`)
-    assert.ok(widget.height <= widget.viewportHeight * .7 + 1, `${name}: Höhe ${widget.height}px`)
-  }
-
-  const overlaps = await page.evaluate(() => {
-    const pairs = [
-      ['.agent-widget-title', '#agentWidget .surface-close'],
-      ['#agentWidget .agent-chat-input', '#agentWidget .agent-chat-send'],
-      ['.evidence-title', '#evidenceWindow .surface-close'],
-      ['.local-finding-short', '.local-finding-disclosure'],
-    ]
-    return pairs.flatMap(([leftSelector, rightSelector]) => {
-      const left = document.querySelector(leftSelector)
-      const right = document.querySelector(rightSelector)
-      if (!left || !right || left.offsetParent === null || right.offsetParent === null) return []
-      const a = left.getBoundingClientRect()
-      const b = right.getBoundingClientRect()
-      const width = Math.min(a.right, b.right) - Math.max(a.left, b.left)
-      const height = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top)
-      return width > 1 && height > 1 ? [`${leftSelector} / ${rightSelector}`] : []
-    })
-  })
-  assert.deepEqual(overlaps, [], `${name}: Text oder Controls überlappen`)
-  await assertTask7IconControls(page, `${mobile ? 'mobile' : 'desktop'} ${name}`)
-  if (mobile) await assertTask7MobileHitboxes(page, name)
-}
-
-async function runTask7Scenarios(browser, mobile) {
-  const viewport = mobile ? { width: 390, height: 844 } : { width: 1440, height: 1000 }
-  for (const name of TASK7_SCENARIOS) {
-    const context = await browser.newContext({
-      viewport,
-      hasTouch: mobile,
-      isMobile: mobile,
-    })
-    const page = await context.newPage()
-    const errors = []
-    page.on('console', message => {
-      if (message.type() === 'error') errors.push(message.text())
-    })
-    page.on('pageerror', error => errors.push(error.message))
-    await openExample(page)
-    if (mobile && !['base', 'shelf'].includes(name)) {
-      await collapseProjectSidebar(page, { touch: true })
-    }
-    await prepareTask7Scenario(page, name)
-    await assertTask7CommonLayout(page, name, mobile)
-    await page.mouse.move(0, 0)
-    await page.evaluate(() => {
-      if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
-      document.getElementById('structureNav').scrollTop = 0
-      document.getElementById('scroll').scrollTop = 0
-      document.getElementById('title').dispatchEvent(new Event('input', { bubbles: true }))
-    })
-    await page.waitForTimeout(80)
-    await page.screenshot({
-      path: `${screenshotDir}/aiwt-v2-task7-${mobile ? 'mobile' : 'desktop'}-${name}.png`,
-      fullPage: true,
-    })
-    assert.deepEqual(errors, [], `${mobile ? 'mobile' : 'desktop'} ${name}: Browserfehler`)
-    await context.close()
-  }
-}
-
-async function runTask7Intermediate(browser) {
-  for (const name of ['finding', 'agent', 'evidence']) {
-    const context = await browser.newContext({ viewport: { width: 1024, height: 768 } })
-    const page = await context.newPage()
-    const errors = []
-    page.on('console', message => {
-      if (message.type() === 'error') errors.push(message.text())
-    })
-    page.on('pageerror', error => errors.push(error.message))
-    await openExample(page)
-    await prepareTask7Scenario(page, name)
-    await assertTask7CommonLayout(page, name, false)
-    await page.screenshot({
-      path: `${screenshotDir}/aiwt-v2-task7-1024-${name}.png`,
-      fullPage: true,
-    })
-    assert.deepEqual(errors, [], `1024 ${name}: Browserfehler`)
-    await context.close()
-  }
-}
-
-function transitionSeconds(value) {
-  return String(value || '')
-    .split(',')
-    .map(part => part.trim())
-    .filter(Boolean)
-    .map(part => part.endsWith('ms') ? Number.parseFloat(part) / 1000 : Number.parseFloat(part))
-}
-
-async function assertReducedTransition(page, selector) {
-  const duration = await page.locator(selector).evaluate(node => getComputedStyle(node).transitionDuration)
-  const seconds = transitionSeconds(duration)
-  assert.ok(seconds.length > 0)
-  assert.ok(seconds.every(value => Number.isFinite(value) && value <= .01), `${selector}: ${duration}`)
-}
-
-async function runTask7KeyboardAndMotion(browser) {
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 } })
-  await page.emulateMedia({ reducedMotion: 'reduce' })
-  await openExample(page)
-
-  await page.locator('#editor .ProseMirror').evaluate(node => {
-    const text = node.querySelector('p')?.firstChild
-    if (!text || text.nodeType !== Node.TEXT_NODE || text.textContent.length < 2) return
-    const selection = getSelection()
-    const range = document.createRange()
-    range.setStart(text, 0)
-    range.setEnd(text, 2)
-    selection.removeAllRanges()
-    selection.addRange(range)
-    node.dispatchEvent(new Event('mouseup', { bubbles: true }))
-  })
-  assert.equal(await page.locator('.bubble, .bb-b, .bb-i, .bb-u, .bb-s, .bb-hl').count(), 0)
-
-  await collapseProjectSidebar(page)
-  await assertReducedTransition(page, '#ondaSidebar')
-  await ensureProjectSidebarOpen(page)
-  await collapseProjectSidebar(page)
-
-  const finding = page.locator('#localAgentLayer [data-finding-id]')
-  await finding.locator('.local-finding-summary').click()
-  await finding.locator('.local-finding-summary').click()
-  await assertReducedTransition(page, '.local-finding-summary')
-  await assertReducedTransition(page, '.local-suggestion')
-  await page.keyboard.press('Escape')
-  await page.keyboard.press('Escape')
-
-  await page.locator('#ondaAura').click()
-  await assertReducedTransition(page, '#agentWidget')
-  await page.keyboard.press('Escape')
-
-  const fixture = await injectTask6PassageFinding(page, true)
-  const evidenceFinding = page.locator(`#localAgentLayer [data-finding-id="${fixture.findingId}"]`)
-  await evidenceFinding.locator('.local-finding-summary').click()
-  await evidenceFinding.locator('.local-finding-summary').click()
-  await assertReducedTransition(page, '#evidenceWindow')
-  await page.keyboard.press('Escape')
-  assert.equal(await page.locator('#evidenceWindow').isHidden(), true)
-
-  await page.locator('#ondaAura').click()
-  await page.keyboard.press('Escape')
-  assert.equal(await page.locator('#agentWidget').isHidden(), true)
-
-  await ensureProjectSidebarOpen(page)
-  await page.locator('#pvCard').click()
-  await expectVisible(page.locator('#pvModal[role="dialog"]'))
-  await page.keyboard.press('Escape')
-  assert.equal(await page.locator('#pvModal').isHidden(), true)
-  assert.equal(await page.locator('#pvCard').evaluate(node => document.activeElement === node), true)
-
-  await page.locator('#editor .ProseMirror').focus()
-  await page.keyboard.press('Escape')
-  await page.waitForFunction(() => document.body.classList.contains('view-home'))
-  await page.waitForFunction(() => document.activeElement === document.getElementById('search'))
-  assert.equal(await page.locator('#search').evaluate(node => document.activeElement === node), true)
-  await assertTask7IconControls(page, 'home')
-
-  await page.locator('#crumb').click()
-  const projectMain = page.locator('#doclist button.doc-main').filter({ hasText: 'Beispiel: Calm Technology' })
-  assert.equal(await projectMain.count(), 1)
-  assert.equal(await page.locator('#doclist button.doc-main button, #doclist button.doc-main input').count(), 0)
-  await assertVisibleTabSequence(page, '#newBtn', 5, 'Projektübersicht')
-  const projectAction = projectMain.locator('xpath=following-sibling::*[contains(@class, "trash-acts")]//button').first()
-  await projectAction.focus()
-  assert.equal(await projectAction.locator('xpath=..').evaluate(node => Number.parseFloat(getComputedStyle(node).opacity) > .99), true)
-  await projectMain.focus()
-  await page.keyboard.press('Enter')
-  await page.waitForFunction(() => document.getElementById('homeTitle')?.textContent?.includes('Beispiel: Calm Technology'))
-
-  const textMain = page.locator('#doclist button.doc-main').first()
-  assert.equal(await textMain.count(), 1)
-  assert.equal(await page.locator('#doclist button.doc-main button, #doclist button.doc-main input').count(), 0)
-  const textAction = textMain.locator('xpath=following-sibling::*[contains(@class, "trash-acts")]//button').first()
-  await textAction.focus()
-  assert.equal(await textAction.locator('xpath=..').evaluate(node => Number.parseFloat(getComputedStyle(node).opacity) > .99), true)
-  await textMain.focus()
-  await page.keyboard.press('Space')
-  await page.waitForFunction(() => document.body.classList.contains('view-editor'))
-  await page.close()
-}
+// ENTFERNT (08.08.2026): der ganze Task-7-Block -- TASK7_SCENARIOS, parkPassageFindings,
+// captureTask7PassageState, prepareTask7Scenario, assertTask7IconControls,
+// assertVisibleTabSequence, assertTask7MobileHitboxes, assertTask7CommonLayout,
+// runTask7Scenarios, runTask7Intermediate, transitionSeconds, assertReducedTransition
+// und runTask7KeyboardAndMotion.
+//
+// Geprüft wurde eine Matrix aus sieben Lagen (leer, Struktur, Anmerkung, Vorschlag,
+// Gespräch, Agent, Belege) mal drei Breiten (390, 1024, 1440): kein waagerechtes
+// Überlaufen, keine zwei Hauptflächen gleichzeitig offen, der lokale Hinweis wird
+// pausiert statt gelöscht, während Agent oder Belege offen sind, 44-Punkt-Trefferflächen
+// auf dem Tastgerät, zugängliche Namen und sichtbarer Fokus an allen Symbolknöpfen,
+// eine Tabfolge ohne unsichtbare Ziele, sowie bei „Bewegung reduzieren" fast
+// abgeschaltete Übergänge. Dazu die Escape-Leiter (Vorschlag, Agent, Belege, Projekt-
+// fenster) und die Rückkehr in die Übersicht.
+//
+// Vier der sieben Lagen -- Anmerkung, Vorschlag, Gespräch, Belege -- wurden über die
+// zweistufige Kurzzeile hergestellt, die es seit dem 05.08.2026 (e4392ce) nicht mehr
+// gibt (siehe die Erklärung bei runTask5PassageFeedback). Ohne sie lassen sich die
+// Lagen nicht mehr aufbauen, und die Prüfungen auf `.local-finding`,
+// `.local-finding-short`, `.local-finding-disclosure` und `.suggestion-action` zielen
+// auf Klassen, die niemand mehr erzeugt. Gemessen am 07.08.2026: alle drei Läufe rot,
+// jeder an genau dieser Stelle.
+//
+// ACHTUNG für die Nachwelt: Commit 94c0c81 vom 08.08.2026 hat in
+// assertTask7MobileHitboxes noch `#sidebarReopen` auf `#sidebarToggle` nachgezogen --
+// an einer Funktion, die zu diesem Zeitpunkt schon drei Tage lang nie lief. Genau so
+// entsteht der Eindruck von Absicherung, wo keine ist. Die Verschärfung ist damit
+// gegenstandslos geworden; die übrigen drei aus demselben Commit (eine Klinke statt
+// zweier, Kursiv als einzige Auszeichnung, „Erkanntes" im Projektverständnis-Fenster)
+// liegen in Funktionen, die laufen, und sind unangetastet.
+//
+// WEITER GEPRÜFT: Breitenverhalten, Trefferflächen, Fokus, Kontrast und die
+// Escape-Leiter der heutigen Oberfläche in test/onda-ui-smoke.mjs (Abschnitte shell,
+// surfaces, accessibility) und test/etappe-d2-smoke.mjs über drei Browser-Motoren.
+// NICHT MEHR GEPRÜFT: dass der lokale Hinweis pausiert statt verschwindet, solange
+// Agentenfeld oder Belegfenster offen sind (`is-paused`, `aria-hidden`), und dass der
+// Text rechts nicht unter das Agentenfeld läuft.
 
 async function runSystem8BudgetGate(browser) {
   const page = await browser.newPage({ viewport: { width: 1100, height: 850 } })
@@ -2657,23 +1416,34 @@ try {
   } else if (process.env.AIWT_SYSTEM8_ONLY === '1') {
     await runSystem8BudgetGate(browser)
   } else {
-    if (process.env.AIWT_TASK7_ONLY !== '1') {
-      await runSeedMigrationRegression(browser)
-      await runDesktop(browser)
-      await runBlockIdentityRegressions(browser)
-      await runTask4InteractionRegressions(browser)
-      // Die frühere zweistufige Oberfläche aus Kurzzeile, Beobachtung/Relevanz/Folge
-      // und separater Vorschlagskarte existiert absichtlich nicht mehr. Ihre
-      // Interaktionspfade werden im semantischen Onda-Smoke über alle Formen geprüft.
-      await runSaveAlert(browser)
-      await runPrintLayout(browser)
-      await runHomeFocus(browser)
-      await runMobile(browser)
-      await runSystem8BudgetGate(browser)
-      await runFinalStateLearningAndCrossDocument(browser)
-    }
+    // Jede hier aufgeführte Prüfung läuft auch wirklich. Wer eine Funktion in dieser
+    // Datei anlegt, ohne sie hier einzutragen, baut eine Kulisse: die Datei sähe nach
+    // Absicherung aus, ein Teil davon liefe nie. Genau das war zwischen dem 05. und
+    // dem 08.08.2026 der Fall -- neun Funktionen mit rund tausend Zeilen standen
+    // stumm herum, und eine spätere Sitzung hat sogar noch eine davon "verschärft".
+    // Ihre Stellen sind oben als ENTFERNT-Kommentare vermerkt.
+    await runSeedMigrationRegression(browser)
+    await runDesktop(browser)
+    await runBlockIdentityRegressions(browser)
+    await runTask4InteractionRegressions(browser)
+    // Die frühere zweistufige Oberfläche aus Kurzzeile, Beobachtung/Relevanz/Folge
+    // und separater Vorschlagskarte existiert absichtlich nicht mehr. Ihre
+    // Interaktionspfade werden im semantischen Onda-Smoke über alle Formen geprüft.
+    await runSaveAlert(browser)
+    await runPrintLayout(browser)
+    await runHomeFocus(browser)
+    await runMobile(browser)
+    // Die Zurückhaltung des Agentenfelds und der Lebenslauf der Editor-Erweiterungen.
+    // Hing nie an der entfernten Kartenstruktur und lief am 07.08.2026 auf Anhieb
+    // grün; docs/ABNAHME-ETAPPE-A.md beruft sich darauf, also muss der Lauf sie auch
+    // ausführen.
+    await runTask6InitiativeAndLifecycle(browser)
+    await runSystem8BudgetGate(browser)
+    await runFinalStateLearningAndCrossDocument(browser)
     // Die alten Task-7-Screenshots beschrieben dieselbe entfernte Kartenstruktur.
     // Die neue Matrix lebt in onda-ui-smoke.mjs und annotation-lab.html.
+    // Der Schalter AIWT_TASK7_ONLY ist mit ihnen entfallen: er hätte zuletzt gar
+    // nichts mehr ausgeführt und trotzdem „V2 smoke passed" gemeldet.
   }
   console.log('V2 smoke passed')
 } finally {

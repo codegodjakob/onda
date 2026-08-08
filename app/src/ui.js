@@ -132,13 +132,6 @@ export function applySettings() {
   const root = document.documentElement
   const dark = s.theme === 'dark' || (s.theme === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches)
   root.dataset.theme = dark ? 'dark' : 'light'
-  // Die gewaehlte Fassung der Anmerkungszeile ueberlebt den Neustart. Sie liegt
-  // bewusst NICHT in den Einstellungen: das hier ist ein Vergleichslauf, keine
-  // Produkteinstellung. Sobald die Fassung entschieden ist, faellt beides weg.
-  try {
-    const bilanz = localStorage.getItem('ondaBilanzVariante')
-    if (bilanz) root.dataset.bilanzVariante = bilanz
-  } catch { /* kein Speicher, dann eben der Standard */ }
   // Das Designsystem kennt genau einen Akzent. Alte gespeicherte Varianten
   // werden nicht mehr in die Oberflaeche projiziert.
   root.removeAttribute('data-accent')
@@ -190,8 +183,13 @@ function buildGearPanel(panel) {
     { stay: true, kbd: s.showWords ? 'An' : 'Aus' })
   menuItem(panel, 'Fokus-Modus', () => toggleZen(), { kbd: '⌘.', active: document.body.classList.contains('zen') })
   menuDivider(panel)
-  menuItem(panel, 'Exportieren als Markdown …', () => ctx.exportMd(), { kbd: '⌘E' })
-  menuItem(panel, 'Drucken / PDF …', () => requestPrint(), { kbd: '⌘P' })
+  // Ohne die drei Punkte. In macOS-Menues heissen sie „das oeffnet noch ein Fenster",
+  // aber das ist Fachwissen, keine Auskunft: wer es nicht kennt, sieht abgeschnittenen
+  // Text. Jakob am 8.8.2026 zur Regel gegen abgeschnittenen Text: „die menüpunkte auch
+  // ohne punkte." Was der Punkt ankuendigen sollte, sagt ohnehin das Fenster selbst,
+  // sobald es aufgeht.
+  menuItem(panel, 'Exportieren als Markdown', () => ctx.exportMd(), { kbd: '⌘E' })
+  menuItem(panel, 'Drucken / PDF', () => requestPrint(), { kbd: '⌘P' })
 }
 
 function requestPrint() {
@@ -297,7 +295,7 @@ function slashItems() {
     { label: 'Checkliste', run: () => e.chain().focus().toggleTaskList().run() },
     { label: 'Zitat', run: () => e.chain().focus().toggleBlockquote().run() },
     { label: 'Trennlinie', run: () => e.chain().focus().setHorizontalRule().run() },
-    { label: 'Link …', run: () => openLinkDialog() },
+    { label: 'Link', run: () => openLinkDialog() },
   ]
 }
 let slashSel = 0
