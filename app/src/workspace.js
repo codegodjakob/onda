@@ -5363,6 +5363,10 @@ async function fuehreErweiterungslaufAus({ vonHand = false } = {}) {
   const project = dokumentProjekt(doc)
   const verstaendnis = project ? ensureProjectUnderstanding(project) : null
   const ondaWissen = ondaQuellen(doc, project)
+  // Dieselbe Rueckkopplung, derselbe Weg wie im Hinweiskanal (fuehreHinweislaufAus): was bei
+  // dieser Person bisher getragen hat, dokumentuebergreifend -- ein zweiter bezahlter Kanal
+  // fuer dasselbe freigegebene Entscheidungsbild, keine zweite Freigabe.
+  const rueckkopplung = synchronisiereRueckkopplungsvorschlag()
 
   // Kanal-Sperre und Signatur wandern ins Lauf-Tor (lauf-tor.mjs, Task 8): laeuftBereits/
   // sperreSetzen an versucheErweiterungslauf werden darum reine No-ops -- die Kanal-Sperre
@@ -5402,6 +5406,7 @@ async function fuehreErweiterungslaufAus({ vonHand = false } = {}) {
       blocks,
       doc,
       onda: ondaWissen,
+      rueckkopplung,
       runTask: (task, kontext, optionen) => torRunTask(task, ergaenzeOndaKontext(kontext, ondaWissen), optionen),
       setzeAgentStatus,
     }),
