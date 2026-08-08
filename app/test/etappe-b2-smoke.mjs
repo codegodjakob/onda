@@ -93,6 +93,13 @@ async function installAdapter(page, delay = 0) {
 
 async function createPlan(page) {
   await page.locator('#researchPlanOpen').click()
+  // Das Formular fokussiert das Fragefeld verzögert (requestAnimationFrame).
+  // Vor dem Ausfüllen muss dieser Autofokus gefeuert haben: fill() schickt den
+  // Text an das gerade fokussierte Element, und ein unter Last verspätet
+  // feuernder Frame zog den Fokus sonst mitten im Ausfüllen zurück aufs
+  // Fragefeld — der Text landete im falschen Feld, das Pflichtfeld blieb leer,
+  // und die Laufansicht erschien nie.
+  await page.waitForFunction(() => document.activeElement?.id === 'researchQuestion')
   await page.locator('#researchQuestion').fill('Wie belastbar ist die Wirkung nach einer Sitzung?')
   await page.locator('#researchClaim').fill('In dieser Stichprobe war die Fehlerrate nach einer Sitzung niedriger.')
   await page.locator('#researchBudget').fill('9')
