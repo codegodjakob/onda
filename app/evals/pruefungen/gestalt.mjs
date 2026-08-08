@@ -22,7 +22,14 @@
 
 import { chromium } from 'playwright'
 
-const baseUrl = process.env.AIWT_URL || 'http://127.0.0.1:4173/'
+import { starteAppServer } from '../../test/helpers/onda-server.mjs'
+
+// Die letzte Stelle mit dem festen Port 4173, gefunden beim Zusammenfuehren am
+// 8. August 2026. Sie hat dieselbe Falle wie die Rauchtests vorher: laeuft dort der
+// Server einer ANDEREN Arbeitskopie, misst diese Pruefung fremde Gestalt und meldet
+// eine Zahl, die mit dem eigenen Stand nichts zu tun hat. Genau das ist am 5. August
+// passiert — 4,11 statt 4,28, gegen ein fremdes Buendel.
+const { baseUrl } = await starteAppServer()
 const ergebnisse = []
 
 function pruefe(id, titel, bestanden, befund) {
