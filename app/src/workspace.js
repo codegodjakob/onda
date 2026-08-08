@@ -2234,8 +2234,11 @@ function renderKiErtrag(container) {
     container.append(createNode('p', 'ki-ertrag-basis',
       `Noch zu wenig entschieden für eine ehrliche Quote (${bilanz.gesamt.bewertbar} von ${MINDESTZAHL_ERTRAG} nötig).`))
   } else {
+    // bewertbar > 0 zusätzlich zu angeboten > 0: eine Art ohne eine einzige Entscheidung
+    // hat keine Quote — "0 von 0 angenommen" wäre Rauschen im Kleid einer Quote, genau was
+    // die Basis-Regel verbietet. Sie erscheint erst, wenn es etwas zu sagen gibt.
     bilanz.proArt
-      .filter(zeile => zeile.angeboten > 0)
+      .filter(zeile => zeile.angeboten > 0 && zeile.bewertbar > 0)
       .forEach(zeile => {
         const label = HINWEISART_LABEL[zeile.art] || zeile.art
         container.append(createNode('p', 'ki-ertrag-art', `${label}: ${zeile.angenommen} von ${zeile.bewertbar} angenommen`))

@@ -1256,6 +1256,25 @@ async function runSystem8BudgetGate(browser) {
       outcome: 'resolved',
       at: jetzt,
     }))
+
+    // Zwei zusätzliche, UNENTSCHIEDENE Funde einer anderen Art ('quelle') — angeboten > 0,
+    // aber bewertbar = 0 (keine Entscheidung dazu). Deckt den Basis-Filter in
+    // renderKiErtrag ab: eine Art ohne eine einzige Entscheidung darf nie als Quote
+    // erscheinen ("0 von 0 angenommen" wäre Rauschen im Kleid einer Quote).
+    doc.findings.push(
+      { id: 'ertrag-quelle-offen-0', kiKategorie: 'quelle', status: 'open' },
+      { id: 'ertrag-quelle-offen-1', kiKategorie: 'quelle', status: 'open' },
+    )
+
+    // Lauf-Journal (Issue #12/#13): zehn Übernahmen über zwei Einträge, damit
+    // kostenJeUebernahme die Mindestzahl (10) erreicht und die Kosten-Zeile im
+    // Ertrag-Abschnitt tatsächlich rendert. state.laufJournal ist dieselbe Referenz, die
+    // initLaufTor über getJournal liest (editor.js) — kein Test-Bridge-Umweg nötig.
+    window.AIWT.state.laufJournal.eintraege.push(
+      { kanal: 'hinweis', ergebnis: 'geliefert', kostenCents: 300, uebernommen: 6 },
+      { kanal: 'erweiterung', ergebnis: 'geliefert', kostenCents: 200, uebernommen: 4 },
+    )
+
     window.AIWT.persist()
     window.AIWT.__workspaceTestBridge.reinitialize()
   })
@@ -1271,6 +1290,27 @@ async function runSystem8BudgetGate(browser) {
   const ertragMitBasis = await dialog.locator('.ki-ertrag').textContent()
   assert.match(ertragMitBasis, /\d+ von \d+ angenommen/, 'Die Quote mit Basis fehlt trotz zwölf entschiedener Hinweise')
   assert.doesNotMatch(ertragMitBasis, /Noch zu wenig entschieden für eine ehrliche Quote/)
+
+  // Genau EINE Art-Zeile: 'fakt' hat zwölf Entscheidungen, 'quelle' hat zwei ANGEBOTENE,
+  // aber NULL entschiedene Funde (bewertbar = 0) — die dürfen keine eigene, bedeutungslose
+  // "0 von 0"-Zeile bekommen. Reproduziert exakt den Review-Befund: ohne den Filter auf
+  // bewertbar > 0 rendert renderKiErtrag hier "Beleg: 0 von 0 angenommen".
+  const artZeilen = dialog.locator('.ki-ertrag-art')
+  assert.equal(await artZeilen.count(), 1, 'Eine unentschiedene Art darf keine eigene Quote-Zeile zeigen')
+  assert.match(await artZeilen.first().textContent(), /^Fakt: 12 von 12 angenommen$/)
+  assert.doesNotMatch(ertragMitBasis, /0 von 0/, 'Eine Art ohne jede Entscheidung darf keine "0 von 0"-Quote zeigen')
+  assert.doesNotMatch(ertragMitBasis, /Beleg/, 'Die unentschiedene Art "Beleg" (quelle) darf nicht als Zeile erscheinen')
+
+  // Kosten je Übernahme: zehn Übernahmen im Lauf-Journal (300 + 200 Cent, 6 + 4
+  // Übernahmen) erreichen die Mindestzahl — jetzt MUSS die Kosten-Zeile mit dem korrekt
+  // berechneten Wert (500 Cent / 10 = 50 Cent = 0,50 $) erscheinen. Bisher deckte keine
+  // Assertion diesen Zweig ab.
+  const kostenZeile = dialog.locator('.ki-ertrag-kosten')
+  await expectVisible(kostenZeile)
+  const kostenText = await kostenZeile.textContent()
+  assert.match(kostenText, /Kosten je Übernahme/, 'Die Kosten-je-Übernahme-Zeile fehlt trotz ausreichender Basis')
+  assert.match(kostenText, /0,50/, 'Der berechnete Wert (500 Cent / 10 Übernahmen = 0,50 $) fehlt')
+  assert.match(kostenText, /\(10 Übernahmen\)/, 'Die Basis (10 Übernahmen) fehlt in der Kosten-Zeile')
 
   assert.match(await dialog.locator('.ki-budget-status--paused').textContent(), /Automatische Läufe sind pausiert/)
   await dialog.getByRole('button', { name: 'Genau einen automatischen Lauf freigeben', exact: true }).click()
