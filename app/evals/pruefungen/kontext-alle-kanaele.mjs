@@ -27,6 +27,7 @@ import { baueErweiterungKontext } from '../../src/erweiterung-kontext.mjs'
 import { baueChatKontext } from '../../src/chat-kontext.mjs'
 import { baueVerstaendnisKontext } from '../../src/verstaendnis-kontext.mjs'
 import { baueQuellenKontext } from '../../src/quellen-kontext.mjs'
+import { KANAELE as KANAL_REGISTER } from '../../src/kanaele.mjs'
 import { baueAnfrage } from '../../src/agent-tasks.mjs'
 import { updateLanguageProfile } from '../../src/language-profile.mjs'
 import { synchronizeClaimLedger } from '../../src/claim-ledger.mjs'
@@ -113,7 +114,14 @@ function vollesWissen() {
 //
 // Die Zahl steht hier ausgeschrieben und wird nicht gezählt: ein Kanal, der seinen
 // Dokumenttext still verliert, soll auffliegen, statt dass die Prüfung sich ihm anpasst.
-const KANAELE = Object.freeze({
+//
+// WELCHE Kanäle es gibt, steht dagegen nicht mehr hier, sondern im Kanal-Register
+// (app/src/kanaele.mjs). Diese Liste war eine von vier handgeführten Abschriften derselben
+// Aufzählung; die Prüfung holt sich jetzt den Namensaufruf von dort und trägt nur noch bei,
+// was sie selbst weiß: wie der Kontext eines Kanals gebaut wird und wie viele Blöcke seines
+// Anfragekörpers gecacht sein dürfen. Ein Kanal im Register ohne Eintrag hier ist ein
+// Fehler, kein Grund zum Überspringen — sonst wüchse ein ungeprüfter Kanal still nach.
+const PRUEFSTUECKE = Object.freeze({
   hinweise: {
     gecacht: 2,
     baue: onda => baueHinweisKontext({ verstaendnis: { task: 'Aufsatz' }, docText: 'Dokumenttext', onda }),
@@ -149,6 +157,25 @@ const KANAELE = Object.freeze({
     }),
   },
 })
+
+// Der Namensaufruf: das Register gibt die Reihenfolge und die Vollzähligkeit vor.
+const KANAELE = {}
+for (const kanal of KANAL_REGISTER) {
+  const pruefstueck = PRUEFSTUECKE[kanal.aufgabe]
+  if (!pruefstueck) {
+    fehler.push(
+      `Kanal ${kanal.aufgabe} steht im Kanal-Register, hat hier aber kein Prüfstück. `
+      + 'Trage ihn ein, sonst ist er der einzige Kanal, den diese Prüfung nie anfasst.',
+    )
+    continue
+  }
+  KANAELE[kanal.aufgabe] = pruefstueck
+}
+for (const aufgabe of Object.keys(PRUEFSTUECKE)) {
+  if (!KANAL_REGISTER.some(kanal => kanal.aufgabe === aufgabe)) {
+    fehler.push(`Prüfstück ${aufgabe} steht hier, aber in keiner Zeile des Kanal-Registers — es misst nichts mehr.`)
+  }
+}
 
 // --- Gegenprobe zuerst: trägt der Prüfstand überhaupt Wissen? -----------------
 // Ohne diese Probe wäre alles Folgende wertlos. Eine Marke, die schon in der leeren
@@ -236,9 +263,9 @@ for (const [name, kanal] of Object.entries(KANAELE)) {
 }
 
 // --- 01, baulich: kein Kanal ohne Anschluss ----------------------------------
-// Am Verhalten oben hängen die vier Kanäle, die es HEUTE gibt. Ein fünfter, der morgen
-// dazukommt, wäre dort unsichtbar. Deshalb zusätzlich die Bauweise: jedes Modul, das
-// einen Anfragekontext baut, muss die Wissensblöcke anhängen.
+// Am Verhalten oben hängen die Kanäle, die im Register stehen. Ein weiterer, der morgen
+// dazukommt, wäre dort unsichtbar, solange niemand das Register ergänzt. Deshalb zusätzlich
+// die Bauweise: jedes Modul, das einen Anfragekontext baut, muss die Wissensblöcke anhängen.
 const dateien = (await readdir(fileURLToPath(srcOrdner)))
   .filter(name => name.endsWith('-kontext.mjs') && name !== 'onda-kontext.mjs')
   .sort()
@@ -252,7 +279,8 @@ if (dateien.length < 4) {
 if (dateien.length !== Object.keys(KANAELE).length) {
   fehler.push(
     `Baulich: ${dateien.length} Kanal-Module liegen in src/, aber ${Object.keys(KANAELE).length} stehen in der `
-    + 'Verhaltensprüfung. Trage den neuen Kanal in KANAELE ein, sonst prüft ihn nur die Textsuche.',
+    + 'Verhaltensprüfung. Trage den neuen Kanal ins Register (app/src/kanaele.mjs) und als Prüfstück hier ein, '
+    + 'sonst prüft ihn nur die Textsuche.',
   )
 }
 for (const datei of dateien) {

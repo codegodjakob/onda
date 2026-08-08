@@ -12,6 +12,7 @@
 // zweite Buchungswahrheit: settings.usage ist der Monats-Budgetzaehler, das Journal ist die
 // Chronik einzelner Laeufe (Issue #12) und der Messpunkt fuer Issue #13 (Wertzahlen).
 import { runTask as gatewayRunTask } from './agent-gateway.mjs'
+import { TOR_NAMEN } from './kanaele.mjs'
 import {
   beginneLauf, leeresJournal, letzteBezahlteSignatur, merkeGezeigt, schliesseLauf, verbucheImEintrag,
 } from './lauf-journal.mjs'
@@ -24,9 +25,14 @@ import {
 // nachdem dieser Zweig fertig war, und hatte die Kopiervorlage ein FUENFTES Mal abgeschrieben
 // (eigene Sperr-Variable, eigene Signatur). Genau das benennt betrieb/LEITSTAND.md als den
 // Preis des liegengebliebenen Merges — und genau das soll das Tor beenden. Wer einen sechsten
-// Kanal baut, traegt ihn hier ein; der Rueckwachs-Waechter (lauf-tor-waechter.test.mjs)
+// Kanal baut, traegt ihn ins Register ein; der Rueckwachs-Waechter (lauf-tor-waechter.test.mjs)
 // laesst ihn ohnehin nicht am Tor vorbei.
-export const KANAELE = Object.freeze(['interview', 'chat', 'hinweis', 'erweiterung', 'quellen'])
+//
+// Die Namen selbst stehen seit dem Kanal-Register (kanaele.mjs) nicht mehr hier: dieselbe
+// Liste war viermal von Hand abgeschrieben, und eine der Abschriften hinkte bereits einen
+// Kanal hinterher. Was das Tor braucht, ist nur die Spalte der TOR-NAMEN — die zweite
+// Spalte (wie das Modell die Aufgabe nennt) geht ausschliesslich agent-tasks.mjs etwas an.
+export const KANAELE = TOR_NAMEN
 
 const STANDARD_HOOKS = { getJournal: null, persist: null, scheduleSave: null }
 let hooks = { ...STANDARD_HOOKS }

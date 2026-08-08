@@ -7,6 +7,7 @@
 import { SYSTEM_COACH } from './agent-prompts.mjs'
 import { STILMITTEL } from './stilmittel.mjs'
 import { NOTE_ANNOTATION_KINDS, TEXT_ANNOTATION_KINDS } from './annotation-contract.mjs'
+import { KANAELE } from './kanaele.mjs'
 
 export const API_URL = 'https://api.anthropic.com/v1/messages'
 export const API_VERSION = '2023-06-01'
@@ -206,30 +207,52 @@ export const VERSTAENDNIS_SCHEMA = Object.freeze({
   additionalProperties: false,
 })
 
-// Fix-Runde 2, Finding 5 (Important): auf claude-opus-5 ist adaptives Denken standardmaessig AN,
-// und max_tokens deckelt DENKEN + ANTWORT zusammen (kein separates Denk-Budget wie bei
-// extended thinking mit explizitem budget_tokens). Bei 16000 lief das regelmaessig auf
-// stop_reason:'max_tokens', bevor die eigentliche Antwort fertig war -- das Gateway verwirft
-// den Lauf dann komplett (agent-gateway.mjs), bezahlt und ohne Ergebnis. verstaendnis/hinweise
-// bekommen deshalb deutlich mehr Luft (32000); chat streamt ohnehin sichtbar fuer die Autorin
-// oder den Autor, ein hoher Wert ist dort unkritisch (64000). titel/zusammenfassung laufen auf
-// dem Routine-Modell mit knapper, klar begrenzter Ausgabe und bleiben unveraendert.
+// Welches Schema eine Kanal-Aufgabe erfüllen muss. Diese Zuordnung steht hier und nicht im
+// Kanal-Register (kanaele.mjs), weil die Schemata selbst hier stehen — direkt neben dem
+// Anfragebau, der sie benutzt. Zöge das Register sie zu sich herüber, müsste es aus dieser
+// Datei importieren, während diese Datei aus dem Register importiert: ein Ring, und davon
+// hat das Projekt bewusst keinen.
+//
+// Die Tabelle ist ein Namensaufruf: JEDE Aufgabe aus dem Register muss hier vorkommen.
+// Fehlt eine, bricht der Start sofort und laut ab, statt dass ein Kanal still ohne
+// Schemaprüfung ans Modell geht — die Antwort käme dann als freier Text zurück und würde
+// beim Verarbeiten irgendwo weiter hinten zerfallen.
+//
+// Das Gespräch steht bewusst mit null da: es streamt sichtbaren Fließtext und hat kein
+// JSON-Schema. Der Eintrag fehlt also nicht, er ist eine Aussage.
+const SCHEMA_JE_AUFGABE = Object.freeze({
+  verstaendnis: VERSTAENDNIS_SCHEMA,
+  hinweise: HINWEISE_SCHEMA,
+  erweiterungen: ERWEITERUNGEN_SCHEMA,
+  quellenthemen: QUELLENTHEMEN_SCHEMA,
+  chat: null,
+})
+
+// Baut die Kanal-Zeilen der Verteilertabelle aus dem Register: Modell, Token-Budget und
+// Streaming stehen dort, das Schema steht hier. Vorher war das eine handgeführte Kopie der
+// Kanalliste — die vierte im Projekt.
+function kanalZeilen() {
+  const zeilen = {}
+  for (const kanal of KANAELE) {
+    if (!(kanal.aufgabe in SCHEMA_JE_AUFGABE)) {
+      throw new Error(
+        `Kanal „${kanal.aufgabe}" steht im Register, aber in keiner Schema-Zeile von agent-tasks.mjs. `
+        + 'Trage ihn in SCHEMA_JE_AUFGABE ein — mit einem Schema, oder mit null, wenn er Fließtext liefert.',
+      )
+    }
+    const schema = SCHEMA_JE_AUFGABE[kanal.aufgabe]
+    const zeile = { modell: kanal.modell, maxTokens: kanal.maxTokens, stream: kanal.stream }
+    if (schema) zeile.schema = schema
+    zeilen[kanal.aufgabe] = Object.freeze(zeile)
+  }
+  return zeilen
+}
+
+// titel und zusammenfassung sind keine Kanäle: sie laufen nicht durchs Lauf-Tor, haben keine
+// Sperre und kein Journal, sondern sind kleine Hilfsaufgaben nebenher. Sie laufen deshalb auf
+// dem Routine-Modell mit knapper, klar begrenzter Ausgabe und stehen weiterhin von Hand hier.
 export const TASK_TABLE = Object.freeze({
-  verstaendnis: Object.freeze({ modell: 'stark', maxTokens: 32000, stream: false, schema: VERSTAENDNIS_SCHEMA }),
-  hinweise: Object.freeze({ modell: 'stark', maxTokens: 32000, stream: false, schema: HINWEISE_SCHEMA }),
-  // Erweiterungen laufen bewusst auf dem starken Modell: der ganze Wert dieses Kanals
-  // haengt daran, das Naheliegende zu erkennen und zu verwerfen. Genau das ist die
-  // Faehigkeit, die ein Routine-Modell nicht hat -- es liefert zuverlaessig den
-  // erwartbaren Gedanken, also den einen, den die Autorin oder der Autor schon hatte.
-  erweiterungen: Object.freeze({ modell: 'stark', maxTokens: 32000, stream: false, schema: ERWEITERUNGEN_SCHEMA }),
-  // Quellenthemen laufen aus demselben Grund auf dem starken Modell wie die
-  // Erweiterungen: der ganze Wert haengt daran, die naheliegende Ordnung zu
-  // verwerfen. Ein Routine-Modell liefert zuverlaessig „Web-Quellen" und
-  // „Sonstiges" — die Bibliotheksrubrik, die jeder Mensch selbst hinbekommt.
-  // Die Ausgabe ist klein (Namen, ein Satz, Kennungen), 8000 reichen weit; nur
-  // gedacht wird viel, und das teilt sich das Budget (siehe oben).
-  quellenthemen: Object.freeze({ modell: 'stark', maxTokens: 8000, stream: false, schema: QUELLENTHEMEN_SCHEMA }),
-  chat: Object.freeze({ modell: 'stark', maxTokens: 64000, stream: true }),
+  ...kanalZeilen(),
   titel: Object.freeze({ modell: 'routine', maxTokens: 256, stream: false }),
   zusammenfassung: Object.freeze({ modell: 'routine', maxTokens: 2000, stream: false }),
 })

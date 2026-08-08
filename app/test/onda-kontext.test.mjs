@@ -15,6 +15,8 @@ import { baueHinweisKontext } from '../src/hinweis-kontext.mjs'
 import { baueErweiterungKontext } from '../src/erweiterung-kontext.mjs'
 import { baueChatKontext } from '../src/chat-kontext.mjs'
 import { baueVerstaendnisKontext } from '../src/verstaendnis-kontext.mjs'
+import { baueQuellenKontext } from '../src/quellen-kontext.mjs'
+import { KANAELE as KANAL_REGISTER } from '../src/kanaele.mjs'
 import { baueAnfrage } from '../src/agent-tasks.mjs'
 import { synchronizeClaimLedger } from '../src/claim-ledger.mjs'
 import { updateLanguageProfile } from '../src/language-profile.mjs'
@@ -366,17 +368,23 @@ test('ein Gedaechtnis eines anderen Projekts erreicht dieses Projekt nicht', () 
 
 // --- Regel 1: alles volatil, nichts im Cache-Praefix --------------------------------------
 
-const KANAELE = [
-  {
-    name: 'hinweise',
+// Wie der Kontext je Kanal gebaut wird, und wie viele Bloecke seines Anfragekoerpers im
+// gecachten Praefix stehen duerfen. Die Zahl steht ausgeschrieben und wird nicht gezaehlt:
+// ein Kanal, der seinen Dokumenttext still verliert, soll auffliegen, statt dass die Pruefung
+// sich ihm anpasst. Der Quellen-Kanal fuehrt bewusst keinen Dokumenttext mit — wonach die
+// Quellen eines Projekts sich ordnen, ist eine Frage des Projekts und nicht des gerade
+// offenen Textes (quellen-kontext.mjs). Er hat deshalb genau einen gecachten Block.
+const PRUEFSTUECKE = {
+  hinweise: {
+    gecacht: 2,
     baue: onda => baueHinweisKontext({ verstaendnis: { task: 'Essay' }, docText: 'Dokumenttext', onda }),
   },
-  {
-    name: 'erweiterungen',
+  erweiterungen: {
+    gecacht: 2,
     baue: onda => baueErweiterungKontext({ verstaendnis: { task: 'Essay' }, docText: 'Dokumenttext', onda }),
   },
-  {
-    name: 'chat',
+  chat: {
+    gecacht: 2,
     baue: onda => baueChatKontext({
       verstaendnis: { task: 'Essay' },
       docText: 'Dokumenttext',
@@ -384,8 +392,8 @@ const KANAELE = [
       onda,
     }),
   },
-  {
-    name: 'verstaendnis',
+  verstaendnis: {
+    gecacht: 2,
     baue: onda => baueVerstaendnisKontext({
       modus: 'entwurf',
       verstaendnis: { task: 'Essay' },
@@ -393,7 +401,32 @@ const KANAELE = [
       onda,
     }),
   },
-]
+  quellenthemen: {
+    gecacht: 1,
+    baue: onda => baueQuellenKontext({
+      verstaendnis: { task: 'Essay' },
+      quellen: [{ id: 'q1', type: 'web', metadata: { title: { value: 'Eine Quelle' } } }],
+      onda,
+    }),
+  },
+}
+
+// WELCHE Kanaele es gibt, stand hier bis zum 8.8.2026 von Hand — und die Handkopie hinkte:
+// sie kannte vier, waehrend der Quellen-Kanal laengst der fuenfte war. Genau diese Sorte
+// stiller Rueckstand ist der Grund fuer das Kanal-Register (src/kanaele.mjs). Die Liste kommt
+// jetzt von dort, und ein Kanal ohne Pruefstueck faellt hier auf, statt uebersprungen zu werden.
+const KANAELE = KANAL_REGISTER.map(kanal => ({ name: kanal.aufgabe, ...(PRUEFSTUECKE[kanal.aufgabe] || {}) }))
+
+test('jeder Kanal aus dem Register wird hier auch geprueft', () => {
+  assert.deepEqual(
+    KANAELE.map(kanal => kanal.name).sort(),
+    Object.keys(PRUEFSTUECKE).sort(),
+    'Register und Pruefstuecke muessen dieselben Kanaele nennen',
+  )
+  for (const kanal of KANAELE) {
+    assert.equal(typeof kanal.baue, 'function', `Kanal ${kanal.name} hat kein Pruefstueck`)
+  }
+})
 
 for (const kanal of KANAELE) {
   test(`${kanal.name}: Textsorte, Aussagen-Speicher und Gedaechtnis erreichen den echten Request-Body`, () => {
@@ -419,9 +452,9 @@ for (const kanal of KANAELE) {
     const anfrage = baueAnfrage(kanal.name, kanal.baue(vollstaendigeQuellen()))
     const content = anfrage.body.messages[0].content
     const gecacht = content.filter(block => 'cache_control' in block)
-    assert.equal(gecacht.length, 2, 'nur verstaendnis und docText duerfen gecacht sein')
+    assert.equal(gecacht.length, kanal.gecacht, 'nur verstaendnis und (wo vorhanden) docText duerfen gecacht sein')
     assert.ok(gecacht[0].text.startsWith('<projektverstaendnis>'))
-    assert.ok(gecacht[1].text.startsWith('<dokument>'))
+    if (kanal.gecacht > 1) assert.ok(gecacht[1].text.startsWith('<dokument>'))
     for (const block of gecacht) {
       assert.doesNotMatch(
         block.text,
@@ -429,7 +462,7 @@ for (const kanal of KANAELE) {
         'ein Wissensblock im Cache-Praefix wuerde den Zwischenspeicher bei jeder Aenderung entwerten',
       )
     }
-    for (const block of content.slice(2)) {
+    for (const block of content.slice(kanal.gecacht)) {
       assert.ok(!('cache_control' in block), 'Volatiles duerfen kein cache_control tragen')
     }
   })
