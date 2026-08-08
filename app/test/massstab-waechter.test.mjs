@@ -161,3 +161,45 @@ test('Playwright nur im Kommentar macht keinen Browser-Beleg', () => {
   const quelltext = "// hier absichtlich KEIN 'playwright'\nimport test from 'node:test'\n"
   assert.equal(belegartAusVollzug('test/beispiel.test.mjs', quelltext), 'unit')
 })
+
+// Eine Prüfdatei kann je Eval urteilen (sie kündigt das mit „# je-eval:" an) oder als
+// Ganzes. Das ändert, WIE gemessen wird, ohne dass sich Katalog oder Bindung anfassen
+// lassen — genau die stille Maßstabsänderung, gegen die es den Wächter gibt. Fällt eine
+// Prüfung von „je-eval" auf „datei" zurück, weil jemand die Ankündigung entfernt hat,
+// muss das im Bericht stehen.
+test('verliert eine Prüfung ihre Einzelurteile, steht das im Bericht', () => {
+  const jeEval = massstabSchnappschuss(beispielKatalog(), BINDUNGEN, {
+    'test/example-seed.test.mjs': 'je-eval',
+  })
+  const alsGanzes = massstabSchnappschuss(beispielKatalog(), BINDUNGEN, {
+    'test/example-seed.test.mjs': 'datei',
+  })
+
+  assert.deepEqual(vergleicheMassstab(jeEval, jeEval), [])
+  assert.deepEqual(vergleicheMassstab(jeEval, alsGanzes), [{
+    bereich: 'urteilsweise',
+    art: 'entfernt',
+    id: 'test/example-seed.test.mjs',
+    vorher: 'je-eval',
+  }])
+  // Der Satz muss ohne Fachwissen verständlich sein: Was ist passiert, und was heisst das?
+  assert.match(
+    formatiereMassstabAenderungen(vergleicheMassstab(jeEval, alsGanzes))[0],
+    /nicht mehr je Eval/,
+  )
+  assert.match(
+    formatiereMassstabAenderungen(vergleicheMassstab(alsGanzes, jeEval))[0],
+    /urteilt jetzt je Eval/,
+  )
+})
+
+test('das Sammelurteil ist der Normalfall und macht keinen Lärm', () => {
+  // Nur die Ausnahme gehört in den Maßstab. Stünde jede Prüfung mit „datei“ darin,
+  // meldete der erste Lauf nach dem Umbau 78 Änderungen — und keine davon besagt etwas.
+  const ohne = massstabSchnappschuss(beispielKatalog(), BINDUNGEN)
+  const alleAlsGanzes = massstabSchnappschuss(beispielKatalog(), BINDUNGEN, {
+    'test/example-seed.test.mjs': 'datei',
+    'test/noch-eine.test.mjs': 'datei',
+  })
+  assert.deepEqual(vergleicheMassstab(ohne, alleAlsGanzes), [])
+})
