@@ -138,3 +138,39 @@ export function resolveAnnotationPresentation(finding) {
   const normalized = normalizeAnnotationFinding(finding)
   return kindInfo(normalized.anmerkungsart)
 }
+
+// --- Die Geste im Text -------------------------------------------------------
+// Bis zum 8.8.2026 trug der Absatz nur einen Punkt im Rand — an den WOERTERN stand
+// nichts. Jakob dazu: „ich erkenn dann gar nicht direkt, um was es geht. Ich muss
+// dann lesen, ich muss erst mal das richtig zuordnen zum Text."
+//
+// Die Antwort steht seit jeher im Vertrag, sie wurde nur nie benutzt: jede Art hat
+// einen scope. Aus ihm folgt die GESTALT der Markierung, und die sagt den Umfang,
+// bevor ein Wort gelesen ist:
+//   wort    — geschlossene Kontur um die Wendung
+//   satz    — ein Strich darunter, der Satzlaenge folgend
+//   absatz  — eine Klammer am linken Rand, ueber die volle Hoehe
+//   keine   — es gibt keine einzelne Stelle: 'Text' meint den ganzen Text, 'Titel'
+//             die Ueberschrift, 'Notiz'/'Notizen' stehen gar nicht im Fliesstext.
+//             Fuer sie bleibt es beim Punkt im Rand; eine erfundene Strecke waere
+//             eine Behauptung ueber den Text.
+//
+// Farbe kommt in keiner der Gestalten vor (Jakob, 8.8.2026: „keine farben bitte").
+// Sie unterscheiden sich durch die Form, und das ist Absicht: haelt die Form allein,
+// braucht es Farbe nie — und bleibt fuer spaeter frei.
+const GESTE_JE_REICHWEITE = Object.freeze({
+  Wort: 'wort',
+  Satz: 'satz',
+  Absatz: 'absatz',
+  Abschnitt: 'absatz',
+})
+
+export function markierungsGestalt(kind) {
+  return GESTE_JE_REICHWEITE[ANNOTATION_DEFINITIONS[kind]?.scope] || 'keine'
+}
+
+// Bequemer Weg von einem rohen Finding aus — dieselbe Toleranz wie ueberall sonst:
+// aeltere Eintraege tragen ihre Art als kiKategorie oder kategorie.
+export function gestaltFuerFinding(finding) {
+  return markierungsGestalt(normalizeAnnotationFinding(finding).anmerkungsart)
+}

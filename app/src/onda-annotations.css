@@ -10,15 +10,15 @@
 .aura-mark--korrektur { border: 1px solid var(--border-strong); padding: 0 var(--space-1); }
 .aura-mark--stil { background: var(--bg-sunken); padding: 1px var(--space-1); }
 .aura-mark--struktur { background: var(--bg-surface); box-shadow: var(--shadow-md); padding: 1px 5px; }
-.aura-mark--inhalt, .aura-mark--notiz { background: var(--accent-tint); padding: 1px var(--space-1); }
-.aura-mark:hover, .aura-mark--active { background: var(--accent-tint); border-color: var(--accent); }
+.aura-mark--inhalt, .aura-mark--notiz { background: var(--bg-sunken); padding: 1px var(--space-1); }
+.aura-mark:hover, .aura-mark--active { background: var(--bg-sunken); border-color: var(--text-primary); }
 .aura-mark__n {
   display: inline-flex; align-items: center; justify-content: center;
   min-width: 20px; height: 20px; padding: 0 var(--space-1); margin-left: var(--space-1);
   border-radius: var(--radius-full); background: var(--bg-sunken); color: var(--text-tertiary);
   font: var(--type-caption); font-variant-numeric: tabular-nums; vertical-align: 2px;
 }
-.aura-mark--active .aura-mark__n { background: var(--accent); color: var(--on-accent); }
+.aura-mark--active .aura-mark__n { background: var(--text-primary); color: var(--bg-app); }
 
 /* Hier stand bis zum 7. August 2026 die Anmerkungsleiste: eine Zeile ueber dem Text mit
    Bilanz, Modus, Ruhig, vor/zurueck, Rueckgaengig und Sammeluebernahme. Sie ist ersatzlos
@@ -27,6 +27,14 @@
 
 #localAgentLayer > .onda-annotation { position: absolute; z-index: 2; width: 340px; pointer-events: auto; }
 #localAgentLayer > .onda-annotation.is-below { width: auto; }
+
+/* Die schmale Spur (264px, siehe positionLocalSurface). Sie traegt dieselbe Notiz mit
+   weniger Platz, also ruecken die Gesten untereinander statt nebeneinander — bei drei
+   Knoepfen in einer Reihe braeche sonst jeder einzeln um und die Karte wuerde hoeher
+   als der Absatz, auf den sie zeigt. */
+#localAgentLayer > .onda-annotation.ist-schmal { padding: var(--space-4); }
+#localAgentLayer > .onda-annotation.ist-schmal .aura-note__acts { flex-direction: column; align-items: stretch; }
+#localAgentLayer > .onda-annotation.ist-schmal .aura-action { justify-content: flex-start; }
 
 .onda-annotation {
   display: flex; flex-direction: column; gap: var(--space-3); width: 100%;
@@ -60,8 +68,11 @@
   transition: var(--transition-colors), transform var(--dur-fast) var(--ease-out);
 }
 .aura-action:active { transform: scale(.98); }
-.aura-action--primary { background: var(--accent); color: var(--on-accent); }
-.aura-action--primary:hover { background: var(--accent-hover); }
+/* Die tragende Geste ist Tinte, nicht Akzent (Jakob, 8.8.2026: „keine farben
+   bitte"). Beide Marken kippen im Dunkelmodus von selbst mit — deshalb keine
+   festen Werte, sondern dieselben Marken, die auch Text und Papier tragen. */
+.aura-action--primary { background: var(--text-primary); color: var(--bg-app); }
+.aura-action--primary:hover { background: var(--text-secondary); }
 .aura-action--ghost { background: transparent; color: var(--text-secondary); }
 .aura-action--ghost:hover { background: var(--bg-hover); color: var(--text-primary); }
 .aura-note__details { color: var(--text-link); font: var(--type-caption); }
@@ -78,7 +89,7 @@
   background: var(--bg-sunken); color: var(--text-primary); font: var(--type-body); line-height: var(--leading-relaxed);
 }
 .aura-insertion__flow { display: grid; grid-template-columns: 2px minmax(0,1fr); gap: var(--space-3); align-items: stretch; }
-.aura-insertion__caret { border-radius: var(--radius-full); background: var(--accent); }
+.aura-insertion__caret { border-radius: var(--radius-full); background: var(--text-primary); }
 .aura-insertion__text { margin: 0; color: var(--text-primary); font: var(--type-body); line-height: var(--leading-relaxed); }
 .aura-slot { border-style: dashed; border-color: var(--border-strong); box-shadow: none; }
 .aura-region { background: var(--bg-sunken); }
@@ -93,7 +104,7 @@
 .aura-note__cmptext { color: var(--text-primary); font: var(--type-body); }
 .aura-dialogue__bubble, .aura-dialogue__reply { max-width: 92%; margin: 0; padding: var(--space-3) var(--space-4); border-radius: var(--radius-panel); font: var(--type-body); }
 .aura-dialogue__bubble { background: var(--bg-sunken); color: var(--text-primary); }
-.aura-dialogue__reply { align-self: flex-end; background: var(--accent-tint); }
+.aura-dialogue__reply { align-self: flex-end; background: var(--bg-sunken); border: 1px solid var(--border-default); }
 .aura-dialogue__composer { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-1); border: 1px solid var(--border-default); border-radius: var(--radius-pill); background: var(--bg-surface); }
 .aura-dialogue__input { min-width: 0; flex: 1; height: 42px; padding: 0 var(--space-3); border: 0; outline: 0; background: transparent; color: var(--text-primary); font: var(--type-body); }
 .aura-dialogue__composer .aura-action { min-height: 40px; }
@@ -105,7 +116,7 @@
 .aura-rejection__intro { margin: 0; font: var(--type-body); color: var(--text-secondary); }
 .aura-rejection__choices { display: grid; gap: var(--space-2); }
 .aura-rejection__choice { display: grid; gap: var(--space-1); min-height: 60px; padding: var(--space-3) var(--space-4); border: 1px solid var(--border-default); border-radius: var(--radius-panel); background: var(--bg-surface); color: var(--text-primary); text-align: left; cursor: pointer; }
-.aura-rejection__choice:hover { border-color: var(--accent); }
+.aura-rejection__choice:hover { border-color: var(--text-primary); }
 .aura-rejection__choice strong { font: var(--type-label); }
 .aura-rejection__choice span { color: var(--text-secondary); font: var(--type-caption); }
 

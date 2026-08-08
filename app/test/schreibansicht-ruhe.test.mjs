@@ -9,6 +9,8 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 
+import { markierungsGestalt } from '../src/annotation-contract.mjs'
+
 const indexUrl = new URL('../index.html', import.meta.url)
 const styleUrl = new URL('../src/style.css', import.meta.url)
 const shellUrl = new URL('../src/onda-shell.css', import.meta.url)
@@ -38,16 +40,31 @@ test('Ein Absatz wird nur angedeutet, wenn die Anmerkung ihm als Ganzem gilt', a
   // „blocks sollen nur angedeutet werden […] wenn ich feedback zu einem ganzen block
   // paragraphen bekomme."
   assert.match(css, /\.hat-absatzweite-anmerkung/, 'Die Andeutung für absatzweite Anmerkungen fehlt')
-  assert.match(workspace, /ABSATZWEITE_REICHWEITEN = new Set\(\['Absatz', 'Abschnitt'\]\)/)
   assert.match(workspace, /function istAbsatzweit\(/)
 
-  // Angedeutet heißt angedeutet: aus dem Punkt im Rand wird eine Linie — dieselbe
-  // Stelle, dieselbe Farbe, andere Gestalt. Keine Fläche auf dem Absatz.
+  // Welche Reichweiten den ganzen Absatz meinen, stand bis zum 8.8.2026 als eigene
+  // Menge in workspace.js. Sie ist entfallen: die Zuordnung Reichweite → Geste steht
+  // jetzt an EINER Stelle im Vertrag (markierungsGestalt), wo auch die Reichweite
+  // selbst herkommt. Geprüft wird deshalb dort — und am Verhalten, nicht am Wortlaut
+  // einer Konstante.
+  assert.equal(markierungsGestalt('absatzstil'), 'absatz', 'Ein Absatz-Hinweis deutet den Absatz nicht mehr an')
+  assert.equal(markierungsGestalt('ton'), 'absatz', 'Ein Abschnitts-Hinweis deutet den Absatz nicht mehr an')
+  assert.equal(markierungsGestalt('wortwahl'), 'wort', 'Ein Wort-Hinweis deutet fälschlich den ganzen Absatz an')
+  assert.equal(markierungsGestalt('satzstil'), 'satz', 'Ein Satz-Hinweis deutet fälschlich den ganzen Absatz an')
+
+  // Angedeutet heißt angedeutet. Seit dem 8.8.2026 ist die Andeutung eine KLAMMER
+  // statt einer Linie: die beiden Haken sagen „von hier bis hier". Was sich dabei
+  // nicht ändern darf, ist der Grund, aus dem diese Prüfung existiert — sie steht im
+  // Rand und malt keine Fläche auf den Absatz.
   const andeutung = css.match(/\.has-local-finding\.hat-absatzweite-anmerkung::before \{([^}]*)\}/)?.[1] || ''
   assert.ok(andeutung.trim(), 'Die Randmarke für absatzweite Anmerkungen fehlt')
-  assert.match(andeutung, /width:\s*2px/, 'Die Andeutung ist keine Linie')
-  assert.match(andeutung, /height:\s*auto/, 'Die Linie läuft nicht über den ganzen Absatz')
-  assert.doesNotMatch(andeutung, /background:/, 'Die Andeutung malt eine Fläche')
+  assert.match(andeutung, /height:\s*auto/, 'Die Andeutung läuft nicht über den ganzen Absatz')
+  assert.match(andeutung, /left:\s*-\d+px/, 'Die Andeutung steht nicht im Rand, sondern im Text')
+  assert.match(andeutung, /border-right:\s*0/, 'Die Andeutung ist keine Klammer, sondern ein Kasten')
+  // „Keine Fläche" heißt: gar keine, oder ausdrücklich durchsichtig. Ein gefüllter
+  // Wert an dieser Stelle wäre genau die Platte, gegen die diese Prüfung geschrieben wurde.
+  const flaeche = andeutung.match(/background:\s*([^;]+);/)?.[1]?.trim()
+  assert.ok(flaeche === undefined || flaeche === 'transparent', `Die Andeutung malt eine Fläche: ${flaeche}`)
 
   // Und sie darf NICHT als Schatten am Absatz selbst versucht werden: .has-local-finding
   // räumt direkt darüber `box-shadow: none` ab und gewinnt bei gleicher Spezifität,

@@ -117,7 +117,7 @@ import {
   createSuppressionStore,
 } from './annotation-controller.mjs'
 import { renderAnnotation } from './annotation-components.mjs'
-import { ANNOTATION_DEFINITIONS, resolveAnnotationPresentation } from './annotation-contract.mjs'
+import { gestaltFuerFinding, resolveAnnotationPresentation } from './annotation-contract.mjs'
 import {
   invertAnnotationOperation,
   planAnnotationOperation,
@@ -166,6 +166,8 @@ let localDecoratedFindingId = null
 let localDecoratedBlockId = null
 let localDecoratedSpacing = 0
 let localDecoratedAbsatzweit = false
+let localDecoratedGestalt = 'keine'
+let localDecoratedZiel = ''
 let localFeedbackError = null
 let localPositionFrame = null
 let localSummaryFocusRequest = null
@@ -296,6 +298,23 @@ function localFindingPlugin() {
               ? 'has-local-finding hat-absatzweite-anmerkung'
               : 'has-local-finding'
             local.push(Decoration.node(offset, offset + node.nodeSize, { class: klassen }))
+
+            // Die Geste an den WOERTERN. Bis zum 8.8.2026 gab es sie nicht: der Absatz
+            // trug einen Punkt im Rand, die Stelle selbst blieb unberuehrt — man musste
+            // die Anmerkung lesen, um zu wissen, worauf sie zeigt.
+            //
+            // Fail-closed: Findet sich der Wortlaut nicht mehr (der Text wurde seit dem
+            // Lauf geaendert), entsteht KEINE Markierung. Lieber kein Strich als einer
+            // unter den falschen Woertern — der Punkt im Rand sagt weiterhin, dass hier
+            // etwas offen ist, und die Anmerkung selbst nennt den Wortlaut.
+            if (findingState.gestalt === 'wort' || findingState.gestalt === 'satz') {
+              const stelle = stelleImBaustein(node, offset, findingState.ziel)
+              if (stelle) {
+                local.push(Decoration.inline(stelle.von, stelle.bis, {
+                  class: `onda-stelle onda-stelle--${findingState.gestalt}`,
+                }))
+              }
+            }
             if (findingState.spacing > 0) {
               local.push(Decoration.widget(offset + node.nodeSize, () => {
                 const spacer = document.createElement('div')
@@ -321,36 +340,82 @@ function localFindingPlugin() {
   })
 }
 
-// Welche Anmerkungsarten gelten dem ganzen Absatz? Die Antwort steht schon im Vertrag:
-// ANNOTATION_DEFINITIONS gibt jeder Art einen scope — Wort, Satz, Absatz, Abschnitt.
-// Nur die letzten beiden meinen den Absatz als Ganzes und duerfen ihn andeuten.
-const ABSATZWEITE_REICHWEITEN = new Set(['Absatz', 'Abschnitt'])
-
+// Welche Gestalt traegt die Markierung im Text? Die Antwort steht seit jeher im
+// Vertrag (annotation-contract.mjs, markierungsGestalt): jede Art hat einen scope,
+// und aus ihm folgt die Geste — Kontur ums Wort, Strich unter den Satz, Klammer am
+// Absatz. 'keine' heisst: es gibt keine einzelne Stelle (der ganze Text, der Titel,
+// eine Notiz), dann bleibt es beim Punkt im Rand.
 function istAbsatzweit(finding) {
-  if (!finding) return false
-  const art = ANNOTATION_DEFINITIONS[finding.anmerkungsart]
-  return ABSATZWEITE_REICHWEITEN.has(art?.scope)
+  return gestaltFuerFinding(finding) === 'absatz'
 }
 
-// Die Reichweite gehoert zur gerade gezeigten Anmerkung, nicht zum Aufruf. Sie hier zu
-// merken statt sie durch vier Aufrufstellen zu reichen, haelt die Aufrufe schlank —
-// und keine von ihnen kennt die Anmerkung ueberhaupt.
+// Die Gestalt und die Stelle gehoeren zur gerade gezeigten Anmerkung, nicht zum
+// Aufruf. Sie hier zu merken statt sie durch vier Aufrufstellen zu reichen, haelt die
+// Aufrufe schlank — und keine von ihnen kennt die Anmerkung ueberhaupt.
 let aktuelleAnmerkungIstAbsatzweit = false
+let aktuelleAnmerkungGestalt = 'keine'
+let aktuelleAnmerkungZiel = ''
+
+// Wo genau im Baustein steht die Stelle? Gesucht wird im ZUSAMMENGESETZTEN Text und
+// dann zurueckgerechnet — nicht mit textContent.indexOf auf dem Absatz.
+//
+// Der Unterschied ist kein Feinschliff: textContent klebt den Text ueber
+// Knotengrenzen hinweg zusammen, waehrend jede dieser Grenzen im Dokument eine
+// Position kostet. Bei einem Zitat oder einer Liste liegt die Stelle deshalb um
+// jede durchquerte Grenze zu weit links — die Markierung saesse auf den falschen
+// Zeichen, und zwar nur dort, wo der Text verschachtelt ist.
+function stelleImBaustein(node, bausteinStart, ziel) {
+  const gesucht = String(ziel || '')
+  if (!gesucht) return null
+
+  const stuecke = []
+  let volltext = ''
+  node.descendants((kind, pos) => {
+    if (!kind.isText) return true
+    // pos ist relativ zum Inhalt des Bausteins; +1 ueberspringt seine oeffnende Marke.
+    stuecke.push({ ab: volltext.length, position: bausteinStart + 1 + pos, laenge: kind.text.length })
+    volltext += kind.text
+    return false
+  })
+
+  const treffer = volltext.indexOf(gesucht)
+  if (treffer < 0) return null
+
+  const position = zeichen => {
+    for (const stueck of stuecke) {
+      if (zeichen >= stueck.ab && zeichen <= stueck.ab + stueck.laenge) {
+        return stueck.position + (zeichen - stueck.ab)
+      }
+    }
+    return null
+  }
+  const von = position(treffer)
+  const bis = position(treffer + gesucht.length)
+  return von != null && bis != null && bis > von ? { von, bis } : null
+}
 
 function setLocalFindingDecoration(blockId, spacing = 0, force = false) {
   const absatzweit = Boolean(blockId) && aktuelleAnmerkungIstAbsatzweit
+  const gestalt = blockId ? aktuelleAnmerkungGestalt : 'keine'
+  const ziel = blockId ? aktuelleAnmerkungZiel : ''
   const nextSpacing = blockId ? Math.max(0, Math.ceil(spacing)) : 0
   if (!force
     && localDecoratedBlockId === blockId
     && localDecoratedSpacing === nextSpacing
-    && localDecoratedAbsatzweit === absatzweit) return false
+    && localDecoratedAbsatzweit === absatzweit
+    && localDecoratedGestalt === gestalt
+    && localDecoratedZiel === ziel) return false
   localDecoratedBlockId = blockId
   localDecoratedSpacing = nextSpacing
   localDecoratedAbsatzweit = absatzweit
+  localDecoratedGestalt = gestalt
+  localDecoratedZiel = ziel
   ctx.editor.view.dispatch(ctx.editor.state.tr.setMeta(localFindingKey, {
     blockId,
     spacing: nextSpacing,
     absatzweit,
+    gestalt,
+    ziel,
   }))
   return true
 }
@@ -3865,14 +3930,35 @@ function positionLocalSurface(blockId) {
   const scrollRect = ui.scroll?.getBoundingClientRect()
   if (layerRect.width <= 0 || blockRect.width <= 0) return
   const gutter = 16
-  const sideWidth = 340
   const availableRight = layerRect.right - blockRect.right
-  const below = window.matchMedia('(max-width: 1040px)').matches || availableRight < sideWidth + 48
+
+  // WIE BREIT DIE NOTIZ DANEBEN STEHT — und wann sie es gar nicht mehr tut.
+  //
+  // Bis zum 8.8.2026 gab es genau eine Breite: 340px, und darunter fiel die Notiz
+  // unter den Absatz und wurde auf die volle Textbreite aufgeblasen. Gemessen kippte
+  // sie bei 1356px Fensterbreite — bei 1280px standen rechts 312px frei, es fehlten
+  // 76 Pixel, und der freie Platz blieb ungenutzt, waehrend die Karte die Lesespalte
+  // zerschnitt. Jakob dazu: „das feedback am text soll neben dran sein und nicht
+  // unter der stelle so wie jetzt", und zum Fenster: „dass da irgendwie dann nichts
+  // umspringt oder verdeckt ist".
+  //
+  // Jetzt gibt es eine ZWEITE Breite dazwischen. Die schmale Spur traegt eine Notiz
+  // noch lesbar und greift ab rund 1230px statt erst ab 1356px — der Sprung wandert
+  // damit aus dem Bereich heraus, in dem ein Fenster ueblicherweise steht. Erst wenn
+  // auch sie nicht mehr passt, geht die Notiz unter den Absatz.
+  //
+  // Was dabei NICHT mehr passiert: die Markierung im Text bewegt sich nie. Sie sagt,
+  // welche Stelle gemeint ist, und sie ist von der Breite unabhaengig. Wandern darf
+  // nur die Erklaerung.
+  const spuren = [340, 264]
+  const spur = spuren.find(breite => availableRight >= breite + 48) || null
+  const below = window.matchMedia('(max-width: 1040px)').matches || spur === null
   const localWidth = below
     ? Math.max(0, Math.min(blockRect.width, layerRect.width - gutter * 2))
-    : Math.min(sideWidth, availableRight - 42)
+    : Math.min(spur, availableRight - 42)
 
   local.classList.toggle('is-below', below)
+  local.classList.toggle('ist-schmal', !below && spur === spuren[1])
   local.style.width = `${localWidth}px`
   local.style.left = `${below ? Math.max(gutter, blockRect.left - layerRect.left) : blockRect.right - layerRect.left + 34}px`
   local.style.top = `${below ? blockRect.bottom - layerRect.top + 14 : blockRect.top - layerRect.top}px`
@@ -3913,8 +3999,11 @@ function renderLocalFinding() {
 
   if (localFeedbackError && localFeedbackError.findingId !== finding?.id) localFeedbackError = null
 
-  // Vor jeder Entscheidung ueber die Verzierung: gilt die Anmerkung dem ganzen Absatz?
-  aktuelleAnmerkungIstAbsatzweit = istAbsatzweit(finding)
+  // Vor jeder Entscheidung ueber die Verzierung: welche Geste traegt diese Anmerkung,
+  // und auf welchen Wortlaut zeigt sie? Beides zusammen ergibt die Markierung im Text.
+  aktuelleAnmerkungGestalt = finding ? gestaltFuerFinding(finding) : 'keine'
+  aktuelleAnmerkungIstAbsatzweit = aktuelleAnmerkungGestalt === 'absatz'
+  aktuelleAnmerkungZiel = String(finding?.target || '')
 
   if (
     localDecoratedDocId !== doc.id

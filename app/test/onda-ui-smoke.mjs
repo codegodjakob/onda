@@ -426,6 +426,7 @@ async function runShell(browser) {
   await assertTastwegFolgtDemBlick(page)
   await assertBausteinHinzufuegen(page)
   await assertQuellenFensterEineHandschrift(page)
+  await assertGesteZeigtAufDieStelle(page)
   await assertRuhigeLage(page)
 
   await page.setViewportSize({ width: 320, height: 760 })
@@ -597,6 +598,86 @@ async function assertZweiGesten(page) {
   assert.equal(await page.locator('#materialTree').isVisible(), true)
   assert.equal(await page.locator('#materialModal').count(), 0, 'Der Pfeil hat ein Fenster geöffnet')
   await page.locator('#materialTreeToggle').click()
+}
+
+// „Ich erkenn dann gar nicht direkt, um was es geht. Ich muss dann lesen, ich muss erst
+// mal das richtig zuordnen zum Text." (Jakob, 8.8.2026)
+//
+// Bis dahin trug der Absatz nur einen Punkt im Rand — an den Woertern stand nichts.
+// Jetzt traegt die Stelle selbst eine Geste, und ihre FORM sagt den Umfang: Kontur ums
+// Wort, Strich unter den Satz, Klammer am Absatz.
+//
+// Geprueft wird das, woran alles haengt: Steht die Markierung auf GENAU den Zeichen,
+// die die Anmerkung nennt? Ein Strich unter den falschen Woertern waere schlimmer als
+// gar keiner — er behauptete eine Stelle.
+async function assertGesteZeigtAufDieStelle(page) {
+  await page.setViewportSize({ width: 1440, height: 900 })
+
+  const faelle = [
+    ['wortwahl', 'wort', 'Peripherie'],
+    ['satzstil', 'satz', 'Calm Technology beschreibt Technik'],
+    ['absatzstil', 'absatz', 'Calm Technology beschreibt Technik'],
+  ]
+
+  for (const [art, gestalt, wortlaut] of faelle) {
+    const gesehen = await page.evaluate(async ({ art, wortlaut }) => {
+      const doc = window.AIWT.state.docs.find(kandidat => kandidat.id === window.AIWT.state.active)
+      doc.findings = []
+      const block = window.AIWT.__blockIdentityTestBridge.getBlocks().find(kandidat => kandidat.text.includes(wortlaut))
+      if (!block) return { fehler: `kein Baustein mit „${wortlaut}"` }
+      window.AIWT.__workspaceTestBridge.injectFinding({
+        id: `geste-${art}`, status: 'open', placement: 'passage', blockId: block.id,
+        target: wortlaut, action: `${wortlaut} — anders`, short: 'Beleg.', why: 'Beleg.', folge: 'Beleg.',
+        anmerkungsart: art, createdAt: -1,
+      })
+      await new Promise(fertig => setTimeout(fertig, 420))
+      const stelle = document.querySelector('#editor .onda-stelle')
+      const absatz = document.querySelector('#editor [data-block-id].has-local-finding')
+      return {
+        markiert: stelle ? stelle.textContent : null,
+        klassen: stelle ? stelle.className : '',
+        absatzweit: Boolean(absatz && absatz.classList.contains('hat-absatzweite-anmerkung')),
+      }
+    }, { art, wortlaut })
+
+    assert.equal(gesehen.fehler, undefined, gesehen.fehler)
+
+    if (gestalt === 'absatz') {
+      assert.equal(gesehen.absatzweit, true, 'Der Absatz-Hinweis klammert den Absatz nicht')
+      assert.equal(gesehen.markiert, null, 'Der Absatz-Hinweis markiert zusätzlich eine einzelne Stelle')
+      continue
+    }
+
+    assert.ok(
+      gesehen.klassen.includes(`onda-stelle--${gestalt}`),
+      `${art} trägt die Geste „${gestalt}" nicht (${gesehen.klassen})`,
+    )
+    // Der Kern: auf den Zeichen, nicht daneben.
+    assert.equal(gesehen.markiert, wortlaut, `Die Markierung sitzt auf „${gesehen.markiert}" statt auf „${wortlaut}"`)
+    assert.equal(gesehen.absatzweit, false, `${art} klammert fälschlich den ganzen Absatz`)
+  }
+
+  // Fail-closed: Wurde der Text seit dem Lauf geändert, entsteht KEINE Markierung.
+  // Lieber kein Strich als einer unter den falschen Wörtern.
+  const veraltet = await page.evaluate(async () => {
+    const doc = window.AIWT.state.docs.find(kandidat => kandidat.id === window.AIWT.state.active)
+    doc.findings = []
+    const block = window.AIWT.__blockIdentityTestBridge.getBlocks()[0]
+    window.AIWT.__workspaceTestBridge.injectFinding({
+      id: 'geste-weg', status: 'open', placement: 'passage', blockId: block.id,
+      target: 'diesen Wortlaut gibt es im Text nicht', action: 'x', short: 'Beleg.', why: 'Beleg.', folge: 'Beleg.',
+      anmerkungsart: 'satzstil', createdAt: -1,
+    })
+    await new Promise(fertig => setTimeout(fertig, 420))
+    return document.querySelectorAll('#editor .onda-stelle').length
+  })
+  assert.equal(veraltet, 0, 'Ein verschwundener Wortlaut erzeugt trotzdem eine Markierung')
+
+  await page.evaluate(() => {
+    const doc = window.AIWT.state.docs.find(kandidat => kandidat.id === window.AIWT.state.active)
+    doc.findings = []
+    window.AIWT.__workspaceTestBridge.reinitialize()
+  })
 }
 
 // Der Tastweg folgt dem Blick: was oben steht, kommt zuerst. Und wer ein Fenster mit
