@@ -2,43 +2,43 @@ TAP version 13
 # Subtest: Erfolg: Schema-Task liefert geparste daten und zählt usage in settings
 ok 1 - Erfolg: Schema-Task liefert geparste daten und zählt usage in settings
   ---
-  duration_ms: 2.916958
+  duration_ms: 3.022084
   type: 'test'
   ...
 # Subtest: Schema-Müll: kein JSON im Text -> Fehler typ schema
 ok 2 - Schema-Müll: kein JSON im Text -> Fehler typ schema
   ---
-  duration_ms: 0.54425
+  duration_ms: 0.401792
   type: 'test'
   ...
 # Subtest: Pflichtfeld fehlt -> Fehler typ schema
 ok 3 - Pflichtfeld fehlt -> Fehler typ schema
   ---
-  duration_ms: 0.236959
+  duration_ms: 0.165084
   type: 'test'
   ...
 # Subtest: Retry: nach ratenlimit kommt genau EIN zweiter Versuch, der gewinnt
 ok 4 - Retry: nach ratenlimit kommt genau EIN zweiter Versuch, der gewinnt
   ---
-  duration_ms: 3.813083
+  duration_ms: 7.059625
   type: 'test'
   ...
 # Subtest: Retry: zwei Fehler hintereinander -> Fehler nach genau zwei Versuchen
 ok 5 - Retry: zwei Fehler hintereinander -> Fehler nach genau zwei Versuchen
   ---
-  duration_ms: 1.929209
+  duration_ms: 0.777
   type: 'test'
   ...
 # Subtest: kein-schluessel wird NICHT wiederholt
 ok 6 - kein-schluessel wird NICHT wiederholt
   ---
-  duration_ms: 0.234917
+  duration_ms: 0.1725
   type: 'test'
   ...
 # Subtest: unbekannt (unklarer HTTP-Status der Brücke) wird genau EINMAL wiederholt
 ok 7 - unbekannt (unklarer HTTP-Status der Brücke) wird genau EINMAL wiederholt
   ---
-  duration_ms: 1.002208
+  duration_ms: 0.753916
   type: 'test'
   ...
 # [agent] Lauf abgelehnt (refusal) — Task hinweise
@@ -48,187 +48,187 @@ ok 7 - unbekannt (unklarer HTTP-Status der Brücke) wird genau EINMAL wiederholt
 # Subtest: unbekannt zweimal hintereinander -> Fehler nach genau zwei Versuchen
 ok 8 - unbekannt zweimal hintereinander -> Fehler nach genau zwei Versuchen
   ---
-  duration_ms: 1.631583
+  duration_ms: 1.408584
   type: 'test'
   ...
 # Subtest: refusal: Fehler typ abgelehnt, usage wird trotzdem gezählt
 ok 9 - refusal: Fehler typ abgelehnt, usage wird trotzdem gezählt
   ---
-  duration_ms: 0.741417
+  duration_ms: 1.518375
   type: 'test'
   ...
 # Subtest: max_tokens: Lauf wird verworfen (typ schema), usage gezählt
 ok 10 - max_tokens: Lauf wird verworfen (typ schema), usage gezählt
   ---
-  duration_ms: 0.445459
+  duration_ms: 0.489958
   type: 'test'
   ...
 # Subtest: refusal: geworfener Fehler trägt die usage des bezahlten Laufs
 ok 11 - refusal: geworfener Fehler trägt die usage des bezahlten Laufs
   ---
-  duration_ms: 0.255125
+  duration_ms: 0.2165
   type: 'test'
   ...
 # Subtest: max_tokens: geworfener Fehler trägt die usage des bezahlten Laufs
 ok 12 - max_tokens: geworfener Fehler trägt die usage des bezahlten Laufs
   ---
-  duration_ms: 0.306583
+  duration_ms: 0.413333
   type: 'test'
   ...
 # Subtest: ungültiges JSON bei Schema-Task: geworfener Fehler trägt die usage des bezahlten Laufs
 ok 13 - ungültiges JSON bei Schema-Task: geworfener Fehler trägt die usage des bezahlten Laufs
   ---
-  duration_ms: 0.29975
+  duration_ms: 0.505708
   type: 'test'
   ...
 # Subtest: fehlende Pflichtfelder: geworfener Fehler trägt die usage des bezahlten Laufs
 ok 14 - fehlende Pflichtfelder: geworfener Fehler trägt die usage des bezahlten Laufs
   ---
-  duration_ms: 0.144625
+  duration_ms: 0.184167
   type: 'test'
   ...
 # Subtest: chat: onDelta wird durchgereicht, daten ist der Volltext
 ok 15 - chat: onDelta wird durchgereicht, daten ist der Volltext
   ---
-  duration_ms: 0.52625
+  duration_ms: 0.80325
   type: 'test'
   ...
 # Subtest: verbucheUsage: Monatswechsel setzt den Zähler zurück
 ok 16 - verbucheUsage: Monatswechsel setzt den Zähler zurück
   ---
-  duration_ms: 0.081292
+  duration_ms: 0.123083
   type: 'test'
   ...
 # Subtest: pruefePflichtfelder: fehlende und vorhandene Felder, auch in Array-Items
 ok 17 - pruefePflichtfelder: fehlende und vorhandene Felder, auch in Array-Items
   ---
-  duration_ms: 0.069041
+  duration_ms: 0.092083
   type: 'test'
   ...
 # Subtest: chat-Vertrag: letzte Message ist immer user, nie assistant
 ok 18 - chat-Vertrag: letzte Message ist immer user, nie assistant
   ---
-  duration_ms: 0.228333
+  duration_ms: 0.26
   type: 'test'
   ...
 # Subtest: setzeTransportFuerTests ersetzt nur den Transport und null stellt die konfigurierte Auswahl wieder her
 ok 19 - setzeTransportFuerTests ersetzt nur den Transport und null stellt die konfigurierte Auswahl wieder her
   ---
-  duration_ms: 0.169375
+  duration_ms: 0.183042
   type: 'test'
   ...
 # Subtest: TASK_TABLE ist vollstaendig und zeigt auf gueltige Modelle
 ok 20 - TASK_TABLE ist vollstaendig und zeigt auf gueltige Modelle
   ---
-  duration_ms: 2.721709
+  duration_ms: 1.079417
   type: 'test'
   ...
 # Subtest: Fix-Runde 2, Finding 5: die drei Opus-Aufgaben haben deutlich mehr Budget als die frühere 16000-Grenze
 ok 21 - Fix-Runde 2, Finding 5: die drei Opus-Aufgaben haben deutlich mehr Budget als die frühere 16000-Grenze
   ---
-  duration_ms: 0.297625
+  duration_ms: 0.167791
   type: 'test'
   ...
 # Subtest: Schemata verbieten Zusatzfelder und verlangen Pflichtfelder
 ok 22 - Schemata verbieten Zusatzfelder und verlangen Pflichtfelder
   ---
-  duration_ms: 0.287333
+  duration_ms: 0.155334
   type: 'test'
   ...
 # Subtest: muster ist in BEIDEN Kanaelen Pflicht — nicht nur bei den Erweiterungen
 ok 23 - muster ist in BEIDEN Kanaelen Pflicht — nicht nur bei den Erweiterungen
   ---
-  duration_ms: 0.14325
+  duration_ms: 0.0925
   type: 'test'
   ...
 # Subtest: baueAnfrage: Wire-Format und Cache-Praefix-Ordnung exakt nach Vertrag
 ok 24 - baueAnfrage: Wire-Format und Cache-Praefix-Ordnung exakt nach Vertrag
   ---
-  duration_ms: 0.437792
+  duration_ms: 0.296667
   type: 'test'
   ...
 # Subtest: baueAnfrage: chat streamt, Verlauf vor die aktuelle Frage, letzte Message nie assistant
 ok 25 - baueAnfrage: chat streamt, Verlauf vor die aktuelle Frage, letzte Message nie assistant
   ---
-  duration_ms: 0.140959
+  duration_ms: 0.091209
   type: 'test'
   ...
 # Subtest: baueAnfrage: letzte Message ist nie assistant (kein Prefill)
 ok 26 - baueAnfrage: letzte Message ist nie assistant (kein Prefill)
   ---
-  duration_ms: 0.201209
+  duration_ms: 0.122875
   type: 'test'
   ...
 # Subtest: baueAnfrage wirft wenn Verlauf ohne anfrage
 ok 27 - baueAnfrage wirft wenn Verlauf ohne anfrage
   ---
-  duration_ms: 0.350458
+  duration_ms: 0.250208
   type: 'test'
   ...
 # Subtest: baueAnfrage ist deterministisch: zweimal bauen ergibt byte-gleiches JSON
 ok 28 - baueAnfrage ist deterministisch: zweimal bauen ergibt byte-gleiches JSON
   ---
-  duration_ms: 0.876625
+  duration_ms: 0.43375
   type: 'test'
   ...
 # Subtest: schaetzeKostenCents rechnet mit den Preiskonstanten
 ok 29 - schaetzeKostenCents rechnet mit den Preiskonstanten
   ---
-  duration_ms: 0.438333
+  duration_ms: 0.388666
   type: 'test'
   ...
 # Subtest: baueAnfrage wirft bei unbekanntem Task und leerem Kontext
 ok 30 - baueAnfrage wirft bei unbekanntem Task und leerem Kontext
   ---
-  duration_ms: 1.023459
+  duration_ms: 0.152167
   type: 'test'
   ...
 # Subtest: Quellenthemen laufen auf dem starken Modell, mit knapper Ausgabe
 ok 31 - Quellenthemen laufen auf dem starken Modell, mit knapper Ausgabe
   ---
-  duration_ms: 0.082084
+  duration_ms: 0.051708
   type: 'test'
   ...
 # Subtest: QUELLENTHEMEN_SCHEMA verlangt Name, Begruendung und Kennungen — und verbietet Zusatzfelder
 ok 32 - QUELLENTHEMEN_SCHEMA verlangt Name, Begruendung und Kennungen — und verbietet Zusatzfelder
   ---
-  duration_ms: 1.142333
+  duration_ms: 0.134667
   type: 'test'
   ...
 # Subtest: Erweiterungen laufen auf dem starken Modell
 ok 33 - Erweiterungen laufen auf dem starken Modell
   ---
-  duration_ms: 0.107375
+  duration_ms: 0.034125
   type: 'test'
   ...
 # Subtest: ERWEITERUNGEN_SCHEMA kennt genau die drei Arten und verlangt alle vier Felder
 ok 34 - ERWEITERUNGEN_SCHEMA kennt genau die drei Arten und verlangt alle vier Felder
   ---
-  duration_ms: 0.145875
+  duration_ms: 0.052167
   type: 'test'
   ...
 # Subtest: der Task bausteinarten laeuft auf dem starken Modell, ohne Strom
 ok 35 - der Task bausteinarten laeuft auf dem starken Modell, ohne Strom
   ---
-  duration_ms: 0.059333
+  duration_ms: 0.033667
   type: 'test'
   ...
 # Subtest: das Schema laesst genau die Funktionen zu, die die Rechenlogik kennt — und null
 ok 36 - das Schema laesst genau die Funktionen zu, die die Rechenlogik kennt — und null
   ---
-  duration_ms: 0.05725
+  duration_ms: 0.052292
   type: 'test'
   ...
 # Subtest: das Schema ist geschlossen: keine erfundenen Felder, alle Felder Pflicht
 ok 37 - das Schema ist geschlossen: keine erfundenen Felder, alle Felder Pflicht
   ---
-  duration_ms: 0.043792
+  duration_ms: 0.043875
   type: 'test'
   ...
 # Subtest: die Anfrage traegt das Schema und den gecachten Praefix
 ok 38 - die Anfrage traegt das Schema und den gecachten Praefix
   ---
-  duration_ms: 0.264542
+  duration_ms: 0.0655
   type: 'test'
   ...
 1..38
@@ -239,5 +239,5 @@ ok 38 - die Anfrage traegt das Schema und den gecachten Praefix
 # cancelled 0
 # skipped 0
 # todo 0
-# duration_ms 94.9325
+# duration_ms 91.727458
 
