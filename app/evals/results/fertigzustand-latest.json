@@ -3,8 +3,8 @@
   "catalogVersion": "2026-08-05.3",
   "stage": "FERTIGZUSTAND",
   "iteration": 1,
-  "generatedAt": "2026-08-07T15:01:36.591Z",
-  "gitCommit": "2a7f4a9a93a9331b32f0623872bc75abea9d767e",
+  "generatedAt": "2026-08-08T12:06:27.679Z",
+  "gitCommit": "47925bbf101e492a1080dcdf42b003cbdaee6d53",
   "rubricScores": {
     "truth": 5,
     "authorship": 5,
@@ -24,22 +24,44 @@
     "access_privacy": "Automatisierte Drei-Engine-, Zoom-, Zielgrößen-, Export- und Geheimnisprüfungen bestehen; echte assistive Nutzung bleibt extern, daher Deckel 4,5."
   },
   "coverage": {
-    "passed": 147,
+    "passed": 138,
     "applicable": 147,
-    "ratio": 1
+    "ratio": 0.9388
   },
   "loops": [
     {
       "iteration": 1,
-      "passed": 147,
-      "failed": 0,
+      "passed": 138,
+      "failed": 9,
       "externalOpen": 5,
       "weightedScore": 4.88
     }
   ],
   "massstabVergleich": {
-    "status": "unveraendert",
-    "aenderungen": []
+    "status": "geaendert",
+    "aenderungen": [
+      {
+        "bereich": "eval",
+        "art": "geaendert",
+        "id": "DESIGN-06",
+        "feld": "automation",
+        "vorher": "file-inspection",
+        "jetzt": "integration"
+      },
+      {
+        "bereich": "eval",
+        "art": "geaendert",
+        "id": "DESIGN-06",
+        "feld": "evidence",
+        "vorher": [
+          "Datei-Prüfung: Statustabelle in docs/REDESIGN-IDEEN.md enthält keinen Eintrag 'open' für einen Punkt, dessen Eval bereits bestanden wird"
+        ],
+        "jetzt": [
+          "Datei-Prüfung: Statustabelle in docs/REDESIGN-IDEEN.md enthält keinen Eintrag 'open' für einen Punkt, dessen Eval bereits bestanden wird",
+          "Frische Messung im selben Lauf: ob ein Punkt umgesetzt ist, wird durch Starten der Gestalt-Prüfung jetzt ermittelt — nicht aus dem Ergebnisstand eines früheren Laufs gelesen"
+        ]
+      }
+    ]
   },
   "massstab": {
     "catalogVersion": "2026-08-05.3",
@@ -1337,12 +1359,13 @@
       "DESIGN-06": {
         "title": "Die Umgestaltungsentscheidungen sind getroffen",
         "gate": "hard",
-        "automation": "file-inspection",
+        "automation": "integration",
         "given": "docs/REDESIGN-IDEEN.md sammelt Punkte mit Status offen, vereinbart oder verworfen.",
         "when": "Die Umsetzung eines Punktes beginnt.",
         "then": "Dieser Punkt trägt den Status vereinbart oder verworfen mit einer Begründung. Kein Punkt wird umgesetzt, solange er auf offen steht — die Entscheidung liegt beim Nutzer, nicht bei der Umsetzung.",
         "evidence": [
-          "Datei-Prüfung: Statustabelle in docs/REDESIGN-IDEEN.md enthält keinen Eintrag 'open' für einen Punkt, dessen Eval bereits bestanden wird"
+          "Datei-Prüfung: Statustabelle in docs/REDESIGN-IDEEN.md enthält keinen Eintrag 'open' für einen Punkt, dessen Eval bereits bestanden wird",
+          "Frische Messung im selben Lauf: ob ein Punkt umgesetzt ist, wird durch Starten der Gestalt-Prüfung jetzt ermittelt — nicht aus dem Ergebnisstand eines früheren Laufs gelesen"
         ],
         "source": [
           "Anweisung 2026-07-31: erst sammeln, dann umsetzen"
@@ -3944,69 +3967,75 @@
     },
     {
       "id": "DESIGN-01",
-      "status": "passed",
+      "status": "failed",
       "evidence": [
         {
           "kind": "browser",
           "path": "evals/results/laeufe/evals-pruefungen-gestalt-mjs.log",
           "command": "node evals/pruefungen/gestalt.mjs"
         }
-      ]
+      ],
+      "note": "Gebundene Prüfung in diesem Lauf fehlgeschlagen: evals/pruefungen/gestalt.mjs"
     },
     {
       "id": "DESIGN-02",
-      "status": "passed",
+      "status": "failed",
       "evidence": [
         {
           "kind": "browser",
           "path": "evals/results/laeufe/evals-pruefungen-gestalt-mjs.log",
           "command": "node evals/pruefungen/gestalt.mjs"
         }
-      ]
+      ],
+      "note": "Gebundene Prüfung in diesem Lauf fehlgeschlagen: evals/pruefungen/gestalt.mjs"
     },
     {
       "id": "DESIGN-03",
-      "status": "passed",
+      "status": "failed",
       "evidence": [
         {
           "kind": "browser",
           "path": "evals/results/laeufe/evals-pruefungen-gestalt-mjs.log",
           "command": "node evals/pruefungen/gestalt.mjs"
         }
-      ]
+      ],
+      "note": "Gebundene Prüfung in diesem Lauf fehlgeschlagen: evals/pruefungen/gestalt.mjs"
     },
     {
       "id": "DESIGN-04",
-      "status": "passed",
+      "status": "failed",
       "evidence": [
         {
           "kind": "browser",
           "path": "evals/results/laeufe/evals-pruefungen-gestalt-mjs.log",
           "command": "node evals/pruefungen/gestalt.mjs"
         }
-      ]
+      ],
+      "note": "Gebundene Prüfung in diesem Lauf fehlgeschlagen: evals/pruefungen/gestalt.mjs"
     },
     {
       "id": "DESIGN-05",
-      "status": "passed",
+      "status": "failed",
       "evidence": [
         {
           "kind": "browser",
           "path": "evals/results/laeufe/evals-pruefungen-gestalt-mjs.log",
           "command": "node evals/pruefungen/gestalt.mjs"
         }
-      ]
+      ],
+      "note": "Gebundene Prüfung in diesem Lauf fehlgeschlagen: evals/pruefungen/gestalt.mjs"
     },
     {
       "id": "DESIGN-06",
-      "status": "passed",
+      "status": "failed",
       "evidence": [
         {
           "kind": "integration",
           "path": "evals/results/laeufe/evals-pruefungen-umgestaltung-entschieden-mjs.log",
           "command": "node evals/pruefungen/umgestaltung-entschieden.mjs"
         }
-      ]
+      ],
+      "note": "Gebundene Prüfung in diesem Lauf fehlgeschlagen: evals/pruefungen/umgestaltung-entschieden.mjs"
     },
     {
       "id": "DESIGN-07",
@@ -4205,7 +4234,7 @@
     },
     {
       "id": "KONTEXT-01",
-      "status": "passed",
+      "status": "failed",
       "evidence": [
         {
           "kind": "integration",
@@ -4217,11 +4246,12 @@
           "path": "evals/results/laeufe/test-onda-kontext-test-mjs.log",
           "command": "node --test test/onda-kontext.test.mjs"
         }
-      ]
+      ],
+      "note": "Gebundene Prüfung in diesem Lauf fehlgeschlagen: evals/pruefungen/kontext-alle-kanaele.mjs"
     },
     {
       "id": "KONTEXT-02",
-      "status": "passed",
+      "status": "failed",
       "evidence": [
         {
           "kind": "integration",
@@ -4233,11 +4263,12 @@
           "path": "evals/results/laeufe/test-onda-kontext-test-mjs.log",
           "command": "node --test test/onda-kontext.test.mjs"
         }
-      ]
+      ],
+      "note": "Gebundene Prüfung in diesem Lauf fehlgeschlagen: evals/pruefungen/kontext-alle-kanaele.mjs"
     },
     {
       "id": "KONTEXT-03",
-      "status": "passed",
+      "status": "failed",
       "evidence": [
         {
           "kind": "integration",
@@ -4249,7 +4280,8 @@
           "path": "evals/results/laeufe/test-onda-kontext-test-mjs.log",
           "command": "node --test test/onda-kontext.test.mjs"
         }
-      ]
+      ],
+      "note": "Gebundene Prüfung in diesem Lauf fehlgeschlagen: evals/pruefungen/kontext-alle-kanaele.mjs"
     },
     {
       "id": "KONTEXT-04",
