@@ -5033,6 +5033,16 @@ async function fuehreQuellenlaufAus({ vonHand = false } = {}) {
   const verstaendnis = project ? ensureProjectUnderstanding(project) : null
   const bestehendeThemen = project ? ensureQuellenThemen(project).map(thema => ({ ...thema })) : []
   const signatur = quellenSignatur(projectId, quellen)
+  // Das Projektwissen gehoert auch in diesen Kanal. Er ging ohne es an den Start und war
+  // damit blind; gemeldet hat es die Eigenschafts-Pruefung ueber alle Kanaele
+  // (evals/pruefungen/kontext-alle-kanaele.mjs). Fuer die Themenbildung zaehlt vor allem
+  // die Textsorte — dieselben zwanzig Quellen ordnen sich fuer eine Seminararbeit anders
+  // als fuer einen Werbetext.
+  //
+  // Direkt durchgereicht statt durch die ergaenzeOndaKontext-Klammer wie bei Hinweis- und
+  // Erweiterungslauf: baueQuellenKontext kennt den onda-Parameter, also braucht es die
+  // Klammer hier gar nicht erst.
+  const ondaWissen = ondaQuellen(doc, project)
 
   const ergebnis = await versucheQuellenlauf({
     hatProjekt: Boolean(project),
@@ -5041,6 +5051,7 @@ async function fuehreQuellenlaufAus({ vonHand = false } = {}) {
     quellen,
     bestehendeThemen,
     verstaendnis,
+    onda: ondaWissen,
     vonHand,
     sperreSetzen: wert => { quellenlaufAktiv = wert },
     hatSchluessel,

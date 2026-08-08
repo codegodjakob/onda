@@ -101,6 +101,9 @@ export async function versucheQuellenlauf({
   quellen = [],
   bestehendeThemen = [],
   verstaendnis = null,
+  // Das Projektwissen (Textsorte, Aussagen-Speicher, Nachbartexte, Gedaechtnis). Ohne
+  // es waere dies ein blinder Kanal — siehe quellen-kontext.mjs.
+  onda = null,
   vonHand = false,
   sperreSetzen,
   hatSchluessel,
@@ -125,7 +128,7 @@ export async function versucheQuellenlauf({
       return { gestartet: false, grund: kostenfreigabe?.grund || 'kostenfreigabe-fehlt' }
     }
 
-    const kontext = baueQuellenKontext({ verstaendnis, quellen, bestehendeThemen })
+    const kontext = baueQuellenKontext({ verstaendnis, quellen, bestehendeThemen, onda })
     setzeAgentStatus({ zustand: 'laeuft' })
     const { daten } = await runTask('quellenthemen', kontext)
     setzeAgentStatus({ zustand: 'bereit' })

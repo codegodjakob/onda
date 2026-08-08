@@ -1557,8 +1557,10 @@ body.zen #title:focus { opacity: 1; }
   letter-spacing: 0;
 }
 
+/* Der Fokusring genuegt. Eine zusaetzlich eingefaerbte Kante war doppelt gemoppelt und
+   brachte das Blau ein zweites Mal ins Fenster. */
 .agent-chat-input:focus {
-  border-color: var(--accent);
+  border-color: var(--border-strong);
   outline: 2px solid transparent;
   box-shadow: var(--shadow-focus);
 }
@@ -1958,22 +1960,44 @@ body.zen #title:focus { opacity: 1; }
   padding: var(--space-3) var(--space-6) var(--space-6);
 }
 
+/* Dasselbe Material wie der Knopf daneben — beide sind Glas auf derselben Ebene, und
+   sie sollen wie EIN Bedienstueck wirken, nicht wie Feld plus Schaltflaeche. */
 .agent-widget-form .agent-chat-input {
   height: 38px;
   border-radius: var(--radius-pill);
   padding: 6px 14px;
+  border-color: transparent;
+  background: var(--onda-material);
+  box-shadow: var(--onda-material-kante);
+  backdrop-filter: blur(20px) saturate(1.6);
+  -webkit-backdrop-filter: blur(20px) saturate(1.6);
 }
 
+/* DER SENDEN-KNOPF TRAEGT KEINE FARBE MEHR.
+   Er war der einzige blaue Fleck im ganzen Fenster und zog den Blick auf sich, obwohl
+   er nichts sagt — man weiss auch ohne Farbe, wo man abschickt. Jakob am 8.8.2026:
+   "es soll ohne farbe sein und mehr im stil von apple tahoe".
+
+   An seine Stelle tritt Material: eine durchscheinende Flaeche mit haarfeiner Kante und
+   einem hellen Innenrand oben. Das ist die Tahoe-Logik — Bedienelemente sind Glas, nicht
+   Anstrich, und Farbe bleibt der Bedeutung vorbehalten. Die Aura ist die einzige Stelle,
+   die im Haus noch faerben darf. */
 .agent-widget-form .agent-chat-send {
   border-radius: var(--radius-pill);
-  background: var(--accent);
-  color: var(--on-accent);
+  background: var(--onda-material);
+  color: var(--text-secondary);
+  box-shadow: var(--onda-material-kante);
+  backdrop-filter: blur(20px) saturate(1.6);
+  -webkit-backdrop-filter: blur(20px) saturate(1.6);
 }
 
+/* Naeher kommen heisst dichter werden, nicht bunter. */
 .agent-widget-form .agent-chat-send:hover {
-  background: var(--accent-hover);
-  color: var(--on-accent);
+  background: var(--onda-material-dicht);
+  color: var(--text-primary);
 }
+
+.agent-widget-form .agent-chat-send:active { transform: scale(.96); }
 
 .unplaced-findings {
   flex: none;
@@ -1995,9 +2019,13 @@ body.zen #title:focus { opacity: 1; }
   font: 10.5px/1.35 var(--sans);
 }
 
+/* Der Entscheidungsverlauf lag als hellerer Block im Fenster — ein Balken, der eine
+   Wichtigkeit behauptete, die er nicht hat. Eine Haarlinie trennt genauso gut und
+   traegt kein Gewicht. */
 .agent-decisions {
   flex: none;
-  background: var(--surface-2);
+  background: transparent;
+  border-block: 1px solid var(--border-subtle);
 }
 
 .agent-decisions-toggle {

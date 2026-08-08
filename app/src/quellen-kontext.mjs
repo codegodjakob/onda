@@ -3,6 +3,7 @@
 // ausschliesslich {verstaendnis, docText, volatiles, verlauf, anfrage}; eigene Feldnamen
 // wuerden still verschluckt.
 import { QUELLENTHEMEN_ANWEISUNG } from './agent-prompts.mjs'
+import { baueOndaBloecke } from './onda-kontext.mjs'
 
 // KEIN docText, und das ist eine Entscheidung: nach welchen Themen die Quellen eines
 // Projekts stehen, ist eine Frage des Projekts und nicht des gerade offenen Textes.
@@ -72,7 +73,24 @@ function quelleFuerPrompt(quelle) {
 //     ein Prompt ist eine Bitte, kein Riegel,
 //   - die vom Agenten gebildeten sind nur ein Vorschlag von letztem Mal. Sie stehen
 //     ebenfalls da, damit dieselbe Ordnung nicht bei jedem Lauf neue Namen bekommt.
-export function baueQuellenKontext({ verstaendnis = null, quellen = [], bestehendeThemen = [] } = {}) {
+// onda: {project, doc, docs, memoryStore} — Textsorte, Aussagen-Speicher, Nachbartexte
+// und Gedaechtnis (onda-kontext.mjs), ganz hinten in den volatilen Bloecken.
+//
+// Dieser Kanal ging ohne das Wissen an den Start und war damit ein BLINDER Kanal. Kein
+// Unit-Test hat es gemerkt — sie belegen jede Quelle einzeln. Gemeldet hat es die
+// Eigenschafts-Pruefung, die ueber ALLE Kanaele laeuft (evals/pruefungen/
+// kontext-alle-kanaele.mjs, KONTEXT-01 baulich). Genau dafuer steht sie da.
+//
+// Fuer die Themenbildung zaehlt vor allem die Textsorte: dieselben zwanzig Quellen ordnen
+// sich fuer eine Seminararbeit anders als fuer einen Werbetext. Die Nachbartexte helfen
+// mit, weil eine Gruppe, die nur in EINEM Text vorkommt, oft keine Gruppe ist, sondern
+// ein Abschnitt.
+export function baueQuellenKontext({
+  verstaendnis = null,
+  quellen = [],
+  bestehendeThemen = [],
+  onda = null,
+} = {}) {
   const volatiles = [QUELLENTHEMEN_ANWEISUNG]
 
   const liste = (Array.isArray(quellen) ? quellen : []).filter(quelle => quelle?.id).map(quelleFuerPrompt)
@@ -93,6 +111,8 @@ export function baueQuellenKontext({ verstaendnis = null, quellen = [], bestehen
       + JSON.stringify(eigene.map(thema => ({ name: thema.name, warum: String(thema.warum || '') }))),
     )
   }
+
+  if (onda) volatiles.push(...baueOndaBloecke(onda))
 
   return { verstaendnis, volatiles }
 }
