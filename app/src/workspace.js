@@ -1014,10 +1014,21 @@ function renderStructureNav() {
 // hinzuzufuegen. Beim Schreiben ist man das nicht.
 let strukturBlaetter = null
 
+// Ein Anriss endet an einem Satzende, nie mitten im Wort. Hier stand ein Schnitt nach
+// 60 Zeichen mit drei Punkten dahinter — „ich will, dass nirgendwo einfach der Text
+// aufhört und dann Punkt, Punkt, Punkt kommt" (Jakob, 8.8.2026). Der Unterschied ist
+// nicht die Laenge, sondern die Ehrlichkeit: ein ganzer erster Satz liest sich als
+// Anfang, ein gekappter als Fehler. Findet sich kein Satzende, kommt der ganze Text
+// zurueck und bricht im Layout um; lieber eine Zeile mehr als ein abgehackter Rest.
+function ersterSatz(text) {
+  const roh = String(text || '').trim()
+  return roh.split(/(?<=[.!?…])\s/)[0] || roh
+}
+
 function blockAnriss(text) {
   const roh = String(text || '').trim()
   if (!roh) return 'Noch leer'
-  return roh.length > 60 ? `${roh.slice(0, 59).trimEnd()}…` : roh
+  return ersterSatz(roh)
 }
 
 // Schreibt den Text eines Bausteins zurueck in den Editor. Nur echte Textbloecke:
@@ -1113,9 +1124,10 @@ function openStrukturModal(opener) {
 //
 // Das Datenmodell dahinter (erweiterung-model.mjs, erweiterungslauf-model.mjs) ist
 // vollstaendig geblieben — nur die Flaeche ist fort.
+// Der erste Satz, und zwar ganz. Der Schnitt bei 96 Zeichen ist am 8.8.2026 gefallen:
+// er kappte genau die Saetze, die etwas zu sagen hatten (siehe ersterSatz).
 function erweiterungAnriss(text) {
-  const satz = String(text || '').split(/(?<=[.!?])\s/)[0] || ''
-  return satz.length > 96 ? `${satz.slice(0, 95).trimEnd()}…` : satz
+  return String(text || '').trim() ? ersterSatz(text) : ''
 }
 
 // Der einzige Weg, auf dem etwas in den Personen-Speicher gelangt. Bewusst EINE

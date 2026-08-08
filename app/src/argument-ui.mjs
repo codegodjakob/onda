@@ -64,9 +64,14 @@ const PATH_LABELS = Object.freeze({
   'definition-first': 'Von der Begriffsgrenze aus',
 })
 
-function shortClaim(value, length = 130) {
+// Eine These wird auf ihren ersten Satz verkuerzt, nicht auf eine Zeichenzahl. Der
+// Schnitt nach n Zeichen mit drei Punkten dahinter ist am 8.8.2026 gefallen — „ich
+// will, dass nirgendwo einfach der Text aufhört und dann Punkt, Punkt, Punkt kommt"
+// (Jakob). Mit ihm faellt der Laengenparameter: die vier Aufrufstellen gaben je eine
+// andere Zahl mit (130, 96, 80, 72), und keine davon hat noch eine Wirkung.
+function shortClaim(value) {
   const text = String(value || '').trim()
-  return text.length > length ? `${text.slice(0, length - 1)}…` : text
+  return text.split(/(?<=[.!?…])\s/)[0] || text
 }
 
 function selectField(className, label, options, selected = '') {
@@ -284,7 +289,7 @@ export function createArgumentUi({ context, createNode, openDialog, getBlocks })
   }
 
   function relationOptions(claims) {
-    return claims.map(claim => [claim.id, shortClaim(claim.text, 80)])
+    return claims.map(claim => [claim.id, shortClaim(claim.text)])
   }
 
   function renderRelationCorrection(card, body, project, relation, render) {
@@ -414,7 +419,7 @@ export function createArgumentUi({ context, createNode, openDialog, getBlocks })
       const card = createNode('article', 'argument-relation')
       const header = createNode('div', 'argument-relation-header')
       header.append(
-        createNode('span', 'argument-relation-flow', `${shortClaim(byId.get(relation.fromClaimId)?.text, 72)} ${RELATION_LABELS[relation.type]} ${shortClaim(byId.get(relation.toClaimId)?.text, 72)}`),
+        createNode('span', 'argument-relation-flow', `${shortClaim(byId.get(relation.fromClaimId)?.text)} ${RELATION_LABELS[relation.type]} ${shortClaim(byId.get(relation.toClaimId)?.text)}`),
         createNode('span', 'argument-tag', `Sicherheit: ${relation.confidence}`),
       )
       const correct = createNode('button', 'argument-action', 'Korrigieren')
@@ -700,7 +705,7 @@ export function createArgumentUi({ context, createNode, openDialog, getBlocks })
         const select = selectField(
           'argument-select',
           'Kernbehauptung auswählen',
-          centralClaims.map(claim => [claim.id, shortClaim(claim.text, 96)]),
+          centralClaims.map(claim => [claim.id, shortClaim(claim.text)]),
           central?.id,
         )
         select.addEventListener('change', () => {
