@@ -213,10 +213,25 @@ test('Anmerkungen trennen ruhiges Zeichen von schwebender Detailfläche', async 
   assert.match(zeichen, /border:\s*0/)
   assert.doesNotMatch(zeichen, /box-shadow:/)
 
-  // Die Anmerkung selbst schwebt — sie ist die Detailflaeche und darf Tiefe haben.
-  assert.match(annotation, /border-radius:\s*var\(--radius-overlay\)/)
-  assert.match(annotation, /box-shadow:\s*var\(--shadow-md\)/)
+  // Die Anmerkung schwebte bis zum 8.8.2026: Kante, Grund, Schatten. Sie tut es nicht
+  // mehr. Der Grund ist nicht Geschmack, sondern eine Aussage, die nicht stimmte —
+  // eine schwebende Karte behauptet „hier ist ein Fenster ÜBER deinem Text", und die
+  // Anmerkung liegt nicht über dem Text, sie steht daneben. Was sie unterscheidet,
+  // sind Spalte, Schriftgröße und Farbe. Seit die Markierung im Text selbst sagt,
+  // welche Stelle gemeint ist, muss die Karte es nicht mehr durch Gewicht behaupten.
+  // (Entwurf: app/anmerkungs-varianten.html, von Jakob am 8.8.2026 angenommen.)
+  assert.match(annotation, /border:\s*0/)
+  assert.match(annotation, /background:\s*transparent/)
+  assert.match(annotation, /box-shadow:\s*none/)
   assert.doesNotMatch(annotation, /shadow-glow/)
+
+  // Drei Formen liegen WIRKLICH über dem Text — sie erscheinen am Wort, nicht in der
+  // Nebenspalte. Ohne eigene Fläche läsen sich zwei Schriften übereinander. Sie holen
+  // sich zurück, was die Anmerkung abgelegt hat; ohne diese Prüfung fiele das beim
+  // nächsten Aufräumen still mit weg.
+  assert.match(ruleBody(annotations, '\n.onda-annotation.aura-corr__pop {'), /background:\s*var\(--bg-surface\)/)
+  assert.match(ruleBody(annotations, '\n.onda-annotation.aura-ins__pop {'), /background:\s*var\(--bg-surface\)/)
+  assert.match(ruleBody(annotations, '\n.aura-slot {'), /border:\s*1px dashed/)
 })
 
 test('Über dem Text steht keine Leiste — das Zeichen zählt nicht und trägt trotzdem den vollen Wortlaut', async () => {

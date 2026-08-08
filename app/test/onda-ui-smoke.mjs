@@ -497,6 +497,7 @@ async function runShell(browser) {
   await assertQuellenFensterEineHandschrift(page)
   await assertGesteZeigtAufDieStelle(page)
   await assertOrtswechselZeigtSeinZiel(page)
+  await assertAnmerkungOhnePlatte(page)
   await assertEntscheidungOeffnetKeineKette(page)
   await assertWichtigstesZuerst(page)
   await assertRuhigeLage(page)
@@ -1035,6 +1036,85 @@ async function assertOrtswechselZeigtSeinZiel(page) {
     window.AIWT.__workspaceTestBridge.reinitialize()
     await new Promise(fertig => setTimeout(fertig, 200))
   })
+}
+
+// Die Anmerkung ist keine Platte mehr — und unter dem Text nur noch eine Zeile.
+//
+// Zwei Dinge, die zusammengehören. Neben dem Text hat die Anmerkung ihre eigene Spalte;
+// dort braucht sie keinen Rahmen, um sich vom Text zu unterscheiden. Unter dem Text hat
+// sie keine Spalte — dort schob sie bis zum 8.8.2026 den nächsten Absatz um über 300px
+// nach unten und stand mitten im Lesefluss. „Dass da irgendwie dann nichts umspringt
+// oder verdeckt ist" (Jakob, 8.8.2026) — also bleibt dort eine Zeile stehen.
+async function assertAnmerkungOhnePlatte(page) {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await page.waitForTimeout(200)
+
+  const breit = await page.evaluate(() => {
+    const karte = document.querySelector('#localAgentLayer .onda-annotation')
+    if (!karte) return { fehler: 'keine Anmerkung sichtbar' }
+    const stil = getComputedStyle(karte)
+    return {
+      unten: karte.classList.contains('is-below'),
+      rahmen: stil.borderTopWidth,
+      schatten: stil.boxShadow,
+      grund: stil.backgroundColor,
+    }
+  })
+  assert.equal(breit.fehler, undefined, breit.fehler)
+  assert.equal(breit.unten, false, 'Bei 1440px steht die Anmerkung schon unter dem Text')
+  assert.equal(breit.rahmen, '0px', `Die Anmerkung trägt wieder eine Kante (${breit.rahmen})`)
+  assert.equal(breit.schatten, 'none', `Die Anmerkung schwebt wieder (${breit.schatten})`)
+  // rgba(…, 0) ist die berechnete Form von transparent.
+  assert.match(breit.grund, /rgba\(0, 0, 0, 0\)|transparent/, `Die Anmerkung trägt wieder eine Fläche (${breit.grund})`)
+
+  // Zwei Drittel Fensterbreite: hier fällt die Anmerkung unter den Text.
+  await page.setViewportSize({ width: 1000, height: 1000 })
+  await page.waitForTimeout(250)
+
+  const schmal = await page.evaluate(() => {
+    const karte = document.querySelector('#localAgentLayer .onda-annotation')
+    const kasten = karte.getBoundingClientRect()
+    return {
+      unten: karte.classList.contains('is-below'),
+      zu: karte.classList.contains('ist-zugeklappt'),
+      hoehe: Math.round(kasten.height),
+      // Zugeklappt heißt: erreichbar mit der Tastatur, und die Rolle sagt, was passiert.
+      rolle: karte.getAttribute('role'),
+      offen: karte.getAttribute('aria-expanded'),
+      knoepfe: karte.querySelectorAll('button:not([hidden])').length,
+      sichtbareKnoepfe: [...karte.querySelectorAll('button')]
+        .filter(knopf => knopf.getBoundingClientRect().height > 0).length,
+      // Und die Markierung im Absatz bleibt: zugeklappt ist nicht weg.
+      markeDa: Boolean(document.querySelector('#editor [data-block-id].has-local-finding')),
+    }
+  })
+  assert.equal(schmal.unten, true, 'Bei 1000px steht die Anmerkung nicht unter dem Text')
+  assert.equal(schmal.zu, true, 'Unter dem Text bleibt die Anmerkung in voller Größe stehen')
+  assert.ok(schmal.hoehe <= 72, `Die zugeklappte Zeile ist ${schmal.hoehe}px hoch`)
+  assert.equal(schmal.rolle, 'button', 'Die zugeklappte Zeile sagt nicht, dass sie sich öffnen lässt')
+  assert.equal(schmal.offen, 'false')
+  assert.equal(schmal.sichtbareKnoepfe, 0, 'Zugeklappt stehen die Knöpfe trotzdem da')
+  assert.equal(schmal.markeDa, true, 'Zugeklappt verliert der Absatz seine Markierung')
+
+  // Und sie lässt sich öffnen — mit der Tastatur, nicht nur mit der Maus.
+  await page.locator('#localAgentLayer .onda-annotation').focus()
+  await page.keyboard.press('Enter')
+  await page.waitForTimeout(250)
+  const geoeffnet = await page.evaluate(() => {
+    const karte = document.querySelector('#localAgentLayer .onda-annotation')
+    return {
+      zu: karte.classList.contains('ist-zugeklappt'),
+      hoehe: Math.round(karte.getBoundingClientRect().height),
+      sichtbareKnoepfe: [...karte.querySelectorAll('button')]
+        .filter(knopf => knopf.getBoundingClientRect().height > 0).length,
+    }
+  })
+  assert.equal(geoeffnet.zu, false, 'Die Zeile lässt sich mit der Tastatur nicht öffnen')
+  assert.ok(geoeffnet.hoehe > 100, `Geöffnet ist die Anmerkung nur ${geoeffnet.hoehe}px hoch`)
+  assert.ok(geoeffnet.sichtbareKnoepfe >= 2, 'Geöffnet fehlen die Knöpfe')
+
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await page.waitForTimeout(150)
 }
 
 // Der Tastweg folgt dem Blick: was oben steht, kommt zuerst. Und wer ein Fenster mit

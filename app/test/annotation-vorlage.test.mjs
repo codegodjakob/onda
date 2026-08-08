@@ -104,8 +104,13 @@ test('die Einfuegung waechst mit ihrem Inhalt, statt eine Karte zu fuellen', () 
 test('der Zielplatz ist gestrichelt und ohne eigene Flaeche', () => {
   // Der Platz ist noch leer. Eine gefuellte Karte wuerde behaupten, dort stehe
   // schon etwas.
+  //
+  // Seit dem 8.8.2026 steht der Strich in der Kurzform `border: 1px dashed …` statt in
+  // `border-style` allein: die Anmerkung darunter hat gar keine Kante mehr (border: 0),
+  // von der sich nur noch die Art aendern liesse. Geprueft wird darum, dass er
+  // gestrichelt IST — nicht, in welcher Schreibweise das dasteht.
   const regel = regelFuer('.aura-slot') || ''
-  assert.match(regel, /border-style:\s*dashed/)
+  assert.match(regel, /border(?:-style)?:\s*(?:1px\s+)?dashed/)
   assert.match(regel, /background:\s*transparent/)
   assert.match(regel, /box-shadow:\s*none/)
 })

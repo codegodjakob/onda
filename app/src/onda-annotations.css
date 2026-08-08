@@ -75,6 +75,32 @@
 
 #localAgentLayer > .onda-annotation { position: absolute; z-index: 2; width: 340px; pointer-events: auto; }
 #localAgentLayer > .onda-annotation.is-below { width: auto; }
+
+/* ZUGEKLAPPT — die Anmerkung unter dem Text.
+   Danebenstehen ist der Normalfall: eigene Spalte, niemand wird gestoert. Unter dem
+   Text gibt es keine Spalte; dort schiebt die Anmerkung den naechsten Absatz nach
+   unten und steht mitten im Lesefluss (gemessen 8.8.2026 bei 1000px Fensterbreite:
+   312px hoch, volle Textbreite). Also bleibt dort nur eine Zeile stehen: was es ist,
+   und ein Winkel, der sagt, dass mehr dahinter liegt.
+   Nicht weg, nur zu — die Markierung im Absatz bleibt unveraendert sichtbar. */
+#localAgentLayer > .onda-annotation.ist-zugeklappt {
+  gap: 0; padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-control); cursor: pointer;
+}
+#localAgentLayer > .onda-annotation.ist-zugeklappt > * { display: none; }
+#localAgentLayer > .onda-annotation.ist-zugeklappt > .aura-note__head {
+  display: flex; min-height: 36px; margin: 0;
+}
+/* Der Winkel steht VOR der Zeile und dreht sich beim Oeffnen — dieselbe Bewegung wie
+   im Entwurf (anmerkungs-varianten.html, .notiz__kurz summary::before). */
+#localAgentLayer > .onda-annotation.ist-zugeklappt > .aura-note__head::before {
+  content: "›"; flex: none; color: var(--text-tertiary);
+}
+#localAgentLayer > .onda-annotation.ist-zugeklappt:hover > .aura-note__head,
+#localAgentLayer > .onda-annotation.ist-zugeklappt:focus-visible > .aura-note__head { color: var(--text-primary); }
+#localAgentLayer > .onda-annotation.ist-zugeklappt:focus-visible {
+  outline: 2px solid var(--text-primary); outline-offset: 2px;
+}
 /* Die kompakten Formen bekommen ihre Breite vom Inhalt, nicht vom Layer.
    positionLocalSurface setzt fuer sie nur eine Obergrenze. */
 #localAgentLayer > .onda-annotation.aura-corr__pop,
@@ -94,8 +120,18 @@
      break-word bleibt als Notbremse darunter: greift erst, wenn es keine Trennstelle gibt,
      und verhindert dann, dass Text seitlich aus der Karte läuft. */
   hyphens: auto; -webkit-hyphens: auto; overflow-wrap: break-word;
-  border: 1px solid var(--border-subtle); border-radius: var(--radius-overlay);
-  background: var(--bg-surface); box-shadow: var(--shadow-md); color: var(--text-primary);
+  /* KEINE Platte mehr (8.8.2026, Entwurf in anmerkungs-varianten.html).
+     Bis hierher war die Anmerkung eine schwebende Karte: Kante, Grund, Schatten. Das
+     war eine Aussage — „hier ist ein Fenster, das über deinem Text liegt" — und sie
+     stimmte nicht. Die Anmerkung liegt nicht über dem Text, sie steht daneben, wie
+     eine Randbemerkung mit einem anderen Stift. Was sie vom Text unterscheidet, sind
+     ihre Spalte, ihre kleinere Schrift und ihre ruhigere Farbe; dafür braucht es
+     keinen Rahmen. Und weil die Markierung im Text seit dem 8.8.2026 selbst sagt,
+     welche Stelle gemeint ist, muss die Karte es nicht mehr durch Gewicht behaupten.
+     Die drei Formen, die WIRKLICH über dem Text liegen — Korrektur, Einfügung,
+     Zielplatz —, holen sich ihre Fläche weiter unten selbst zurück. */
+  border: 0; border-radius: var(--radius-overlay);
+  background: transparent; box-shadow: none; color: var(--text-primary);
   font-family: var(--font-sans); text-align: left;
   /* Der Auftritt (docs/PHILOSOPHIE.md §1). Der Versatz ist die eigentliche Aussage:
      erst zeichnet der Stift im Text, dann tritt die Anmerkung daneben. Wer mit einem
@@ -105,7 +141,13 @@
 .onda-annotation[data-state="loading"] { opacity: .68; }
 .onda-annotation[data-state="applied"] { background: var(--bg-sunken); }
 .onda-annotation[data-state="rejected"], .onda-annotation[data-state="closed"] { opacity: .62; }
-.onda-annotation[data-state="stale"], .onda-annotation[data-state="error"] { border-color: var(--danger); }
+/* „Textstelle verändert" und der Fehlerfall trugen ihr Zeichen an der Kante. Es gibt
+   keine Kante mehr — der Ring liegt jetzt INNEN, in der vorhandenen Polsterung, und
+   verschiebt darum keine Zeile. Ohne ihn wäre ein sichtbarer Zustand stillschweigend
+   verschwunden, und das wäre kein Aufräumen, sondern ein Verlust. */
+.onda-annotation[data-state="stale"], .onda-annotation[data-state="error"] {
+  box-shadow: inset 0 0 0 1px var(--danger);
+}
 .aura-note__head { display: flex; align-items: center; gap: var(--space-2); min-width: 0; font: var(--type-label); }
 .aura-note__head > svg { flex: none; color: var(--text-tertiary); }
 .aura-note__kind { min-width: 0; }
@@ -152,6 +194,10 @@
 .onda-annotation.aura-corr__pop {
   flex-direction: row; align-items: center; gap: var(--space-3); width: auto; max-width: 100%;
   padding: 9px 10px 9px 16px; border: 0; border-radius: var(--radius-panel);
+  /* Diese Form liegt WIRKLICH ueber dem Text — sie erscheint direkt am Wort, nicht in
+     der Nebenspalte. Ohne eigene Flaeche laesen sich zwei Schriften uebereinander.
+     Deshalb behaelt sie Grund und Schatten, die die Anmerkung selbst abgelegt hat. */
+  background: var(--bg-surface);
   box-shadow: var(--shadow-md); font: var(--type-body); letter-spacing: var(--tracking-normal);
   /* Eine Zeile, solange sie eine sein kann. Die sechs Stücke — alt, Pfeil, neu, Hinweis,
      Übernehmen, Verwerfen — brauchen nebeneinander 527px; am rechten Rand stehen bei
@@ -187,6 +233,8 @@
    selbst ist, stoert beim Lesen. */
 .onda-annotation.aura-ins__pop {
   gap: 0; width: fit-content; max-width: 100%; padding: 14px 16px;
+  /* Auch sie steht am Text und nicht daneben — siehe Korrektur. */
+  background: var(--bg-surface);
   border: 0; border-radius: var(--radius-panel); box-shadow: var(--shadow-xs);
 }
 .aura-ins__label { display: block; font: var(--type-label); color: var(--text-tertiary); }
@@ -217,7 +265,10 @@
 }
 
 /* --- Zielplatz: gestrichelt, ohne eigene Flaeche ------------------------ */
-.aura-slot { border-style: dashed; border-color: var(--border-strong); background: transparent; box-shadow: none; }
+/* Der Zielplatz war schon immer ohne Flaeche — jetzt braucht er den gestrichelten
+   Rahmen ausdruecklich, denn die Anmerkung darunter hat gar keinen mehr. Gestrichelt,
+   weil der Platz noch leer ist: eine durchgezogene Kante waere eine Behauptung. */
+.aura-slot { border: 1px dashed var(--border-strong); background: transparent; box-shadow: none; }
 .aura-slot__label { font: var(--type-label); color: var(--text-tertiary); }
 .aura-slot__note { margin: 0; font: var(--type-caption); color: var(--text-secondary); }
 

@@ -4123,6 +4123,17 @@ function scheduleLocalPosition(blockId) {
   })
 }
 
+// Korrektur und Einfuegung sind in der Vorlage keine Karten, sondern schon von sich
+// aus eine Zeile. Sie zuzuklappen hiesse, eine Zeile in eine Zeile zu klappen.
+function kompaktZeile(knoten) {
+  return knoten.classList.contains('aura-corr__pop') || knoten.classList.contains('aura-ins__pop')
+}
+
+// Welche Anmerkung ist unter dem Text ausdruecklich aufgeklappt? Genau eine, und nur
+// bis die naechste kommt: das Aufklappen ist eine Handbewegung fuer diesen Moment,
+// keine Einstellung, die bleibt.
+let aufgeklappteAnmerkung = null
+
 function positionLocalSurface(blockId) {
   if (!ctx || !controller) return
   const ui = elements()
@@ -4158,11 +4169,34 @@ function positionLocalSurface(blockId) {
     : Math.min(sideWidth, availableRight - 42)
 
   local.classList.toggle('is-below', below)
+  // Unter dem Text wird aus der Anmerkung eine ruhige Zeile.
+  //
+  // Danebenstehen ist der Normalfall: die Anmerkung hat ihre eigene Spalte und stoert
+  // niemanden. Unter dem Text hat sie keine eigene Spalte mehr — dort schiebt sie den
+  // naechsten Absatz nach unten und steht mitten im Lesefluss. Bei zwei Dritteln
+  // Fensterbreite passiert genau das (gemessen 8.8.2026: bei 1000px 312px hoch,
+  // volle Textbreite). „Dass da irgendwie dann nichts umspringt oder verdeckt ist"
+  // (Jakob, 8.8.2026) — eine Zeile springt nicht.
+  //
+  // Zugeklappt heisst nicht weg: die Zeile sagt weiter, worum es geht, und der Text
+  // im Absatz traegt seine Markierung unveraendert. Wer mehr wissen will, klappt auf.
+  const zugeklappt = below && !kompaktZeile(local) && aufgeklappteAnmerkung !== local.dataset.findingId
+  local.classList.toggle('ist-zugeklappt', zugeklappt)
+  if (zugeklappt) {
+    local.setAttribute('role', 'button')
+    local.setAttribute('tabindex', '0')
+    local.setAttribute('aria-expanded', 'false')
+  } else {
+    local.removeAttribute('role')
+    local.removeAttribute('tabindex')
+    local.removeAttribute('aria-expanded')
+  }
+
   // Korrektur und Einfuegung sind in der Vorlage KEINE Karten: die eine ist eine
   // Zeile, die andere waechst mit ihrem Vorschlag. Presst man sie auf
   // Kartenbreite, bricht "alt → neu" auf drei Zeilen um und sieht wieder aus wie
   // das, was sie nicht sein soll. Sie bekommen deshalb nur eine Obergrenze.
-  const kompakt = local.classList.contains('aura-corr__pop') || local.classList.contains('aura-ins__pop')
+  const kompakt = kompaktZeile(local)
   if (kompakt) {
     local.style.width = ''
     local.style.maxWidth = `${Math.max(localWidth, below ? localWidth : sideWidth + 120)}px`
@@ -4203,9 +4237,14 @@ function positionLocalSurface(blockId) {
   // Luft unter der Anmerkung, damit sie den naechsten Absatz nicht beruehrt. Frueher
   // war das die Hoehe des Plus-Knopfes plus Abstand; ohne ihn ein fester Wert in
   // derselben Groessenordnung (44px Trefferflaeche + 2px).
+  //
+  // Fuer die zugeklappte Zeile gilt das nicht: 46px unter einer 52px hohen Zeile sind
+  // mehr Luft als Zeile, und der Absatz danach rutscht weiter, als die Anmerkung hoch
+  // ist. Sie bekommt denselben Abstand wie eine Anmerkung neben dem Text.
   const touchTriggerClearance = 46
+  const luftDarunter = below && !zugeklappt ? touchTriggerClearance : 14
   const spacing = feedbackBottom > blockRect.bottom
-    ? feedbackBottom - blockRect.bottom + (below ? touchTriggerClearance : 14)
+    ? feedbackBottom - blockRect.bottom + luftDarunter
     : 0
   setLocalFindingDecoration(blockId, Math.min(MAX_LOCAL_SUGGESTION_SPACING, spacing))
 }
@@ -4237,6 +4276,10 @@ function renderLocalFinding() {
   // Baustein, den es nicht mehr gibt, entsteht keine — die Anmerkung bleibt lesbar,
   // sie behauptet nur kein Wohin, das der Text nicht hergibt.
   aktuellesZiel = ortswechselZiel(finding, blocks, blockId)
+
+  // Eine neue Anmerkung kommt zugeklappt. Das Aufklappen galt der vorigen — sonst
+  // stuende die naechste sofort in voller Groesse da, und der Takt waere dahin.
+  if (finding?.id !== aufgeklappteAnmerkung) aufgeklappteAnmerkung = null
 
   if (
     localDecoratedDocId !== doc.id
@@ -5932,6 +5975,24 @@ export function initWorkspace(context) {
     reconcilePersistedEditingFinding()
     refreshWorkspace()
   }
+
+  // Die zugeklappte Zeile unter dem Text aufklappen. Die ganze Zeile ist der Weg, nicht
+  // ein kleines Dreieck daneben — zugeklappt gibt es in ihr nichts anderes zu treffen,
+  // und ein 36px hohes Ziel trifft man auch mit dem Daumen. Aufgeklappt greift die
+  // Bedingung nicht mehr, die Knoepfe darin arbeiten also ungestoert.
+  const aufklappen = knoten => {
+    const karte = knoten?.closest?.('.onda-annotation.ist-zugeklappt')
+    if (!karte) return false
+    aufgeklappteAnmerkung = karte.dataset.findingId || null
+    positionLocalSurface(karte.dataset.blockId)
+    karte.querySelector('button')?.focus()
+    return true
+  }
+  listen(ui.localLayer, 'click', event => { aufklappen(event.target) })
+  listen(ui.localLayer, 'keydown', event => {
+    if (event.key !== 'Enter' && event.key !== ' ') return
+    if (aufklappen(event.target)) event.preventDefault()
+  })
 
   listen(ui.back, 'click', onBack)
   // Zwei Wege zur Übersicht, weil beide erwartbar sind: der Pfeil unten links und der
