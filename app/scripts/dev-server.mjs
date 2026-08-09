@@ -1,7 +1,8 @@
 import { context as createBuildContext } from 'esbuild'
+import { createHash } from 'node:crypto'
 import { watch } from 'node:fs'
 import { createServer } from 'node:http'
-import { readFile } from 'node:fs/promises'
+import { readdir, readFile } from 'node:fs/promises'
 import { extname, isAbsolute, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -19,6 +20,27 @@ const MIME = new Map([
   ['.svg', 'image/svg+xml'],
   ['.woff2', 'font/woff2'],
 ])
+
+const WATCHED_CODE = /\.(?:css|[cm]?js)$/
+
+// Der Fingerabdruck des Inhalts. Eine unlesbare oder gelöschte Datei gilt als
+// verändert — dann soll die Vorschau ruhig neu laden.
+async function fingerprint(file) {
+  try {
+    return createHash('sha1').update(await readFile(file)).digest('hex')
+  } catch {
+    return 'fehlt'
+  }
+}
+
+async function watchedFiles(sourceDir) {
+  try {
+    const entries = await readdir(sourceDir, { recursive: true })
+    return entries.filter(name => WATCHED_CODE.test(name)).map(name => resolve(sourceDir, name))
+  } catch {
+    return []
+  }
+}
 
 const LIVE_CLIENT = `<script data-onda-dev-reload>
 (() => {
@@ -65,17 +87,52 @@ export async function startDevServer({
   logger = console,
 } = {}) {
   const clients = new Set()
+  const marks = new Map()
+  const pendingReload = new Set()
+  const pendingBuild = new Set()
   let closed = false
   let reloadTimer = null
+  let forceReload = false
 
-  const broadcast = () => {
-    reloadTimer = null
+  // Die gemeldeten Dateien lesen und mit dem zuletzt gesehenen Stand vergleichen.
+  //
+  // Erst hier, am Ende der Entprellung — nicht schon beim Eintreffen der Meldung.
+  // writeFile leert eine Datei zuerst und schreibt dann: wer zu früh liest, erwischt
+  // sie halbleer und hält das für eine Änderung. Gemessen am 8.8.2026: bei einer
+  // 40-MB-Datei lud jede von zehn Runden grundlos neu, bei 200 Byte jede zwanzigste.
+  const hasRealChange = async pending => {
+    const files = [...pending]
+    pending.clear()
+    const fresh = await Promise.all(files.map(fingerprint))
+    let changed = false
+    files.forEach((file, index) => {
+      if (marks.get(file) === fresh[index]) return
+      marks.set(file, fresh[index])
+      changed = true
+    })
+    return changed
+  }
+
+  const sendReload = () => {
     if (!nachladen) return
     for (const client of clients) client.write('event: reload\ndata: changed\n\n')
   }
   const scheduleReload = () => {
     clearTimeout(reloadTimer)
-    reloadTimer = setTimeout(broadcast, debounceMs)
+    reloadTimer = setTimeout(async () => {
+      reloadTimer = null
+      const forced = forceReload
+      forceReload = false
+      // Die Warteliste wird immer geleert, auch beim erzwungenen Neuladen — sonst
+      // schleppt sie einen alten Eintrag mit und löst später ein zweites Mal aus.
+      const changed = await hasRealChange(pendingReload)
+      if (forced || changed) sendReload()
+    }, debounceMs)
+  }
+  // Ein gelungener Build lädt immer neu — dort steht die Änderung schon fest.
+  const requestReload = () => {
+    forceReload = true
+    scheduleReload()
   }
 
   const server = createServer(async (request, response) => {
@@ -137,13 +194,14 @@ export async function startDevServer({
     buildTimer = setTimeout(() => {
       buildTimer = null
       buildQueue = buildQueue.then(async () => {
+        if (!(await hasRealChange(pendingBuild))) return
         try {
           const result = await buildContext.rebuild()
           if (result.errors.length) {
             for (const detail of result.errors) logger.error?.(detail.text)
             return
           }
-          scheduleReload()
+          requestReload()
         } catch (error) {
           for (const detail of error.errors ?? [error]) logger.error?.(detail.text ?? detail.message)
         }
@@ -151,19 +209,38 @@ export async function startDevServer({
     }, Math.max(debounceMs, 80))
   }
 
+  // Onda lädt nur neu, wenn eine Datei wirklich anders ist als zuletzt gesehen.
+  //
+  // macOS reicht beim Anhängen des Wächters auch Meldungen aus der Vergangenheit
+  // nach. Bis zum 8.8.2026 hielt hier ein Wartefenster von debounceMs + 20 dagegen —
+  // ein Wettlauf gegen das Betriebssystem, den das Betriebssystem manchmal gewann:
+  // gemessen kam die Meldung für eine unveränderte style.css erst nach 62 ms und
+  // löste ein grundloses Neuladen aus. Mit dem Wartefenster war etwa jeder
+  // vierzigste Lauf von dev-server.test.mjs rot, ohne es 37 von 40. Der Vergleich am
+  // Inhalt kennt keine Frist und braucht deshalb auch keine.
+  const indexHtml = resolve(root, 'index.html')
+  const sourceDir = resolve(root, 'src')
+  await Promise.all([indexHtml, ...(await watchedFiles(sourceDir))].map(
+    async file => { marks.set(file, await fingerprint(file)) },
+  ))
+
   const fileWatchers = [
-    watch(resolve(root, 'index.html'), scheduleReload),
-    watch(resolve(root, 'src'), { recursive: true }, (_event, filename) => {
-      if (filename?.endsWith('.css')) scheduleReload()
-      else if (filename && /\.(?:[cm]?js)$/.test(filename)) scheduleJavaScriptBuild()
+    watch(indexHtml, () => {
+      pendingReload.add(indexHtml)
+      scheduleReload()
+    }),
+    watch(sourceDir, { recursive: true }, (_event, filename) => {
+      if (!filename || !WATCHED_CODE.test(filename)) return
+      const file = resolve(sourceDir, filename)
+      if (filename.endsWith('.css')) {
+        pendingReload.add(file)
+        scheduleReload()
+      } else {
+        pendingBuild.add(file)
+        scheduleJavaScriptBuild()
+      }
     }),
   ]
-
-  // macOS can deliver file events that were queued while the watcher was attached.
-  // Drain that short startup window before any browser can subscribe.
-  await new Promise(resolveSettled => setTimeout(resolveSettled, debounceMs + 20))
-  clearTimeout(reloadTimer)
-  reloadTimer = null
 
   try {
     await new Promise((resolveListening, rejectListening) => {
@@ -186,7 +263,7 @@ export async function startDevServer({
     host,
     port: actualPort,
     url: `http://${host}:${actualPort}/`,
-    scheduleReload,
+    scheduleReload: requestReload,
     async close() {
       if (closed) return
       closed = true

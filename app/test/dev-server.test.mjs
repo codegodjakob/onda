@@ -157,6 +157,19 @@ test('lädt nach HTML und CSS gebündelt neu', async t => {
   assert.match(event, /event: reload/)
 })
 
+// Onda entscheidet am Inhalt, nicht an der Meldung. Das hält auch die Meldungen ab,
+// die macOS beim Anhängen des Wächters aus der Vergangenheit nachreicht.
+test('ein Speichern ohne echte Änderung lädt nicht neu', async t => {
+  const { root, dev } = await servedFixture(t, { debounceMs: 20 })
+
+  await expectNoReload(dev, async () => {
+    for (const file of ['index.html', 'src/style.css', 'src/editor.js']) {
+      const target = resolve(root, file)
+      await writeFile(target, await readFile(target))
+    }
+  }, 600)
+})
+
 test('lädt JavaScript nur nach erfolgreichem Build und erholt sich', async t => {
   const errors = []
   const { root, dev } = await servedFixture(t, {
