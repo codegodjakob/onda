@@ -49,6 +49,7 @@ const AUSNAHMEN = new Map([
   ['panels.js', 'Prosa ueber Vergangenes: die Datei war "laengst nicht mehr im Bundle" — genau das erzaehlt der Kommentar.'],
   ['data.json', 'Name der gespeicherten Nutzerdatei zur Laufzeit, keine Datei im Projektbaum.'],
   ['bilanz-varianten.mjs', 'Prosa ueber Vergangenes: der Vorgaenger von anmerkung-wortlaut.mjs, am 7.8.2026 bewusst abgeschafft.'],
+  ['evals/results/fertigzustand-latest.json', 'Prosa ueber Vergangenes: umgestaltung-entschieden.mjs:15 erzaehlt, dass das Tor diese Datei BIS ZUM 6.8.2026 las und dass genau das schiefging -- es beurteilte den Stand von vorgestern. Die Datei soll es nicht mehr geben; sie ist seit B1 erzeugt statt versioniert. Ein Verweis, der eine abgeschaffte Sache benennt, darf nicht rot machen -- sonst gewoehnt man sich an ein rotes Netz.'],
 ])
 
 // ---------------------------------------------------------------------------------------

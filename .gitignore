@@ -40,8 +40,42 @@ app/evals/results/laeufe/
 # Der Waechter betrieb/waechter/erzeugt.mjs (W5) prueft dieselben Muster noch einmal gegen
 # die verfolgten Dateien -- weil in diesem Projekt bewiesen ist, dass eine Zeile hier
 # allein nicht traegt.
+#
+# DIESELBE UNTERSCHEIDUNG BEI DEN BILDSCHIRMFOTOS, nachgetragen am 09.08.2026:
+# Achtzehn dieser Bilder sind ZITIERT. app/evals/onda-ui-rubric.json fuehrt sie unter
+# "evidence" als die Belege auf, auf die sich die bestandene Qualitaetsbewertung stuetzt,
+# und app/test/onda-quality-rubric.test.mjs prueft Zeile fuer Zeile nach, dass es jeden
+# davon gibt. Als sie mitentfernt wurden, wurde diese Pruefung rot -- 1015 von 1016 statt
+# 1016 von 1016. Ein Beleg, den man wegwirft, belegt nichts mehr.
+#
+# Also gilt hier, was auch fuer archiv/ und verlauf/ gilt: Gedaechtnis bleibt, Ausgabe geht.
+# Die achtzehn zitierten bleiben, die uebrigen achtundzwanzig Bilder gehen. Wer die Liste
+# in der Rubrik aendert, aendert auch diese hier -- sonst wird die Pruefung wieder rot und
+# sagt genau, welches Bild fehlt.
+#
+# Wichtig fuer die Schreibweise: Es steht "screenshots/*" und nicht "screenshots/". Git
+# kann eine einzelne Datei nicht zurueckholen, wenn ihr ganzer Ordner ausgeschlossen ist --
+# die Ausnahmen darunter blieben wirkungslos.
 # ---------------------------------------------------------------------------------------
-app/evals/results/screenshots/
+app/evals/results/screenshots/*
+!app/evals/results/screenshots/onda-editor-1440.png
+!app/evals/results/screenshots/onda-editor-1024.png
+!app/evals/results/screenshots/onda-editor-720.png
+!app/evals/results/screenshots/onda-editor-320.png
+!app/evals/results/screenshots/onda-library-1280.png
+!app/evals/results/screenshots/onda-library-320.png
+!app/evals/results/screenshots/onda-editor-dark-1440.png
+!app/evals/results/screenshots/onda-editor-dark-320.png
+!app/evals/results/screenshots/onda-library-dark-1280.png
+!app/evals/results/screenshots/onda-library-dark-320.png
+!app/evals/results/screenshots/annotation-lab-light-1280.png
+!app/evals/results/screenshots/annotation-lab-light-320.png
+!app/evals/results/screenshots/annotation-lab-dark-1280.png
+!app/evals/results/screenshots/annotation-lab-dark-320.png
+!app/evals/results/screenshots/onda-overlay-ki.png
+!app/evals/results/screenshots/onda-overlay-agent.png
+!app/evals/results/screenshots/onda-overlay-argument.png
+!app/evals/results/screenshots/onda-overlay-audit.png
 app/evals/results/onda-ui-runs/
 app/evals/results/*-latest.json
 app/evals/results/stand.html

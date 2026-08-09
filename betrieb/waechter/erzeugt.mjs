@@ -30,6 +30,7 @@
 // geraten -- sie sind das Gedaechtnis des Projekts und bleiben versioniert.
 
 import { spawnSync } from 'node:child_process'
+import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
 const WURZEL = fileURLToPath(new URL('../../', import.meta.url))
@@ -88,10 +89,41 @@ function verfolgteDateien() {
   return lauf.stdout.split('\0').filter(Boolean)
 }
 
+// ---------------------------------------------------------------------------------------
+// Die zitierten Belege — die eine Ausnahme, und warum sie ABGELEITET statt aufgezaehlt ist.
+//
+// app/evals/onda-ui-rubric.json fuehrt unter „evidence" die Bildschirmfotos auf, auf die
+// sich die bestandene Qualitaetsbewertung stuetzt, und app/test/onda-quality-rubric.test.mjs
+// prueft nach, dass es jedes davon wirklich gibt. Diese Bilder sind derselbe Fall wie
+// archiv/ und verlauf/: einmal geschossen, danach zitiert, nicht bei jedem Lauf neu. Ein
+// Beleg, den man wegwirft, belegt nichts mehr.
+//
+// Am 9.8.2026 waren sie mitentfernt worden. Ergebnis: 1015 von 1016 Pruefungen statt 1016.
+//
+// Warum abgeleitet und nicht hier aufgezaehlt: Zwei Listen desselben Inhalts laufen
+// auseinander, sobald jemand nur eine davon pflegt -- das ist in diesem Projekt mehrfach
+// passiert. Es gibt genau EINE Liste, die der Belege, und sie steht in der Rubrik. Wer
+// dort ein Bild streicht, verliert hier automatisch die Ausnahme dafuer.
+// ---------------------------------------------------------------------------------------
+function zitierteBelege() {
+  try {
+    const rubrik = JSON.parse(readFileSync(new URL('../../app/evals/onda-ui-rubric.json', import.meta.url), 'utf8'))
+    return new Set((rubrik.current?.evidence ?? []).map(pfad => `app/${pfad}`))
+  } catch (fehler) {
+    // Lieber streng als still: Ist die Rubrik unlesbar, gibt es keine Ausnahmen. Dann wird
+    // dieser Waechter rot und nennt den Grund -- das ist besser, als ein Loch aufzumachen.
+    console.log(`  Hinweis: app/evals/onda-ui-rubric.json war nicht lesbar (${fehler.message}).`)
+    console.log('  Es gilt darum KEINE Beleg-Ausnahme. Erst die Rubrik reparieren.\n')
+    return new Set()
+  }
+}
+
+const belege = zitierteBelege()
 const verfolgt = verfolgteDateien()
 const treffer = []
 
 for (const pfad of verfolgt) {
+  if (belege.has(pfad)) continue
   for (const eintrag of MUSTER) {
     if (eintrag.muster.test(pfad)) treffer.push({ pfad, grund: eintrag.grund })
   }
@@ -119,7 +151,9 @@ for (const eintrag of MUSTER) {
 console.log('Erzeugt-Waechter (W5) — liegt Maschinenausgabe in der Versionsverwaltung?\n')
 console.log(`  ${MUSTER.length} Erzeugt-Muster gegen ${verfolgt.length} verfolgte Dateien geprueft.`)
 console.log('  Nicht geprueft, mit Absicht: app/evals/results/archiv/ und app/evals/results/verlauf/')
-console.log('  — schreib-einmal, nie ueberschrieben, darum konfliktfrei und weiter versioniert.\n')
+console.log('  — schreib-einmal, nie ueberschrieben, darum konfliktfrei und weiter versioniert.')
+console.log(`  Ebenfalls ausgenommen: ${belege.size} zitierte Bildschirmfotos aus app/evals/onda-ui-rubric.json`)
+console.log('  — sie sind die Belege der Qualitaetsbewertung, die Liste steht dort und nur dort.\n')
 
 if (treffer.length === 0 && ungedeckt.length === 0) {
   console.log('GRUEN: Keine erzeugte Datei wird verfolgt, und jedes Muster ist von der .gitignore gedeckt.')
