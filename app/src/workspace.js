@@ -4156,42 +4156,6 @@ function replyToAnnotation(finding, text) {
   sendeLocalChat(finding, text)
 }
 
-// Der andere Stift (docs/PHILOSOPHIE.md §1). Das EINZIGE Bedienelement fuer
-// Anmerkungen, das uebrig ist. Es kann genau zwei Dinge: sagen, dass Anmerkungen da
-// sind, und sie aus- und einblenden.
-//
-// Was es ausdruecklich NICHT tut: zaehlen. "0 Fehler · 1 Empfehlung · 0 Geschmack" war
-// eine Punktetafel, und eine Punktetafel hat ein Ziel — sie auf null bringen. Wer neben
-// dir schreibt, sagt nicht, wie viele Anmerkungen er noch hat.
-//
-// Fuer die Augen also nur ein Stift. Fuer Vorlesegeraete der volle Wortlaut: wer nicht
-// sieht, dass jemand mitschreibt, muss es gesagt bekommen. Die Zurueckhaltung ist eine
-// Frage der Augen, nicht der Zugaenglichkeit.
-function renderAnnotationPresence() {
-  const doc = ctx?.activeDoc()
-  const workspace = activeWorkspace()
-  const zeichen = document.getElementById('annotationPresence')
-  if (!zeichen || !doc || !workspace) return
-
-  const offen = (Array.isArray(doc.findings) ? doc.findings : []).filter(finding => finding?.status === 'open')
-  const summary = annotationSummary(offen)
-
-  // Kein Anlass, kein Zeichen. Ein Stift, der nichts anzustreichen hat, liegt nicht
-  // sichtbar herum.
-  zeichen.hidden = summary.total === 0
-  if (zeichen.hidden) return
-
-  if (!zeichen.firstChild) zeichen.append(ondaIcon('edit', { size: 18 }))
-
-  const sichtbar = !workspace.quietAnnotations
-  zeichen.setAttribute('aria-pressed', String(sichtbar))
-  const wortlaut = bilanzVorlesetext(summary)
-  zeichen.setAttribute('aria-label', sichtbar
-    ? `${wortlaut}. Anmerkungen ausblenden.`
-    : `${wortlaut}. Anmerkungen einblenden.`)
-  zeichen.title = sichtbar ? 'Anmerkungen ausblenden' : 'Anmerkungen einblenden'
-}
-
 function scheduleLocalPosition(blockId) {
   if (localPositionFrame) cancelAnimationFrame(localPositionFrame)
   queueMicrotask(() => {
@@ -4367,6 +4331,22 @@ function renderLocalFinding() {
   }
 }
 
+// DER ORB SAGT DREIERLEI, und alle drei muessen unterscheidbar bleiben. Jakob am
+// 8. August 2026: "man kann das ein und ausblenden von anmerkungen vielleicht auch mit
+// in den orb integrieren. sodass der orb evt vielleicht selber signalisiert […] wenn
+// eine anmerkung da ist."
+//
+//   is-thinking      der Agent arbeitet GERADE. Das ist die einzige Bewegung am Orb.
+//   has-unseen       im GESPRAECH liegt etwas Neues. Ein Punkt oben rechts.
+//   hat-anmerkungen  im TEXT stehen Anmerkungen. Neu, und ausdruecklich STILL.
+//
+// WARUM KEIN PULSIEREN, obwohl Jakob es vorgeschlagen hat. Zwei Gruende, beide am Code
+// belegt. Erstens ist die Bewegung schon vergeben: der Orb atmet, wenn der Agent
+// arbeitet. Ein zweites Pulsieren waere vom ersten nicht zu unterscheiden — zwei
+// verschiedene Sachverhalte in derselben Geste. Zweitens sagt PHILOSOPHIE.md §1: eine
+// Zahl neben "Fehler" macht aus einem Geschenk eine Hausaufgabe. Ein Pulsieren ist
+// derselbe Griff in anderer Form. Ein stehendes Zeichen sagt "es ist etwas da"; ein
+// pulsierendes sagt "sieh JETZT hin". Das eine kann man liegen lassen.
 function applyAuraState() {
   const orb = elements().agentPresence
   if (!orb) return
@@ -4378,10 +4358,97 @@ function applyAuraState() {
   orb.classList.toggle('is-thinking', laeuft)
   orb.classList.toggle('is-quiet', !laeuft)
   orb.classList.toggle('has-unseen', unseen)
-  orb.setAttribute(
-    'aria-label',
-    unseen ? 'Agentengespräch öffnen (neue Anmerkung)' : 'Agentengespräch öffnen',
-  )
+
+  const anmerkungen = offeneAnmerkungen()
+  const stumm = Boolean(workspace?.quietAnnotations)
+  // Das Zeichen steht nur, wenn Anmerkungen da UND sichtbar sind. Wer sie ausgeblendet
+  // hat, hat sich fuer Ruhe entschieden — dann bleibt auch der Orb ruhig.
+  orb.classList.toggle('hat-anmerkungen', anmerkungen.total > 0 && !stumm)
+  orb.classList.toggle('sind-stumm', anmerkungen.total > 0 && stumm)
+
+  // FUER DIE AUGEN EIN ZEICHEN, FUER VORLESEGERAETE DER VOLLE WORTLAUT. Die
+  // Zurueckhaltung ist eine Frage der Augen, nicht der Zugaenglichkeit
+  // (PHILOSOPHIE.md §1). Hier steht deshalb, was der Stift vorher vorgelesen hat —
+  // wie viele Anmerkungen es sind und welcher Art —, und dazu die zweite Geste.
+  const teile = ['Agentengespräch öffnen']
+  if (unseen) teile.push('neue Nachricht im Gespräch')
+  if (anmerkungen.total > 0) {
+    teile.push(bilanzVorlesetext(anmerkungen))
+    teile.push(stumm
+      ? 'Lange drücken oder Wahltaste und Eingabe: Anmerkungen einblenden'
+      : 'Lange drücken oder Wahltaste und Eingabe: Anmerkungen ausblenden')
+  }
+  orb.setAttribute('aria-label', teile.join('. '))
+  orb.title = anmerkungen.total > 0 && stumm
+    ? 'Agentengespräch — lange drücken blendet die Anmerkungen wieder ein'
+    : anmerkungen.total > 0
+      ? 'Agentengespräch — lange drücken blendet die Anmerkungen aus'
+      : 'Agentengespräch öffnen'
+}
+
+// Die offenen Anmerkungen des gezeigten Textes, gezaehlt wie der Stift sie gezaehlt
+// hat. Gezeigt wird die Zahl nirgends — sie geht nur an Vorlesegeraete.
+function offeneAnmerkungen() {
+  const doc = ctx?.activeDoc()
+  const offen = (Array.isArray(doc?.findings) ? doc.findings : [])
+    .filter(finding => finding?.status === 'open')
+  return annotationSummary(offen)
+}
+
+// VORUEBERGEHEND. Drei stille Zeichen zur Wahl, damit die Entscheidung am laufenden
+// Programm faellt und nicht in einer Ueberlegung. Erscheint nur, wenn localStorage
+// 'ondaVarianten' auf '1' steht; nach der Wahl fliegt die Leiste raus und die
+// gewaehlte Fassung bleibt als einzige in style.css stehen.
+const ORB_ZEICHEN = [
+  ['kragen', 'Kragen'],
+  ['saum', 'Saum'],
+  ['punkt', 'Punkt'],
+]
+
+function renderOrbZeichenUmschalter() {
+  let an = false
+  try {
+    an = window.localStorage?.getItem('ondaVarianten') === '1'
+  } catch {
+    an = false
+  }
+  if (!an) return () => {}
+
+  let gemerkt = 'kragen'
+  try {
+    gemerkt = window.localStorage?.getItem('ondaOrbZeichen') || 'kragen'
+  } catch {
+    gemerkt = 'kragen'
+  }
+  if (!ORB_ZEICHEN.some(([name]) => name === gemerkt)) gemerkt = 'kragen'
+
+  const setzen = name => {
+    if (name === 'kragen') delete document.documentElement.dataset.orbZeichen
+    else document.documentElement.dataset.orbZeichen = name
+    try {
+      window.localStorage?.setItem('ondaOrbZeichen', name)
+    } catch {
+      // Ohne Speicher faellt nur das Erinnern weg, nicht das Umschalten.
+    }
+  }
+  setzen(gemerkt)
+
+  const leiste = createNode('div', 'onda-varianten')
+  leiste.append(createNode('span', 'onda-varianten__wort', 'Zeichen'))
+  const knoepfe = ORB_ZEICHEN.map(([name, wort]) => {
+    const knopf = createNode('button', 'onda-varianten__knopf', wort)
+    knopf.type = 'button'
+    knopf.dataset.fassung = name
+    knopf.setAttribute('aria-pressed', String(name === gemerkt))
+    knopf.addEventListener('click', () => {
+      setzen(name)
+      knoepfe.forEach(anderer => anderer.setAttribute('aria-pressed', String(anderer === knopf)))
+    })
+    leiste.append(knopf)
+    return knopf
+  })
+  document.body.append(leiste)
+  return () => leiste.remove()
 }
 
 // Prueft die Schluessel-Lage und setzt den ruhigen Grundzustand des Agenten.
@@ -5913,7 +5980,6 @@ export function refreshWorkspace({ reconcileEditing = false } = {}) {
   renderMaterialEntry()
   renderMaterialTree()
   syncThemeToggle()
-  renderAnnotationPresence()
   renderLocalFinding()
   renderAgentWidget()
   renderEvidenceWindow()
@@ -6008,6 +6074,12 @@ export function initWorkspace(context) {
     ctx.showHomeView()
   }
   const onAgentPresence = () => {
+    // Langes Druecken hat gerade schon umgeschaltet. Der Klick, der darauf folgt,
+    // gehoert zu derselben Geste und darf das Gespraech nicht zusaetzlich oeffnen.
+    if (gesteVerbraucht) {
+      gesteVerbraucht = false
+      return
+    }
     const workspace = activeWorkspace()
     if (!workspace) return
     const opening = !workspace.agent.open
@@ -6071,6 +6143,56 @@ export function initWorkspace(context) {
     annotationController?.setQuiet(!workspace?.quietAnnotations)
     refreshWorkspace()
   }
+
+  // DIE ZWEITE GESTE AM ORB. Der Stift neben ihm ist fort; das Aus- und Einblenden
+  // liegt jetzt auf dem Orb selbst. Ein Klick oeffnet weiter das Gespraech, langes
+  // Druecken blendet die Anmerkungen aus und wieder ein.
+  //
+  // DAS KOSTET WAS, und der Preis steht in docs/ORB-UND-ANMERKUNGEN.md: eine Geste,
+  // die nirgends steht. Bezahlt wird er auf zwei Wegen. Erstens sagt der Orb sie an —
+  // im Titel und im Vorlesetext steht, was langes Druecken tut. Zweitens gibt es einen
+  // Tastenweg: Wahltaste und Eingabe, solange der Orb den Fokus hat. Ohne den waere
+  // die Funktion fuer Tastatur und Vorlesegeraete gar nicht mehr erreichbar, und Ruhe
+  // ist keine Ausrede fuer Auslassung (PHILOSOPHIE.md §1).
+  const DRUCKDAUER = 450
+  let druckUhr = null
+  let druckStart = null
+  let gesteVerbraucht = false
+
+  const druckAbbrechen = () => {
+    if (druckUhr) clearTimeout(druckUhr)
+    druckUhr = null
+    druckStart = null
+  }
+
+  const onOrbDruckAn = event => {
+    // Nur die Haupttaste. Ein Rechtsklick oeffnet das Kontextmenue und darf nichts
+    // umschalten.
+    if (event.button !== 0) return
+    if (offeneAnmerkungen().total === 0) return
+    druckStart = { x: event.clientX, y: event.clientY }
+    druckUhr = setTimeout(() => {
+      druckUhr = null
+      // Verbraucht: der Klick, der gleich folgt, darf das Gespraech nicht auch noch
+      // oeffnen. Ohne diese Sperre taete langes Druecken zwei Dinge auf einmal.
+      gesteVerbraucht = true
+      toggleQuietAnnotations()
+    }, DRUCKDAUER)
+  }
+
+  // Wer beim Druecken abrutscht, wollte nicht umschalten. Sechs Pixel sind die
+  // Toleranz, die auch ein ruhiger Finger auf dem Trackpad noch erzeugt.
+  const onOrbBewegung = event => {
+    if (!druckStart) return
+    if (Math.hypot(event.clientX - druckStart.x, event.clientY - druckStart.y) > 6) druckAbbrechen()
+  }
+
+  const onOrbTaste = event => {
+    if (event.key !== 'Enter' || !event.altKey) return
+    if (offeneAnmerkungen().total === 0) return
+    event.preventDefault()
+    toggleQuietAnnotations()
+  }
   document.querySelector('.onda-side-back-chevron')?.replaceChildren(ondaIcon('arrow-left', { size: 16 }))
   document.getElementById('kiSettings')?.replaceChildren(ondaIcon('settings', { size: 18 }))
 
@@ -6126,6 +6248,14 @@ export function initWorkspace(context) {
   // Name oben links. Derselbe Weg, nicht zwei verschiedene.
   listen(document.getElementById('ondaHome'), 'click', onBack)
   listen(ui.agentPresence, 'click', onAgentPresence)
+  listen(ui.agentPresence, 'pointerdown', onOrbDruckAn)
+  listen(ui.agentPresence, 'pointermove', onOrbBewegung)
+  listen(ui.agentPresence, 'pointerup', druckAbbrechen)
+  listen(ui.agentPresence, 'pointercancel', druckAbbrechen)
+  // Auch der Fokusverlust bricht ab: sonst liefe die Uhr weiter, waehrend der Zeiger
+  // laengst woanders ist, und schaltete aus dem Nichts um.
+  listen(ui.agentPresence, 'pointerleave', druckAbbrechen)
+  listen(ui.agentPresence, 'keydown', onOrbTaste)
   listen(ui.toggle, 'click', onSidebarToggle)
   // Zwei Gesten, klar getrennt: der Name oeffnet das Fenster, der Pfeil klappt den
   // Baum. Ein Knopf, der beides taete, koennte keins von beidem ankuendigen.
@@ -6150,11 +6280,11 @@ export function initWorkspace(context) {
   // ruhig, Sammeluebernahme, rueckgaengig, Entscheidung zuruecknehmen und zwei fuer
   // den Arbeitsmodus. Sie hingen alle an der Leiste ueber dem Text, und die Leiste ist
   // fort (docs/PHILOSOPHIE.md §1 "Der andere Stift").
-  listen(document.getElementById('annotationPresence'), 'click', toggleQuietAnnotations)
   listenEditor('selectionUpdate', onSelectionUpdate)
   listenEditor('update', onEditorUpdate)
 
   cleanups.push(blaseBeobachten())
+  cleanups.push(renderOrbZeichenUmschalter())
 
   // Status-Abo: Statuszeile und Aura folgen dem echten Agenten-Zustand.
   cleanups.push(beiAgentStatus(() => {
@@ -6237,6 +6367,16 @@ export function initWorkspace(context) {
 export const __workspaceTestBridge = {
   destroy() {
     controller?.destroy()
+  },
+  // Anmerkungen aus- und einblenden, ohne die Geste nachzuspielen. Solange der Stift
+  // existierte, konnten Pruefungen ihn einfach anklicken; seit dem 8. August 2026 liegt
+  // das Umschalten auf langem Druecken am Orb, und ein langer Druck laesst sich in
+  // einer Pruefung nur mit Zeitspiel nachstellen. Wer die GESTE selbst pruefen will,
+  // nimmt weiter den echten Weg — hierueber wird nur der ZUSTAND hergestellt.
+  setQuietAnnotations(quiet) {
+    annotationController?.setQuiet(quiet === true)
+    refreshWorkspace()
+    return quiet === true
   },
   reinitialize() {
     if (!lastContext) return null

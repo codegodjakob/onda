@@ -93,6 +93,44 @@ test('liefert die App lokal aus und injiziert Reload nur in die Antwort', async 
   assert.doesNotMatch(await readFile(resolve(root, 'index.html'), 'utf8'), /__onda_reload/)
 })
 
+test('als Prüfserver spritzt er nichts ein und lädt nichts nach', async t => {
+  // DER FALLSTRICK, an dem am 9. August 2026 zwei Bauten scheiterten. Der Nachlade-
+  // Client ist beim Entwickeln ein Segen — Datei speichern, Seite aktualisiert sich.
+  // Als Prüfserver ist er ein Fallstrick: jede Testseite trägt dann ein
+  // `location.reload()`, das jederzeit feuern kann. Feuert es mitten in einer Prüfung,
+  // bricht sie mit "Execution context was destroyed" ab, oder eine Zusicherung schlägt
+  // fehl, weil die Seite heimlich ihren Zustand verloren hat. Beides sah wie ein Befund
+  // aus und war keiner.
+  const { root, dev } = await servedFixture(t, { nachladen: false })
+
+  const html = await (await fetch(dev.url)).text()
+  assert.doesNotMatch(html, /__onda_reload/, 'Der Prüfserver spritzt den Nachlade-Client ein')
+  assert.doesNotMatch(html, /location\.reload/, 'Der Prüfserver kann die Seite neu laden')
+
+  // Und er schickt auch kein Ereignis, wenn sich wirklich etwas ändert. Ohne diese
+  // zweite Hälfte bliebe der Kanal offen und ein Client, der ihn von sich aus abonniert,
+  // bekäme das Signal trotzdem.
+  // collectReload WIRFT, wenn nichts kommt — hier ist das der Erfolg. Deshalb wird der
+  // Fehlschlag abgefangen und in „nichts empfangen" übersetzt, statt ihn zu bestehen.
+  const empfangen = await collectReload(dev, async () => {
+    await writeFile(resolve(root, 'src/style.css'), 'body { color: rebeccapurple; }')
+  }, 1200).catch(fehler => {
+    assert.match(String(fehler.message), /reload timeout/,
+      `Unerwarteter Fehlschlag beim Horchen: ${fehler.message}`)
+    return ''
+  })
+  assert.doesNotMatch(empfangen, /event: reload/, 'Der Prüfserver schickt trotzdem ein Nachlade-Ereignis')
+})
+
+test('der Bau startet den Server ausdrücklich als Prüfserver', async () => {
+  // Der Schalter nützt nichts, wenn ihn niemand setzt. Geprüft wird deshalb die Stelle,
+  // an der es zählt: das Pflicht-Tor in mac/build.sh.
+  const bau = await readFile(new URL('../../mac/build.sh', import.meta.url), 'utf8')
+  const zeile = bau.split('\n').find(z => z.includes('dev-server.mjs') && !z.trimStart().startsWith('#'))
+  assert.ok(zeile, 'mac/build.sh startet gar keinen Prüfserver mehr')
+  assert.match(zeile, /--kein-nachladen/, 'Der Bau startet den Server mit Nachladen — seine Seiten können sich selbst neu laden')
+})
+
 test('liefert korrekte Inhaltstypen und 404 für fehlende Dateien', async t => {
   const { dev } = await servedFixture(t)
 

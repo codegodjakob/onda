@@ -42,11 +42,26 @@ function injectLiveClient(html) {
     : `${html}${LIVE_CLIENT}`
 }
 
+// `nachladen: false` macht aus dem Entwicklungsserver einen PRUEFSERVER: er baut und
+// liefert weiter, spritzt aber keinen Nachlade-Client in die Seite und schickt kein
+// reload-Ereignis.
+//
+// WARUM DAS SEIN MUSS. Beim Entwickeln ist der Client ein Segen — Datei speichern,
+// Seite aktualisiert sich. Als Pruefserver ist er ein Fallstrick: jede Testseite traegt
+// dann ein `location.reload()`, das jederzeit feuern kann. Feuert es mitten in einer
+// Pruefung, bricht sie mit "Execution context was destroyed, most likely because of a
+// navigation" ab — oder, schlimmer, eine Zusicherung schlaegt fehl, weil die Seite
+// heimlich neu geladen und ihren Zustand verloren hat. Beides sah am 9. August 2026 im
+// Bau wie ein Befund aus und war keiner: zwei verschiedene rote Laeufe, keiner davon in
+// 19 Wiederholungen ohne diesen Server reproduzierbar.
+//
+// Ein Tor, dessen Seiten sich unter ihm selbst neu laden koennen, prueft nicht.
 export async function startDevServer({
   root = DEFAULT_ROOT,
   host = DEFAULT_HOST,
   port = DEFAULT_PORT,
   debounceMs = 80,
+  nachladen = true,
   logger = console,
 } = {}) {
   const clients = new Set()
@@ -55,6 +70,7 @@ export async function startDevServer({
 
   const broadcast = () => {
     reloadTimer = null
+    if (!nachladen) return
     for (const client of clients) client.write('event: reload\ndata: changed\n\n')
   }
   const scheduleReload = () => {
@@ -85,7 +101,7 @@ export async function startDevServer({
       }
       const data = await readFile(target)
       const body = target === resolve(root, 'index.html')
-        ? injectLiveClient(data.toString('utf8'))
+        ? (nachladen ? injectLiveClient(data.toString('utf8')) : data.toString('utf8'))
         : data
       response.writeHead(200, {
         'content-type': MIME.get(extname(target)) ?? 'application/octet-stream',
@@ -188,6 +204,11 @@ export async function startDevServer({
   }
 }
 
+// --kein-nachladen: als Pruefserver laufen. Siehe die Begruendung an startDevServer.
+function cliNachladen(args) {
+  return !args.includes('--kein-nachladen')
+}
+
 function cliPort(args) {
   const token = args.find(argument => argument.startsWith('--port='))
   if (!token) return DEFAULT_PORT
@@ -204,9 +225,11 @@ const isMain = process.argv[1]
 if (isMain) {
   let running = null
   try {
-    const port = cliPort(process.argv.slice(2))
-    running = await startDevServer({ port })
-    console.log(`Onda Live: ${running.url}`)
+    const argumente = process.argv.slice(2)
+    const port = cliPort(argumente)
+    const nachladen = cliNachladen(argumente)
+    running = await startDevServer({ port, nachladen })
+    console.log(`Onda ${nachladen ? 'Live' : 'Pruefserver'}: ${running.url}`)
 
     let stopping = false
     const stop = async () => {
