@@ -148,7 +148,14 @@ for (const treffer of ausgabe.matchAll(/^ok\s+(DESIGN-\d+)\b/gm)) bestanden.add(
 // Eine Ausgabe ohne eine einzige Ergebniszeile heisst: gemessen wurde nichts.
 const gemessen = /^(ok|not ok) DESIGN-\d+/m.test(ausgabe)
 if (!fehler.length && !gemessen) {
-  fehler.push(`Die Gestalt-Prüfung hat kein einziges Ergebnis gemeldet (${herkunft}) — ohne Messung kein Urteil.`)
+  // NICHT als Mangel melden: Diese Prüfung liest den Stand der Gestalt-Prüfung. Hat die
+  // gar nicht gemessen — weil der lokale Server nicht lief —, dann weiss diese hier
+  // nichts ueber die App. Am 9.8.2026 war das der Fall, und DESIGN-06 stand als
+  // Mangel in der Liste, obwohl nichts kaputt war. Das eigene Wort dafuer steht in
+  // src/messbarkeit.mjs; der Prueflauf zaehlt so etwas getrennt.
+  process.stdout.write(`NICHT MESSBAR: Die Gestalt-Prüfung hat kein einziges Ergebnis gemeldet (${herkunft}) — ohne Messung kein Urteil.\n`)
+  process.exitCode = 1
+  process.exit(1)
 }
 
 // --- Die eigentliche Pruefung -------------------------------------------------

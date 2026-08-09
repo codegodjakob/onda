@@ -18,6 +18,10 @@ const ERLAUBTE_ERGEBNIS_STATUS = new Set([
   'future-stage',
   'external-open',
   'not-applicable',
+  // Die Prüfung kam gar nicht an die App — toter Server, fehlender Browser, volle
+  // Platte. Das ist kein Urteil über die App und darf nicht wie eines aussehen.
+  // Gilt trotzdem nicht als bestanden. Siehe src/messbarkeit.mjs.
+  'not-measurable',
 ])
 
 function istObjekt(wert) {
@@ -279,7 +283,8 @@ export function validiereEvalErgebnisse(katalog, ergebnis) {
       if (!nichtLeererString(eintrag.note)) fehler.push(`Eval ${eintrag.id}: external-open benötigt eine Begründung.`)
     }
     if (
-      (eintrag.status === 'future-stage' || eintrag.status === 'not-applicable')
+      (eintrag.status === 'future-stage' || eintrag.status === 'not-applicable'
+        || eintrag.status === 'not-measurable')
       && !nichtLeererString(eintrag.note)
     ) {
       fehler.push(`Eval ${eintrag.id}: ${eintrag.status} benötigt eine Begründung.`)

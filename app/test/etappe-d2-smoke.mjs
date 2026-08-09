@@ -368,16 +368,45 @@ const selected = process.env.AIWT_BROWSER
   ? [[process.env.AIWT_BROWSER, browsers[process.env.AIWT_BROWSER]]]
   : Object.entries(browsers)
 
+// Ein Browser, der in dieser Umgebung nicht installiert ist, ist kein Mangel an Onda.
+// Bis zum 9.8.2026 riss ein fehlender Firefox die ganze Prüfung ab, und der Prüflauf
+// meldete daraufhin AUDIT-01 und AUDIT-03 als nicht bestanden — zwei Zusagen über die
+// Nachvollziehbarkeit, an denen nichts kaputt war.
+//
+// Übersprungen wird deshalb, aber NIE still: jeder fehlende Browser steht am Ende in
+// einer eigenen Zeile, und wenn KEINER läuft, bricht die Prüfung hart ab. Eine grüne
+// Zeile ohne einen einzigen Lauf wäre die schlimmere Lüge.
+const uebersprungen = []
+let gelaufen = 0
+
 for (const [name, launcher] of selected) {
   if (!launcher) throw new Error(`Unbekannter Browser: ${name}`)
-  const browser = await launcher.launch({ headless: true })
+  let browser = null
+  try {
+    browser = await launcher.launch({ headless: true })
+  } catch (ursache) {
+    if (!/Executable doesn't exist|playwright install/.test(String(ursache))) throw ursache
+    uebersprungen.push(name)
+    console.log(`Etappe D2 smoke (${name}): ÜBERSPRUNGEN — in dieser Umgebung nicht installiert`)
+    continue
+  }
   try {
     await runCoreFlow(browser)
     await runResponsiveFlow(browser)
     await runKeyboardAndZoomFlow(browser)
     await runDeletionFlow(browser)
     console.log(`Etappe D2 smoke (${name}): PASS`)
+    gelaufen += 1
   } finally {
     await browser.close()
   }
+}
+
+if (!gelaufen) {
+  throw new Error(`Etappe D2 smoke: KEIN Browser lief (${uebersprungen.join(', ')} fehlen) — `
+    + 'ohne einen einzigen Lauf gibt es hier nichts zu bestätigen. npx playwright install')
+}
+if (uebersprungen.length) {
+  console.log(`Etappe D2 smoke: ${gelaufen} Browser gelaufen, `
+    + `${uebersprungen.length} übersprungen (${uebersprungen.join(', ')} nicht installiert).`)
 }

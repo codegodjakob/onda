@@ -3,8 +3,8 @@
   "catalogVersion": "2026-08-05.3",
   "stage": "FERTIGZUSTAND",
   "iteration": 1,
-  "generatedAt": "2026-08-08T14:25:16.782Z",
-  "gitCommit": "2bffd5f488f050854915198f079e23b9b53cbe30",
+  "generatedAt": "2026-08-09T10:10:45.961Z",
+  "gitCommit": "7eb8e7b165782578163e0d7ffaf1364d854b735d",
   "rubricScores": {
     "truth": 5,
     "authorship": 5,
@@ -38,8 +38,15 @@
     }
   ],
   "massstabVergleich": {
-    "status": "unveraendert",
-    "aenderungen": []
+    "status": "geaendert",
+    "aenderungen": [
+      {
+        "bereich": "urteilsweise",
+        "art": "hinzugefuegt",
+        "id": "evals/pruefungen/gestalt.mjs",
+        "jetzt": "je-eval"
+      }
+    ]
   },
   "massstab": {
     "catalogVersion": "2026-08-05.3",

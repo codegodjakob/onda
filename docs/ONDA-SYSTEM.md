@@ -228,11 +228,18 @@ node evals/run-fertigzustand.mjs
 
 Im Projektstamm baut `mac/build.sh` das lokale `Onda.app`-Paket. Für Browserprüfungen muss die
 App unter `http://127.0.0.1:4173/` erreichbar sein; die bestehenden Test- und Eval-Läufe benutzen
-diesen festen lokalen Endpunkt.
+diesen festen lokalen Endpunkt. Der Fertigzustandsrunner startet ihn seit dem 9.8.2026 selbst.
 
-Der Fertigzustandsrunner führt jede gebundene Prüfung in demselben Lauf frisch aus. 126 lokale
-Evals müssen bestehen. Die Rubrik wird unabhängig von der Abdeckung aus Gold-, Kontrast- und
-Vollausgabe-Fixtures berechnet.
+Der Fertigzustandsrunner führt jede gebundene Prüfung in demselben Lauf frisch aus. Am 9.8.2026
+bestanden 147 lokale Evals, 5 bleiben ehrliche Live-Gates (Abschnitt 13); die Zahl misst man
+frisch mit `node evals/run-fertigzustand.mjs`, statt sie hier nachzuschlagen. Die Rubrik wird
+unabhängig von der Abdeckung aus Gold-, Kontrast- und Vollausgabe-Fixtures berechnet.
+
+**Eine Prüfung, die nicht laufen konnte, ist kein Mangel an der App.** Toter Server, fehlender
+Browser, volle Platte: Der Lauf meldet das als NICHT GEMESSEN, getrennt von „nicht belegt".
+Beides hält den Lauf rot — ungemessen darf nie grün sein —, aber nur eines ist eine Aussage über
+Onda. Vor dieser Trennung meldete derselbe Lauf einmal 25 Mängel, von denen keiner existierte
+(`app/src/messbarkeit.mjs`).
 
 ## 13. Ehrlich verbleibende Live-Abnahme
 

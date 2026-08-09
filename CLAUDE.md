@@ -51,5 +51,11 @@ node evals/run-fertigzustand.mjs   # Fertigzustand frisch messen
 node evals/zeichne-stand.mjs       # Diagramm dazu
 ```
 
-Browser-Prüfungen brauchen einen lokalen Server auf Port 4173 (`cd app && python3 -m
-http.server 4173`).
+`node evals/run-fertigzustand.mjs` startet den lokalen Server auf Port 4173 selbst und
+räumt ihn danach wieder ab. Für einzelne Browser-Prüfungen von Hand braucht es ihn
+weiterhin: `cd app && python3 -m http.server 4173`.
+
+**Läuft er nicht, lügt keine Zahl.** Eine Prüfung, die gar nicht an die App kam, meldet
+der Lauf als NICHT GEMESSEN — getrennt von „nicht belegt", das echte Befunde zählt. Am
+9.8.2026 stand hier einmal „25 Evals nicht bestanden", und kein einziger davon war ein
+Mangel. Siehe `app/src/messbarkeit.mjs`.

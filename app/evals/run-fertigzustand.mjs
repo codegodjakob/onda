@@ -11,7 +11,7 @@
 // er gemessen hat (Katalog samt Bindungen), und meldet jede inhaltliche
 // Abweichung vom letzten Lauf als eigenen Abschnitt „Maßstab geändert".
 
-import { execFile } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -19,6 +19,7 @@ import { promisify } from 'node:util'
 import { flattenEvals, ladeEvalKatalog, validiereEvalErgebnisse } from '../src/eval-catalog.mjs'
 import { runQualityRubric } from './run-quality-rubric.mjs'
 import { urteileJeEval } from '../src/bindungs-urteil.mjs'
+import { serverAntwortet, standDerPruefung } from '../src/messbarkeit.mjs'
 import {
   belegartAusVollzug,
   formatiereMassstabAenderungen,
@@ -63,6 +64,44 @@ for (const [id, dateien] of Object.entries(bindungen)) {
   for (const datei of dateien) evalsProDatei.set(datei, [...(evalsProDatei.get(datei) || []), id])
 }
 await mkdir(protokollOrdner, { recursive: true })
+
+// VORSTART. Die Browser-Prüfungen brauchen den lokalen Server auf 4173. Bis zum
+// 9.8.2026 musste man ihn von Hand starten, und wer das vergaß, bekam keinen Hinweis,
+// sondern 23 rote Evals — darunter alle sieben DESIGN-Zusagen, an denen nichts kaputt
+// war. Eine Voraussetzung, an die man denken MUSS, ist eine Voraussetzung, die der
+// Lauf selbst herstellen sollte.
+const SERVER_URL = 'http://127.0.0.1:4173/'
+let selbstGestarteterServer = null
+if (await serverAntwortet(SERVER_URL)) {
+  process.stdout.write('Lokaler Server auf 4173: läuft bereits.\n')
+} else {
+  process.stdout.write('Lokaler Server auf 4173 antwortet nicht — wird für diesen Lauf gestartet …\n')
+  selbstGestarteterServer = spawn('node', ['scripts/dev-server.mjs', '--port=4173'],
+    { cwd: appWurzel, stdio: 'ignore', detached: false })
+  // BEIDES ist noetig, und das eine ohne das andere hat den Lauf schon haengen lassen:
+  //   unref()  — Node wartet sonst am Ende auf dieses Kind und beendet sich NIE. Genau
+  //              so hing der erste Versuch dieses Vorstarts: alle Zahlen standen
+  //              gedruckt da, der Prozess lief trotzdem weiter.
+  //   kill()   — ohne das bliebe nach jedem Lauf ein Server auf 4173 zurueck.
+  selbstGestarteterServer.unref()
+  const serverBeenden = () => {
+    if (selbstGestarteterServer && !selbstGestarteterServer.killed) {
+      selbstGestarteterServer.kill()
+    }
+  }
+  process.once('exit', serverBeenden)
+  for (const zeichen of ['SIGINT', 'SIGTERM']) {
+    process.once(zeichen, () => { serverBeenden(); process.exit(130) })
+  }
+  if (await serverAntwortet(SERVER_URL, 25, 400)) {
+    process.stdout.write('Lokaler Server auf 4173: steht.\n')
+  } else {
+    // Nicht stillschweigend weiterlaufen: ohne Server misst dieser Lauf die App nicht,
+    // und jedes rote Browser-Eval wäre eine Behauptung über etwas Ungemessenes.
+    process.stdout.write('WARNUNG: Der Server ließ sich nicht starten. Alle Browser-Prüfungen '
+      + 'dieses Laufs werden als NICHT MESSBAR gemeldet, nicht als fehlgeschlagen.\n')
+  }
+}
 
 process.stdout.write(`Führe ${pruefungen.length} Prüfungen aus …\n`)
 
@@ -118,8 +157,11 @@ for (const [index, datei] of pruefungen.entries()) {
     dateiOk: ok,
   })
   await writeFile(protokoll, ausgabe, 'utf8')
+  // Konnte diese Prüfung die App überhaupt erreichen? Siehe src/messbarkeit.mjs.
+  const messbarkeit = standDerPruefung({ ok, ausgabe: letzteAusgabe })
   laufErgebnis.set(datei, {
     ok,
+    messbarkeit,
     modus: stand.modus,
     urteile: stand.urteile,
     belegart,
@@ -197,12 +239,27 @@ const ergebnisEvals = evals.map(eintrag => {
           scoreRationale: qualitaet.scoredEvalRationales[eintrag.id],
         } : {}),
       }
-      : {
-        id: eintrag.id,
-        status: 'failed',
-        evidence: belege,
-        note: scoreOk ? gebrochenText(urteile) : `Qualitätsrubrik ${score ?? 'ohne Wert'} liegt unter ${katalog.thresholds.minimumDimensionScore}.`,
-      }
+      : (() => {
+        // Konnte auch nur eine der gebundenen Prüfungen die App gar nicht erreichen,
+        // ist dieses Eval NICHT GEMESSEN — und das ist keine Aussage über die App.
+        // Es zählt weiterhin nicht als bestanden (Schweigen darf nie grün sein), aber
+        // es heißt nicht mehr „fehlgeschlagen". Siehe src/messbarkeit.mjs.
+        const unmessbar = laeufe.find(lauf => lauf?.messbarkeit?.stand === 'nicht-messbar')
+        if (unmessbar) {
+          return {
+            id: eintrag.id,
+            status: 'not-measurable',
+            evidence: belege,
+            note: `Nicht gemessen — ${unmessbar.messbarkeit.grund} Abhilfe: ${unmessbar.messbarkeit.abhilfe}`,
+          }
+        }
+        return {
+          id: eintrag.id,
+          status: 'failed',
+          evidence: belege,
+          note: scoreOk ? gebrochenText(urteile) : `Qualitätsrubrik ${score ?? 'ohne Wert'} liegt unter ${katalog.thresholds.minimumDimensionScore}.`,
+        }
+      })()
   }
 
   if (liveIds.has(eintrag.id)) {
@@ -223,7 +280,7 @@ const ergebnisEvals = evals.map(eintrag => {
 })
 
 // --- Rubrik und Abdeckung getrennt halten -----------------------------------
-const zaehler = { passed: 0, failed: 0, 'external-open': 0 }
+const zaehler = { passed: 0, failed: 0, 'external-open': 0, 'not-measurable': 0 }
 ergebnisEvals.forEach(e => { zaehler[e.status] = (zaehler[e.status] || 0) + 1 })
 const anwendbar = ergebnisEvals.length - zaehler['external-open']
 const anteil = anwendbar ? zaehler.passed / anwendbar : 0
@@ -286,7 +343,12 @@ if (massstabVergleich.status === 'geaendert') {
   process.stdout.write('\n')
 }
 process.stdout.write(`Bestanden:      ${zaehler.passed}\n`)
-process.stdout.write(`Nicht belegt:   ${zaehler.failed}\n`)
+process.stdout.write(`Nicht belegt:   ${zaehler.failed}${zaehler.failed ? '  (echte Befunde an der App)' : ''}\n`)
+// Eigene Zeile, und nur wenn es sie gibt. Zusammengezählt mit „nicht belegt" hat dieser
+// Lauf am 9.8.2026 25 Mängel gemeldet, von denen keiner existierte.
+if (zaehler['not-measurable']) {
+  process.stdout.write(`NICHT GEMESSEN: ${zaehler['not-measurable']}  (die Prüfung kam nicht an die App — kein Urteil über sie)\n`)
+}
 process.stdout.write(`Live-Gates:     ${zaehler['external-open']}\n`)
 process.stdout.write(`Qualität:       ${qualitaet.weightedScore} / 5  (Gold-, Kontrast- und Vollausgabe-Rubrik)\n`)
 process.stdout.write(`Abdeckung:      ${Math.round(anteil * 100)} % der anwendbaren Evals frisch belegt\n`)
@@ -298,6 +360,13 @@ process.stdout.write(`Maßstab:        ${{
 process.stdout.write(`Ergebnis:       evals/results/fertigzustand-latest.json\n`)
 const schwellenFehler = []
 if (zaehler.failed) schwellenFehler.push(`${zaehler.failed} anwendbare Evals sind nicht bestanden.`)
+// Ungemessen ist NICHT grün — der Lauf bleibt rot, bis gemessen wurde. Nur der Grund
+// steht sauber getrennt da, damit niemand anfängt, heile Dinge zu reparieren.
+if (zaehler['not-measurable']) {
+  const gruende = [...new Set(ergebnisEvals.filter(e => e.status === 'not-measurable')
+    .map(e => (e.note || '').replace(/^Nicht gemessen — /, '')))]
+  schwellenFehler.push(`${zaehler['not-measurable']} Evals konnten nicht gemessen werden (kein Befund an der App):\n    ${gruende.join('\n    ')}`)
+}
 if (qualitaet.weightedScore < katalog.thresholds.minimumWeightedScore) {
   schwellenFehler.push(`Gesamtqualität ${qualitaet.weightedScore} liegt unter ${katalog.thresholds.minimumWeightedScore}.`)
 }

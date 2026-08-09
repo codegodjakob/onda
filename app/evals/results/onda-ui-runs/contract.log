@@ -2,181 +2,181 @@ TAP version 13
 # Subtest: Onda kennt exakt 24 Text- und fünf Notizarten
 ok 1 - Onda kennt exakt 24 Text- und fünf Notizarten
   ---
-  duration_ms: 0.5355
+  duration_ms: 1.027039
   type: 'test'
   ...
 # Subtest: jede Anmerkungsart besitzt einen vollständigen unveränderlichen Darstellungsvertrag
 ok 2 - jede Anmerkungsart besitzt einen vollständigen unveränderlichen Darstellungsvertrag
   ---
-  duration_ms: 0.596291
+  duration_ms: 1.969903
   type: 'test'
   ...
 # Subtest: die Natur des Hinweises bestimmt zehn unterschiedliche Darstellungsformen
 ok 3 - die Natur des Hinweises bestimmt zehn unterschiedliche Darstellungsformen
   ---
-  duration_ms: 0.153625
+  duration_ms: 0.441565
   type: 'test'
   ...
 # Subtest: Prioritäten entsprechen Fehler, Empfehlung und Geschmack aus der Referenz
 ok 4 - Prioritäten entsprechen Fehler, Empfehlung und Geschmack aus der Referenz
   ---
-  duration_ms: 0.060042
+  duration_ms: 0.133928
   type: 'test'
   ...
 # Subtest: Text- und Notizmodus lassen nur ihre eigenen Arten zu
 ok 5 - Text- und Notizmodus lassen nur ihre eigenen Arten zu
   ---
-  duration_ms: 0.066875
+  duration_ms: 0.167136
   type: 'test'
   ...
 # Subtest: Legacy-Findings werden sicher normalisiert ohne das Original zu verändern
 ok 6 - Legacy-Findings werden sicher normalisiert ohne das Original zu verändern
   ---
-  duration_ms: 0.087
+  duration_ms: 0.181671
   type: 'test'
   ...
 # Subtest: vorhandene genaue Art gewinnt und Stilmittel-Metadaten schlagen die grobe Kategorie
 ok 7 - vorhandene genaue Art gewinnt und Stilmittel-Metadaten schlagen die grobe Kategorie
   ---
-  duration_ms: 0.060916
+  duration_ms: 0.1928
   type: 'test'
   ...
 # Subtest: unbekannte oder kaputte Findings fallen auf eine subjektive Anmerkung zurück
 ok 8 - unbekannte oder kaputte Findings fallen auf eine subjektive Anmerkung zurück
   ---
-  duration_ms: 0.054208
+  duration_ms: 0.137086
   type: 'test'
   ...
 # Subtest: Textmodus-Schema erlaubt exakt die 24 Textarten und verlangt anmerkungsart
 ok 9 - Textmodus-Schema erlaubt exakt die 24 Textarten und verlangt anmerkungsart
   ---
-  duration_ms: 2.135708
+  duration_ms: 1.70014
   type: 'test'
   ...
 # Subtest: Notizmodus-Schema erlaubt ausschließlich die fünf Notizarten
 ok 10 - Notizmodus-Schema erlaubt ausschließlich die fünf Notizarten
   ---
-  duration_ms: 0.211167
+  duration_ms: 0.175997
   type: 'test'
   ...
 # Subtest: Anfrage verwendet das Schema des ausdrücklich gewählten Arbeitsmodus
 ok 11 - Anfrage verwendet das Schema des ausdrücklich gewählten Arbeitsmodus
   ---
-  duration_ms: 0.22625
+  duration_ms: 0.309549
   type: 'test'
   ...
 # Subtest: Prompts erklären die genaue Art positiv und schützen lose Notizen vor Korrekturen
 ok 12 - Prompts erklären die genaue Art positiv und schützen lose Notizen vor Korrekturen
   ---
-  duration_ms: 0.162291
+  duration_ms: 0.252501
   type: 'test'
   ...
 # Subtest: Verarbeitung verwirft eine genaue Art aus dem falschen Modus, liest Legacy aber weiter
 ok 13 - Verarbeitung verwirft eine genaue Art aus dem falschen Modus, liest Legacy aber weiter
   ---
-  duration_ms: 1.718917
+  duration_ms: 1.260647
   type: 'test'
   ...
 # Subtest: Onda-Tokens besitzen genau vier Schriftgrößen und drei Gewichte
 ok 14 - Onda-Tokens besitzen genau vier Schriftgrößen und drei Gewichte
   ---
-  duration_ms: 5.346583
+  duration_ms: 10.321401
   type: 'test'
   ...
 # Subtest: Sky, editoriale Grundflaechen, warme Overlays und Aura sind kanonisch definiert
 ok 15 - Sky, editoriale Grundflaechen, warme Overlays und Aura sind kanonisch definiert
   ---
-  duration_ms: 0.810667
+  duration_ms: 1.409627
   type: 'test'
   ...
 # Subtest: Tokenquelle wird vor Kompatibilitäts- und Komponenten-CSS geladen
 ok 16 - Tokenquelle wird vor Kompatibilitäts- und Komponenten-CSS geladen
   ---
-  duration_ms: 1.076333
+  duration_ms: 0.911103
   type: 'test'
   ...
 # Subtest: Legacy-Styles laden keine zweite Schriftfamilie mehr
 ok 17 - Legacy-Styles laden keine zweite Schriftfamilie mehr
   ---
-  duration_ms: 2.561875
+  duration_ms: 1.909724
   type: 'test'
   ...
 # Subtest: Onda-Icons verwenden die eine Linienregel und zugängliche Namen
 ok 18 - Onda-Icons verwenden die eine Linienregel und zugängliche Namen
   ---
-  duration_ms: 0.935541
+  duration_ms: 1.432638
   type: 'test'
   ...
 # Subtest: Gerenderte Bedienelemente verwenden keine Unicode-Ersatzsymbole
 ok 19 - Gerenderte Bedienelemente verwenden keine Unicode-Ersatzsymbole
   ---
-  duration_ms: 3.254166
+  duration_ms: 6.785326
   type: 'test'
   ...
 # Subtest: Sky ist der einzige auswählbare Akzent
 ok 20 - Sky ist der einzige auswählbare Akzent
   ---
-  duration_ms: 3.412625
+  duration_ms: 4.645815
   type: 'test'
   ...
 # Subtest: Grundflächen sind flach und Aura bleibt der KI vorbehalten
 ok 21 - Grundflächen sind flach und Aura bleibt der KI vorbehalten
   ---
-  duration_ms: 1.254667
+  duration_ms: 1.18604
   type: 'test'
   ...
 # Subtest: Bibliothekszeilen gliedern sich durch Linien statt Kartenschatten
 ok 22 - Bibliothekszeilen gliedern sich durch Linien statt Kartenschatten
   ---
-  duration_ms: 3.469292
+  duration_ms: 1.215621
   type: 'test'
   ...
 # Subtest: Projektstruktur ist eine ruhige Liste statt eines Kartenstapels
 ok 23 - Projektstruktur ist eine ruhige Liste statt eines Kartenstapels
   ---
-  duration_ms: 1.596083
+  duration_ms: 2.286709
   type: 'test'
   ...
 # Subtest: Alle kompakten Aktionen behalten mindestens 44 Pixel Trefferfläche
 ok 24 - Alle kompakten Aktionen behalten mindestens 44 Pixel Trefferfläche
   ---
-  duration_ms: 1.199416
+  duration_ms: 3.165808
   type: 'test'
   ...
 # Subtest: Nur echte Ebenen tragen Schatten
 ok 25 - Nur echte Ebenen tragen Schatten
   ---
-  duration_ms: 1.048083
+  duration_ms: 1.7778
   type: 'test'
   ...
 # Subtest: Anmerkungen trennen ruhiges Zeichen von schwebender Detailfläche
 ok 26 - Anmerkungen trennen ruhiges Zeichen von schwebender Detailfläche
   ---
-  duration_ms: 2.27425
+  duration_ms: 1.755802
   type: 'test'
   ...
 # Subtest: Über dem Text steht keine Leiste — das Zeichen zählt nicht und trägt trotzdem den vollen Wortlaut
 ok 27 - Über dem Text steht keine Leiste — das Zeichen zählt nicht und trägt trotzdem den vollen Wortlaut
   ---
-  duration_ms: 1.941167
+  duration_ms: 4.041435
   type: 'test'
   ...
 # Subtest: Die Ankunft einer Anmerkung ist langsamer als jede andere Bewegung im Haus
 ok 28 - Die Ankunft einer Anmerkung ist langsamer als jede andere Bewegung im Haus
   ---
-  duration_ms: 1.520625
+  duration_ms: 2.439148
   type: 'test'
   ...
 # Subtest: Echte Popups nutzen Overlay-Radius und neutrale Tiefe ohne Aura
 ok 29 - Echte Popups nutzen Overlay-Radius und neutrale Tiefe ohne Aura
   ---
-  duration_ms: 1.113875
+  duration_ms: 2.962447
   type: 'test'
   ...
 # Subtest: Die Sprechblase trägt dieselbe Fläche, Linie und Tiefe wie das Fenster, das sie ersetzt
 ok 30 - Die Sprechblase trägt dieselbe Fläche, Linie und Tiefe wie das Fenster, das sie ersetzt
   ---
-  duration_ms: 2.574791
+  duration_ms: 3.175202
   type: 'test'
   ...
 1..30
@@ -187,5 +187,5 @@ ok 30 - Die Sprechblase trägt dieselbe Fläche, Linie und Tiefe wie das Fenster
 # cancelled 0
 # skipped 0
 # todo 0
-# duration_ms 98.872084
+# duration_ms 145.272011
 
