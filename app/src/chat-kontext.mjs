@@ -12,6 +12,7 @@
 // ({role:'user'|'assistant', content}) ab — exakt das, was baueAnfrage tatsächlich liest.
 
 import { baueOndaBloecke } from './onda-kontext.mjs'
+import { WOERTLICH_BEHALTEN } from './lauf-bilanz.mjs'
 
 // Fix-Runde 2, Finding 2a (Important): ohne Wortgrenzen traf das hier auch mitten in ganz
 // anderen Woertern -- "veranschaulichen" (schau), "überprüfbar" (prüf), "Checkliste" (check).
@@ -32,6 +33,16 @@ const ENTSCHEIDUNGS_LABELS = Object.freeze({
   eigene: 'Eigene Fassung übernommen',
   verworfen: 'Verworfen',
   risiko: 'Risiko bewusst angenommen',
+})
+
+// Kompakte Substantive fuer die Sammelzeile aelterer Entscheidungen (kurzformEntscheidungen
+// unten) -- bewusst eigene, kuerzere Woerter statt ENTSCHEIDUNGS_LABELS: "Angenommen: Hinweis"
+// ist eine Satzform fuer EINE Zeile, "3 angenommen" eine Zaehlform fuer eine Sammelzeile.
+const AELTERE_ENTSCHEIDUNGEN_LABELS = Object.freeze({
+  angenommen: 'angenommen',
+  verworfen: 'verworfen',
+  risiko: 'Risiko angenommen',
+  eigene: 'eigene Fassung',
 })
 
 function gueltigeTurns(thread) {
@@ -100,10 +111,46 @@ export function entscheidungsEintraege(doc, now = Date.now()) {
     })
 }
 
+// Baut die eine Sammelzeile fuer alle Entscheidungen jenseits der WOERTLICH_BEHALTEN
+// juengsten (siehe kurzformEntscheidungen). Nur Arten mit mindestens einem Fall erscheinen --
+// eine Sammelzeile ohne aeltere Eintraege gibt es nicht (null statt einer leeren Zeile).
+function sammelzeileAeltereEntscheidungen(aeltere) {
+  const zaehler = { angenommen: 0, verworfen: 0, risiko: 0, eigene: 0 }
+  aeltere.forEach(eintrag => {
+    if (Object.prototype.hasOwnProperty.call(zaehler, eintrag.art)) zaehler[eintrag.art] += 1
+  })
+  const teile = Object.keys(AELTERE_ENTSCHEIDUNGEN_LABELS)
+    .filter(art => zaehler[art] > 0)
+    .map(art => `${zaehler[art]} ${AELTERE_ENTSCHEIDUNGEN_LABELS[art]}`)
+  if (!teile.length) return null
+  return `Ältere Entscheidungen: ${teile.join(' · ')}`
+}
+
+// WICHTIG (Issue #13, Task 2): wie bei fasseEntscheidungenZusammen (agent-findings.mjs) ist
+// diese Liste reine Heuristik fuer den Prompt -- keine Garantie. Der Chat kennt Entscheidungen
+// nur zur Orientierung ("das wurde schon geklaert, nicht neu aufrollen"); eine harte Sperre
+// gegen Wiederholung gibt es hier nicht und braucht es auch nicht, weil der Chat (anders als
+// der Hinweislauf) keine neuen Hinweise generiert, die gegen `dedupeHinweise` zu pruefen waeren.
+//
+// Frueher stand hier fuer JEDE Entscheidung eine eigene Zeile -- linear wachsend mit der
+// Entscheidungsgeschichte. Jetzt bleiben nur die WOERTLICH_BEHALTEN juengsten (nach `at`,
+// entscheidungsEintraege sortiert bereits neueste zuerst) als Einzelzeile wie bisher; alles
+// Aeltere faellt in EINE Sammelzeile je Art (angenommen/verworfen/risiko/eigene). Andere
+// Bucket-Logik als verdichteEntscheidungen (lauf-bilanz.mjs): dort wird nach `kategorie`
+// gebuendelt, hier nach `art` -- entscheidungsEintraege kennt keine Kategorie, nur die Art der
+// Entscheidung. Deshalb keine Wiederverwendung der generischen Funktion, sondern eigene,
+// einfache Zaehllogik mit denselben vier festen Eimern.
 export function kurzformEntscheidungen(doc, now = Date.now()) {
-  return entscheidungsEintraege(doc, now).map(eintrag => (
+  const eintraege = entscheidungsEintraege(doc, now)
+  const woertlich = eintraege.slice(0, WOERTLICH_BEHALTEN)
+  const aeltere = eintraege.slice(WOERTLICH_BEHALTEN)
+
+  const zeilen = woertlich.map(eintrag => (
     `${eintrag.label}: ${eintrag.kurztext}${eintrag.begruendung ? ` (Begründung: ${eintrag.begruendung})` : ''}`
   ))
+  const sammelzeile = sammelzeileAeltereEntscheidungen(aeltere)
+  if (sammelzeile) zeilen.push(sammelzeile)
+  return zeilen
 }
 
 export function kurzformHinweise(findings) {
