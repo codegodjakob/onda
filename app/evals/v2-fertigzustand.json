@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": "2026-08-05.3",
-  "target": "Onda — vollständiger Fertigzustand A–D samt Gestalt der Arbeitsoberfläche, zweitem Rückmeldungs-Kanal, Rhythmus nach Moment, dem Wissen im Anfragekontext, dem Prinzip als Pflicht, der Textart als Maßstab und dem Ort, der einer Person gehört",
+  "catalogVersion": "2026-08-09.1",
+  "target": "Onda — vollständiger Fertigzustand A–D samt Gestalt der Arbeitsoberfläche, zweitem Rückmeldungs-Kanal, Rhythmus nach Moment, dem Wissen im Anfragekontext, dem Prinzip als Pflicht, der Textart als Maßstab, dem Ort, der einer Person gehört — und den vier Suiten, die messen, was Onda über sich selbst, über das Wachstum der Person, über das Naheliegende und über die Textsorte noch nicht weiß",
   "thresholds": {
     "allApplicableHardGatesMustPass": true,
     "minimumWeightedScore": 4.6,
@@ -2564,6 +2564,151 @@
           "source": ["AC-22", "app/src/editor.js", "app/test/v2-smoke.mjs"]
         }
       ]
+    },
+    {
+      "id": "SELF",
+      "name": "Onda misst sich selbst",
+      "evals": [
+        {
+          "id": "SELF-01",
+          "title": "Die Ertragszahlen haben einen Leser",
+          "gate": "hard",
+          "automation": "unit",
+          "given": "Zu jedem bezahlten Lauf schreibt Onda mit, wie viele Rückmeldungen geliefert, übernommen und verworfen wurden.",
+          "when": "Jakob wissen will, was die bezahlten Läufe eingebracht haben.",
+          "then": "Ein Modul liest genau diese drei Zahlen und verdichtet sie zu einer Bilanz, die Jakob zu sehen bekommt. Ein Mitschrieb, den niemand liest, ist kein Maß — er ist der Befund, gegen den diese Suite gebaut ist.",
+          "evidence": ["Noch ohne Datenbasis: kein Modul liest geliefert/uebernommen/verworfen aus dem Journal.", "Nötig wäre ein Node-Test, der aus einem Journal mit mehreren Läufen eine Ertragsbilanz bildet."],
+          "source": ["app/src/lauf-journal.mjs", "app/src/lauf-tor.mjs"]
+        },
+        {
+          "id": "SELF-02",
+          "title": "Jede Unterbrechung zählt auf ihren Moment",
+          "gate": "hard",
+          "automation": "unit",
+          "given": "Eine Rückmeldungskarte erscheint zum ersten Mal, in einem der drei Momente.",
+          "when": "Das Journal das Ereignis aufnimmt und später die ältesten Ereignisse zu Monatssummen verdichtet.",
+          "then": "Das Ereignis zählt genau einmal je Karte — ein zweites Erscheinen derselben Karte ist keine zweite Unterbrechung — und es trägt seinen Moment. Auch nach der Verdichtung bleibt die Zahl je Moment und Monat erhalten. Das ist die zählbare Grundlage der Unterbrechungsquote je Moment; die Quote selbst braucht den Leser aus SELF-01.",
+          "evidence": ["Node-Test: merkeGezeigt dedupliziert je findingId und hält den Deckel", "Node-Test: die Verdichtung zählt nach Moment, nicht nach Art"],
+          "source": ["app/src/lauf-journal.mjs", "app/src/lauf-tor.mjs", "app/src/momente-model.mjs"]
+        },
+        {
+          "id": "SELF-03",
+          "title": "Keine unbestätigte Maßstabs-Änderung seit der letzten Abnahme",
+          "gate": "hard",
+          "automation": "file-inspection",
+          "given": "Der Wächter meldet jede inhaltliche Änderung an Katalog, Schwellen, Rubrik und Bindungen.",
+          "when": "Eine Abnahme ansteht.",
+          "then": "Zu jeder gemeldeten Änderung liegt eine Bestätigung der Person vor, mit Datum und Grund; die Zahl der unbestätigten Änderungen ist null. Ohne diesen Gegenschritt bleibt der Wächter eine Anzeige, die niemand quittiert — und Produzent und Richter sind wieder dieselbe Instanz.",
+          "evidence": ["Noch ohne Datenbasis: es gibt keinen Ort, an dem eine gemeldete Maßstabs-Änderung bestätigt wird — Issue #15 hat den Melder gebaut, nicht die Quittung."],
+          "source": ["app/src/massstab-waechter.mjs", "app/evals/run-fertigzustand.mjs"]
+        }
+      ]
+    },
+    {
+      "id": "GROW",
+      "name": "Wachstum heißt: ohne Assistenz messen",
+      "evals": [
+        {
+          "id": "GROW-01",
+          "title": "Dasselbe Muster tritt in später begonnenen Texten seltener auf",
+          "gate": "hard",
+          "automation": "unit",
+          "given": "Ein übertragbares Prinzip ist der Person in mehreren Texten begegnet; jede Begegnung trägt Dokument, Projekt und Zeitpunkt.",
+          "when": "Onda das Wachstum der Person misst.",
+          "then": "Gemessen wird die Wiederauftretensrate desselben Musters in Texten, die NACH der ersten Begegnung begonnen wurden — sie muss fallen. Übernahmequoten zählen ausdrücklich nicht: Wer einen Vorschlag annimmt, zeigt Gehorsam, nicht Können (Kompass, Regel 14).",
+          "evidence": ["Noch ohne Datenbasis: die Begegnungen tragen Zeit und Dokument, aber niemand bildet daraus eine Rate über später begonnene Texte — und es fehlt die Schreibgeschichte mehrerer Monate."],
+          "source": ["app/src/autorentwicklung-model.mjs", "app/src/erkanntes-model.mjs"]
+        },
+        {
+          "id": "GROW-02",
+          "title": "Selbstkorrektur vor dem Hinweis",
+          "gate": "hard",
+          "automation": "unit",
+          "given": "Die Person korrigiert eine Stelle selbst, bevor Onda dazu einen Hinweis gezeigt hat.",
+          "when": "Entwicklungssignale gebildet werden.",
+          "then": "Genau diese Reihenfolge zählt als Können: Korrektur vor Hinweis. Eine Korrektur nach dem Hinweis ist Befolgen und erzeugt kein Entwicklungssignal.",
+          "evidence": ["Noch ohne Datenbasis: das Ereignis author-self-correction wird gelesen, aber von keiner Stelle der App erzeugt; die Reihenfolge gegenüber dem gezeigt-Ereignis vergleicht niemand."],
+          "source": ["app/src/autorentwicklung-model.mjs", "app/src/lauf-journal.mjs"]
+        },
+        {
+          "id": "GROW-03",
+          "title": "Die Monatsfrage: welches Muster ohne Onda",
+          "gate": "hard",
+          "automation": "user-study",
+          "given": "Ein Monat ist vergangen, in dem die Person auch außerhalb von Onda geschrieben hat.",
+          "when": "Onda einmal im Monat fragt, welches Muster sie ohne das Werkzeug angewendet hat.",
+          "then": "Die Antwort kommt von der Person, nicht aus einer Zählung im Programm. Sie ist der einzige unmittelbare Beleg für Können ohne Assistenz und durch keine lokale Fixture wahrheitsgemäß zu ersetzen.",
+          "evidence": ["Nutzerstudie: die monatliche Frage und die Antwort der Person, festgehalten mit Datum."],
+          "source": ["docs/research/KOMPASS.md", "app/src/autorentwicklung-model.mjs"]
+        }
+      ]
+    },
+    {
+      "id": "DIVERGE",
+      "name": "Gegen das Naheliegende",
+      "evals": [
+        {
+          "id": "DIVERGE-01",
+          "title": "Die Weglegen-Quote je Erweiterungsart ist ablesbar",
+          "gate": "hard",
+          "automation": "unit",
+          "given": "Erweiterungen werden gemerkt oder weggelegt; jeder Eintrag trägt seinen Zustand und seine Art.",
+          "when": "Jakob sehen will, welche Art von Angebot er wegzulegen pflegt.",
+          "then": "Die Weglegen-Quote steht je Art — Weiterführung, Feld, Verbindung — mit der Zahl der Fälle daneben; unter zu wenigen Fällen erscheint keine Prozentzahl, sondern „noch zu wenig\". Welche Schwelle Folgen hat, setzt Jakob erst nach der ersten echten Messung; sie gehört nicht in dieses Eval.",
+          "evidence": ["Noch ohne Datenbasis: der Zustand „weg\" wird je Art geschrieben, aber niemand rechnet daraus eine Quote."],
+          "source": ["app/src/erweiterung-model.mjs", "app/src/erweiterungslauf-model.mjs"]
+        },
+        {
+          "id": "DIVERGE-02",
+          "title": "Die Blindprobe entscheidet über die Vorkehrung",
+          "gate": "hard",
+          "automation": "manual-live",
+          "given": "Derselbe echte Text, einmal mit und einmal ohne die Vorkehrungen gegen das Naheliegende.",
+          "when": "Jakob die beiden Sätze von Erweiterungen verblindet nebeneinander liest.",
+          "then": "Das Ergebnis entscheidet über die Vorkehrung: Erkennt er den Unterschied häufiger, als der Zufall ihn erklärt, bleibt sie; erkennt er ihn nicht, fällt sie weg. Ein ehrliches „keine davon wirkt\" ist ein gültiges Ergebnis. Unzulässig ist allein, die Vorkehrung ungeprüft zu behalten, weil sie plausibel klingt.",
+          "evidence": ["Noch ohne Datenbasis: der Harness aus Issue #22 (Selbst-Verwurf als Schema-Pflicht, Kontrastlauf mit blindem Richter) ist nicht gebaut — ohne ihn gibt es keine zwei Sätze zum Vergleichen."],
+          "source": ["app/src/agent-prompts.mjs", "docs/rueckmeldung/karten/04-wie-das-naheliegende-aussieht.md"]
+        },
+        {
+          "id": "DIVERGE-03",
+          "title": "Dieselbe Erweiterung passt nicht auf den zweiten Text",
+          "gate": "hard",
+          "automation": "fixture",
+          "given": "Zwei Fixture-Texte mit verschiedenem Gegenstand.",
+          "when": "Onda zum ersten Text Erweiterungen erzeugt.",
+          "then": "Keine davon ließe sich unverändert auch zum zweiten Text sagen. Der Auftrag dazu steht im Prompt — „Könntest du dieselbe Erweiterung auch zu einem ganz anderen Text sagen? Dann ist sie zu allgemein.\" — gemessen wurde er noch nie.",
+          "evidence": ["Noch ohne Datenbasis: der Allgemeinheits-Check braucht Modellausgaben zu zwei Fixture-Texten; der Harness aus Issue #22 fehlt."],
+          "source": ["app/src/agent-prompts.mjs", "app/evals/fixtures/zweiter-seed.mjs"]
+        }
+      ]
+    },
+    {
+      "id": "GENRE",
+      "name": "Die Textsorte als Maßstab",
+      "evals": [
+        {
+          "id": "GENRE-01",
+          "title": "Die Textsorte reist in jeden Kanal",
+          "gate": "hard",
+          "automation": "integration",
+          "given": "Ein Projekt mit gesetzter Textsorte und sechs Kanäle, die Anfragen an das Modell bauen.",
+          "when": "Ein beliebiger Kanal seine Anfrage abschickt.",
+          "then": "Die Textsorte steht im tatsächlich abgeschickten Anfragekörper jedes Kanals, und sie entscheidet zugleich, welche Hinweisarten in diesem Text Integritätsfragen sind. Ein Kanal, der die Textsorte vergisst, urteilt über einen Text, dessen Art er nicht kennt.",
+          "evidence": ["Prüfung: die Marke der Textsorte erscheint im Anfragekörper aller sechs Kanäle", "Prüfung: die Integritätstabelle entscheidet je Textart und erreicht die Entscheidung, nicht nur die Tabelle"],
+          "source": ["app/src/onda-kontext.mjs", "app/src/textart-regeln.mjs"]
+        },
+        {
+          "id": "GENRE-02",
+          "title": "Fixture-Paare je Sorte mit bestätigten Erwartungs- und Verbotslisten",
+          "gate": "hard",
+          "automation": "fixture",
+          "given": "Je Textsorte — wissenschaftlich, Marketing, Essay — ein Paar aus einem Text, der eine Hinweisart verlangt, und einem, der sie verbietet.",
+          "when": "Onda die Paare durchläuft.",
+          "then": "Gemessen wird gegen Erwartungs- und Verbotslisten, die Jakob bestätigt hat — nicht gegen die Forschungsmatrix. Der Kompass hält einen Forschungsstand fest, keine Setzung; er darf den Maßstab nicht selbst schreiben.",
+          "evidence": ["Noch ohne Datenbasis: die Erwartungs- und Verbotslisten je Sorte sind nicht bestätigt; die Härte-Tabelle je Textsorte ist Issue #24 und offen."],
+          "source": ["docs/research/KOMPASS.md", "app/src/textart-regeln.mjs"]
+        }
+      ]
     }
   ],
   "externalLiveGateIds": [
@@ -2571,6 +2716,7 @@
     "EFFECT-06",
     "SYSTEM-03",
     "SYSTEM-09",
-    "ONDA-UI-18"
+    "ONDA-UI-18",
+    "GROW-03"
   ]
 }

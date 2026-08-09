@@ -228,6 +228,16 @@ ergebnisEvals.forEach(e => { zaehler[e.status] = (zaehler[e.status] || 0) + 1 })
 const anwendbar = ergebnisEvals.length - zaehler['external-open']
 const anteil = anwendbar ? zaehler.passed / anwendbar : 0
 
+// Rot ist nicht gleich rot. Zwei Arten stecken in derselben Zahl, und sie verlangen
+// Verschiedenes: Eine GEBROCHENE Zusage war einmal grün und ist es nicht mehr — da ist
+// etwas kaputt. Eine Zusage OHNE DATENBASIS war nie grün: Ihr Messobjekt steht im
+// Programm, aber die Daten, an denen sie sich messen ließe, gibt es noch nicht (der
+// Grund steht je Kennung in bindungen.json unter _ungebunden_begruendung). Beide zählen
+// gleich gegen den Fertigzustand — bestanden ist keine von beiden. Nur wer sie liest,
+// soll nicht acht bewusst offene Zusagen für acht Regressionen halten.
+const ohneDatenbasis = ergebnisEvals.filter(e => e.status === 'failed' && ungebunden?.[e.id])
+const gebrochen = zaehler.failed - ohneDatenbasis.length
+
 const gitCommit = (await ausfuehren('git', ['rev-parse', 'HEAD'], { cwd: appWurzel })).stdout.trim()
 
 const aktuelleSchleife = {
@@ -287,6 +297,8 @@ if (massstabVergleich.status === 'geaendert') {
 }
 process.stdout.write(`Bestanden:      ${zaehler.passed}\n`)
 process.stdout.write(`Nicht belegt:   ${zaehler.failed}\n`)
+process.stdout.write(`  davon gebrochen:        ${gebrochen}\n`)
+process.stdout.write(`  davon ohne Datenbasis:  ${ohneDatenbasis.length}${ohneDatenbasis.length ? ` (${ohneDatenbasis.map(e => e.id).join(', ')})` : ''}\n`)
 process.stdout.write(`Live-Gates:     ${zaehler['external-open']}\n`)
 process.stdout.write(`Qualität:       ${qualitaet.weightedScore} / 5  (Gold-, Kontrast- und Vollausgabe-Rubrik)\n`)
 process.stdout.write(`Abdeckung:      ${Math.round(anteil * 100)} % der anwendbaren Evals frisch belegt\n`)
@@ -297,7 +309,12 @@ process.stdout.write(`Maßstab:        ${{
 }[massstabVergleich.status]}\n`)
 process.stdout.write(`Ergebnis:       evals/results/fertigzustand-latest.json\n`)
 const schwellenFehler = []
-if (zaehler.failed) schwellenFehler.push(`${zaehler.failed} anwendbare Evals sind nicht bestanden.`)
+if (zaehler.failed) {
+  schwellenFehler.push(
+    `${zaehler.failed} anwendbare Evals sind nicht bestanden`
+    + ` (${gebrochen} gebrochen, ${ohneDatenbasis.length} noch ohne Datenbasis).`,
+  )
+}
 if (qualitaet.weightedScore < katalog.thresholds.minimumWeightedScore) {
   schwellenFehler.push(`Gesamtqualität ${qualitaet.weightedScore} liegt unter ${katalog.thresholds.minimumWeightedScore}.`)
 }

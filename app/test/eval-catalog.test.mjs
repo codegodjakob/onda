@@ -21,6 +21,7 @@ const EXTERNE_LIVE_GATES = [
   'SYSTEM-03',
   'SYSTEM-09',
   'ONDA-UI-18',
+  'GROW-03',
 ]
 
 test('V2-Eval-Katalog lädt reproduzierbar und enthält den vollständigen Zielumfang', async () => {
@@ -28,13 +29,13 @@ test('V2-Eval-Katalog lädt reproduzierbar und enthält den vollständigen Zielu
   const zusammenfassung = summarisiereEvalKatalog(katalog)
 
   assert.deepEqual(zusammenfassung, {
-    suites: 19,
-    evals: 152,
-    hardGates: 144,
+    suites: 23,
+    evals: 163,
+    hardGates: 155,
     scoredGates: 8,
-    externalLiveGates: 5,
+    externalLiveGates: 6,
   })
-  assert.equal(flattenEvals(katalog).length, 152)
+  assert.equal(flattenEvals(katalog).length, 163)
 })
 
 test('V2-Eval-Katalog erfüllt alle Struktur- und Konsistenzregeln', async () => {
@@ -84,7 +85,7 @@ test('der rohe JSON-Katalog enthält keine doppelten Given/When/Then-Schlüssel 
   const roh = await readFile(KATALOG_PFAD, 'utf8')
   const evalObjekte = roh.split(/\n        \{\n          "id": "/).slice(1)
 
-  assert.equal(evalObjekte.length, 152)
+  assert.equal(evalObjekte.length, 163)
   for (const [index, ausschnitt] of evalObjekte.entries()) {
     const objekt = ausschnitt.split(/\n        \}(?:,|\n)/, 1)[0]
     for (const schluessel of ['given', 'when', 'then']) {
@@ -186,11 +187,11 @@ test('Eval-CLI prüft den Katalog und liefert eine maschinenlesbare Zusammenfass
 
   assert.equal(bericht.valid, true)
   assert.deepEqual(bericht.catalog, {
-    suites: 19,
-    evals: 152,
-    hardGates: 144,
+    suites: 23,
+    evals: 163,
+    hardGates: 155,
     scoredGates: 8,
-    externalLiveGates: 5,
+    externalLiveGates: 6,
   })
   assert.equal(bericht.result, null)
 })
