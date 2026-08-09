@@ -1222,6 +1222,20 @@ async function runSystem8BudgetGate(browser) {
   // openOndaDialog fokussiert per requestAnimationFrame das erste Element im Dialog. Erst wenn
   // dieser Fokus angekommen ist, kann der spaet feuernde rAF das fill() nicht mehr bestehlen.
   await page.waitForFunction(() => document.activeElement?.closest('#kiModal'))
+
+  // Issue #13 (Task 4): der Ertrag-Abschnitt steht zwischen Verbrauch und Budget. Frisches
+  // Projekt, noch keine einzige Entscheidung — hier MUSS der ehrliche "noch zu wenig"-Satz
+  // stehen, nie eine Quote aus zu wenigen Fällen.
+  const ertrag = dialog.locator('.ki-ertrag')
+  await expectVisible(ertrag)
+  assert.match(await ertrag.locator('.onda-eyebrow').textContent(), /^Ertrag$/)
+  assert.match(await ertrag.textContent(), /Diesen Monat/, 'Der Monats-Satz fehlt im frischen Zustand')
+  assert.match(
+    await ertrag.textContent(),
+    /Noch zu wenig entschieden/,
+    'Ohne Entscheidungen muss der ehrliche "noch zu wenig"-Satz stehen, keine Quote',
+  )
+
   await dialog.locator('#kiBudgetInput').fill('0.50')
   await dialog.locator('.ki-budget-form').getByRole('button', { name: 'Grenze speichern', exact: true }).click()
   assert.match(await dialog.locator('.ki-budget-status').textContent(), /Grenze erreicht/)
@@ -1233,6 +1247,43 @@ async function runSystem8BudgetGate(browser) {
     const project = window.AIWT.state.projects.find(candidate => candidate.id === doc.projectId)
     project.understanding.entwurfVersuchtAm = null
     window.__llmMock.aufrufe.length = 0
+
+    // Zwölf entschiedene Hinweise — über der Mindestzahl (10) aus lauf-bilanz.mjs. Ab
+    // hier darf der Ertrag-Abschnitt eine echte Quote mit Basis zeigen statt des
+    // "noch zu wenig"-Satzes.
+    const jetzt = Date.now()
+    doc.findings = Array.from({ length: 12 }, (_, index) => ({
+      id: `ertrag-finding-${index}`,
+      kiKategorie: 'fakt',
+      status: 'resolved',
+    }))
+    doc.decisions = doc.findings.map(finding => ({
+      id: `decision-${finding.id}-${jetzt}`,
+      findingId: finding.id,
+      kind: 'accept',
+      outcome: 'resolved',
+      at: jetzt,
+    }))
+
+    // Zwei zusätzliche, UNENTSCHIEDENE Funde einer anderen Art ('quelle') — angeboten > 0,
+    // aber bewertbar = 0 (keine Entscheidung dazu). Deckt den Basis-Filter in
+    // renderKiErtrag ab: eine Art ohne eine einzige Entscheidung darf nie als Quote
+    // erscheinen ("0 von 0 angenommen" wäre Rauschen im Kleid einer Quote).
+    doc.findings.push(
+      { id: 'ertrag-quelle-offen-0', kiKategorie: 'quelle', status: 'open' },
+      { id: 'ertrag-quelle-offen-1', kiKategorie: 'quelle', status: 'open' },
+    )
+
+    // Lauf-Journal (Issue #12/#13): zehn Übernahmen über zwei Einträge, damit
+    // kostenJeUebernahme die Mindestzahl (10) erreicht und die Kosten-Zeile im
+    // Ertrag-Abschnitt tatsächlich rendert. state.laufJournal ist dieselbe Referenz, die
+    // initLaufTor über getJournal liest (editor.js) — kein Test-Bridge-Umweg nötig.
+    window.AIWT.state.laufJournal.eintraege.push(
+      { kanal: 'hinweis', ergebnis: 'geliefert', kostenCents: 300, uebernommen: 6 },
+      { kanal: 'erweiterung', ergebnis: 'geliefert', kostenCents: 200, uebernommen: 4 },
+    )
+
+    window.AIWT.persist()
     window.AIWT.__workspaceTestBridge.reinitialize()
   })
   await page.waitForTimeout(100)
@@ -1241,6 +1292,34 @@ async function runSystem8BudgetGate(browser) {
 
   await page.locator('#kiSettings').click()
   await expectVisible(dialog)
+
+  // Mit den zwölf entschiedenen Hinweisen zeigt der Ertrag-Abschnitt jetzt eine Zeile mit
+  // sichtbarer Basis ("X von Y") statt des "noch zu wenig"-Satzes.
+  const ertragMitBasis = await dialog.locator('.ki-ertrag').textContent()
+  assert.match(ertragMitBasis, /\d+ von \d+ angenommen/, 'Die Quote mit Basis fehlt trotz zwölf entschiedener Hinweise')
+  assert.doesNotMatch(ertragMitBasis, /Noch zu wenig entschieden für eine ehrliche Quote/)
+
+  // Genau EINE Art-Zeile: 'fakt' hat zwölf Entscheidungen, 'quelle' hat zwei ANGEBOTENE,
+  // aber NULL entschiedene Funde (bewertbar = 0) — die dürfen keine eigene, bedeutungslose
+  // "0 von 0"-Zeile bekommen. Reproduziert exakt den Review-Befund: ohne den Filter auf
+  // bewertbar > 0 rendert renderKiErtrag hier "Beleg: 0 von 0 angenommen".
+  const artZeilen = dialog.locator('.ki-ertrag-art')
+  assert.equal(await artZeilen.count(), 1, 'Eine unentschiedene Art darf keine eigene Quote-Zeile zeigen')
+  assert.match(await artZeilen.first().textContent(), /^Fakt: 12 von 12 angenommen$/)
+  assert.doesNotMatch(ertragMitBasis, /0 von 0/, 'Eine Art ohne jede Entscheidung darf keine "0 von 0"-Quote zeigen')
+  assert.doesNotMatch(ertragMitBasis, /Beleg/, 'Die unentschiedene Art "Beleg" (quelle) darf nicht als Zeile erscheinen')
+
+  // Kosten je Übernahme: zehn Übernahmen im Lauf-Journal (300 + 200 Cent, 6 + 4
+  // Übernahmen) erreichen die Mindestzahl — jetzt MUSS die Kosten-Zeile mit dem korrekt
+  // berechneten Wert (500 Cent / 10 = 50 Cent = 0,50 $) erscheinen. Bisher deckte keine
+  // Assertion diesen Zweig ab.
+  const kostenZeile = dialog.locator('.ki-ertrag-kosten')
+  await expectVisible(kostenZeile)
+  const kostenText = await kostenZeile.textContent()
+  assert.match(kostenText, /Kosten je Übernahme/, 'Die Kosten-je-Übernahme-Zeile fehlt trotz ausreichender Basis')
+  assert.match(kostenText, /0,50/, 'Der berechnete Wert (500 Cent / 10 Übernahmen = 0,50 $) fehlt')
+  assert.match(kostenText, /\(10 Übernahmen\)/, 'Die Basis (10 Übernahmen) fehlt in der Kosten-Zeile')
+
   assert.match(await dialog.locator('.ki-budget-status--paused').textContent(), /Automatische Läufe sind pausiert/)
   await dialog.getByRole('button', { name: 'Genau einen automatischen Lauf freigeben', exact: true }).click()
   await page.waitForFunction(() => window.__llmMock.aufrufe.length === 1)

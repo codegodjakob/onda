@@ -18,6 +18,11 @@ import {
   merkeErweiterung,
   sichtbareErweiterungen,
 } from '../src/erweiterung-model.mjs'
+import {
+  bilanziereRueckmeldung,
+  entscheideRueckkopplung,
+  erstelleRueckkopplungsvorschlag,
+} from '../src/rueckkopplung-model.mjs'
 
 const LANGER_TEXT = 'Die Stadt wuchs schneller als ihre Leitungen. '.repeat(12)
 const BLOCKS = [{ id: 'b1', text: LANGER_TEXT }]
@@ -641,6 +646,61 @@ test('Lauf: Fehler im Gateway wird still protokolliert, Sperre faellt trotzdem',
   assert.equal(ergebnis.fehler, 'schema')
   assert.equal(aufrufe.at(-1), 'sperre:false')
   assert.ok(aufrufe.includes('status:fehler'))
+})
+
+// ---- Die Rueckkopplung reicht bis in die echte Anfrage durch ------------------
+// Derselbe zweite bezahlte Kanal wie beim Hinweislauf (siehe hinweislauf-model.test.mjs):
+// dasselbe freigegebene Entscheidungsbild, hier durchgereicht an versucheErweiterungslauf ->
+// baueErweiterungKontext. Ein Parameter, den niemand uebergibt, ist eine Leitung ohne Strom.
+
+test('die Rueckkopplungsbilanz erreicht den Kontext, den versucheErweiterungslauf an runTask gibt', async () => {
+  const findings = []
+  const decisions = []
+  const anlegen = (art, status, anzahl) => {
+    for (let i = 0; i < anzahl; i += 1) {
+      const id = `${art}-${status}-${i}`
+      findings.push({ id, kiKategorie: art, status })
+      decisions.push({ findingId: id, outcome: status })
+    }
+  }
+  anlegen('struktur', 'dismissed', 18)
+  anlegen('struktur', 'resolved', 2)
+  anlegen('fakt', 'resolved', 9)
+  anlegen('fakt', 'dismissed', 3)
+
+  const vorschlag = erstelleRueckkopplungsvorschlag(
+    bilanziereRueckmeldung({ dokumente: [{ findings, decisions }] }),
+  )
+  const freigegeben = entscheideRueckkopplung(vorschlag, { approved: true, actor: 'user', at: 1 })
+
+  let gesehenerKontext = null
+  const { optionen } = laufBausteine({
+    rueckkopplung: freigegeben,
+    runTask: async (task, kontext) => {
+      gesehenerKontext = kontext
+      return { daten: { erweiterungen: [] } }
+    },
+  })
+  await versucheErweiterungslauf(optionen)
+  const text = (gesehenerKontext?.volatiles || []).join('\n')
+  assert.ok(text.includes('struktur: 18 von 20'), 'die Bilanz fehlt im Kontext des Laufs')
+  assert.ok(text.includes('Streiche keine Art aus deinem Repertoire'), text)
+})
+
+test('ohne Rueckkopplung sieht der Kontext genau aus wie zuvor', async () => {
+  let ohne = null
+  const { optionen: optionenOhne } = laufBausteine({
+    runTask: async (task, kontext) => { ohne = kontext; return { daten: { erweiterungen: [] } } },
+  })
+  await versucheErweiterungslauf(optionenOhne)
+
+  let leer = null
+  const { optionen: optionenLeer } = laufBausteine({
+    rueckkopplung: bilanziereRueckmeldung({ dokumente: [] }),
+    runTask: async (task, kontext) => { leer = kontext; return { daten: { erweiterungen: [] } } },
+  })
+  await versucheErweiterungslauf(optionenLeer)
+  assert.deepEqual(leer.volatiles, ohne.volatiles, 'eine leere Bilanz darf keinen Block erzeugen')
 })
 
 // "Merken" muss eine Folge haben, sonst ist der Knopf eine Farbaenderung und sonst nichts.

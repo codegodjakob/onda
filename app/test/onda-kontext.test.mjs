@@ -19,7 +19,7 @@ import { baueAnfrage } from '../src/agent-tasks.mjs'
 import { synchronizeClaimLedger } from '../src/claim-ledger.mjs'
 import { updateLanguageProfile } from '../src/language-profile.mjs'
 import { createMemoryEntry, ensureMemoryStore } from '../src/memory-model.mjs'
-import { schreibeErkanntes } from '../src/erkanntes-model.mjs'
+import { REGAL_DECKEL, schreibeErkanntes, ueberholeErkanntes } from '../src/erkanntes-model.mjs'
 import { LANGUAGE_GENRES } from '../src/language-profile.mjs'
 
 // PFLICHT (Lehre aus V-3/H-2, siehe hinweis-kontext.test.mjs): baueAnfrage (agent-tasks.mjs)
@@ -745,4 +745,120 @@ test('echtes freigegebenes Wissen bleibt neben einem Prinzip erhalten', () => {
   assert.match(gedaechtnisBlock, /freigegebenes Wissen: »MARKANTES-THEMENWISSEN-6b9f«/)
   assert.doesNotMatch(gedaechtnisBlock, /MARKANTES-PRINZIP-1f7e/)
   assert.match(bloecke.find(b => /schon erkannt/.test(b)), /MARKANTES-PRINZIP-1f7e/)
+})
+
+// ---- Die A→B-Reise: Abnahmetest aus Issue #14 ----------------------------------
+// D2: der Merken-Klick auf einen einzelnen Hinweis oder eine einzelne Erweiterung IST die
+// ausdrueckliche Freigabe -- eine explizite Handlung der Autorin oder des Autors auf genau
+// diesem Inhalt (Leitplanke 4). merkeErkanntes (workspace.js) ruft schreibeErkanntes darum
+// OHNE Vorschau-Umweg auf, und schreibeErkanntes legt das Prinzip auf der PERSOENLICHEN Ebene
+// mit allProjects ab, nicht auf der Projekt-Ebene (erkanntes-model.mjs). Der foermliche
+// Transfer-Weg -- createTransferRequest/decideMemoryTransfer mit seinem Vorschau-Schutz
+// (memory-retrieval.mjs) -- bleibt reserviert fuer PROJEKT-Wissen, das gezielt von einem
+// Projekt in ein anderes wandern soll. Ein erkanntes Prinzip braucht diesen Umweg nicht:
+// es gilt seit dem Merken-Klick ueberall, das ist sein ganzer Sinn.
+const PROJEKT_A = 'p-a'
+const PROJEKT_B = 'p-b'
+const DOC_IN_A = { id: 'doc-in-a', projectId: PROJEKT_A }
+const DOC_IN_B = { id: 'doc-in-b', projectId: PROJEKT_B }
+
+test('ein in Projekt A gemerktes Prinzip reist ungefragt zu Projekt B -- bis in den echten Request-Body', () => {
+  const satz = 'Wo zwei Groessen verglichen werden, traegt der Vergleich das Argument.'
+
+  // Der Merken-Klick, simuliert genau wie merkeErkanntes ihn ausloest (workspace.js): eine
+  // Begegnung mit Herkunft, Dokument und Projekt A, dimension 'idee' wie beim Erweiterungspfad.
+  let store = ensureMemoryStore(null)
+  store = schreibeErkanntes(store, {
+    satz,
+    herkunft: 'erweiterung',
+    dokumentId: DOC_IN_A.id,
+    projektId: PROJEKT_A,
+    beleg: 'Ein Anker in Projekt A',
+    dimension: 'idee',
+    at: 1,
+  }).store
+
+  // baueOndaBloecke wird fuer Projekt B aufgerufen: das Prinzip haengt an der Person, nicht
+  // an Projekt A, und muss deshalb im Erkanntes-Block von B auftauchen.
+  const bloecke = baueOndaBloecke({ project: { id: PROJEKT_B }, doc: DOC_IN_B, memoryStore: store })
+  const erkanntesBlock = bloecke.find(b => /schon erkannt/.test(b))
+  assert.ok(erkanntesBlock, 'der Erkanntes-Block fehlt fuer Projekt B')
+  assert.match(erkanntesBlock, /Wo zwei Groessen verglichen werden, traegt der Vergleich das Argument/)
+
+  // Ende-zu-Ende bis in den ERWEITERUNG-Kanal: baueErweiterungKontext konsumiert onda nur
+  // ueber baueOndaBloecke (erweiterung-kontext.mjs), genau wie die anderen drei Agentenkanaele.
+  const kontext = baueErweiterungKontext({
+    verstaendnis: { task: 'Essay' },
+    docText: 'Text in Projekt B.',
+    onda: { project: { id: PROJEKT_B }, doc: DOC_IN_B, memoryStore: store },
+  })
+  const bodyJson = JSON.stringify(baueAnfrage('erweiterungen', kontext).body)
+  assert.ok(bodyJson.includes(satz), 'der gemerkte Satz erreicht den echten Request-Body fuer Projekt B nicht')
+})
+
+test('Gegenprobe: ein NICHT gemerktes Muster (nur status "neu" in doc.erweiterungen) erscheint in keinem Block von B', () => {
+  const nichtGemerkt = 'MARKANTES-MUSTER-NICHT-GEMERKT-3d8f soll nie erscheinen.'
+
+  // Ein Dokument in Projekt A traegt eine vorgeschlagene, aber nie angeklickte Erweiterung --
+  // genau die Form, die erweiterungAusAntwort anlegt (erweiterungslauf-model.mjs): status
+  // 'neu', kein Merken-Klick, also KEIN Aufruf von schreibeErkanntes.
+  const docAmitVorschlag = {
+    ...DOC_IN_A,
+    erweiterungen: [{
+      id: 'erw-1',
+      art: 'feld',
+      status: 'neu',
+      gedanke: 'ein Gedanke',
+      muster: nichtGemerkt,
+      stellen: [],
+      createdAt: 1,
+    }],
+  }
+  const store = ensureMemoryStore(null) // leer -- kein Merken-Klick fand je statt
+
+  const bloecke = baueOndaBloecke({
+    project: { id: PROJEKT_B },
+    doc: DOC_IN_B,
+    docs: [docAmitVorschlag, DOC_IN_B],
+    memoryStore: store,
+  })
+  assert.equal(
+    bloecke.some(b => b.includes(nichtGemerkt)),
+    false,
+    'ein ungemerktes Muster darf niemals im Prompt landen',
+  )
+})
+
+test('Gegenprobe: ein zurueckgenommenes ("Stimmt nicht mehr") Prinzip reist nicht nach B', () => {
+  const satz = 'MARKANTES-ZURUECKGENOMMENES-PRINZIP-9c2e gilt nicht mehr.'
+
+  let store = ensureMemoryStore(null)
+  store = schreibeErkanntes(store, { satz, herkunft: 'hinweis', dokumentId: DOC_IN_A.id, projektId: PROJEKT_A, at: 1 }).store
+  store = ueberholeErkanntes(store, satz, 2).store // die Ruecknahme -- "Stimmt nicht mehr"
+
+  const bloecke = baueOndaBloecke({ project: { id: PROJEKT_B }, doc: DOC_IN_B, memoryStore: store })
+  assert.equal(
+    bloecke.some(b => b.includes(satz)),
+    false,
+    'erkanntesFuerPrompt liefert nur aktive Eintraege -- ein zurueckgenommenes Prinzip darf nicht im Prompt stehen',
+  )
+})
+
+test('Gegenprobe: ein per Regal-Deckel verdraengter Satz reist nicht nach B', () => {
+  const verdraengtesMuster = 'MARKANTES-VERDRAENGTES-PRINZIP-6a1d wurde einmal genannt.'
+
+  let store = ensureMemoryStore(null)
+  // Das Regal exakt einmal ueberfuellt: verdraengtesMuster ist der aelteste Einzelgaenger
+  // und faellt als schwaechster heraus (wendeRegalDeckelAn, erkanntes-model.mjs).
+  store = schreibeErkanntes(store, { satz: verdraengtesMuster, at: 1 }).store
+  for (let i = 1; i <= REGAL_DECKEL; i += 1) {
+    store = schreibeErkanntes(store, { satz: `Prinzip Nummer ${i}.`, at: i + 1 }).store
+  }
+
+  const bloecke = baueOndaBloecke({ project: { id: PROJEKT_B }, doc: DOC_IN_B, memoryStore: store })
+  assert.equal(
+    bloecke.some(b => b.includes(verdraengtesMuster)),
+    false,
+    'ein durch den Regal-Deckel verdraengtes Prinzip darf nicht im Prompt stehen',
+  )
 })

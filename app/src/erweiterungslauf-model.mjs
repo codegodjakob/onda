@@ -255,6 +255,11 @@ export async function versucheErweiterungslauf({
   blocks,
   doc,
   onda = null,
+  // Dieselbe freigegebene Bilanz wie im Hinweiskanal (rueckkopplung-model.mjs,
+  // bilanziereRueckmeldung), ueber ALLE eigenen Dokumente gebildet — nicht nur ueber diesen
+  // Lauf. Muss vom Aufrufer kommen (workspace.js sieht alle Dokumente, diese Funktion nur
+  // eines). Fehlt sie, entsteht kein Block, und der Lauf sieht aus wie zuvor.
+  rueckkopplung = null,
   runTask,
   setzeAgentStatus,
 }) {
@@ -289,6 +294,7 @@ export async function versucheErweiterungslauf({
       verstaendnis,
       docText,
       bereitsAngeboten: fasseErweiterungenZusammen(doc),
+      rueckkopplung,
     })
     setzeAgentStatus({ zustand: 'laeuft' })
     const { daten } = await runTask('erweiterungen', kontext)

@@ -1,6 +1,8 @@
 // Reine, node-testbare Einstellungs-Normalisierung — kein DOM, keine Tiptap-Abhaengigkeit.
 // Aus editor.js load() und den Tests importiert. Bumpt KEIN Schema (additiv, tolerant).
 
+import { HISTORIE_DECKEL } from './lauf-bilanz.mjs'
+
 export const ACCENTS = Object.freeze(['sky', 'sage', 'blue', 'clay', 'lavender', 'sand'])
 
 // Voreingestellte lokale Monatsgrenze: 10 US-Dollar. Sie ersetzt das verbindliche
@@ -79,10 +81,69 @@ function normalizeUsage(raw, monat) {
   }
 }
 
+function istLeereUsage(usage) {
+  return (
+    usage.inputTokens === 0 &&
+    usage.outputTokens === 0 &&
+    usage.cacheReadTokens === 0 &&
+    usage.cacheWriteTokens === 0 &&
+    usage.kostenCents === 0
+  )
+}
+
+// Baut aus einem rohen usage-Objekt einen archivierbaren Eintrag, oder null, wenn kein
+// brauchbarer Monatsschluessel dransteht (Schutz gegen Muell aus fremden Quellen). Die
+// Zahlenfelder laufen dabei durch dieselbe sichereZahl-Saeuberung wie normalizeUsage —
+// in der Historie landen nie unbereinigte Werte, egal welcher Aufrufer sie liefert.
+function alsArchivierbar(rohUsage) {
+  if (!rohUsage || typeof rohUsage !== 'object' || typeof rohUsage.monat !== 'string') return null
+  return normalizeUsage(rohUsage, rohUsage.monat)
+}
+
+// Haengt einen abgeschlossenen Monat an eine Historie an — das ist die EINE Stelle, die
+// die "genau einmal"-Garantie aus dem Vertrag durchsetzt: leere Monate fliegen raus,
+// bereits vorhandene Monate (dedupe ueber den monat-Schluessel) werden nicht doppelt
+// angehaengt, und der Deckel (HISTORIE_DECKEL) wirft den jeweils aeltesten Eintrag raus.
+// Sowohl normalizeSettings (Wechsel bemerkt beim Laden) als auch verbucheUsage (Wechsel
+// bemerkt beim Buchen) rufen diesen Helfer — dedupe macht es egal, welcher der beiden
+// Pfade den Wechsel zuerst bemerkt.
+function archiviereUsage(historie, usage) {
+  if (!usage || istLeereUsage(usage)) return historie
+  if (historie.some(eintrag => eintrag.monat === usage.monat)) return historie
+  const erweitert = [...historie, usage]
+  return erweitert.length > HISTORIE_DECKEL
+    ? erweitert.slice(erweitert.length - HISTORIE_DECKEL)
+    : erweitert
+}
+
+// Tolerant: kein Array oder Muell-Eintraege werden bereinigt statt zu werfen. Ein
+// Eintrag, dessen monat dem aktuellen Monat entspricht, gehoert NICHT in die Historie —
+// Schutz gegen kaputte Daten, die den laufenden Monat schon als abgeschlossen markieren
+// wuerden.
+function normalizeUsageHistorie(raw, monat) {
+  if (!Array.isArray(raw)) return []
+  let historie = []
+  for (const eintrag of raw) {
+    const kandidat = alsArchivierbar(eintrag)
+    if (!kandidat || kandidat.monat === monat) continue
+    historie = archiviereUsage(historie, kandidat)
+  }
+  return historie
+}
+
 // Verbucht die usage-Zahlen einer API-Antwort (Feldnamen der Anthropic-API)
 // plus geschätzte Kosten in Cent. Wirft nie; Müll zählt als 0.
 export function verbucheUsage(settings, apiUsage, kostenCents, monat = aktuellerMonat()) {
-  if (!settings.usage || settings.usage.monat !== monat) settings.usage = leereUsage(monat)
+  if (!settings.usage || settings.usage.monat !== monat) {
+    // Wechsel bemerkt: der alte Stand wandert (falls nicht leer, dedupe inklusive) in die
+    // Historie, bevor der Zaehler neu beginnt. Siehe archiviereUsage fuer die Garantie.
+    const vorheriger = alsArchivierbar(settings.usage)
+    if (vorheriger) {
+      if (!Array.isArray(settings.usageHistorie)) settings.usageHistorie = []
+      settings.usageHistorie = archiviereUsage(settings.usageHistorie, vorheriger)
+    }
+    settings.usage = leereUsage(monat)
+  }
   const usage = settings.usage
   usage.inputTokens += sichereZahl(apiUsage && apiUsage.input_tokens)
   usage.outputTokens += sichereZahl(apiUsage && apiUsage.output_tokens)
@@ -142,6 +203,17 @@ export function normalizeSettings(raw, monat = aktuellerMonat()) {
   s.accent = ACCENTS.includes(s.accent) ? s.accent : 'sky'
   s.sidebarCollapsed = !!s.sidebarCollapsed
   s.kiMonatsbudgetCents = normalizeKiBudget(src.kiMonatsbudgetCents)
+  // Historie zuerst aus den Rohdaten saeubern, dann - falls der geladene usage-Stand aus
+  // einem anderen, nicht-leeren Monat stammt - EINMAL archivieren, bevor normalizeUsage
+  // ihn unten verwirft. archiviereUsage dedupet ueber den monat-Schluessel: hat eine
+  // vorherige Sitzung diesen Monat beim Buchen (verbucheUsage) schon archiviert, passiert
+  // hier nichts doppelt — das ist die "genau einmal"-Garantie aus dem Vertrag.
+  let historie = normalizeUsageHistorie(src.usageHistorie, monat)
+  const vorherigerStand = alsArchivierbar(src.usage)
+  if (vorherigerStand && vorherigerStand.monat !== monat) {
+    historie = archiviereUsage(historie, vorherigerStand)
+  }
+  s.usageHistorie = historie
   s.usage = normalizeUsage(src.usage, monat)
   s.automatikFreigabe = normalizeAutomatikFreigabe(src.automatikFreigabe, monat)
   return s
