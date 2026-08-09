@@ -158,10 +158,11 @@ test('Alle kompakten Aktionen behalten mindestens 44 Pixel Trefferfläche', asyn
 
   assert.match(ruleBody(shell, '.onda-library-nav__item,'), /min-height:\s*44px/)
   assert.match(ruleBody(shell, '.onda-library-recent__item {'), /min-height:\s*44px/)
-  // Der Stift ist klein gezeichnet, aber nicht klein zu treffen: 18px Symbol in einer
-  // 44px-Flaeche. Er hat die Trefferflaeche der gesamten Anmerkungsleiste geerbt, die
-  // hier bis zum 7. August 2026 stand (docs/PHILOSOPHIE.md §1).
-  assert.match(ruleBody(css, '.onda-presence {'), /width:\s*44px;\s*height:\s*44px/)
+  // Der Orb ist klein gezeichnet, aber nicht klein zu treffen: 30px Farbkreis in einer
+  // 44px-Flaeche. Seit dem 8. August 2026 traegt er auch das Aus- und Einblenden der
+  // Anmerkungen, das vorher am Stift daneben hing — die Trefferflaeche zaehlt jetzt
+  // fuer beides.
+  assert.match(ruleBody(css, '#ondaAura {'), /width:\s*44px;\s*height:\s*44px/)
   assert.match(ruleBody(css, '.agent-chat-send,\n.surface-close'), /width:\s*44px;\s*height:\s*44px/)
   assert.match(ruleBody(css, '.suggestion-action {'), /width:\s*44px;\s*height:\s*44px/)
   assert.match(ruleBody(css, '.onda-btn {'), /min-height:\s*44px/)
@@ -206,14 +207,14 @@ test('Anmerkungen trennen ruhiges Zeichen von schwebender Detailfläche', async 
     readFile(annotationsUrl, 'utf8'),
     readFile(styleUrl, 'utf8'),
   ])
-  const zeichen = ruleBody(css, '.onda-presence {')
+  const orb = ruleBody(css, '#ondaAura {')
   const annotation = ruleBody(annotations, '\n.onda-annotation {\n')
 
-  // Das Zeichen ist keine Flaeche: kein Grund, keine Kante, kein Schatten. Es steht in
-  // der Topbar wie ein Stift auf dem Tisch (docs/PHILOSOPHIE.md §1).
-  assert.match(zeichen, /background:\s*transparent/)
-  assert.match(zeichen, /border:\s*0/)
-  assert.doesNotMatch(zeichen, /box-shadow:/)
+  // Der Orb selbst ist keine Flaeche: kein Grund, kein Schatten. Sichtbar ist nur sein
+  // Farbkreis (::before) — und seit dem 8. August 2026 das stille Zeichen daran, dass
+  // Anmerkungen im Text stehen (docs/PHILOSOPHIE.md §1).
+  assert.match(orb, /background:\s*transparent/)
+  assert.match(orb, /box-shadow:\s*none/)
 
   // Die Anmerkung selbst schwebt — sie ist die Detailflaeche und darf Tiefe haben.
   assert.match(annotation, /border-radius:\s*var\(--radius-overlay\)/)
@@ -222,11 +223,12 @@ test('Anmerkungen trennen ruhiges Zeichen von schwebender Detailfläche', async 
 })
 
 test('Über dem Text steht keine Leiste — das Zeichen zählt nicht und trägt trotzdem den vollen Wortlaut', async () => {
-  const [html, annotations, shell, workspace] = await Promise.all([
+  const [html, annotations, shell, workspace, css] = await Promise.all([
     readFile(indexUrl, 'utf8'),
     readFile(annotationsUrl, 'utf8'),
     readFile(shellUrl, 'utf8'),
     readFile(new URL('../src/workspace.js', import.meta.url), 'utf8'),
+    readFile(styleUrl, 'utf8'),
   ])
 
   // Der Grundsatz, hart geprüft: die Leiste und alle fünf Bedienelemente sind fort.
@@ -248,17 +250,37 @@ test('Über dem Text steht keine Leiste — das Zeichen zählt nicht und trägt 
     assert.equal(shell.includes(`${regel} {`), false, `CSS der Anmerkungsleiste ist zurück: ${regel}`)
   }
 
-  // Genau EIN Bedienelement für Anmerkungen, und es blendet sie nur aus und ein.
-  assert.match(html, /id="annotationPresence"/)
-  assert.match(workspace, /getElementById\('annotationPresence'\), 'click', toggleQuietAnnotations/)
+  // GAR KEIN eigenes Bedienelement mehr. Seit dem 8. August 2026 traegt der Orb
+  // beides — das Zeichen und die Geste (Jakob: "man kann das ein und ausblenden von
+  // anmerkungen vielleicht auch mit in den orb integrieren"). Der Stift daneben ist
+  // fort, und er darf nicht zurueckkommen: zwei Zeichen in der Topbar waren genau das,
+  // was gestoert hat.
+  // Geprueft wird das ELEMENT und sein Zuhoerer, nicht das Wort: der Kommentar, der
+  // erklaert warum der Stift fort ist, darf seinen Namen nennen. Sonst muesste man die
+  // Begruendung loeschen, um die Pruefung zu bestehen.
+  assert.doesNotMatch(html, /id="annotationPresence"/, 'Der Stift neben dem Orb ist zurück')
+  assert.doesNotMatch(workspace, /getElementById\('annotationPresence'\)/, 'Der Stift wird wieder bedient')
+  assert.doesNotMatch(css, /\.onda-presence\b/, 'Der Stil des Stifts ist zurück')
 
-  // Für die Augen keine Zahl, für Vorlesegeräte der volle Wortlaut. Beides muss
-  // gleichzeitig gelten — sonst ist die Ruhe eine Auslassung.
-  const zeichnen = workspace.slice(workspace.indexOf('function renderAnnotationPresence'))
-    .slice(0, workspace.slice(workspace.indexOf('function renderAnnotationPresence')).indexOf('\n}\n') + 3)
-  assert.doesNotMatch(zeichnen, /textContent\s*=/, 'Das Zeichen schreibt Text — es soll nur ein Stift sein')
-  assert.match(zeichnen, /aria-label/)
-  assert.match(zeichnen, /bilanzVorlesetext/)
+  // Für die Augen ein stilles Zeichen, für Vorlesegeräte der volle Wortlaut. Beides
+  // muss gleichzeitig gelten — sonst ist die Ruhe eine Auslassung.
+  const orbZustand = workspace.slice(workspace.indexOf('function applyAuraState'))
+  const block = orbZustand.slice(0, orbZustand.indexOf('\n}\n') + 3)
+  assert.match(block, /hat-anmerkungen/, 'Der Orb sagt nicht, dass Anmerkungen da sind')
+  assert.match(block, /bilanzVorlesetext/, 'Vorlesegeräte bekommen den Wortlaut nicht mehr')
+  assert.doesNotMatch(block, /textContent\s*=/, 'Der Orb schreibt Text — er soll nur ein Zeichen tragen')
+
+  // UND DAS ZEICHEN STEHT STILL. Jakob hatte Pulsieren vorgeschlagen; die Bewegung ist
+  // aber schon vergeben (der Orb atmet, wenn der Agent arbeitet), und ein Pulsieren
+  // waere die Hausaufgabe aus PHILOSOPHIE.md §1 in anderer Form. Geprueft wird, dass
+  // keine der drei Fassungen des Zeichens eine Animation traegt.
+  for (const wahl of ['#ondaAura.hat-anmerkungen::before',
+    '[data-orb-zeichen="saum"] #ondaAura.hat-anmerkungen::before',
+    '[data-orb-zeichen="punkt"] #ondaAura.hat-anmerkungen::after']) {
+    const regel = ruleBody(css, wahl)
+    assert.ok(regel, `Die Fassung ${wahl} fehlt`)
+    assert.doesNotMatch(regel, /animation/, `Das Zeichen ${wahl} bewegt sich — es soll stillstehen`)
+  }
 })
 
 test('Die Ankunft einer Anmerkung ist langsamer als jede andere Bewegung im Haus', async () => {

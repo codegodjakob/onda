@@ -95,14 +95,21 @@ async function runEditor(browser) {
   assert.ok(seeded)
   await page.locator('[data-annotation-form="rewrite"]').waitFor({ state: 'visible' })
   assert.equal(await page.locator('.local-finding-detail-row').count(), 0)
-  // Über dem Text steht nichts (docs/PHILOSOPHIE.md §1 "Der andere Stift"). Geblieben
-  // ist ein Stift-Zeichen in der Topbar, das nicht zählt — aber Vorlesegeräten den
-  // vollen Wortlaut gibt.
+  // Über dem Text steht nichts (docs/PHILOSOPHIE.md §1 "Der andere Stift"), und seit
+  // dem 8. August 2026 steht auch NEBEN dem Orb nichts mehr: er selbst sagt, dass
+  // Anmerkungen da sind. Für die Augen ein stilles Zeichen, für Vorlesegeräte der
+  // volle Wortlaut.
   assert.equal(await page.locator('#annotationReviewBar').count(), 0, 'Die Anmerkungsleiste ist zurück')
-  const zeichen = page.locator('#annotationPresence')
-  assert.equal(await zeichen.isVisible(), true, 'Ohne Zeichen wäre gar nicht zu sehen, dass jemand mitschreibt')
-  assert.equal((await zeichen.textContent()).trim(), '', 'Das Zeichen zeigt eine Zahl — es soll nur ein Stift sein')
-  assert.match(await zeichen.getAttribute('aria-label'), /Empfehlung/)
+  assert.equal(await page.locator('#annotationPresence').count(), 0, 'Der Stift neben dem Orb ist zurück')
+  const orb = page.locator('#ondaAura')
+  assert.equal((await orb.textContent()).trim(), '', 'Der Orb zeigt eine Zahl — er soll nur ein Zeichen tragen')
+  assert.equal(await orb.evaluate(node => node.classList.contains('hat-anmerkungen')), true,
+    'Der Orb sagt nicht, dass Anmerkungen im Text stehen')
+  assert.match(await orb.getAttribute('aria-label'), /Empfehlung/)
+  // UND ER STEHT STILL. Ein Pulsieren wäre von dem für "der Agent arbeitet" nicht zu
+  // unterscheiden — und es machte aus einem Geschenk eine Hausaufgabe.
+  assert.equal(await orb.evaluate(node => getComputedStyle(node, '::before').animationName), 'none',
+    'Das Zeichen am Orb bewegt sich')
 
   // Der Knopf hiess "Fassung übernehmen" und heisst seit dem 07.08.2026
   // "Übernehmen" — so steht er im Design System (components/annotation/
@@ -464,6 +471,7 @@ async function runShell(browser) {
 
   await assertTextNeverShrinks(page)
   await assertOrbStaysPut(page)
+  await assertOrbTraegtDieAnmerkungen(page)
   await assertBlaseWaechstAusDemOrb(page)
   await assertBlaseSitztMittigAmHals(page)
   await assertKlinkeBleibtStehen(page)
@@ -483,12 +491,12 @@ async function runShell(browser) {
   // auf einer Höhe bleiben. Beide Knöpfe gibt es nicht mehr (docs/PHILOSOPHIE.md §1).
   // An ihre Stelle tritt die Frage, ob das eine verbliebene Zeichen mobil erreichbar
   // bleibt — nicht abgeschnitten, nicht unter die Fensterkante gerutscht.
-  const zeichenMobil = await page.locator('#annotationPresence').evaluate(node => {
+  const zeichenMobil = await page.locator('#ondaAura').evaluate(node => {
     const kasten = node.getBoundingClientRect()
     return { links: Math.round(kasten.left), rechts: Math.round(kasten.right), breite: Math.round(kasten.width) }
   })
-  assert.ok(zeichenMobil.breite >= 44, `Das Zeichen ist mobil nur ${zeichenMobil.breite}px breit`)
-  assert.ok(zeichenMobil.links >= 0 && zeichenMobil.rechts <= 320, 'Das Zeichen liegt mobil außerhalb des Fensters')
+  assert.ok(zeichenMobil.breite >= 44, `Der Orb ist mobil nur ${zeichenMobil.breite}px breit`)
+  assert.ok(zeichenMobil.links >= 0 && zeichenMobil.rechts <= 320, 'Der Orb liegt mobil außerhalb des Fensters')
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
   assert.ok(overflow <= 1, `Die App laeuft mobil ${overflow}px horizontal ueber`)
   assert.equal(await page.locator('#editor .ProseMirror').isVisible(), true)
@@ -1024,10 +1032,7 @@ async function assertRuhigeLage(page) {
     getComputedStyle(document.documentElement).getPropertyValue('--container-reading'),
   ))
 
-  await page.evaluate(() => {
-    const stift = document.getElementById('annotationPresence')
-    if (stift.getAttribute('aria-pressed') === 'true') stift.click()
-  })
+  await page.evaluate(() => window.AIWT.__workspaceTestBridge.setQuietAnnotations(true))
   if (await page.locator('#sidebarToggle').getAttribute('aria-expanded') === 'true') {
     await page.locator('#sidebarToggle').click()
   }
@@ -1063,10 +1068,7 @@ async function assertRuhigeLage(page) {
   assert.deepEqual(uebrig.sort(), ['onda-topbar__aside', 'onda-topbar__lead'],
     `In der ruhigen Lage schwebt noch etwas: ${JSON.stringify(uebrig)}`)
 
-  await page.evaluate(() => {
-    const stift = document.getElementById('annotationPresence')
-    if (stift.getAttribute('aria-pressed') === 'false') stift.click()
-  })
+  await page.evaluate(() => window.AIWT.__workspaceTestBridge.setQuietAnnotations(false))
   if (await page.locator('#sidebarToggle').getAttribute('aria-expanded') === 'false') {
     await page.locator('#sidebarToggle').click()
   }
@@ -1077,6 +1079,107 @@ async function assertRuhigeLage(page) {
 // 1712px schob ihn das Agentenfenster über padding-right an .onda-editor-col um 420px.
 // Gemessen wird der Abstand zur RECHTEN Fensterkante — der darf sich unter keinem
 // Zustandswechsel ändern.
+// „das icon neben dem orb kann man eventuell entfernen man kann das ein und ausblenden
+// von anmerkungen vielleicht auch mit in den orb integrieren" — Jakob am 8. August 2026.
+//
+// Der Orb trägt jetzt beides. Das ist ein Knopf mit ZWEI Gesten, und ein Knopf mit zwei
+// Gesten geht auf zwei Arten schief: die zweite Geste tut versehentlich auch die erste,
+// oder sie feuert, wenn man sie gar nicht wollte. Beide Fälle stehen hier.
+async function assertOrbTraegtDieAnmerkungen(page) {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.evaluate(() => window.AIWT.__workspaceTestBridge.setQuietAnnotations(false))
+  await page.evaluate(() => {
+    if (document.getElementById('editorView').classList.contains('is-agent-open')) {
+      document.getElementById('ondaAura').click()
+    }
+  })
+  await page.waitForTimeout(400)
+
+  const stumm = () => page.evaluate(() => {
+    const doc = window.AIWT.state.docs.find(item => item.id === window.AIWT.state.active)
+    return Boolean(doc.workspace?.quietAnnotations)
+  })
+  const gespraechOffen = () => page.evaluate(() => (
+    document.getElementById('editorView').classList.contains('is-agent-open')
+  ))
+  const orb = page.locator('#ondaAura')
+  const kasten = await orb.boundingBox()
+  const mitte = { x: kasten.x + kasten.width / 2, y: kasten.y + kasten.height / 2 }
+  // GEWARTET WIRD AUF DEN ZUSTAND, NICHT AUF DIE UHR. Die Schwelle im Programm liegt
+  // bei 450ms; ein festes Warten von 650ms laesst nur 200ms Luft, und unter Last ist
+  // das zu wenig — der Bau lief genau daran einmal rot. Gedrueckt wird deshalb, bis
+  // sich das Ergebnis wirklich eingestellt hat.
+  const langDruecken = async ziel => {
+    await page.mouse.move(mitte.x, mitte.y)
+    await page.mouse.down()
+    try {
+      await page.waitForFunction(erwartet => {
+        const doc = window.AIWT.state.docs.find(item => item.id === window.AIWT.state.active)
+        return Boolean(doc.workspace?.quietAnnotations) === erwartet
+      }, ziel, { timeout: 5000 })
+    } finally {
+      await page.mouse.up()
+    }
+    await page.waitForTimeout(120)
+  }
+
+  // (a) Der kurze Klick gehört weiter dem Gespräch. Nähme ihm die zweite Geste etwas
+  //     weg, wäre der Orb als Einstieg kaputt.
+  await orb.click()
+  await page.waitForTimeout(250)
+  assert.equal(await gespraechOffen(), true, 'Der kurze Klick öffnet das Gespräch nicht mehr')
+  assert.equal(await stumm(), false, 'Der kurze Klick blendet die Anmerkungen aus')
+  await orb.click()
+  await page.waitForTimeout(400)
+
+  // (b) Langes Drücken blendet aus — und öffnet das Gespräch NICHT nebenbei. Ohne die
+  //     Sperre auf den nachfolgenden Klick täte eine Geste zwei Dinge auf einmal.
+  await langDruecken(true)
+  assert.equal(await stumm(), true, 'Langes Drücken blendet die Anmerkungen nicht aus')
+  assert.equal(await gespraechOffen(), false, 'Langes Drücken öffnet nebenbei das Gespräch')
+
+  // (c) Und zurück.
+  await langDruecken(false)
+  assert.equal(await stumm(), false, 'Langes Drücken blendet die Anmerkungen nicht wieder ein')
+
+  // (d) Der Tastenweg. Ohne ihn wäre die Funktion für Tastatur und Vorlesegeräte gar
+  //     nicht mehr erreichbar — Ruhe ist keine Ausrede für Auslassung (PHILOSOPHIE §1).
+  await orb.focus()
+  await page.keyboard.press('Alt+Enter')
+  await page.waitForFunction(() => {
+    const doc = window.AIWT.state.docs.find(item => item.id === window.AIWT.state.active)
+    return Boolean(doc.workspace?.quietAnnotations)
+  }, undefined, { timeout: 5000 }).catch(() => {})
+  assert.equal(await stumm(), true, 'Wahltaste und Eingabe blenden die Anmerkungen nicht aus')
+  await page.evaluate(() => window.AIWT.__workspaceTestBridge.setQuietAnnotations(false))
+  await page.waitForTimeout(200)
+
+  // (e) Wer beim Drücken abrutscht, wollte nicht umschalten. Ohne diese Grenze schaltete
+  //     jedes Ziehen über den Orb hinweg die Anmerkungen aus.
+  await page.mouse.move(mitte.x, mitte.y)
+  await page.mouse.down()
+  await page.mouse.move(mitte.x + 40, mitte.y + 40)
+  // Hier IST das Warten die Aussage: deutlich laenger als die Schwelle von 450ms, und
+  // trotzdem darf sich nichts geaendert haben.
+  await page.waitForTimeout(1200)
+  await page.mouse.up()
+  await page.waitForTimeout(200)
+  assert.equal(await stumm(), false, 'Abrutschen beim Drücken schaltet trotzdem um')
+
+  // (f) Der volle Wortlaut bleibt bei den Vorlesegeräten — samt der zweiten Geste, damit
+  //     sie nicht geheim ist.
+  const wortlaut = await orb.getAttribute('aria-label')
+  assert.match(wortlaut, /Empfehlung/, 'Der Orb sagt Vorlesegeräten nicht mehr, was im Text steht')
+  assert.match(wortlaut, /Lange drücken/, 'Die zweite Geste steht nirgends — sie wäre geheim')
+
+  await page.evaluate(() => {
+    if (document.getElementById('editorView').classList.contains('is-agent-open')) {
+      document.getElementById('ondaAura').click()
+    }
+  })
+  await page.waitForTimeout(400)
+}
+
 async function assertOrbStaysPut(page) {
   // Gemessen wird der Anker (.onda-topbar__aside), nicht der Orb selbst: der Orb trägt
   // ein hover-scale(1.04), das seinen Kasten um ~1px verändert. Das ist eine Rückmeldung
@@ -1092,11 +1195,12 @@ async function assertOrbStaysPut(page) {
     await page.waitForTimeout(30)
     const ruhe = await abstand()
 
-    // Der Stift kommt und geht
-    await page.evaluate(() => { document.getElementById('annotationPresence').hidden = true })
-    assert.deepEqual(await abstand(), ruhe, `Der Orb wandert bei ${width}px, wenn der Stift verschwindet`)
-    await page.evaluate(() => { document.getElementById('annotationPresence').hidden = false })
-    assert.deepEqual(await abstand(), ruhe, `Der Orb wandert bei ${width}px, wenn der Stift erscheint`)
+    // Das Zeichen am Orb kommt und geht. Es sitzt AM Orb und nicht daneben, kann ihn
+    // also gar nicht mehr schieben — genau das war der Grund, ihn dorthin zu holen.
+    await page.evaluate(() => window.AIWT.__workspaceTestBridge.setQuietAnnotations(true))
+    assert.deepEqual(await abstand(), ruhe, `Der Orb wandert bei ${width}px, wenn das Zeichen verschwindet`)
+    await page.evaluate(() => window.AIWT.__workspaceTestBridge.setQuietAnnotations(false))
+    assert.deepEqual(await abstand(), ruhe, `Der Orb wandert bei ${width}px, wenn das Zeichen erscheint`)
 
     // Das Agentenfenster geht auf und zu
     await page.locator('#ondaAura').click()

@@ -1147,42 +1147,6 @@ body.zen #title:focus { opacity: 1; }
   gap: var(--space-1);
 }
 
-/* Der andere Stift (docs/PHILOSOPHIE.md §1). Kein Werkzeugknopf, sondern ein Zeichen:
-   er ist nur da, wenn Anmerkungen da sind, und traegt keine Zahl. Wer neben dir
-   schreibt, sagt nicht, wie viele Anmerkungen er noch hat. */
-.onda-presence {
-  width: 44px;
-  height: 44px;
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: 0;
-  border-radius: var(--radius-pill);
-  background: transparent;
-  color: var(--text-tertiary);
-  cursor: pointer;
-  transition:
-    color var(--dur-normal) var(--ease-out),
-    background-color var(--dur-fast) var(--ease-out),
-    opacity var(--dur-normal) var(--ease-out);
-}
-.onda-presence[hidden] { display: none; }
-.onda-presence:hover { background: var(--bg-hover); color: var(--text-secondary); }
-
-/* Angeschaltet heisst: die Anmerkungen sind zu sehen. Der Stift schreibt gerade mit. */
-.onda-presence[aria-pressed="true"] { color: var(--text-secondary); }
-
-/* Ausgeschaltet heisst: der Stift ist abgelegt. Sichtbar bleibt er trotzdem — sonst
-   waere nicht mehr zu erkennen, dass ueberhaupt jemand mitschreibt. */
-.onda-presence[aria-pressed="false"] { color: var(--text-tertiary); opacity: .55; }
-
-/* Der Auftritt des Zeichens selbst ist so beilaeufig wie der einer Anmerkung: es
-   verblasst herein, es springt nicht an. */
-.onda-presence { animation: onda-presence-in var(--dur-slower) var(--ease-out); }
-@keyframes onda-presence-in { from { opacity: 0; } }
-
 #ondaAura {
   --aura-size: 30px;
   width: 44px;
@@ -2792,6 +2756,123 @@ button.onda-aura:focus-visible {
 
 #ondaAura.is-thinking::before {
   animation: onda-aura-breathe 3.2s var(--ease-spring) infinite;
+}
+
+/* ============================================================
+   IM TEXT STEHEN ANMERKUNGEN — das Zeichen am Orb
+   ============================================================
+
+   Seit dem 8. August 2026 traegt der Orb, was vorher der Stift neben ihm sagte.
+   Jakob hatte Pulsieren vorgeschlagen; es ist STILL geworden, aus zwei Gruenden, die
+   beide am Code haengen:
+
+     1. Die Bewegung ist vergeben. Der Orb atmet, wenn der Agent arbeitet
+        (.is-thinking). Ein zweites Pulsieren waere davon nicht zu unterscheiden.
+     2. PHILOSOPHIE.md §1: eine Zahl neben „Fehler" macht aus einem Geschenk eine
+        Hausaufgabe. Ein Pulsieren ist derselbe Griff. Ein stehendes Zeichen sagt
+        „es ist etwas da"; ein pulsierendes sagt „sieh JETZT hin".
+
+   Der vorhandene Punkt oben rechts (.has-unseen) bleibt, was er ist: etwas Neues im
+   GESPRAECH. Das neue Zeichen meint etwas anderes — etwas im TEXT — und muss deshalb
+   anders aussehen und woanders sitzen. Drei Fassungen zur Wahl, umgeschaltet ueber
+   data-orb-zeichen an <html>; nach der Entscheidung bleibt eine. */
+
+/* KRAGEN (Voreinstellung). Der Ring zwischen dem sichtbaren Farbkreis (R15) und der
+   Tastflaeche (R22) ist ohnehin da — er wird nur sichtbar. Kein Abzeichen, das man
+   dem Orb anheftet, sondern seine eigene Geometrie, die eine Linie zieht. Genau das
+   ist eine Anmerkung ja auch. */
+#ondaAura.hat-anmerkungen::before {
+  box-shadow: 0 0 0 1px var(--border-strong), var(--shadow-glow);
+}
+
+/* SAUM. Statt eines Rings ein etwas tieferer Rand am Farbkreis selbst — noch leiser,
+   fast nur eine Verdichtung. */
+[data-orb-zeichen="saum"] #ondaAura.hat-anmerkungen::before {
+  box-shadow: inset 0 0 0 2px rgba(28, 26, 23, .16), var(--shadow-glow);
+}
+
+/* PUNKT. Ein zweiter Punkt, aber unten links — dem Gespraechspunkt gegenueber, damit
+   beide nebeneinander bestehen und auseinanderzuhalten sind. Kleiner als jener und
+   in Textfarbe statt in Akzentfarbe: er meldet nichts, er steht nur da. */
+[data-orb-zeichen="punkt"] #ondaAura.hat-anmerkungen::before {
+  box-shadow: var(--shadow-glow);
+}
+
+[data-orb-zeichen="punkt"] #ondaAura.hat-anmerkungen::after {
+  content: "";
+  position: absolute;
+  top: auto;
+  right: auto;
+  bottom: 6px;
+  left: 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--text-tertiary);
+  box-shadow: 0 0 0 2px var(--bg-surface);
+}
+
+/* Der Punkt fuer das Gespraech gewinnt, wenn beides zugleich zutrifft: eine neue
+   Nachricht ist das Dringendere, und zwei Punkte an derselben Ecke waeren Matsch. */
+[data-orb-zeichen="punkt"] #ondaAura.hat-anmerkungen.has-unseen::after {
+  top: 5px;
+  right: 5px;
+  bottom: auto;
+  left: auto;
+  width: 9px;
+  height: 9px;
+  background: var(--accent-active);
+}
+
+/* AUSGEBLENDET. Wer die Anmerkungen stumm geschaltet hat, hat sich fuer Ruhe
+   entschieden — dann traegt der Orb kein Zeichen mehr. Dass sie noch da sind, sagt er
+   Vorlesegeraeten weiter im Wortlaut. */
+#ondaAura.sind-stumm::before {
+  box-shadow: var(--shadow-glow);
+}
+
+/* Das Zeichen kommt so beilaeufig wie die Anmerkung selbst: es verblasst herein, es
+   springt nicht an. Bewegung ist das nicht — nur ein Uebergang. */
+#ondaAura::before {
+  transition: box-shadow var(--dur-slower) var(--ease-out);
+}
+
+/* Der Umschalter fuer die drei Zeichen. Absichtlich schlicht: er ist ein Geruest und
+   verschwindet mit der Entscheidung wieder. Erscheint nur bei localStorage
+   'ondaVarianten' = '1'. */
+.onda-varianten {
+  position: fixed;
+  z-index: 70;
+  left: 50%;
+  bottom: var(--space-4);
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-overlay);
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-lg);
+  font: var(--type-caption);
+}
+
+.onda-varianten__wort { color: var(--text-tertiary); }
+
+.onda-varianten__knopf {
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  padding: 2px var(--space-2);
+  background: none;
+  color: var(--text-secondary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.onda-varianten__knopf[aria-pressed="true"] {
+  border-color: var(--border-default);
+  color: var(--text-primary);
+  background: var(--bg-sunken);
 }
 
 @media (prefers-reduced-motion: reduce) {

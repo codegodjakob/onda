@@ -151,10 +151,17 @@
       <div class="onda-editor-col">
         <header class="onda-topbar">
           <div class="onda-topbar__aside">
-            <!-- Der andere Stift (docs/PHILOSOPHIE.md §1). Das EINZIGE Bedienelement fuer
-                 Anmerkungen: es sagt, dass welche da sind, und blendet sie aus und ein.
-                 Es erscheint nur, wenn es etwas zu sagen gibt. -->
-            <button id="annotationPresence" class="onda-presence" type="button" aria-pressed="true" hidden></button>
+            <!-- EIN Zeichen in der Topbar, nicht zwei. Bis zum 8. August 2026 stand hier
+                 neben dem Orb noch ein Stift (#annotationPresence), der sagte, dass
+                 Anmerkungen da sind, und sie aus- und einblendete. Jakob: "das icon neben
+                 dem orb kann man eventuell entfernen man kann das ein und ausblenden von
+                 anmerkungen vielleicht auch mit in den orb integrieren."
+
+                 Beides liegt jetzt am Orb: er traegt das Zeichen (still, siehe
+                 applyAuraState in workspace.js) und die Geste (langes Druecken, dazu
+                 Wahltaste und Eingabe). Das EINZIGE Bedienelement fuer Anmerkungen ist
+                 damit kein eigenes mehr — es ist die Anwesenheit selbst
+                 (docs/PHILOSOPHIE.md §1). -->
             <button id="ondaAura" class="onda-aura" title="Agentengespräch öffnen" aria-label="Agentengespräch öffnen" aria-controls="agentWidget" aria-expanded="false"></button>
           </div>
         </header>
