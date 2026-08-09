@@ -28,6 +28,17 @@ export const ERKANNTES_DIMENSIONEN = Object.freeze([
 // hinaus, fallen zuerst die Sätze heraus, die nur ein einziges Mal aufkamen.
 export const PROMPT_GRENZE = 25
 
+// Das Regal, nicht die Halde: die Obergrenze fuer aktive SAETZE (gruppierte
+// Wortlaute, nicht Begegnungen) im Personen-Speicher. Begruendung: genug fuer
+// Jahre echten Schreibens (25 davon gehen in den Prompt), wenig genug, dass die
+// Liste im Projektverstaendnis-Fenster lesbar bleibt und kein append-only-Berg
+// entsteht. Verdraengung, nicht Loeschung: ueberzaehlige werden 'superseded'
+// (Korrigierbarkeit und Ereignis-Historie bleiben), Rangfolge beim Verdraengen:
+// wenigste treffer zuerst, bei Gleichstand aeltester zuerst. Ein wiederkehrendes
+// Muster (treffer>=2) verdraengt nie ein anderes wiederkehrendes -- dann bleibt
+// der Neuzugang einmalig und das Regal voll.
+export const REGAL_DECKEL = 60
+
 // Zwei Sätze sind derselbe, wenn sie sich nur in Groß-/Kleinschreibung, Satzzeichen
 // oder Leerraum unterscheiden. Bewusst NICHT klüger: eine unscharfe Ähnlichkeit würde
 // zwei verschiedene Einsichten zu einer verschmelzen, und der Schaden davon ist
@@ -99,6 +110,7 @@ export function schreibeErkanntes(store, {
     },
   }
   sicher.entries.push(eintrag)
+  wendeRegalDeckelAn(sicher, at)
   return { store: sicher, eintrag }
 }
 
@@ -161,6 +173,27 @@ export function ueberholeErkanntes(store, schluessel, at = Date.now()) {
     getroffen += 1
   }
   return { store: sicher, getroffen }
+}
+
+// Der Abfluss: haelt das Regal bei REGAL_DECKEL aktiven Saetzen, egal wie viele
+// Begegnungen ueber die Jahre dazukommen. Intern, wird von schreibeErkanntes nach
+// jedem Einfuegen aufgerufen -- niemand ruft das von aussen.
+//
+// Rangfolge (schwaechster zuerst): wenigste treffer, bei Gleichstand die laengste
+// nicht mehr gesehene Zeit (kleinstes "zuletzt" -- das Gegenstueck zur Anzeige-
+// Sortierung in erkanntesListe, die genau umgekehrt sortiert). Diese eine Regel
+// erledigt auch den Sonderfall aus dem Kopf-Kommentar von selbst: ein Satz mit
+// treffer=1 ist immer schwaecher als einer mit treffer>=2, also verdraengt ein
+// neuer Einzelgaenger nie ein wiederkehrendes Muster -- er selbst ist dann der
+// Schwaechste im Regal und faellt heraus (bleibt einmalig, das Regal bleibt voll).
+function wendeRegalDeckelAn(store, at = Date.now()) {
+  const aktiv = erkanntesListe(store)
+  const ueberzahl = aktiv.length - REGAL_DECKEL
+  if (ueberzahl <= 0) return
+  const schwaechsteZuerst = [...aktiv].sort((a, b) => a.treffer - b.treffer || a.zuletzt - b.zuletzt)
+  for (let i = 0; i < ueberzahl; i += 1) {
+    ueberholeErkanntes(store, schwaechsteZuerst[i].schluessel, at)
+  }
 }
 
 // Was in den Prompt geht. Die Reihenfolge ist die Auswahlregel: was am häufigsten

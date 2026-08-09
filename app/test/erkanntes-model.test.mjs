@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   PROMPT_GRENZE,
+  REGAL_DECKEL,
   erkanntesFuerPrompt,
   erkanntesListe,
   schluesselFuer,
@@ -133,6 +134,108 @@ test('die Obergrenze greift, damit keine Anfrage unbegrenzt waechst', () => {
 
 test('ein leerer Speicher ergibt einen leeren Prompt-Block, keinen leeren Satz', () => {
   assert.deepEqual(erkanntesFuerPrompt(frisch()), [])
+})
+
+// ---- Der Abfluss: Deckel und Verdraengung statt einer Halde --------------------
+
+test('der Deckel verdraengt die aeltesten Einzelgaenger, wenn er ueberschritten wird', () => {
+  let store = frisch()
+  const N = REGAL_DECKEL + 5
+  for (let i = 0; i < N; i += 1) {
+    store = schreibeErkanntes(store, { satz: `Prinzip Nummer ${i}.`, at: i + 1 }).store
+  }
+  // Genau REGAL_DECKEL Saetze bleiben aktiv -- keine Halde.
+  assert.equal(erkanntesListe(store).length, REGAL_DECKEL)
+  // Die fuenf aeltesten (zuerst geschriebenen) sind verdraengt, nicht geloescht.
+  for (let i = 0; i < 5; i += 1) {
+    const schluessel = schluesselFuer(`Prinzip Nummer ${i}.`)
+    const eintrag = store.entries.find(kandidat => schluesselFuer(kandidat.content) === schluessel)
+    assert.equal(eintrag.status, 'superseded')
+    assert.equal(typeof eintrag.supersededAt, 'number')
+  }
+  // Die juengsten REGAL_DECKEL sind noch aktiv.
+  for (let i = 5; i < N; i += 1) {
+    const schluessel = schluesselFuer(`Prinzip Nummer ${i}.`)
+    const eintrag = store.entries.find(kandidat => schluesselFuer(kandidat.content) === schluessel)
+    assert.equal(eintrag.status, 'active')
+  }
+})
+
+test('ein wiederkehrender Satz (treffer=3) wird nie von einem Einmal-Satz verdraengt', () => {
+  let store = frisch()
+  // Das Regal randvoll mit lauter Einzelgaengern.
+  for (let i = 0; i < REGAL_DECKEL; i += 1) {
+    store = schreibeErkanntes(store, { satz: `Prinzip Nummer ${i}.`, at: i + 1 }).store
+  }
+  // Satz 0 kommt noch zweimal wieder -- treffer=3.
+  store = schreibeErkanntes(store, { satz: 'Prinzip Nummer 0.', at: 1000 }).store
+  store = schreibeErkanntes(store, { satz: 'Prinzip Nummer 0.', at: 1001 }).store
+  // Ein brandneuer Einmal-Satz quillt das Regal ueber den Deckel.
+  store = schreibeErkanntes(store, { satz: 'Ganz neu.', at: 2000 }).store
+
+  const liste = erkanntesListe(store)
+  assert.equal(liste.length, REGAL_DECKEL)
+  const wiederkehrer = liste.find(gruppe => gruppe.schluessel === schluesselFuer('Prinzip Nummer 0.'))
+  assert.ok(wiederkehrer, 'der dreifach getroffene Satz bleibt aktiv')
+  assert.equal(wiederkehrer.treffer, 3)
+})
+
+// Randfall aus dem Kopf-Kommentar von wendeRegalDeckelAn, hier festgenagelt statt nur per
+// Ad-hoc-Probe geprueft (Nachtrag aus der Durchsicht von Task 2): diesmal ist das Regal NICHT
+// mit Einzelgaengern voll (das prueft der Test darueber), sondern mit lauter WIEDERKEHRERN --
+// jeder Satz schon mindestens zweimal begegnet. Kommt dann ein brandneuer Einmal-Satz dazu,
+// ist ER selbst der einzige mit treffer=1 und damit unausweichlich der Schwaechste im Regal:
+// er verdraengt sich in demselben Zug selbst, keiner der Wiederkehrer wird angetastet.
+test('Regal voll mit lauter Wiederkehrern (treffer>=2): ein neuer Einmal-Satz verdraengt sofort sich selbst', () => {
+  let store = frisch()
+  for (let i = 0; i < REGAL_DECKEL; i += 1) {
+    store = schreibeErkanntes(store, { satz: `Wiederkehrer Nummer ${i}.`, at: i * 2 + 1 }).store
+    store = schreibeErkanntes(store, { satz: `Wiederkehrer Nummer ${i}.`, at: i * 2 + 2 }).store
+  }
+  // Vorbedingung: das Regal ist randvoll und ausschliesslich mit Wiederkehrern.
+  const vorher = erkanntesListe(store)
+  assert.equal(vorher.length, REGAL_DECKEL)
+  assert.ok(vorher.every(gruppe => gruppe.treffer >= 2), 'die Vorbedingung: ALLE Eintraege sind Wiederkehrer')
+
+  const neuzugang = 'Ganz neuer Einmal-Satz.'
+  store = schreibeErkanntes(store, { satz: neuzugang, at: 9999 }).store
+
+  const liste = erkanntesListe(store)
+  assert.equal(liste.length, REGAL_DECKEL, 'das Regal bleibt bei REGAL_DECKEL, auch mit dem Neuzugang')
+
+  // Der Neuzugang selbst ist verdraengt, nicht irgendein Wiederkehrer.
+  const neuSchluessel = schluesselFuer(neuzugang)
+  assert.equal(liste.some(gruppe => gruppe.schluessel === neuSchluessel), false, 'der Neuzugang muss selbst verdraengt sein')
+  const neuEintrag = store.entries.find(eintrag => schluesselFuer(eintrag.content) === neuSchluessel)
+  assert.equal(neuEintrag.status, 'superseded')
+  assert.equal(typeof neuEintrag.supersededAt, 'number')
+
+  // ALLE urspruenglichen Wiederkehrer ueberleben unangetastet, mit unveraendertem treffer.
+  for (let i = 0; i < REGAL_DECKEL; i += 1) {
+    const schluessel = schluesselFuer(`Wiederkehrer Nummer ${i}.`)
+    const gruppe = liste.find(kandidat => kandidat.schluessel === schluessel)
+    assert.ok(gruppe, `Wiederkehrer ${i} muss ueberleben`)
+    assert.equal(gruppe.treffer, 2)
+  }
+})
+
+test('erneutes Merken eines ueberholten Satzes belebt ihn wieder, mit frischem treffer', () => {
+  // Bestehendes Verhalten von schreibeErkanntes, hier nur festgehalten: eine neue
+  // Begegnung ist immer ein neuer aktiver Eintrag, auch wenn der Schluessel schon
+  // als 'superseded' im Speicher steht. Die alten Begegnungen bleiben liegen und
+  // zaehlen nicht mehr mit -- Historie, keine Loeschung.
+  let store = frisch()
+  store = schreibeErkanntes(store, { satz: SATZ, at: 1 }).store
+  store = schreibeErkanntes(store, { satz: SATZ, at: 2 }).store
+  store = ueberholeErkanntes(store, SATZ, 9).store
+  assert.deepEqual(erkanntesListe(store), [])
+
+  store = schreibeErkanntes(store, { satz: SATZ, at: 10 }).store
+  const liste = erkanntesListe(store)
+  assert.equal(liste.length, 1)
+  assert.equal(liste[0].treffer, 1)
+  const alte = store.entries.filter(eintrag => eintrag.status === 'superseded')
+  assert.equal(alte.length, 2)
 })
 
 test('fremde Gedaechtniseintraege werden nicht mitgezaehlt', () => {

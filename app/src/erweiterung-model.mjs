@@ -145,6 +145,10 @@ export function fasseErweiterungenZusammen(doc) {
     art: eintrag.art,
     stellen: eintrag.stellen.map(stelle => stelle.text),
     gedanke: eintrag.gedanke,
+    // Das Schema verlangt das Muster als abgelieferten Arbeitsschritt (erweiterungslauf-model.mjs
+    // erzwingt es fail-closed). Es hier im Rueck-Prompt zu verschweigen hiesse, das Modell
+    // dieselben Prinzipien beim naechsten Lauf neu erfinden zu lassen, statt sie wiederzuerkennen.
+    muster: String(eintrag.muster || ''),
     zustand: eintrag.status,
   }))
 }

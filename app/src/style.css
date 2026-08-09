@@ -5057,6 +5057,14 @@ button.onda-aura:focus-visible {
 .ki-verbrauch p { margin: 0; color: var(--text-secondary); font: var(--type-body); }
 .ki-verbrauch-kosten { color: var(--text-primary); }
 .ki-verbrauch-leer { color: var(--text-tertiary); }
+.ki-verbrauch-vormonat { color: var(--text-tertiary); }
+
+/* Ertrag (Issue #13) — im Muster von ki-verbrauch, keine eigene Gestaltungssprache */
+.ki-ertrag { display: flex; flex-direction: column; gap: var(--space-1); }
+.ki-ertrag p { margin: 0; color: var(--text-secondary); font: var(--type-body); }
+.ki-ertrag-intro { color: var(--text-tertiary); font: var(--type-caption); }
+.ki-ertrag-basis { color: var(--text-tertiary); }
+.ki-ertrag-kosten { color: var(--text-primary); }
 .ki-budget {
   display: flex;
   flex-direction: column;

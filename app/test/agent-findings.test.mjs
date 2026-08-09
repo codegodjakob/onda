@@ -10,6 +10,7 @@ import {
 } from '../src/agent-findings.mjs'
 import { decideFinding, ensureReasoningModel, getFindingQueue, isIntegrityCategory } from '../src/reasoning-model.mjs'
 import { dedupeHinweise, findeAnker } from '../src/anchor-verify.mjs'
+import { WOERTLICH_BEHALTEN } from '../src/lauf-bilanz.mjs'
 
 function beispielHinweis(extra = {}) {
   return {
@@ -195,6 +196,96 @@ test('fasseEntscheidungenZusammen und fasseOffeneHinweiseZusammen trennen entsch
     kategorie: 'struktur',
     kurz: 'Die These ist absolut formuliert.',
   }])
+})
+
+// Issue #13, Task 2: die Prompt-Liste bereits entschiedener Hinweise darf nicht mehr linear
+// mit der Entscheidungsgeschichte wachsen. Baut `anzahl` Finding+Decision-Paare direkt
+// (ohne den Umweg ueber hinweisZuFinding/decideFinding) -- fasseEntscheidungenZusammen
+// braucht nur finding.{id,status,target,kiKategorie,short} und decision.{findingId,reason,at}.
+// `at` faellt mit wachsendem i (i=0 also der juengste) -- dieselbe Konvention wie
+// baueEntscheidungen in lauf-bilanz.test.mjs, damit "juengste zuerst" unmittelbar pruefbar ist.
+const KATEGORIEN_5 = Object.freeze(['fakt', 'logik', 'quelle', 'sprache', 'struktur'])
+const AUSGAENGE_3 = Object.freeze(['resolved', 'dismissed', 'risk-accepted'])
+
+// atVon(i, anzahl) bestimmt den Zeitstempel je Index -- als Funktion statt als feste Formel,
+// damit ein Aufrufer (Review-Nachtrag unten) eine `at`-Reihenfolge waehlen kann, die NICHT der
+// Array-Reihenfolge entspricht.
+function baueFindingsUndDecisions(anzahl, atVon = (i, n) => n - i) {
+  const findings = []
+  const decisions = []
+  for (let i = 0; i < anzahl; i += 1) {
+    const status = AUSGAENGE_3[i % AUSGAENGE_3.length]
+    findings.push({
+      id: `f-${i}`,
+      status,
+      target: `Anker ${i}`,
+      kiKategorie: KATEGORIEN_5[i % KATEGORIEN_5.length],
+      short: `Kurz ${i}`,
+    })
+    decisions.push({
+      findingId: `f-${i}`,
+      reason: `Begruendung ${i}`,
+      at: atVon(i, anzahl),
+    })
+  }
+  return { findings, decisions }
+}
+
+test('fasseEntscheidungenZusammen: ab dem 13. aeltesten Eintrag verdichten sich Entscheidungen zu Kategorien-Summen', () => {
+  const { findings, decisions } = baueFindingsUndDecisions(50)
+  const entscheidungen = fasseEntscheidungenZusammen(findings, decisions)
+
+  // Genau WOERTLICH_BEHALTEN woertliche Zeilen, danach eine Zeile je Kategorie (5).
+  const woertlicheZeilen = entscheidungen.filter(zeile => 'entscheidung' in zeile)
+  const summenZeilen = entscheidungen.filter(zeile => 'summe' in zeile)
+  assert.equal(woertlicheZeilen.length, WOERTLICH_BEHALTEN)
+  assert.equal(summenZeilen.length, KATEGORIEN_5.length)
+  assert.equal(entscheidungen.length, WOERTLICH_BEHALTEN + KATEGORIEN_5.length)
+
+  // Juengste zuerst (i=0 hat den groessten at-Wert): Anker 0..11 in genau dieser Reihenfolge.
+  assert.deepEqual(woertlicheZeilen.map(z => z.anker), Array.from({ length: WOERTLICH_BEHALTEN }, (unused, i) => `Anker ${i}`))
+  // Kein Zeitstempel im Prompt-Ausgang -- weder als eigenes Feld noch versteckt irgendwo.
+  entscheidungen.forEach(zeile => assert.equal('at' in zeile, false))
+  assert.equal(JSON.stringify(entscheidungen).includes('…'), false, 'keine Abschneidung mit Auslassungszeichen')
+
+  // Die restlichen 38 (i=12..49) muessen vollstaendig in den Summen aufgehen, nach Kategorie.
+  const erwartet = new Map(KATEGORIEN_5.map(k => [k, { angenommen: 0, verworfen: 0 }]))
+  for (let i = WOERTLICH_BEHALTEN; i < 50; i += 1) {
+    const kategorie = KATEGORIEN_5[i % KATEGORIEN_5.length]
+    const ausgang = AUSGAENGE_3[i % AUSGAENGE_3.length]
+    const zeile = erwartet.get(kategorie)
+    if (ausgang === 'resolved' || ausgang === 'risk-accepted') zeile.angenommen += 1
+    else if (ausgang === 'dismissed') zeile.verworfen += 1
+  }
+  assert.deepEqual(summenZeilen.map(z => z.kategorie), [...KATEGORIEN_5].sort((a, b) => a.localeCompare(b, 'de')))
+  summenZeilen.forEach(zeile => {
+    const soll = erwartet.get(zeile.kategorie)
+    assert.deepEqual(zeile.summe, soll, `Summe bei ${zeile.kategorie}`)
+  })
+})
+
+test('fasseEntscheidungenZusammen: bis WOERTLICH_BEHALTEN Eintraege bleibt die Ausgabe die alte Form (Array-Reihenfolge, unabhaengig vom Entscheidungsdatum)', () => {
+  // Review-Nachtrag: `at` bewusst NICHT deckungsgleich mit der Array-Reihenfolge (Finding 1
+  // ist am juengsten entschieden, Finding 2 am aeltesten, obwohl beide mittendrin im Array
+  // stehen). Eine Fixture, deren `at` einfach mit wachsendem Index faellt, kann eine
+  // Implementierung, die unterhalb der Schwelle trotzdem nach `at` sortiert, nicht von der
+  // korrekten unterscheiden -- beide liefern zufaellig dieselbe Reihenfolge. Die alte,
+  // unverdichtete Form kannte kein `at` und gab immer die Array-Reihenfolge zurueck; genau die
+  // wird hier erwartet, nicht die nach Datum sortierte.
+  const atAusserDerReihe = [300, 500, 100, 400, 200]
+  const { findings, decisions } = baueFindingsUndDecisions(5, i => atAusserDerReihe[i])
+  const entscheidungen = fasseEntscheidungenZusammen(findings, decisions)
+
+  const alteForm = findings.map((finding, i) => ({
+    anker: finding.target,
+    kategorie: finding.kiKategorie,
+    kurz: finding.short,
+    entscheidung: finding.status,
+    begruendung: decisions[i].reason,
+  }))
+  assert.deepEqual(entscheidungen, alteForm)
+  entscheidungen.forEach(zeile => assert.equal('at' in zeile, false))
+  entscheidungen.forEach(zeile => assert.equal('summe' in zeile, false))
 })
 
 test('Dedupe-Regressionstest: Wiederholungs-Sperre greift für alle 8 Kategorien', () => {
