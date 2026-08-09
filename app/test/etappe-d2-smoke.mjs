@@ -303,6 +303,19 @@ async function runKeyboardAndZoomFlow(browser) {
   await seedD2Project(page)
   await page.keyboard.press('Control+e')
   await page.locator('#auditModal').waitFor({ state: 'visible' })
+  // Das Fenster setzt den Fokus erst im naechsten Bild (workspace.js:1605,
+  // requestAnimationFrame). Direkt nach dem Sichtbarwerden zu messen prueft nur, wie
+  // schnell der Rechner gerade ist -- in Firefox schlug genau diese Zeile bei jedem
+  // dritten Lauf fehl. Also warten, bis der Fokus wirklich angekommen ist, mit einer
+  // Frist und einer klaren Meldung, wenn er ausbleibt: Verschwiegen wird dadurch
+  // nichts, denn bleibt der Fokus aus, faellt die Pruefung weiterhin durch.
+  await page.waitForFunction(
+    () => document.activeElement?.getAttribute('aria-label') === 'Schließen',
+    null,
+    { timeout: 3000 },
+  ).catch(() => {
+    assert.fail('Das Schlussaudit-Fenster nimmt den Fokus beim Öffnen nicht auf den Schließen-Knopf')
+  })
   assert.equal(await page.getByRole('button', { name: 'Schließen', exact: true }).evaluate(node => (
     document.activeElement === node
   )), true)
