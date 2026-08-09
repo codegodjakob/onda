@@ -37,7 +37,15 @@ done
 # baut mit denselben esbuild-Einstellungen wie `npm run build` — er kann das eben
 # gebaute Bundle also nicht durch ein anderes ersetzen. Der Port MUSS als
 # `--port=…` uebergeben werden; ein nacktes Argument verwirft cliPort() still.
-node ../app/scripts/dev-server.mjs --port="$PRUEFPORT" > /tmp/onda-bau-server.log 2>&1 &
+# --kein-nachladen ist hier PFLICHT und nicht Geschmack. Ohne den Schalter spritzt der
+# Server einen Nachlade-Client in jede Seite ("location.reload()" auf ein Server-
+# Ereignis). Im Bau heisst das: jede Testseite kann sich mitten in der Pruefung selbst
+# neu laden. Am 9. August 2026 sind daran zwei Bauten gescheitert — einmal mit
+# "Execution context was destroyed", einmal mit einer Zusicherung, die fehlschlug, weil
+# die Seite heimlich ihren Zustand verloren hatte. Kein Lauf davon liess sich ohne
+# diesen Server reproduzieren (19 Versuche). Ein Tor, dessen Seiten sich unter ihm neu
+# laden koennen, prueft nicht.
+node ../app/scripts/dev-server.mjs --port="$PRUEFPORT" --kein-nachladen > /tmp/onda-bau-server.log 2>&1 &
 PRUEFSERVER=$!
 # Der Server muss auch dann sterben, wenn ein Tor weiter unten fehlschlaegt.
 trap 'kill "$PRUEFSERVER" 2>/dev/null || true' EXIT
