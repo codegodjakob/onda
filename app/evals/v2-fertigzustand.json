@@ -2577,8 +2577,8 @@
           "given": "Zu jedem bezahlten Lauf schreibt Onda mit, wie viele Rückmeldungen geliefert, übernommen und verworfen wurden.",
           "when": "Jakob wissen will, was die bezahlten Läufe eingebracht haben.",
           "then": "Ein Modul liest genau diese drei Zahlen und verdichtet sie zu einer Bilanz, die Jakob zu sehen bekommt. Ein Mitschrieb, den niemand liest, ist kein Maß — er ist der Befund, gegen den diese Suite gebaut ist.",
-          "evidence": ["Noch ohne Datenbasis: kein Modul liest geliefert/uebernommen/verworfen aus dem Journal.", "Nötig wäre ein Node-Test, der aus einem Journal mit mehreren Läufen eine Ertragsbilanz bildet."],
-          "source": ["app/src/lauf-journal.mjs", "app/src/lauf-tor.mjs"]
+          "evidence": ["Node-Test: die Kosten je Übernahme summieren über die Ertragskanäle und schweigen unter der Mindestzahl statt eine Zufallszahl zu zeigen", "Browser-Prüfung: der Ertrag-Abschnitt im Maschinenzimmer zeigt Annahme je Hinweisart, Weggelegtes, den Monat und die Kosten je Übernahme"],
+          "source": ["app/src/lauf-journal.mjs", "app/src/lauf-bilanz.mjs", "app/src/workspace.js"]
         },
         {
           "id": "SELF-02",
@@ -2654,9 +2654,9 @@
           "automation": "unit",
           "given": "Erweiterungen werden gemerkt oder weggelegt; jeder Eintrag trägt seinen Zustand und seine Art.",
           "when": "Jakob sehen will, welche Art von Angebot er wegzulegen pflegt.",
-          "then": "Die Weglegen-Quote steht je Art — Weiterführung, Feld, Verbindung — mit der Zahl der Fälle daneben; unter zu wenigen Fällen erscheint keine Prozentzahl, sondern „noch zu wenig\". Welche Schwelle Folgen hat, setzt Jakob erst nach der ersten echten Messung; sie gehört nicht in dieses Eval.",
-          "evidence": ["Noch ohne Datenbasis: der Zustand „weg\" wird je Art geschrieben, aber niemand rechnet daraus eine Quote."],
-          "source": ["app/src/erweiterung-model.mjs", "app/src/erweiterungslauf-model.mjs"]
+          "then": "Die Weglegen-Quote steht je Art — Weiterführung, Feld, Verbindung — mit der Zahl der Fälle daneben; unter zu wenigen Fällen erscheint keine Prozentzahl, sondern „noch zu wenig\". Eine Summe über alle Arten sagt, DASS weggelegt wird, aber nicht was; erst die Aufschlüsselung zeigt, welche Art von Angebot ins Leere geht. Welche Schwelle Folgen hat, setzt Jakob erst nach der ersten echten Messung; sie gehört nicht in dieses Eval.",
+          "evidence": ["Noch ohne Datenbasis: die Quote gibt es als Summe über alle Erweiterungen, aufgeschlüsselt je Art gibt es sie nicht."],
+          "source": ["app/src/erweiterung-model.mjs", "app/src/lauf-bilanz.mjs"]
         },
         {
           "id": "DIVERGE-02",

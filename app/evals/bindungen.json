@@ -460,6 +460,10 @@
     "ONDA-UI-20": ["evals/run-onda-ui-quality.mjs"],
     "ONDA-UI-21": ["evals/run-onda-ui-quality.mjs"],
     "ONDA-UI-22": ["evals/run-onda-ui-quality.mjs"],
+    "SELF-01": [
+      "test/lauf-bilanz.test.mjs",
+      "test/v2-smoke.mjs"
+    ],
     "SELF-02": ["test/lauf-journal.test.mjs"],
     "GENRE-01": [
       "evals/pruefungen/kontext-alle-kanaele.mjs",
@@ -467,11 +471,10 @@
     ]
   },
   "_ungebunden_begruendung": {
-    "SELF-01": "Noch ohne Datenbasis. Das Messobjekt steht: lauf-journal.mjs schreibt zu jedem bezahlten Lauf geliefert, uebernommen und verworfen mit. Was fehlt, ist der Leser — kein Modul auf main liest diese drei Zahlen. Die Ertragsrechnung dazu (lauf-bilanz.mjs, Issue #13) liegt auf dem Zweig claude/affectionate-villani-34c1c6 und ist nicht gemergt. Bis dahin: nicht bestanden, nie stillschweigend gruen.",
     "SELF-03": "Noch ohne Datenbasis. Das Messobjekt steht: massstab-waechter.mjs meldet jede inhaltliche Aenderung, und jeder Lauf legt seinen Schnappschuss ab. Was fehlt, ist die Quittung — es gibt keinen Ort, an dem eine gemeldete Aenderung bestaetigt wird. Issue #15 hat den Melder gebaut, ausdruecklich ohne Sperre; ohne Bestaetigungs-Register ist „unbestaetigt\" nicht zaehlbar.",
     "GROW-01": "Noch ohne Datenbasis. Das Messobjekt steht: autorentwicklung-model.mjs haelt je Muster jede Begegnung mit Dokument, Projekt und Zeitpunkt. Was fehlt, ist zweierlei — niemand bildet daraus eine Rate ueber spaeter begonnene Texte, und es gibt noch keine Schreibgeschichte ueber Monate, an der eine fallende Rate ueberhaupt sichtbar waere. Ersatzweise eine Uebernahmequote zu messen ist ausdruecklich verboten (Kompass, Regel 14).",
     "GROW-02": "Noch ohne Datenbasis. Das Messobjekt steht: autorentwicklung-model.mjs kennt das Ereignis author-self-correction und macht daraus ein Entwicklungssignal. Was fehlt, ist der Erzeuger — keine Stelle der App schreibt dieses Ereignis, und die Reihenfolge gegenueber dem gezeigt-Ereignis des Journals vergleicht niemand.",
-    "DIVERGE-01": "Noch ohne Datenbasis. Das Messobjekt steht: erweiterung-model.mjs schreibt je Erweiterung den Zustand „weg\" samt Art. Was fehlt, ist der Rechner — weglegenQuote gehoert zu Issue #13 und liegt auf dem Zweig claude/affectionate-villani-34c1c6, nicht auf main. Die Schwelle, ab der die Quote Folgen hat, setzt Jakob ohnehin erst nach der ersten echten Messung.",
+    "DIVERGE-01": "Noch ohne Datenbasis. Das Messobjekt steht, und seit dem Merge von Issue #13 hat es sogar einen Leser: weglegenQuote (lauf-bilanz.mjs) zaehlt Gemerktes gegen Weggelegtes, und der Ertrag-Abschnitt im Maschinenzimmer zeigt die Zahl. Was fehlt, ist die Aufschluesselung JE ART — heute ist die Quote eine Summe ueber alle Erweiterungen, und gerade der Unterschied zwischen Weiterfuehrung, Feld und Verbindung waere der Befund. Die Schwelle, ab der die Quote Folgen hat, setzt Jakob ohnehin erst nach der ersten echten Messung.",
     "DIVERGE-02": "Noch ohne Datenbasis. Das Messobjekt steht: der Auftrag gegen das Naheliegende steht woertlich in agent-prompts.mjs (ERWEITERUNG_ANWEISUNG). Was fehlt, ist der Harness aus Issue #22 — Selbst-Verwurf als Schema-Pflicht und ein Kontrastlauf mit blindem Richter. Ohne ihn gibt es keine zwei Saetze, die Jakob verblindet nebeneinanderlegen koennte. Erst danach wird daraus ein Live-Gate; solange bleibt es rot statt sich unter die externen Gates zu mischen.",
     "DIVERGE-03": "Noch ohne Datenbasis. Das Messobjekt steht: die Allgemeinheits-Frage steht woertlich im Prompt. Was fehlt, sind Modellausgaben zu zwei Fixture-Texten — auch das braucht den Harness aus Issue #22. Die Regel im Prompt zu lesen belegt nicht, dass sie wirkt.",
     "GENRE-02": "Noch ohne Datenbasis. Das Messobjekt steht: textart-regeln.mjs entscheidet je Textart, welche Hinweisarten binden. Was fehlt, sind die Erwartungs- und Verbotslisten je Sorte — von Jakob bestaetigt. Die Gewichtungs-Matrix in docs/research/KOMPASS.md ist ein Forschungsstand, keine Setzung; sie darf den Massstab nicht selbst schreiben. Die Haerte-Tabelle je Textsorte ist Issue #24 und offen."
